@@ -1,0 +1,40 @@
+.mindfs-ide-agent-tools {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--content-bg);
+}
+
+.mindfs-ide-agent-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--menu-bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mindfs-ide-agent-tools button:hover {
+  background: var(--selection-bg);
+}
+
+.mindfs-ide-agent-tools button:focus-visible,
+[data-file-tree-menu] button:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
+}
+
+[data-file-tree-menu] button {
+  white-space: normal;
+}
+
+[data-file-tree-menu] svg {
+  flex-shrink: 0;
+}

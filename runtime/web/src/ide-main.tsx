@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { applyAppearanceMode } from "./services/appearance";
 import "./services/ideaBridge";
 import "./index.css";
+import "./ide.css";
 
 applyAppearanceMode();
 document.title = "IDEA AI Agent";

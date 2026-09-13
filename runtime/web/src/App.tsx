@@ -1678,6 +1678,7 @@ export function App({ onGoHome }: AppProps) {
   const [sidebarsSwapped, setSidebarsSwapped] = useState(loadSidebarsSwapped);
   const [gitDiffSideBySide, setGitDiffSideBySide] = useState(loadGitDiffSideBySide);
   const [isLeftOpen, setIsLeftOpen] = useState(() => !isIdeaRuntime && window.innerWidth >= 768);
+  const [agentMenuRequest, setAgentMenuRequest] = useState<number | null>(null);
   const [isRightOpen, setIsRightOpen] = useState(
     () => !isIdeaRuntime && window.innerWidth >= 768,
   );
@@ -14370,6 +14371,8 @@ export function App({ onGoHome }: AppProps) {
             renderRootRelatedContent={renderRootRelatedContent}
             projectTreeTabRequest={projectTreeTabRequest}
             agentConfigSwitchRequest={agentConfigSwitchRequest}
+            agentMenuRequest={agentMenuRequest}
+            onAgentMenuOpened={() => setAgentMenuRequest(null)}
             onAgentConfigSwitched={(agentName) => {
               if (agentName.trim().toLowerCase() === "codex") {
                 setCodexRateLimitsRefreshToken((value) => value + 1);
@@ -14420,6 +14423,22 @@ export function App({ onGoHome }: AppProps) {
               position: "relative",
             }}
           >
+            {isIdeaRuntime ? (
+              <div className="mindfs-ide-agent-tools">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLeftOpen(true);
+                    setAgentMenuRequest((request) => (request ?? 0) + 1);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M4 7h16M4 17h16M8 4v6M16 14v6" />
+                  </svg>
+                  {t("agentConfig.management")}
+                </button>
+              </div>
+            ) : null}
             <div
               style={{
                 flex: 1,

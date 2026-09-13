@@ -143,7 +143,7 @@ function normalizeShellStatus(input: unknown): ShellStatus | null {
   };
 }
 
-async function fetchAgentRuntime(force = false, includeAll = false): Promise<{ agents: AgentStatus[]; shells: ShellStatus[] }> {
+async function fetchAgentRuntime(force = false, includeAll = false, throwOnError = false): Promise<{ agents: AgentStatus[]; shells: ShellStatus[] }> {
   const now = Date.now();
   const agentCache = includeAll ? cachedAgentCatalog : cachedAgents;
   const agentLastFetch = includeAll ? lastCatalogFetch : lastFetch;
@@ -187,6 +187,7 @@ async function fetchAgentRuntime(force = false, includeAll = false): Promise<{ a
     return await request;
   } catch (err) {
     console.error("Failed to fetch agents:", err);
+    if (throwOnError) throw err;
     return { agents: agentCache, shells: cachedShells };
   } finally {
     if (includeAll) {
@@ -197,13 +198,13 @@ async function fetchAgentRuntime(force = false, includeAll = false): Promise<{ a
   }
 }
 
-export async function fetchAgents(force = false): Promise<AgentStatus[]> {
-  const data = await fetchAgentRuntime(force);
+export async function fetchAgents(force = false, options: { throwOnError?: boolean } = {}): Promise<AgentStatus[]> {
+  const data = await fetchAgentRuntime(force, false, options.throwOnError);
   return data.agents;
 }
 
-export async function fetchAgentCatalog(force = false): Promise<AgentStatus[]> {
-  const data = await fetchAgentRuntime(force, true);
+export async function fetchAgentCatalog(force = false, options: { throwOnError?: boolean } = {}): Promise<AgentStatus[]> {
+  const data = await fetchAgentRuntime(force, true, options.throwOnError);
   return data.agents;
 }
 

@@ -145,6 +145,8 @@ type FileTreeProps = {
   renderRootRelatedContent?: (rootId: string) => React.ReactNode;
   projectTreeTabRequest?: { tab: ProjectTreeTab; nonce: number } | null;
   agentConfigSwitchRequest?: AgentConfigSwitchRequest | null;
+  agentMenuRequest?: number | null;
+  onAgentMenuOpened?: () => void;
   onAgentConfigSwitched?: (agent: string) => void;
   onProjectTreeTabChange?: (tab: ProjectTreeTab) => void;
   creatingRootName?: string | null;
@@ -1049,12 +1051,14 @@ function AgentLifecyclePopover({
   runningAgent,
   error,
   onRun,
+  onRefresh,
 }: {
   agents: AgentStatus[];
   busy: boolean;
   runningAgent: string;
   error: string;
   onRun: (agent: AgentStatus, action: "install" | "update") => void;
+  onRefresh: () => void;
 }) {
   const { t } = useI18n();
   const [expandedDescriptions, setExpandedDescriptions] = React.useState<Set<string>>(() => new Set());
@@ -1073,8 +1077,11 @@ function AgentLifecyclePopover({
         gap: "10px",
       }}
     >
-      <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>
-        {t("agentConfig.lifecycleTitle")}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>{t("agentConfig.lifecycleTitle")}</span>
+        <button type="button" onClick={onRefresh} disabled={busy} style={agentConfigSecondaryButtonStyle(busy)}>
+          {t("agentConfig.refreshList")}
+        </button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "320px", overflow: "auto" }}>
         {busy && agents.length === 0 ? (
@@ -1103,6 +1110,9 @@ function AgentLifecyclePopover({
                   gap: "4px",
                 }}
               >
+                <div style={{ fontSize: "11px", color: "var(--text-secondary)", overflowWrap: "anywhere" }}>
+                  {t(item.installed ? "agentConfig.detected" : "agentConfig.notDetected")}{item.version ? ` · ${item.version}` : ""}
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
                   <AgentIcon
                     agentName={item.name}
@@ -1335,6 +1345,8 @@ export function FileTree({
   renderRootRelatedContent,
   projectTreeTabRequest = null,
   agentConfigSwitchRequest = null,
+  agentMenuRequest = null,
+  onAgentMenuOpened,
   onAgentConfigSwitched,
   onProjectTreeTabChange,
   creatingRootName = null,
@@ -1890,6 +1902,17 @@ export function FileTree({
   }, [updateActionLabel, updateActionSummary]);
 
   React.useEffect(() => {
+    if (agentMenuRequest === null) return;
+    setAgentConfigFlow(null);
+    setAgentLifecycleOpen(false);
+    setIsAppearanceMenuOpen(false);
+    setIsLocaleMenuOpen(false);
+    setIsSortMenuOpen(false);
+    setIsMenuOpen(true);
+    onAgentMenuOpened?.();
+  }, [agentMenuRequest, onAgentMenuOpened]);
+
+  React.useEffect(() => {
     if (!isMenuOpen) {
       return;
     }
@@ -1898,8 +1921,30 @@ export function FileTree({
         setIsMenuOpen(false);
       }
     };
+    const firstItem = menuRef.current?.querySelector<HTMLButtonElement>("[data-file-tree-menu] button");
+    firstItem?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!menuRef.current?.contains(document.activeElement)) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setIsMenuOpen(false);
+        menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+      } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        const buttons = Array.from(menuRef.current.querySelectorAll<HTMLButtonElement>("[data-file-tree-menu] button:not(:disabled)"));
+        if (!buttons.length) return;
+        event.preventDefault();
+        const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+          : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+        buttons[next].focus();
+      }
+    };
     document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isMenuOpen]);
 
   const openAgentConfigFlow = React.useCallback((flow: AgentConfigFlow) => {
@@ -1927,7 +1972,7 @@ export function FileTree({
     setAgentConfigRestartingAgent("");
     setIsMenuOpen(false);
     setAgentConfigBusy(true);
-    fetchAgents(true)
+    fetchAgents(true, { throwOnError: true })
       .then((items) => {
         setAgentConfigAgents(items.filter((item) => item.installed));
       })
@@ -2071,7 +2116,7 @@ export function FileTree({
     setIsMenuOpen(false);
     setAgentLifecycleError("");
     setAgentLifecycleBusy(true);
-    fetchAgentCatalog(true)
+    fetchAgentCatalog(true, { throwOnError: true })
       .then((items) => {
         setAgentLifecycleAgents(items);
       })
@@ -2773,6 +2818,7 @@ export function FileTree({
               });
             }}
             aria-label={t("fileTree.menu.open")}
+            aria-expanded={isMenuOpen}
             style={{
               width: "28px",
               height: "28px",
@@ -2795,6 +2841,7 @@ export function FileTree({
           </button>
           {isMenuOpen ? (
             <div
+              data-file-tree-menu
               style={{
                 position: "absolute",
                 top: "calc(100% + 6px)",
@@ -2903,7 +2950,7 @@ export function FileTree({
                     {idleReleaseHours || "72"}h
                   </span>
                 </button>
-                <button
+                {!relayNoRelayer ? <button
                   type="button"
                   onClick={() => {
                     setRelayServicesOpen(true);
@@ -2924,7 +2971,7 @@ export function FileTree({
                     <path d="m21 3-9 9" />
                   </svg>
                   <span>{t("fileTree.relayLocalServices")}</span>
-                </button>
+                </button> : null}
                 {!isNativeApp ? <WebPushMenuItem /> : null}
                 <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />
                 <button
@@ -3579,6 +3626,7 @@ export function FileTree({
               busy={agentLifecycleBusy}
               runningAgent={agentLifecycleRunningAgent}
               error={agentLifecycleError}
+              onRefresh={openAgentLifecycleFlow}
               onRun={(agent, action) => {
                 void runAgentLifecycleCommand(agent, action);
               }}

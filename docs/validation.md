@@ -2,6 +2,17 @@
 
 环境：Windows amd64、开发 JDK 21、Go 1.26.5、Node.js 20.18.1、pnpm 12.4.1。
 
+## Agent 管理入口（0.1.4）
+
+同目录 MindFS 的 `FileTree.tsx` 已有配置添加、配置切换重启、安装更新弹层，本插件也保留了相同服务接口和 App 回调。本次补足默认收起侧栏时的可发现入口，增加识别状态及列表刷新，并让管理界面显示请求错误。
+
+- 新增的打包浏览器检查先在旧前端失败，报找不到 `Agent management` 按钮；日志为 `build/reports/agent-management-red.log`。
+- `node scripts/smoke-runtime.mjs` 通过。受控 `/api/agents` 和 `/api/agents/restart` 响应验证菜单入口、配置选择、重启目标与忙碌禁用、失败重试、识别状态，以及刷新确实重新请求后端、显示错误并可重试。接口保持原有形状；没有运行真实 CLI、安装器、配置写入或模型调用。
+- 430px、375px 工具窗口及明暗主题检查通过，未出现页面未捕获错误或独立远程服务请求。截图为 `build/reports/agent-management-menu.png`、`agent-management-dark.png`、`agent-management-light.png` 和 `agent-management-375.png`；日志为 `build/reports/agent-management-smoke.log`。
+- TypeScript 类型检查、`agent-lifecycle-restart.test.mjs` 和 `project-tree-refresh.test.mjs` 通过。前者的旧英文断言已更新为原有的 `Agent config switch & restart`，其余交互断言保留。
+- 插件构建、5 项 JUnit 测试及项目配置检查通过；Plugin Verifier 对 IC/IU 2024.1、2024.2、2024.3 六个目标均返回 `Compatible`。日志为 `build/reports/agent-management-build.log` 和 `build/reports/agent-management-verifier.log`。
+- 原生 CLI 及 Mac 实机验证边界仍见下文；新增入口复用原有后端，没有改动检测、进程重启或配置存储逻辑。
+
 ## macOS CLI 检测修复（0.1.3）
 
 现场：Mac 终端通过 `/bin/zsh` 能找到 `~/.hermes/node/bin/codex` 和 `~/.local/bin/claude`，插件的 Agent 列表却为空。旧的 `ProcessBuilder` 只继承 IDEA 进程环境，没有使用 IDEA 恢复的 shell 环境；Go 的 `exec.LookPath` 因而可能判定 CLI 未安装，`/api/agents` 默认会过滤这些记录。[JetBrains 的环境加载说明](https://youtrack.jetbrains.com/articles/SUPPORT-A-1727)解释了桌面启动与终端环境的差异。

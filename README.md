@@ -4,11 +4,11 @@
 
 [下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
 
-| 系统 / 架构 | 0.1.3 安装包 |
+| 系统 / 架构 | 0.1.4 安装包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.3/idea-ai-agent-0.1.3-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.3/idea-ai-agent-0.1.3-macos-arm64.zip) |
-| Mac，Intel 处理器 | [macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.3/idea-ai-agent-0.1.3-macos-amd64.zip) |
+| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.4/idea-ai-agent-0.1.4-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.4/idea-ai-agent-0.1.4-macos-arm64.zip) |
+| Mac，Intel 处理器 | [macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.4/idea-ai-agent-0.1.4-macos-amd64.zip) |
 
 Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。两个 Mac 包已完成交叉编译及安装包校验，尚未在 Mac 实机运行验证。
 
@@ -59,6 +59,8 @@ macOS/Linux 使用 `./gradlew buildPlugin`。构建会编译 Web 前端和当前
 ## 使用
 
 在 IDEA 的「Settings → Plugins → 齿轮 → Install Plugin from Disk」中选择生成的 ZIP，打开项目和右侧「AI Agent」工具窗口。
+
+聊天区顶部常驻「Agent 管理」，点击后直接打开 MindFS 原有菜单：添加 Agent 配置、Agent 配置切换重启、Agent 安装和更新。在配置切换列表中可以单独重启所选 Agent；安装更新页显示「已识别 / 未检测到」状态、已获取的版本，并提供「刷新 Agent 列表」。自动检测和重启后的重新探测沿用原有后端，刷新列表读取服务端最新结果。安装更新仍使用原有命令会话展示执行过程。
 
 选中代码后通过右键「发送到 AI Agent」或 `Ctrl+Alt+A` 加入聊天草稿。没有选中内容时加入当前文件；未保存的编辑器内容会注明。添加上下文不会自动发送消息。模型执行结束后触发 IDE 文件刷新，会话中的文件链接可以打开当前 IDEA 项目内的文件。
 
