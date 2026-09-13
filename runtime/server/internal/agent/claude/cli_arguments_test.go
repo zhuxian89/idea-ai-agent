@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -14,6 +15,34 @@ type argumentRecorder struct {
 	claudeagent.SubprocessRunner
 	args []string
 	cwd  string
+}
+
+func TestPermissionArgumentsCannotOverrideIDESelection(t *testing.T) {
+	for _, args := range [][]string{
+		{"--permission-mode", "bypassPermissions"},
+		{"--permission-mode=bypassPermissions"},
+		{"--permission-mode", "default"},
+		{"--dangerously-skip-permissions"},
+		{"--dangerously-skip-permissions=true"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			if err := validateCLIArguments(args); err == nil || !strings.Contains(err.Error(), "permission selector") {
+				t.Fatalf("permission override must be rejected with recovery guidance, got %v", err)
+			}
+			for _, planning := range []bool{false, true} {
+				_, err := NewRuntime().OpenSession(context.Background(), OpenOptions{
+					SessionKey: "conflicting-permissions", Mode: "default", PlanMode: planning,
+					Command: "must-not-launch-agent", Args: args,
+				})
+				if err == nil || !strings.Contains(err.Error(), "permission selector") {
+					t.Fatalf("plan=%t: must reject before launching a CLI, got %v", planning, err)
+				}
+			}
+		})
+	}
+	if err := validateCLIArguments([]string{"--add-dir", "a folder", "--effort", "max", "--allow-dangerously-skip-permissions"}); err != nil {
+		t.Fatalf("non-overriding arguments should remain supported: %v", err)
+	}
 }
 
 var errArgumentsRecorded = errors.New("arguments recorded without starting a model")

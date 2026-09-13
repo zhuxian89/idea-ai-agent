@@ -24,6 +24,94 @@ func approvalTestRequest(id string) claudeagent.ToolPermissionRequest {
 	}
 }
 
+func TestPlanBypassAutomaticallyAllowsReadOnlyToolsWithoutApproval(t *testing.T) {
+	s, events := approvalTestSession()
+	s.planMode = true
+	s.permissionMode = claudeagent.PermissionModePlan
+	s.previousPermissionMode = claudeagent.PermissionModeBypassAll
+
+	requests := []claudeagent.ToolPermissionRequest{
+		{ToolName: "Skill", Arguments: json.RawMessage(`{"skill":"claude-api"}`), Context: claudeagent.PermissionContext{ToolUseID: "skill-1", AgentID: "agent-1"}},
+		{ToolName: "Skill", Arguments: json.RawMessage(`{"skill":"claude-api"}`), Context: claudeagent.PermissionContext{ToolUseID: "skill-2", AgentID: "agent-2"}},
+		{ToolName: "Read", Arguments: json.RawMessage(`{"file_path":"README.md"}`), Context: claudeagent.PermissionContext{ToolUseID: "read-1"}},
+		{ToolName: "Agent", Arguments: json.RawMessage(`{"subagent_type":"Explore","prompt":"trace code"}`), Context: claudeagent.PermissionContext{ToolUseID: "explore-1"}},
+	}
+	start := make(chan struct{})
+	results := make(chan claudeagent.PermissionResult, len(requests))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for _, req := range requests {
+		go func(req claudeagent.ToolPermissionRequest) {
+			<-start
+			results <- s.handleCanUseTool(ctx, req)
+		}(req)
+	}
+	close(start)
+	for range requests {
+		if _, allowed := (<-results).(claudeagent.PermissionAllow); !allowed {
+			t.Fatal("read-only requests should be automatically allowed concurrently")
+		}
+	}
+	if len(s.questionWaits) != 0 || len(s.pendingToolCalls) != 0 {
+		t.Fatal("automatic callbacks left pending state")
+	}
+	select {
+	case event := <-events:
+		t.Fatalf("automatic permissions must not emit approval events: %#v", event)
+	default:
+	}
+	for _, req := range requests {
+		if s.hasPendingToolCall("approval-" + req.Context.ToolUseID) {
+			t.Fatalf("automatic permission remained pending: %s", req.Context.ToolUseID)
+		}
+	}
+}
+
+func TestPlanBypassAutomaticallyDeniesWriteAndExecuteTools(t *testing.T) {
+	s, events := approvalTestSession()
+	s.planMode = true
+	s.permissionMode = claudeagent.PermissionModePlan
+	s.previousPermissionMode = claudeagent.PermissionModeBypassAll
+
+	for _, req := range []claudeagent.ToolPermissionRequest{
+		{ToolName: "Bash", Arguments: json.RawMessage(`{"command":"touch changed"}`), Context: claudeagent.PermissionContext{ToolUseID: "bash-1"}},
+		{ToolName: "Edit", Arguments: json.RawMessage(`{"file_path":"README.md"}`), Context: claudeagent.PermissionContext{ToolUseID: "edit-1"}},
+		{ToolName: "Write", Arguments: json.RawMessage(`{"file_path":"README.md"}`), Context: claudeagent.PermissionContext{ToolUseID: "write-1"}},
+		{ToolName: "Agent", Arguments: json.RawMessage(`{"subagent_type":"general-purpose"}`), Context: claudeagent.PermissionContext{ToolUseID: "agent-1"}},
+	} {
+		if _, denied := s.handleCanUseTool(context.Background(), req).(claudeagent.PermissionDeny); !denied {
+			t.Fatalf("%s must stay blocked by plan mode", req.ToolName)
+		}
+	}
+	select {
+	case event := <-events:
+		t.Fatalf("automatic plan denials must not emit approval events: %#v", event)
+	default:
+	}
+}
+
+func TestAutomaticPermissionPreservesOtherModesAndPlanApproval(t *testing.T) {
+	for _, mode := range []claudeagent.PermissionMode{claudeagent.PermissionModeDefault, claudeagent.PermissionModeBypassAll} {
+		s := &session{permissionMode: mode, previousPermissionMode: mode}
+		if _, handled := s.automaticToolPermission(approvalTestRequest("bash")); handled {
+			t.Fatal("non-plan callbacks must retain native approval behavior")
+		}
+	}
+	s := &session{planMode: true, permissionMode: claudeagent.PermissionModePlan, previousPermissionMode: claudeagent.PermissionModeDefault}
+	if _, handled := s.automaticToolPermission(claudeagent.ToolPermissionRequest{ToolName: "Skill"}); handled {
+		t.Fatal("ordinary plan permissions were changed")
+	}
+	s.previousPermissionMode = claudeagent.PermissionModeBypassAll
+	if _, handled := s.automaticToolPermission(claudeagent.ToolPermissionRequest{ToolName: "ExitPlanMode"}); handled {
+		t.Fatal("plan approval must still require a decision")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, denied := s.handleCanUseTool(ctx, claudeagent.ToolPermissionRequest{ToolName: "Read"}).(claudeagent.PermissionDeny); !denied {
+		t.Fatal("canceled callback allowed a tool")
+	}
+}
+
 func nextApprovalEvent(t *testing.T, events <-chan types.Event, eventType types.EventType, id, status string) types.ToolCall {
 	t.Helper()
 	select {

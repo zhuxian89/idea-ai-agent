@@ -979,6 +979,12 @@ function readURLState(): URLState {
 
 function buildURLSearch(next: URLState): string {
   const params = new URLSearchParams();
+  // Session/file navigation rewrites the URL. Preserve the native host flags
+  // so a reload still hides the web toolbar and subscribes to title actions.
+  const current = new URLSearchParams(window.location.search);
+  if (current.get("ide_chrome") === "1") params.set("ide_chrome", "1");
+  const ideaTheme = current.get("ide_theme");
+  if (ideaTheme === "dark" || ideaTheme === "light") params.set("ide_theme", ideaTheme);
   if (next.root) params.set("root", next.root);
   if (next.file) params.set("file", next.file);
   if (next.session) params.set("session", next.session);
@@ -6234,34 +6240,27 @@ export function App({ onGoHome }: AppProps) {
       if (sendSessionKey && session) {
         const targetSessionKey = sendSessionKey;
         const previousAgent = session.agent || "";
-        const useTargetSessionDefaults =
-          !!currentBoundSessionKey && currentBoundSessionKey !== targetSessionKey;
         effectiveMode = normalizeMode(session.type as any);
-        effectiveAgent =
-          (useTargetSessionDefaults ? previousAgent : agent) ||
-          previousAgent ||
-          "";
+        // The composer displays this target's settings. A different previously
+        // bound session must not override choices made in the visible composer.
+        effectiveAgent = agent || previousAgent || "";
         effectiveModel =
-          (useTargetSessionDefaults ? session.model || "" : model) ||
+          model ||
           (effectiveAgent === previousAgent ? session.model || "" : "");
         effectiveAgentMode =
-          (useTargetSessionDefaults ? (session as any).mode || "" : agentMode) ||
+          agentMode ||
           (effectiveAgent === previousAgent ? (session as any).mode || "" : "");
         effectiveEffort =
-          (useTargetSessionDefaults ? (session as any).effort || "" : effort) ||
+          effort ||
           (effectiveAgent === previousAgent ? (session as any).effort || "" : "");
         effectiveFastService =
-          (useTargetSessionDefaults
-            ? (((session as any).fast_service || "") as "" | "on" | "off")
-            : ((fastService || "") as "" | "on" | "off")) ||
+          fastService ||
           (effectiveAgent === previousAgent
             ? (((session as any).fast_service || "") as "" | "on" | "off")
             : "");
         effectiveShell =
           effectiveMode === "command"
-            ? ((useTargetSessionDefaults ? (session as any).shell || "" : shell) ||
-                (session as any).shell ||
-                "")
+            ? shell || (session as any).shell || ""
             : "";
         updateSessionAgentForKey(
           activeRoot,
@@ -6284,11 +6283,12 @@ export function App({ onGoHome }: AppProps) {
         setBoundSessionForRoot(activeRoot, targetSessionKey);
         if (!isQueueSend) {
           setSelectedPendingByKey(targetSessionKey, true);
-          setDrawerSessionForRoot(activeRoot, {
-            ...(session as any),
-            pending: true,
-          } as Session);
         }
+        // Queue sends also rebind the drawer; its metadata must follow that key.
+        setDrawerSessionForRoot(activeRoot, {
+          ...(session as any),
+          pending: true,
+        } as Session);
       } else {
         if (transientSlashCommand) {
           sendSessionKey = `transient-${Date.now()}`;
@@ -6892,7 +6892,9 @@ export function App({ onGoHome }: AppProps) {
     setDrawerSessionForRoot(rootID, null);
     setInteractionMode("main");
     setDrawerOpenForRoot(rootID, false);
+    replaceURLState({ ...readURLState(), root: rootID || "", session: "", cursor: 0 });
   }, [
+    replaceURLState,
     setBoundSessionForRoot,
     setDrawerOpenForRoot,
     setDrawerSessionForRoot,
@@ -10817,12 +10819,18 @@ export function App({ onGoHome }: AppProps) {
     !!selectedKey &&
     selectedKey !== activeBoundSessionKey &&
     interactionMode !== "drawer";
-  const actionBarSession = activeBoundSessionKey
-    ? isDetachedMainSessionTarget
-      ? (selectedSession as any)
-      : (currentSession as any) || boundFromCache || boundFromSelected
-    : selectedInCurrentRoot
-      ? (selectedSession as any)
+  const boundFromCurrent =
+    activeBoundSessionKey &&
+    (currentSession?.key || currentSession?.session_key) === activeBoundSessionKey &&
+    (!currentSession?.root_id || currentSession.root_id === currentRootId)
+      ? currentSession
+      : null;
+  // Match the same main/drawer target used by handleSendMessage, even while
+  // a previously bound drawer is being replaced or receiving background events.
+  const actionBarSession = selectedInCurrentRoot && interactionMode !== "drawer"
+    ? selectedSession
+    : activeBoundSessionKey
+      ? boundFromCurrent || boundFromCache || boundFromSelected
       : null;
   const actionBarSessionKey =
     (actionBarSession as any)?.key ||

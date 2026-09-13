@@ -74,13 +74,17 @@ async function bundleFixture() {
           efforts: ["high", "xhigh"], default_effort: "high", supports_fast_service: true,
         }];
         agents.push({ ...agents[0], name: "second-fixture" });
+        if (options.distinctModes) {
+          agents[0].modes = [{ id: "full-access", name: "First full access" }];
+          agents[1].modes = [{ id: "bypassPermissions", name: "Second full access" }, { id: "default", name: "Standard" }];
+        }
         function Fixture() {
           const [value, setValue] = useState(options.value || "default");
           const [disabled, setDisabled] = useState(options.disabled || false);
           const [agent, setAgent] = useState("fixture");
           const [model, setModel] = useState("test-model");
           const [effort, setEffort] = useState(options.effort || "high");
-          const [mode, setMode] = useState("bypassPermissions");
+          const [mode, setMode] = useState(options.distinctModes ? "full-access" : "bypassPermissions");
           const [fastService, setFastService] = useState("off");
           const [changes, setChanges] = useState([]);
           window.__menuFixture = { setDisabled };
@@ -88,12 +92,17 @@ async function bundleFixture() {
             <div id="fixture-state">
               <output data-testid="value">{value}</output>
               <output data-testid="changes">{JSON.stringify(changes)}</output>
+              <output data-testid="agent">{agent}</output>
+              <output data-testid="mode">{mode}</output>
             </div>
             <div id="fixture-controls" style={{ justifyContent: options.edge === "right" ? "flex-end" : "flex-start" }}>
               <button data-testid="before">Before</button>
               {options.kind === "agent" ? <AgentSelector
                 agent={agent} model={model} mode={mode} effort={effort} agents={agents}
-                onAgentChange={(name, nextModel) => { setAgent(name); setModel(nextModel || ""); }}
+                onAgentChange={(name, nextModel) => {
+                  setAgent(name); setModel(nextModel || "");
+                  if (options.distinctModes && name !== agent) setMode("");
+                }}
                 onModeChange={setMode} onEffortChange={setEffort}
                 fastService={fastService} onFastServiceChange={setFastService}
                 compact showLabel showChevron stableLayout viewportMenu allowDefaultModel
@@ -369,6 +378,27 @@ test("isolated menu controls in headless Chromium", { timeout: 90_000 }, async (
     await page.getByTestId("before").click();
     await expect(menu).toHaveCount(0);
   });
+
+  for (const closeOnSelect of [false, true]) {
+    await t.test(`a mode from another Agent selects that Agent before its mode (close=${closeOnSelect})`, async (t) => {
+      const page = await openFixture(browser, bundle, t, { kind: "agent", distinctModes: true, closeOnSelect });
+      const button = page.locator('[data-onboarding="fixture-agent-selector"] > button');
+      const menu = page.locator('[data-agent-menu="true"]');
+      await button.click();
+      await menu.getByRole("button", { name: "Expand second-fixture model list", exact: true }).click();
+      await expect(page.getByTestId("agent")).toHaveText("fixture");
+      await menu.getByRole("button", { name: /^Mode\b/ }).click();
+      await menu.getByRole("button", { name: "Second full access", exact: true }).click();
+      await expect(page.getByTestId("agent")).toHaveText("second-fixture");
+      await expect(page.getByTestId("mode")).toHaveText("bypassPermissions");
+      if (closeOnSelect) await button.click();
+      await menu.getByRole("button", { name: "Expand fixture model list", exact: true }).click();
+      await menu.getByRole("button", { name: /^Mode\b/ }).click();
+      await menu.getByRole("button", { name: "First full access", exact: true }).click();
+      await expect(page.getByTestId("agent")).toHaveText("fixture");
+      await expect(page.getByTestId("mode")).toHaveText("full-access");
+    });
+  }
 
   await t.test("Agent selector clients can still opt into closing after selection", async (t) => {
     const page = await openFixture(browser, bundle, t, { kind: "agent", closeOnSelect: true });

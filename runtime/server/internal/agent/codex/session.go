@@ -209,6 +209,7 @@ type session struct {
 
 	questionMu    sync.Mutex
 	questionWaits map[string]*types.PendingQuestion[map[string]string]
+	questionItems map[string][]codexsdk.AskUserQuestion
 }
 
 func (s *session) SendMessage(ctx context.Context, content string) error {
@@ -224,7 +225,7 @@ func (s *session) SendMessage(ctx context.Context, content string) error {
 		return err
 	}
 
-	if err := s.handleStreamedEvents(streamed.Events); err != nil {
+	if err := s.handleInteractiveStream(turnCtx, streamed); err != nil {
 		return err
 	}
 	s.updateThreadIDFromThread()
@@ -289,12 +290,25 @@ func (s *session) SubscribeThreadEvents(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return s.handleStreamedEvents(streamed.Events)
+	return s.handleInteractiveStream(turnCtx, streamed)
 }
 
-func (s *session) handleStreamedEvents(events <-chan codexsdk.ThreadEvent) error {
+func (s *session) handleStreamedEvents(ctx context.Context, events <-chan codexsdk.ThreadEvent, questions *asyncQuestionPause) error {
 	textByID := map[string]string{}
-	for event := range events {
+	for {
+		var event codexsdk.ThreadEvent
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-questions.stopDeadline:
+			s.turn.Cancel()
+			return errors.New("timed out pausing Codex for user choice")
+		case next, ok := <-events:
+			if !ok {
+				return nil
+			}
+			event = next
+		}
 		raw, _ := json.Marshal(event)
 		switch e := event.(type) {
 		case *codexsdk.ThreadStartedEvent:
@@ -336,8 +350,17 @@ func (s *session) handleStreamedEvents(events <-chan codexsdk.ThreadEvent) error
 				logUnhandledEvent(s.sessionKey, "item.updated", raw)
 				continue
 			}
+			if len(questions.requests) > 0 || (msg.Delivery == "async" && len(msg.Questions) > 0) {
+				continue
+			}
 			s.emitMessageDelta(msg, textByID)
 		case *codexsdk.ItemCompletedEvent:
+			if msg, ok := e.Item.(*codexsdk.AgentMessageItem); ok && msg.Delivery == "async" && len(msg.Questions) > 0 {
+				if err := s.pauseForAsyncQuestion(ctx, e, msg, questions); err != nil {
+					return err
+				}
+				continue
+			}
 			s.logRawToolItem(e.Item)
 			if toolCall, ok := mapToolItem(e.Item, false); ok {
 				s.emit(types.Event{Type: types.EventTypeToolUpdate, SessionID: s.SessionID(), Data: toolCall})
@@ -348,6 +371,9 @@ func (s *session) handleStreamedEvents(events <-chan codexsdk.ThreadEvent) error
 			}
 			msg, ok := e.Item.(*codexsdk.AgentMessageItem)
 			if ok {
+				if len(questions.requests) > 0 {
+					continue
+				}
 				s.emitMessageDelta(msg, textByID)
 				continue
 			}
@@ -360,6 +386,9 @@ func (s *session) handleStreamedEvents(events <-chan codexsdk.ThreadEvent) error
 			}
 			logUnhandledEvent(s.sessionKey, "item.completed", raw)
 		case *codexsdk.TurnCompletedEvent:
+			if len(questions.requests) > 0 {
+				continue
+			}
 			s.updateThreadIDFromThread()
 			log.Printf("[agent/codex] output.done session=%s", s.sessionKey)
 			contextWindow, _ := s.ContextWindow(context.Background())
@@ -383,7 +412,6 @@ func (s *session) handleStreamedEvents(events <-chan codexsdk.ThreadEvent) error
 			logUnhandledEvent(s.sessionKey, "event", raw)
 		}
 	}
-	return nil
 }
 
 func (s *session) handleNonToolItem(item codexsdk.ThreadItem, started bool) bool {
@@ -499,6 +527,11 @@ func (s *session) AnswerQuestion(ctx context.Context, answer types.AskUserAnswer
 	if !ok {
 		return errors.New("question is not pending: " + callID)
 	}
+	if questions := s.questionItems[callID]; len(questions) > 0 {
+		if len(codexAskUserResponse(questions, answers).Answers) != len(questions) {
+			return errors.New("all questions require an explicit answer")
+		}
+	}
 	if err := waiter.Answer(ctx, answers); err != nil {
 		return err
 	}
@@ -528,10 +561,15 @@ func (s *session) handleAskUserRequest(req codexsdk.AskUserRequest) (codexsdk.As
 		return codexsdk.AskUserResponse{}, errors.New("ask user question already pending: " + callID)
 	}
 	s.questionWaits[callID] = waiter
+	if s.questionItems == nil {
+		s.questionItems = make(map[string][]codexsdk.AskUserQuestion)
+	}
+	s.questionItems[callID] = req.Questions
 	s.questionMu.Unlock()
 	defer func() {
 		s.questionMu.Lock()
 		delete(s.questionWaits, callID)
+		delete(s.questionItems, callID)
 		s.questionMu.Unlock()
 	}()
 
@@ -562,6 +600,7 @@ func (s *session) cancelPendingQuestions(err error) {
 	for callID, waiter := range s.questionWaits {
 		waiters = append(waiters, waiter)
 		delete(s.questionWaits, callID)
+		delete(s.questionItems, callID)
 	}
 	s.questionMu.Unlock()
 

@@ -476,6 +476,9 @@ export function AgentSelector({
 
   const handleModeSelect = useCallback(
     (nextMode: string) => {
+      if (submenuAgentStatus && submenuAgentStatus.name !== agent) {
+        onAgentChange(submenuAgentStatus.name);
+      }
       onModeChange?.(nextMode);
       if (!closeOnSelect) return;
       setIsOpen(false);
@@ -487,7 +490,7 @@ export function AgentSelector({
       setServiceTierSectionExpanded(false);
       setMenuBodyHeight(null);
     },
-    [onModeChange, closeOnSelect],
+    [submenuAgentStatus, agent, onAgentChange, onModeChange, closeOnSelect],
   );
 
   const handleAgentRestart = useCallback(

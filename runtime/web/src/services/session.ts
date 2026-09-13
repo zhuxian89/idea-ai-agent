@@ -242,8 +242,16 @@ export type SyncSessionResult = {
 
 type SessionEventHandler = {
   onStream?: (event: StreamEvent) => void;
+  onUserMessage?: () => void;
   onDone?: () => void;
   onError?: (error: string) => void;
+};
+
+type SessionActivityState = {
+  lastEventAt: number;
+  recoveryMessage: string | null;
+  eventCursor?: string;
+  userTimestamp?: string;
 };
 
 type SessionServiceEvent = {
@@ -294,6 +302,7 @@ class SessionService {
   private handlers = new Map<string, Set<SessionEventHandler>>();
   private pendingStreams = new Map<string, StreamEvent[]>();
   private activeStreams = new Set<string>();
+  private sessionActivity = new Map<string, SessionActivityState>();
   private eventCursors = new Map<string, string>();
   private pendingMessages = new Map<string, PendingMessage>();
   private pendingAnswers = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -684,6 +693,10 @@ class SessionService {
     msg: any,
   ) {
     const nextPayload = { ...payload };
+    if (sessionKey) {
+      this.updateActiveStreamState(type, sessionKey, nextPayload);
+      this.updateSessionActivity(type, sessionKey, nextPayload);
+    }
     this.emit({ type, sessionKey, payload: nextPayload });
 
     if (!sessionKey) return;
@@ -700,8 +713,6 @@ class SessionService {
     } else if (type === "session.done" && cursorKey) {
       this.eventCursors.delete(cursorKey);
     }
-    this.updateActiveStreamState(type, sessionKey, nextPayload);
-
     const handlers = this.handlers.get(sessionKey);
     if ((!handlers || handlers.size === 0) && type === "session.stream") {
       const event = nextPayload.event as StreamEvent;
@@ -715,6 +726,11 @@ class SessionService {
     if (!handlers || handlers.size === 0) return;
 
     switch (type) {
+      case "session.user_message":
+        for (const handler of handlers) {
+          handler.onUserMessage?.();
+        }
+        break;
       case "session.stream":
         for (const handler of handlers) {
           handler.onStream?.(nextPayload.event as StreamEvent);
@@ -782,6 +798,9 @@ class SessionService {
   ) {
     if (type === "session.done" || type === "session.error") {
       this.activeStreams.delete(sessionKey);
+      // Content is already delivered to global listeners. Replaying these
+      // transient events on a later mount would restart a completed spinner.
+      this.pendingStreams.delete(sessionKey);
       return;
     }
     if (type !== "session.stream") return;
@@ -798,6 +817,48 @@ class SessionService {
 
   isSessionStreaming(sessionKey: string) {
     return this.activeStreams.has(sessionKey);
+  }
+
+  private updateSessionActivity(
+    type: string,
+    sessionKey: string,
+    payload: Record<string, unknown>,
+  ) {
+    if (type === "session.done" || type === "session.error") {
+      this.sessionActivity.delete(sessionKey);
+      return;
+    }
+    const previous = this.sessionActivity.get(sessionKey);
+    if (type === "session.user_message") {
+      const exchange = payload.exchange as { timestamp?: string } | undefined;
+      const userTimestamp = exchange?.timestamp;
+      // The authoritative user message can be delivered more than once.
+      if (userTimestamp && userTimestamp === previous?.userTimestamp) return;
+      this.sessionActivity.set(sessionKey, { lastEventAt: 0, recoveryMessage: null, userTimestamp });
+      this.pendingStreams.delete(sessionKey);
+      this.activeStreams.delete(sessionKey);
+      return;
+    }
+    if (type !== "session.stream") return;
+    const event = payload.event as StreamEvent | undefined;
+    if (!event) return;
+    // Replay cursors may be cleared when the timeline is reloaded. Keep our
+    // activity cursor separately so already observed events do not look fresh.
+    const cursor = event.event_cursor?.match(/^(\d+):(\d+)$/);
+    const previousCursor = previous?.eventCursor?.match(/^(\d+):(\d+)$/);
+    if (cursor && previousCursor && cursor[1] === previousCursor[1]
+      && BigInt(cursor[2]) <= BigInt(previousCursor[2])) return;
+    this.sessionActivity.set(sessionKey, {
+      ...previous,
+      lastEventAt: Date.now(),
+      eventCursor: event.event_cursor || previous?.eventCursor,
+      recoveryMessage: event.type === "recovery" ? event.data?.message || ""
+        : event.type === "message_done" ? previous?.recoveryMessage ?? null : null,
+    });
+  }
+
+  getSessionActivity(sessionKey: string): Readonly<SessionActivityState> | undefined {
+    return this.sessionActivity.get(sessionKey);
   }
 
   private eventCursorKey(rootId: string, sessionKey: string): string {

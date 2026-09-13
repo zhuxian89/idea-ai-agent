@@ -14,6 +14,8 @@ func validateCLIArguments(args []string) error {
 		switch flag {
 		case "--input-format", "--output-format", "--permission-prompt-tool":
 			return fmt.Errorf("%s is managed by the IDEA streaming transport; remove it from the Agent arguments", flag)
+		case "--permission-mode", "--dangerously-skip-permissions":
+			return fmt.Errorf("%s conflicts with the IDEA permission selector; remove it from the Agent arguments and choose execution permissions in the IDE", flag)
 		}
 	}
 	return nil

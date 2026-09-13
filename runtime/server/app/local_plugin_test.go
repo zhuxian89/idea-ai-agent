@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -63,6 +64,49 @@ func TestIDEAccessBoundary(t *testing.T) {
 				}
 				if !strings.Contains(w.Header().Get("Location"), "root=demo+project") {
 					t.Fatal("project not selected")
+				}
+			}
+		})
+	}
+}
+
+func TestIDEBootstrapPreservesHostPresentation(t *testing.T) {
+	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	address := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 19731}
+	handler := localAccessMiddleware(token, "demo project", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("bootstrap must redirect before serving the page")
+	}))
+	for _, test := range []struct {
+		name, query, chrome, theme string
+	}{
+		{"native dark", "&ide_chrome=1&ide_theme=dark", "1", "dark"},
+		{"native light", "&ide_chrome=1&ide_theme=light", "1", "light"},
+		{"browser preview", "&ide_theme=light", "", "light"},
+		{"invalid presentation", "&ide_chrome=on&ide_theme=invalid", "", ""},
+		{"do not forward arbitrary parameters", "&ide_chrome=1&root=other&next=https://example.com&secret=private", "1", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "http://"+address.String()+"/?ide_token="+token+test.query, nil)
+			r = r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, address))
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != http.StatusSeeOther {
+				t.Fatalf("got %d, want redirect", w.Code)
+			}
+			location, err := url.Parse(w.Header().Get("Location"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			query := location.Query()
+			if query.Get("ide_chrome") != test.chrome || query.Get("ide_theme") != test.theme {
+				t.Fatalf("host presentation lost: %s", location)
+			}
+			if location.IsAbs() || location.Path != "/" || query.Get("root") != "demo project" || query.Get("ide") != "1" {
+				t.Fatalf("invalid bootstrap destination: %s", location)
+			}
+			for key := range query {
+				if key != "root" && key != "ide" && key != "ide_chrome" && key != "ide_theme" {
+					t.Fatalf("unexpected bootstrap query key: %s", key)
 				}
 			}
 		})

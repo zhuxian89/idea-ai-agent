@@ -23,7 +23,7 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
   const user = timeline[userIndex];
   const startedAt = user?.type === "user_text" && user.timestamp ? Date.parse(user.timestamp) : openedAt;
   const since = Number.isFinite(startedAt) ? startedAt : openedAt;
-  const idleSeconds = Math.max(0, Math.floor((now - Math.max(since, lastEventAt || openedAt)) / 1000));
+  const idleSeconds = Math.max(0, Math.floor((now - Math.max(since, lastEventAt)) / 1000));
   const elapsedSeconds = Math.max(0, Math.floor((now - since) / 1000));
   const currentTurn = timeline.slice(userIndex + 1);
   const runningTools = currentTurn.filter((item) => item.type === "tool" && ["running", "pending", "in_progress"].includes(item.toolCall.status || ""));
@@ -39,15 +39,24 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
     : last?.type === "assistant_text" ? t("session.generating")
     : t("session.activityWaiting"));
   const quiet = connected && !question && idleSeconds >= 60;
+  const formatDuration = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor(totalSeconds / 60) % 60;
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return t("session.activityDurationHours", { hours, minutes, seconds });
+    if (minutes > 0) return t("session.activityDurationMinutes", { minutes, seconds });
+    return t("session.activityDurationSeconds", { seconds });
+  };
+  const idleDuration = formatDuration(idleSeconds);
   return <div data-session-activity className="session-activity">
     <div role="status" aria-live="polite" className="session-activity-label">
       <span aria-hidden="true" className="session-activity-dot" />
       <span>{label}</span>
     </div>
     <div className="session-activity-time">
-      {t("session.activityElapsed", { seconds: elapsedSeconds })}
-      {lastEventAt > 0 ? ` · ${t("session.activityLastUpdate", { seconds: idleSeconds })}` : ""}
+      {t("session.activityElapsed", { duration: formatDuration(elapsedSeconds) })}
+      {lastEventAt > 0 ? ` · ${t("session.activityLastUpdate", { duration: idleDuration })}` : ""}
     </div>
-    {quiet ? <div className="session-activity-note">{t("session.activityQuiet", { seconds: idleSeconds })}</div> : null}
+    {quiet ? <div className="session-activity-note">{t("session.activityQuiet", { duration: idleDuration })}</div> : null}
   </div>;
 }

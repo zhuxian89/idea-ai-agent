@@ -276,7 +276,13 @@ func (s *session) AnswerQuestion(ctx context.Context, answer types.AskUserAnswer
 }
 
 func (s *session) handleCanUseTool(ctx context.Context, req claudeagent.ToolPermissionRequest) claudeagent.PermissionResult {
+	if err := ctx.Err(); err != nil {
+		return claudeagent.PermissionDeny{Reason: err.Error()}
+	}
 	if req.ToolName != "AskUserQuestion" {
+		if result, handled := s.automaticToolPermission(req); handled {
+			return result
+		}
 		return s.awaitToolPermission(ctx, req)
 	}
 

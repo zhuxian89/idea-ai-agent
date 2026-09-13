@@ -1,4 +1,5 @@
-import { setAppearanceMode } from "./appearance";
+import { restoreIdeaAppearance, setIdeaTheme } from "./appearance";
+export { persistIdeaLocale } from "./ideaPreferences";
 
 export const isIdeaRuntime = true;
 const pendingContexts: string[] = [];
@@ -16,7 +17,6 @@ let nativeCommandHandler: ((command: string) => void) | undefined;
 
 declare global {
   interface Window {
-    ideaAgent?: { postMessage: (payload: Record<string, unknown>) => void };
     ideaAgentReceiveContext?: (text: string) => void;
     ideaAgentSetTheme?: (theme: "dark" | "light") => void;
     ideaAgentNativeCommand?: (command: string) => void;
@@ -28,7 +28,7 @@ window.ideaAgentReceiveContext = (text) => {
   if (receiveContext) receiveContext(text);
   else pendingContexts.push(text);
 };
-window.ideaAgentSetTheme = (theme) => setAppearanceMode(theme);
+window.ideaAgentSetTheme = (theme) => setIdeaTheme(theme);
 
 export function subscribeIdeaContext(receive: (text: string) => void): () => void {
   receiveContext = receive;
@@ -72,11 +72,12 @@ function postToHost(payload: Record<string, unknown>): void {
 
 function flushPendingHostMessages(): void {
   if (!window.ideaAgent) return;
-  pendingHostMessages.splice(0).forEach((payload) => window.ideaAgent?.postMessage(payload));
+  pendingHostMessages.splice(0).forEach(postToHost);
 }
 
 if (typeof window.addEventListener === "function") {
   window.addEventListener("ideaAgentReady", flushPendingHostMessages, { once: true });
+  window.addEventListener("ideaAgentReady", restoreIdeaAppearance);
 }
 
 export function requestIdeaEditorContext(): void {

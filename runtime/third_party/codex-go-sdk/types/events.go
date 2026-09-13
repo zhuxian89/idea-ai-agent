@@ -194,7 +194,9 @@ type ItemCompletedEvent struct {
 	// Type is the event type discriminator
 	Type string `json:"type"`
 	// Item is the completed thread item
-	Item ThreadItem `json:"item"`
+	Item     ThreadItem `json:"item"`
+	ThreadID string     `json:"threadId,omitempty"`
+	TurnID   string     `json:"turnId,omitempty"`
 }
 
 // UnmarshalJSON parses the item payload into a concrete ThreadItem.
@@ -205,6 +207,14 @@ func (e *ItemCompletedEvent) UnmarshalJSON(data []byte) error {
 	}
 	e.Type = eventType
 	e.Item = item
+	var envelope struct {
+		ThreadID string `json:"threadId"`
+		TurnID   string `json:"turnId"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return err
+	}
+	e.ThreadID, e.TurnID = envelope.ThreadID, envelope.TurnID
 	return nil
 }
 

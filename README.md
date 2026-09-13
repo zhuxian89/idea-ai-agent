@@ -4,21 +4,22 @@
 
 [下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
 
-当前源码版本为 0.1.8，尚未发布新的 GitHub Release。下面的安装包路径仅适用于本地构建目录，不包含在 Git 仓库中；上方 Release 链接仍为此前版本。
+当前版本为 **0.1.13**，更新说明见 [0.1.13 发布说明](docs/releases/v0.1.13.md)。
 
-| 系统 / 架构 | 0.1.8 本地测试包 |
+| 系统 / 架构 | 0.1.13 安装包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](build/local-packages/idea-ai-agent-0.1.8-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](build/local-packages/idea-ai-agent-0.1.8-macos-arm64.zip) |
-| Mac，Intel 处理器 | [macos-amd64.zip](build/local-packages/idea-ai-agent-0.1.8-macos-amd64.zip) |
+| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.13/idea-ai-agent-0.1.13-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.13/idea-ai-agent-0.1.13-macos-arm64.zip) |
 
-Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。两个 Mac 包已完成交叉编译及安装包校验，尚未在 Mac 实机运行验证。
+Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。各平台验证范围见发布说明。
 
 0.1.3 修复了 Mac 从 Dock/Finder 启动 IDEA 时，终端可用的 CLI 在插件中无法识别的问题。插件使用 IDEA 从用户 shell 恢复的环境，让检测和执行继承相同的 `PATH`、Node 路径及 CLI 配置。升级后请完全退出并重新启动 IDEA；不需要重新安装 CLI。
 
 0.1.5 继续保留用户 PATH 的优先顺序，并在 Mac 上补充 `~/.local/bin`、`~/.hermes/node/bin` 和 Homebrew 常见目录，覆盖运行期间新建的安装目录。进入配置页或刷新列表会立即检查 CLI 是否存在；安装输出在命令会话展示，执行后返回配置页即可重新识别。重启后检测结果会自动更新，连接错误会显示在对应 Agent 卡片上。
 
 ## 实现
+
+0.1.13 修复原生标题栏按钮、发送后 Agent/模型串会话、异步选择题未等待回答、活动栏状态恢复和语言/外观持久化；同时包含此前本地测试版本的权限选择、消息同步与 Agent 管理改进。
 
 0.1.8 修复队列快照过期和重连后残留、发送窗口漏显示正式消息的问题。等待区展示实际思考/工具/用户回答状态、已等待时间及最近更新间隔；运行中的工具保留原生状态。详情见 [0.1.8 本地测试版说明](docs/releases/v0.1.8.md)。
 
@@ -85,7 +86,7 @@ IDEA 原生标题栏保留新会话、历史、设置，网页内部不再重复
 ./gradlew.bat verifyPluginProjectConfiguration verifyPlugin
 cd runtime/web
 pnpm run typecheck
-node --test tests/*.test.mjs
+node --test --test-concurrency=1 tests/*.test.mjs
 cd ../..
 node scripts/test-runtime.mjs
 ```

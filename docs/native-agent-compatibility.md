@@ -17,7 +17,7 @@
 | IDEA 入口禁用会话及任务 worktree | Git 项目恢复会话和任务的独立 worktree，项目注册仍绑定 IDEA | `TestIDEProjectSupportsSessionAndTaskWorktrees`、打包界面冒烟 |
 | 编辑器内容截取前 128000 字符 | 传递完整选择/文件内容，保留未保存内容与安全 Markdown 围栏 | `EditorContextTest` |
 
-方案选择支持 Codex `request_user_input` 与 Claude `AskUserQuestion`，包括多问题、文字补充和 Claude 多选。协议测试验证答案映射回原生问题标识/问题文本；CLI 工具请求的允许或拒绝通过相同交互入口返回。Codex 会保留服务端提供的授权选项和结构化决定。
+方案选择支持 Codex `request_user_input`、`request_user_input_async` 与 Claude `AskUserQuestion`，包括多问题、文字补充和 Claude 多选。0.1.13 保留异步消息中的问题数据，通过原生 `turn/interrupt` 暂停对应轮次，用户提交完整答案后在同一原生线程继续。协议测试验证答案映射回原生问题标识/问题文本；CLI 工具请求的允许或拒绝通过相同交互入口返回。Codex 会保留服务端提供的授权选项和结构化决定。
 
 本机 CLI 的配置仍受其自身的项目信任规则、模型能力和权限规则约束。主动打开计划模式会切换原生计划模式；关闭时恢复已观察到的先前权限模式，尚未观察到时使用普通模式。新会话不会从插件缓存恢复旧的模型/推理/快速服务默认值，需要固定选择时在会话中明确选择。
 

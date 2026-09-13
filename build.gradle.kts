@@ -11,7 +11,7 @@ plugins {
 }
 
 group = "dev.ideaagent"
-version = "0.1.11"
+version = "0.1.13"
 
 repositories {
     mavenCentral()

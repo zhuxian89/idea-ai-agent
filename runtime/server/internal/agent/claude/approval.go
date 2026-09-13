@@ -2,17 +2,61 @@ package claude
 
 import (
 	"context"
-	claudeagent "github.com/roasbeef/claude-agent-sdk-go"
-	"mindfs/server/internal/agent/types"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
+
+	claudeagent "github.com/roasbeef/claude-agent-sdk-go"
+	"mindfs/server/internal/agent/types"
 )
+
+func (s *session) automaticToolPermission(req claudeagent.ToolPermissionRequest) (claudeagent.PermissionResult, bool) {
+	s.mu.RLock()
+	state := permissionState{
+		planMode:               s.planMode,
+		permissionMode:         s.permissionMode,
+		previousPermissionMode: s.previousPermissionMode,
+	}
+	s.mu.RUnlock()
+
+	planning := state.planMode || state.permissionMode == planPermissionMode
+	if !planning || state.previousPermissionMode != claudeagent.PermissionModeBypassAll {
+		return nil, false
+	}
+	// Leaving plan mode is a user decision, not read-only exploration.
+	if req.ToolName == "ExitPlanMode" {
+		return nil, false
+	}
+	if isPlanSafeTool(req.ToolName, req.Arguments) {
+		return claudeagent.PermissionAllow{}, true
+	}
+	return claudeagent.PermissionDeny{Reason: "plan mode blocks tools that can modify files or execute commands"}, true
+}
+
+func isPlanSafeTool(toolName string, arguments json.RawMessage) bool {
+	switch toolName {
+	case "Skill", "Read", "Glob", "Grep", "Search", "Explore", "WebFetch", "WebSearch", "LS", "TaskList", "TaskGet", "EnterPlanMode":
+		return true
+	case "Agent", "Task":
+		var input struct {
+			SubagentType string `json:"subagent_type"`
+		}
+		return json.Unmarshal(arguments, &input) == nil && strings.EqualFold(strings.TrimSpace(input.SubagentType), "Explore")
+	default:
+		return false
+	}
+}
 
 func (s *session) awaitToolPermission(ctx context.Context, req claudeagent.ToolPermissionRequest) claudeagent.PermissionResult {
 	if strings.TrimSpace(req.Context.ToolUseID) == "" {
 		return claudeagent.PermissionDeny{Reason: "permission request missing tool use id"}
 	}
-	question := "Claude Code 请求执行 " + req.ToolName + "：\n" + string(req.Arguments)
+	requester := "Claude Code"
+	if agentID := strings.TrimSpace(req.Context.AgentID); agentID != "" {
+		requester = fmt.Sprintf("Claude Code（来源：%s）", agentID)
+	}
+	question := requester + " 请求执行 " + req.ToolName + "：\n" + string(req.Arguments)
 	// Synthetic approval prompts have no native tool_result to finish their lifecycle.
 	answers, err := s.awaitQuestion(ctx, claudeagent.QuestionSet{
 		ToolUseID: "approval-" + req.Context.ToolUseID,

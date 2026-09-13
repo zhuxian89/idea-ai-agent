@@ -10,6 +10,9 @@ import { test } from "node:test";
 const compiled = ts.transpileModule(fs.readFileSync("src/services/ideaBridge.ts", "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText;
+const compiledPreferences = ts.transpileModule(fs.readFileSync("src/services/ideaPreferences.ts", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
 
 function loadBridge({ ready = false, search = "" } = {}) {
   const listeners = {};
@@ -21,13 +24,16 @@ function loadBridge({ ready = false, search = "" } = {}) {
     dispatchEvent: (event) => { for (const handler of listeners[event.type] || []) handler(event); },
   };
   if (ready) inject();
+  const preferences = { exports: {}, window };
+  vm.runInNewContext(compiledPreferences, preferences);
   const sandbox = {
     window,
     URLSearchParams,
     exports: {},
     require: (name) => {
+      if (name === "./ideaPreferences") return preferences.exports;
       assert.equal(name, "./appearance", "ideaBridge must not pull app runtime services");
-      return { setAppearanceMode: () => {} };
+      return { setIdeaTheme: () => {}, restoreIdeaAppearance: () => {} };
     },
   };
   vm.runInNewContext(compiled, sandbox);
@@ -118,4 +124,21 @@ test("IDE code contexts still queue until the composer subscribes", () => {
   bridge.window.ideaAgentReceiveContext("second");
   assert.deepEqual(seen, ["int captured = 1;", "second"]);
   unsubscribe();
+});
+
+test("language changes are sent to native preferences and update the current host value", () => {
+  const bridge = loadBridge({ ready: true });
+  bridge.exports.persistIdeaLocale("zh-CN");
+  assert.equal(bridge.window.ideaAgent.locale, "zh-CN");
+  assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), [{ action: "setLocale", locale: "zh-CN" }]);
+});
+
+test("the latest language choice wins when the bridge loads after repeated changes", () => {
+  const bridge = loadBridge();
+  for (const locale of ["zh-CN", "en-US", "zh-CN"]) bridge.exports.persistIdeaLocale(locale);
+  bridge.injectBridge();
+  bridge.window.ideaAgent.locale = "en-US";
+  bridge.fireReady();
+  assert.equal(bridge.window.ideaAgent.locale, "zh-CN");
+  assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), [{ action: "setLocale", locale: "zh-CN" }]);
 });

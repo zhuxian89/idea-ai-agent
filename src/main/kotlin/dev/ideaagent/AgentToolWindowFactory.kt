@@ -183,6 +183,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         // Select the supported overload; the JBCefBrowser overload is scheduled for removal.
         val query = JBCefJSQuery.create(view as JBCefBrowserBase)
         Disposer.register(view, query)
+        val preferences = ApplicationManager.getApplication().getService(AgentPreferences::class.java)
         query.addHandler { payload ->
             if (closed || payload.length > 16384 || !LocalEndpoint.sameOrigin(ready.endpoint, view.cefBrowser.url)) {
                 JBCefJSQuery.Response("Rejected", 1, "Invalid IDE request")
@@ -200,6 +201,8 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                         }
                     }
                     "refresh" -> VirtualFileManager.getInstance().asyncRefresh(null)
+                    "setLocale" -> preferences.setLocale(request.get("locale").asString)
+                    "setAppearance" -> preferences.setAppearance(request.get("appearance").asString)
                     "addContext" -> ApplicationManager.getApplication().invokeLater {
                         if (!project.isDisposed) addCurrentEditorContext()
                     }
@@ -213,7 +216,8 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         view.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
             override fun onLoadEnd(cefBrowser: CefBrowser, frame: CefFrame, statusCode: Int) {
                 if (!frame.isMain || !LocalEndpoint.sameOrigin(ready.endpoint, frame.url)) return
-                cefBrowser.executeJavaScript("window.ideaAgent = { postMessage: payload => { ${query.inject("JSON.stringify(payload)")} } }; window.dispatchEvent(new Event(\"ideaAgentReady\"));", frame.url, 0)
+                val saved = preferences.getState()
+                cefBrowser.executeJavaScript("window.ideaAgent = { locale: ${gson.toJson(saved.locale)}, appearance: ${gson.toJson(saved.appearance)}, theme: ${gson.toJson(theme)}, postMessage: payload => { ${query.inject("JSON.stringify(payload)")} } }; window.dispatchEvent(new Event(\"ideaAgentReady\"));", frame.url, 0)
                 ApplicationManager.getApplication().invokeLater {
                     if (closed || browser !== view) return@invokeLater
                     loaded = true

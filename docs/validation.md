@@ -1,5 +1,17 @@
 # 验证记录
 
+## 0.1.13 发布源码验证
+
+本轮在 macOS arm64、IDEA 自带 JDK 21 环境验证：
+
+- 前端 `node --test --test-concurrency=1 tests/*.test.mjs`：86 项通过；TypeScript 类型检查通过。旧主题测试补齐持久化桥接依赖，并断言启动主题不会写入用户偏好；活动栏测试在安装模拟时钟后向前暂停，避免繁忙环境下倒退时间。
+- `node scripts/test-runtime.mjs` 全量服务端测试通过。首次并发检查中，未改动的任务调度测试偶发出现重复执行计数；该用例单独连续 10 次通过，随后全量服务端复查通过，保留首轮与复查日志。
+- `./gradlew test verifyPluginProjectConfiguration -x buildRuntime --offline` 通过，覆盖原生命令、配置持久化、编辑器上下文、运行环境与本地端点。
+- 异步选择题相关 SDK/Adapter/Session/Usecase 回归通过；新增异步选择题测试通过 Go race 检查。
+- 完整页面受控冒烟覆盖选择卡片与提交确认、运行中会话模型/权限、原生按钮、消息队列、活动栏恢复和重连；本地已通过。发布包构建后再次从对应发布源码运行冒烟。
+
+源码验证日志在本地 `build/reports/release-0.1.13-*.log`，具体异步问题修复记录见 `.codestable/issues/2026-09-14-async-question/`。Windows 安装包为 Mac 交叉编译产物，不能将编译及包结构检查视为 Windows/IDEA 实机验证。
+
 环境：Windows amd64、开发 JDK 21、Go 1.26.5、Node.js 20.18.1、pnpm 12.4.1。
 
 ## 消息同步与等待状态（0.1.8，未发布）

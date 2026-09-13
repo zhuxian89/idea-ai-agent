@@ -228,6 +228,14 @@ type AgentMessageItem struct {
 	Type string `json:"type"`
 	// Text is either natural-language text or JSON when structured output is requested
 	Text string `json:"text"`
+	// Async input requests are delivered as agent messages, not server RPCs.
+	Delivery  string                   `json:"delivery,omitempty"`
+	Questions []AsyncUserInputQuestion `json:"questions,omitempty"`
+}
+
+type AsyncUserInputQuestion struct {
+	Title   string   `json:"title"`
+	Options []string `json:"options"`
 }
 
 // GetType returns the item type discriminator.

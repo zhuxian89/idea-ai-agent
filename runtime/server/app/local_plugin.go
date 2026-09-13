@@ -54,6 +54,14 @@ func localAccessMiddleware(token, rootID string, next http.Handler) http.Handler
 			http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 			w.Header().Set("Cache-Control", "no-store")
 			query := url.Values{"root": {rootID}, "ide": {"1"}}
+			// Keep the host presentation flags while removing the bootstrap
+			// credential. Losing ide_chrome also disables native title actions.
+			if r.URL.Query().Get("ide_chrome") == "1" {
+				query.Set("ide_chrome", "1")
+			}
+			if theme := r.URL.Query().Get("ide_theme"); theme == "dark" || theme == "light" {
+				query.Set("ide_theme", theme)
+			}
 			http.Redirect(w, r, "/?"+query.Encode(), http.StatusSeeOther)
 			return
 		}

@@ -461,10 +461,13 @@ export function useSessionStream(
   sessionContextWindow?: ContextWindowLike,
   sessionPending = false,
 ): UseSessionStreamResult {
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamState, setStreamState] = useState({ sessionKey, isStreaming: false });
   const [streamVersion, setStreamVersion] = useState(0);
-  const [streamStatusText, setStreamStatusText] = useState("");
-  const [lastEventAt, setLastEventAt] = useState(0);
+  const isStreaming = streamState.sessionKey === sessionKey ? streamState.isStreaming
+    : !!sessionKey && sessionPending && sessionService.isSessionStreaming(sessionKey);
+  // Read the current session's snapshot during render. Effect-local state would
+  // briefly show the previous session's activity before resubscription settles.
+  const activity = sessionKey ? sessionService.getSessionActivity(sessionKey) : undefined;
 
   const baseTimeline = useMemo(
     () =>
@@ -477,8 +480,7 @@ export function useSessionStream(
 
   useEffect(() => {
     setStreamVersion(0);
-    setStreamStatusText("");
-    setLastEventAt(0);
+    const setIsStreaming = (value: boolean) => setStreamState({ sessionKey, isStreaming: value });
     if (!sessionKey) {
       setIsStreaming(false);
       return;
@@ -488,33 +490,20 @@ export function useSessionStream(
     );
 
     const unsubscribe = sessionService.subscribe(sessionKey, {
-      onStream: (event) => {
-        setLastEventAt(Date.now());
+      onUserMessage: () => {
         setStreamVersion((value) => value + 1);
-        if (event.type === "recovery") {
-          setStreamStatusText(event.data?.message || translateNow("session.recovering"));
-          setIsStreaming(true);
-          return;
-        }
-        if (event.type === "message_chunk") {
-          setStreamStatusText("");
-        }
-        if (event.type === "message_done") {
-          return;
-        }
-        if (event.type === "error") {
-          setStreamStatusText("");
-          setIsStreaming(false);
-        } else {
-          setIsStreaming(true);
-        }
+        setIsStreaming(sessionService.isSessionStreaming(sessionKey));
+      },
+      onStream: () => {
+        // The service records arrival time even while this viewer is unmounted.
+        // Replaying buffered events must not reset the silence timer or status.
+        setStreamVersion((value) => value + 1);
+        setIsStreaming(sessionService.isSessionStreaming(sessionKey));
       },
       onDone: () => {
-        setStreamStatusText("");
         setIsStreaming(false);
       },
       onError: () => {
-        setStreamStatusText("");
         setIsStreaming(false);
       },
     });
@@ -528,7 +517,8 @@ export function useSessionStream(
     timeline: sessionPending || isStreaming ? baseTimeline : settleRunningTools(baseTimeline),
     isStreaming,
     streamVersion,
-    streamStatusText,
-    lastEventAt,
+    streamStatusText: activity?.recoveryMessage != null
+      ? activity.recoveryMessage || translateNow("session.recovering") : "",
+    lastEventAt: activity?.lastEventAt || 0,
   };
 }

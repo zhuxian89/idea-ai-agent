@@ -1,5 +1,6 @@
 .tools/
 .gradle/
+.kotlin/
 .intellijPlatform/
 build/
 .idea/
@@ -10,4 +11,3 @@ runtime/web/dist/
 runtime/build/
 runtime/*.exe
 runtime/.mindfs/
-

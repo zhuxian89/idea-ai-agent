@@ -1,5 +1,6 @@
 import React from "react";
 import { getStoredString, setStoredString } from "../services/storage";
+import { persistIdeaLocale } from "../services/ideaPreferences";
 import { enUS } from "./locales/en-US";
 import { zhCN } from "./locales/zh-CN";
 import type { I18nContextValue, Locale, MessageKey, MessageParams, Messages } from "./types";
@@ -39,6 +40,10 @@ export function getStoredLocale(): Locale | null {
 }
 
 export function detectLocale(): Locale {
+  const hostLocale = typeof window !== "undefined" ? normalizeLocale(window.ideaAgent?.locale) : null;
+  if (hostLocale) {
+    return hostLocale;
+  }
   const stored = getStoredLocale();
   if (stored) {
     return stored;
@@ -57,6 +62,20 @@ export function detectLocale(): Locale {
 
 export function persistLocale(locale: Locale): void {
   setStoredString(LOCALE_STORAGE_KEY, locale);
+  persistIdeaLocale(locale);
+}
+
+export function restoreIdeaLocale(): void {
+  if (typeof window === "undefined" || !window.ideaAgent) return;
+  const hostLocale = normalizeLocale(window.ideaAgent.locale);
+  if (hostLocale) {
+    setStoredString(LOCALE_STORAGE_KEY, hostLocale);
+  } else {
+    // Migrate an explicit choice from an existing webview, never the inferred
+    // browser language, which could overwrite a choice on another startup.
+    const stored = getStoredLocale();
+    if (stored) persistIdeaLocale(stored);
+  }
 }
 
 export function applyDocumentLocale(locale: Locale): void {
@@ -105,11 +124,18 @@ export function I18nProvider({ children }: { children: React.ReactNode }): React
     const syncLocale = () => {
       setLocaleState(detectLocale());
     };
+    const syncIdeaLocale = () => {
+      restoreIdeaLocale();
+      syncLocale();
+    };
+    syncIdeaLocale();
     window.addEventListener("storage", syncLocale);
     window.addEventListener(LOCALE_CHANGE_EVENT, syncLocale);
+    window.addEventListener("ideaAgentReady", syncIdeaLocale);
     return () => {
       window.removeEventListener("storage", syncLocale);
       window.removeEventListener(LOCALE_CHANGE_EVENT, syncLocale);
+      window.removeEventListener("ideaAgentReady", syncIdeaLocale);
     };
   }, []);
 

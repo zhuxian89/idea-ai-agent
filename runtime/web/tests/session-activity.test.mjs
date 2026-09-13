@@ -10,6 +10,7 @@ const compiled = ts.transpileModule(source, {compilerOptions: {module: ts.Module
 vm.runInNewContext(compiled, {exports, require(name) {
   if (name === 'react') return {useEffect() {}, useMemo: fn => fn(), useState: value => [typeof value === 'function' ? value() : value, () => {}]};
   if (name === '../i18n') return {translateNow: key => key};
+  if (name === '../services/session') return {sessionService: {getSessionActivity: () => undefined}};
   return {};
 }});
 

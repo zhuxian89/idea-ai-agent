@@ -9,6 +9,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { smokeAgentManagement } from './smoke-agent-management.mjs';
 import { smokeMessageDelivery } from './smoke-message-delivery.mjs';
+import { smokeNativeChrome } from './smoke-native-chrome.mjs';
+import { smokeSessionModel } from './smoke-session-model.mjs';
+import { smokeQuestionChoice } from './smoke-question-choice.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const toolsDir = path.join(root, '.tools');
@@ -90,7 +93,13 @@ try {
     const { chromium } = createRequire(new URL('../runtime/web/package.json', import.meta.url))('@playwright/test');
     const chrome = process.env.IDE_AGENT_BROWSER || (process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined);
     browser = await chromium.launch({headless: true, ...(chrome ? {executablePath: chrome} : {channel: 'chrome'})});
-    const page = await browser.newPage({viewport: {width: 1120, height: 850}});
+    const reports = path.join(root, 'build/reports');
+    mkdirSync(reports, {recursive: true});
+    await smokeQuestionChoice(browser, bootstrapURL, ready.rootId, reports);
+    await smokeSessionModel(browser, bootstrapURL, ready.rootId, reports);
+    await smokeNativeChrome(browser, bootstrapURL, ready.rootId, reports);
+    // Accessible-name assertions below use the English UI, independent of host language.
+    const page = await browser.newPage({locale: 'en-US', viewport: {width: 1120, height: 850}});
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(bootstrapURL);
@@ -99,12 +108,11 @@ try {
     await page.waitForFunction(() => [...document.querySelectorAll('[contenteditable="true"]')].some(e => e.textContent.includes('IDE_CONTEXT_SMOKE')));
     await page.getByRole('button', {name: /worktree/i}).first().waitFor();
     assert.ok(await page.getByRole('button', {name: /worktree/i}).count() > 0, 'IDE composer must offer worktree creation for a Git project');
-    const reports = path.join(root, 'build/reports');
-    mkdirSync(reports, {recursive: true});
     await page.screenshot({path: path.join(reports, 'agent-wide.png'), animations: 'disabled'});
     await page.setViewportSize({width: 430, height: 850});
     await page.evaluate(() => window.ideaAgentSetTheme('dark'));
-    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark' && localStorage.getItem('mindfs-appearance-mode') === 'dark');
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+    assert.equal(await page.evaluate(() => localStorage.getItem('mindfs-appearance-mode')), null, 'Host theme updates must not become an explicit appearance preference');
     await page.waitForFunction(() => {
       const editor = [...document.querySelectorAll('[contenteditable="true"]')].find(e => e.textContent.includes('IDE_CONTEXT_SMOKE'));
       if (!editor) return false;

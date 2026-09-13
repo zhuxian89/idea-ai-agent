@@ -57,7 +57,10 @@ test("saved appearance still applies when no IDE theme is supplied", () => {
 test("React startup preserves the early IDE theme instead of restoring stale storage", () => {
   for (const theme of ["dark", "light"]) {
     const context = loadTheme({ theme, stored: theme === "dark" ? "light" : "dark" });
-    const appearance = { ...context, exports: {} };
+    const appearance = { ...context, exports: {}, require(name) {
+      if (name === "./ideaPreferences") return { persistIdeaAppearance() { assert.fail("startup theme must not overwrite saved preferences"); } };
+      throw new Error(`Unexpected appearance dependency: ${name}`);
+    } };
     const transpile = (path) => ts.transpileModule(fs.readFileSync(path, "utf8"), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React },
     }).outputText;
