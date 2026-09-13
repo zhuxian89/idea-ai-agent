@@ -524,7 +524,7 @@ func (h *WSHandler) handleSessionAnswerQuestion(ctx context.Context, conn *webso
 	if manager, err := h.AppContext.GetSessionManager(rootID); err == nil {
 		if sess, getErr := manager.Get(ctx, key, 0); getErr == nil && sess != nil && strings.TrimSpace(sess.TaskID) != "" {
 			if svc, svcErr := h.AppContext.GetKanbanService(); svcErr == nil {
-				value := false
+				value := manager.HasPendingAskUserQuestions(ctx, key)
 				if _, clearErr := svc.UpdateTaskAuxFlags(ctx, rootID, sess.TaskID, kanban.TaskAuxFlagsPatch{AskUserWaiting: &value}, "aux_ask_user_answered"); clearErr != nil {
 					log.Printf("[kanban] ask_user.answered.flag_clear.error root=%s task=%s session=%s err=%v", rootID, sess.TaskID, key, clearErr)
 				}

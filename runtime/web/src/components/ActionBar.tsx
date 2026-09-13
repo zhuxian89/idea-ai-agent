@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { subscribeIdeaContext } from "../services/ideaBridge";
+import { isIdeaChromeHost, requestIdeaEditorContext, subscribeIdeaContext } from "../services/ideaBridge";
 import { type SessionMode } from "./ModeSelector";
 import { ModeSelector } from "./ModeSelector";
 import { AgentSelector } from "./AgentSelector";
+import { PermissionSelector } from "./PermissionSelector";
 import { getAgentDefaults } from "../services/agentDefaults";
 import { nativePermissionChoices } from "../services/nativePermissions";
 import { fetchAgents, fetchShells, restartAgent, type AgentStatus, type ShellStatus } from "../services/agents";
@@ -487,6 +488,7 @@ export function ActionBar({
   const inputHistoryDraftRef = useRef("");
   const applyingInputHistoryRef = useRef(false);
   const { isMobile } = useResponsive();
+  const ideaChromeHost = isIdeaChromeHost();
   const isConnected = status === "connected";
   const connectionMeta = wsStatusMeta(status, t);
   const DRAG_THRESHOLD = -40;
@@ -1135,7 +1137,7 @@ export function ActionBar({
         return;
       }
     }
-    if (!activeToken && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+    if (!compactWorkbench && !activeToken && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
       if (e.key === "ArrowUp" && navigateInputHistory("previous")) {
         e.preventDefault();
         e.stopPropagation();
@@ -1146,7 +1148,7 @@ export function ActionBar({
         e.stopPropagation();
       }
     }
-  }, [candidates, activeCandidateIndex, applyCandidate, isCompositionActive, activeToken, navigateInputHistory]);
+  }, [compactWorkbench, candidates, activeCandidateIndex, applyCandidate, isCompositionActive, activeToken, navigateInputHistory]);
 
   const handleEditorEnter = useCallback((event: KeyboardEvent | null) => {
     if (isCompositionActive(event)) {
@@ -1942,13 +1944,18 @@ export function ActionBar({
                     stableLayout={compactWorkbench}
                     viewportMenu={compactWorkbench}
                     allowDefaultModel={compactWorkbench}
+                    closeOnSelect={!compactWorkbench}
                     defaultExpandOptions
                     onboardingId="agent-selector"
                     />
-                    {permissionChoices.length > 0 ? <select className="idea-permission-select" aria-label={t("permission.label")} title={t("permission.description")} value={effectiveAgentMode} disabled={sending} onChange={(event) => setAgentMode(event.target.value)}>
-                      {!permissionChoices.some((choice) => choice.id === effectiveAgentMode) ? <option value={effectiveAgentMode}>{effectiveAgentMode}</option> : null}
-                      {permissionChoices.map((choice) => <option key={choice.id} value={choice.id}>{t(choice.label)}</option>)}
-                    </select> : null}
+                    {permissionChoices.length > 0 ? <PermissionSelector
+                      value={effectiveAgentMode}
+                      choices={permissionChoices.map((choice) => ({ id: choice.id, label: t(choice.label) }))}
+                      label={t("permission.label")}
+                      description={t("permission.description")}
+                      disabled={sending}
+                      onChange={setAgentMode}
+                    /> : null}
                   </div>
                 ) : (
                   <ShellSelector
@@ -1991,6 +1998,31 @@ export function ActionBar({
                   <path d="M5 12h14" />
                 </svg>
                 </button>
+                {ideaChromeHost ? (
+                <button
+                type="button"
+                onClick={requestIdeaEditorContext}
+                title={t("idea.addEditorContext")}
+                aria-label={t("idea.addEditorContext")}
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--text-secondary)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="14 6 20 12 14 18" />
+                  <polyline points="10 6 4 12 10 18" />
+                </svg>
+                </button>
+                ) : null}
                 <button
                 data-onboarding="send-action"
                 type="button"

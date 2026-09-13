@@ -3,12 +3,12 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { I18nProvider } from "./i18n";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { applyAppearanceMode } from "./services/appearance";
+import { applyAppearanceMode, normalizeAppearanceMode } from "./services/appearance";
 import "./services/ideaBridge";
 import "./index.css";
 import "./ide.css";
 
-applyAppearanceMode();
+applyAppearanceMode(normalizeAppearanceMode(document.documentElement.getAttribute("data-theme")));
 document.title = "IDEA AI Agent";
 const container = document.getElementById("root");
 if (!container) throw new Error("Missing application root");

@@ -33,6 +33,7 @@ type AgentSelectorProps = {
   viewportMenu?: boolean;
   stableLayout?: boolean;
   allowDefaultModel?: boolean;
+  closeOnSelect?: boolean;
 };
 
 const AGENT_MENU_MAX_BODY_HEIGHT = 344;
@@ -162,6 +163,7 @@ export function AgentSelector({
   viewportMenu = false,
   stableLayout = false,
   allowDefaultModel = false,
+  closeOnSelect = true,
 }: AgentSelectorProps) {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
@@ -374,6 +376,18 @@ export function AgentSelector({
   const handleAgentSelect = useCallback(
     (newAgent: string, nextModel?: string) => {
       onAgentChange(newAgent, nextModel);
+      if (!closeOnSelect) {
+        const next = agents.find((item) => item.name === newAgent);
+        setErrorAgent(null);
+        setSubmenuAgent(hasAgentOptions(next) ? newAgent : null);
+        if (submenuAgent !== newAgent) {
+          setModelSectionExpanded(true);
+          setModeSectionExpanded(false);
+          setEffortSectionExpanded(false);
+          setServiceTierSectionExpanded(false);
+        }
+        return;
+      }
       setIsOpen(false);
       setSubmenuAgent(null);
       setErrorAgent(null);
@@ -382,11 +396,16 @@ export function AgentSelector({
       setEffortSectionExpanded(false);
       setServiceTierSectionExpanded(false);
     },
-    [onAgentChange],
+    [onAgentChange, closeOnSelect, agents, submenuAgent],
   );
 
   const handleAgentRowClick = useCallback(
     (entry: AgentStatus) => {
+      if (!closeOnSelect && entry.name === agent) {
+        setErrorAgent(null);
+        setSubmenuAgent(hasAgentOptions(entry) ? entry.name : null);
+        return;
+      }
       handleAgentSelect(
         entry.name,
         allowDefaultModel
@@ -394,7 +413,7 @@ export function AgentSelector({
           : entry.default_model_id || entry.current_model_id || "",
       );
     },
-    [allowDefaultModel, handleAgentSelect],
+    [allowDefaultModel, handleAgentSelect, closeOnSelect, agent],
   );
 
   const handleSubmenuToggle = useCallback((entry: AgentStatus) => {
@@ -426,6 +445,7 @@ export function AgentSelector({
   const handleEffortSelect = useCallback(
     (nextEffort: string) => {
       onEffortChange?.(nextEffort);
+      if (!closeOnSelect) return;
       setIsOpen(false);
       setSubmenuAgent(null);
       setErrorAgent(null);
@@ -435,12 +455,13 @@ export function AgentSelector({
       setServiceTierSectionExpanded(false);
       setMenuBodyHeight(null);
     },
-    [onEffortChange],
+    [onEffortChange, closeOnSelect],
   );
 
   const handleServiceTierSelect = useCallback(
     (nextFastService: "" | "on" | "off") => {
       onFastServiceChange?.(nextFastService);
+      if (!closeOnSelect) return;
       setIsOpen(false);
       setSubmenuAgent(null);
       setErrorAgent(null);
@@ -450,12 +471,13 @@ export function AgentSelector({
       setServiceTierSectionExpanded(false);
       setMenuBodyHeight(null);
     },
-    [onFastServiceChange],
+    [onFastServiceChange, closeOnSelect],
   );
 
   const handleModeSelect = useCallback(
     (nextMode: string) => {
       onModeChange?.(nextMode);
+      if (!closeOnSelect) return;
       setIsOpen(false);
       setSubmenuAgent(null);
       setErrorAgent(null);
@@ -465,7 +487,7 @@ export function AgentSelector({
       setServiceTierSectionExpanded(false);
       setMenuBodyHeight(null);
     },
-    [onModeChange],
+    [onModeChange, closeOnSelect],
   );
 
   const handleAgentRestart = useCallback(
@@ -1206,13 +1228,16 @@ function SectionHeader({
     >
       <span
         style={{
-          flex: "0 0 auto",
+          flex: "0 1 auto",
+          minWidth: 0,
+          maxWidth: "45%",
           fontSize: "11px",
           fontWeight: 700,
-          letterSpacing: "0.08em",
+          letterSpacing: "0.04em",
           textTransform: "uppercase",
           color: expanded ? "#3b82f6" : "var(--text-secondary)",
-          whiteSpace: "nowrap",
+          whiteSpace: "normal",
+          overflowWrap: "anywhere",
         }}
       >
         {title}
@@ -1235,12 +1260,10 @@ function SectionHeader({
               minWidth: 0,
               fontSize: "11px",
               color: "var(--text-secondary)",
-              whiteSpace: "nowrap",
-              maxWidth: "92px",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              direction: "rtl",
-              textAlign: "left",
+              whiteSpace: "normal",
+              maxWidth: "100%",
+              overflowWrap: "anywhere",
+              textAlign: "right",
             }}
           >
             {value}

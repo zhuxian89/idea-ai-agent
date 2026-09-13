@@ -75,12 +75,13 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 		return nil, err
 	}
 
+	permission := initialPermissionState(opts.Mode, opts.PlanMode)
 	s := &session{
 		sessionKey:             opts.SessionKey,
 		model:                  strings.TrimSpace(opts.Model),
-		planMode:               opts.PlanMode,
-		permissionMode:         claudeagent.PermissionMode(strings.TrimSpace(opts.Mode)),
-		previousPermissionMode: claudeagent.PermissionMode(strings.TrimSpace(opts.Mode)),
+		planMode:               permission.planMode,
+		permissionMode:         permission.permissionMode,
+		previousPermissionMode: permission.previousPermissionMode,
 		agentDebugLog:          logs.NewAgentLogger(opts.RootPath, opts.SessionKey, opts.AgentName),
 		questionWaits:          make(map[string]*types.PendingQuestion[claudeagent.Answers]),
 	}
@@ -372,24 +373,22 @@ func (s *session) SetPlanMode(ctx context.Context, enabled bool) error {
 	if s == nil || s.stream == nil {
 		return errors.New("claude session not initialized")
 	}
-	s.mu.Lock()
-	if enabled && s.permissionMode != "" && s.permissionMode != claudeagent.PermissionModePlan {
-		s.previousPermissionMode = s.permissionMode
-	}
-	mode := s.previousPermissionMode
-	if mode == "" {
-		mode = claudeagent.PermissionModeDefault
-	}
-	s.mu.Unlock()
-	if enabled {
-		mode = claudeagent.PermissionModePlan
-	}
-	if err := s.stream.SetPermissionMode(ctx, mode); err != nil {
+	s.mu.RLock()
+	transition := resolveSetPlanMode(permissionState{
+		planMode:               s.planMode,
+		permissionMode:         s.permissionMode,
+		previousPermissionMode: s.previousPermissionMode,
+	}, enabled)
+	s.mu.RUnlock()
+	if err := s.stream.SetPermissionMode(ctx, transition.send); err != nil {
+		// Without a successful ack the runtime keeps its current mode, so the
+		// recorded state must stay untouched.
 		return err
 	}
 	s.mu.Lock()
 	s.planMode = enabled
-	s.permissionMode = mode
+	s.permissionMode = transition.effective
+	s.previousPermissionMode = transition.base
 	s.mu.Unlock()
 	return nil
 }
@@ -459,17 +458,26 @@ func (s *session) SetMode(ctx context.Context, mode string) error {
 		next = claudeagent.PermissionModeDefault
 	}
 	s.mu.RLock()
-	planning := s.planMode
+	transition := resolveSetMode(permissionState{
+		planMode:               s.planMode,
+		permissionMode:         s.permissionMode,
+		previousPermissionMode: s.previousPermissionMode,
+	}, next)
 	s.mu.RUnlock()
-	if !planning {
-		if err := s.stream.SetPermissionMode(ctx, next); err != nil {
+	// While the CLI is planning - including plans it entered natively - the
+	// plan approval flow owns the runtime mode: only the base mode is
+	// recorded here and no control request may exit or bypass the plan.
+	if transition.send != "" {
+		if err := s.stream.SetPermissionMode(ctx, transition.send); err != nil {
+			// Without a successful ack the runtime keeps its current mode, so
+			// the recorded state must stay untouched.
 			return err
 		}
 	}
 	s.mu.Lock()
-	s.previousPermissionMode = next
-	if !planning {
-		s.permissionMode = next
+	s.previousPermissionMode = transition.previous
+	if transition.send != "" {
+		s.permissionMode = transition.effective
 	}
 	s.mu.Unlock()
 	return nil
@@ -1048,6 +1056,10 @@ func (s *session) handleTaskNotificationMessage(msg claudeagent.TaskNotification
 }
 
 func (s *session) awaitAskUserQuestion(ctx context.Context, qs claudeagent.QuestionSet) (claudeagent.Answers, error) {
+	return s.awaitQuestion(ctx, qs, false)
+}
+
+func (s *session) awaitQuestion(ctx context.Context, qs claudeagent.QuestionSet, resolveLocally bool) (claudeagent.Answers, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -1081,7 +1093,11 @@ func (s *session) awaitAskUserQuestion(ctx context.Context, qs claudeagent.Quest
 		Data:      toolCall,
 	})
 
-	return waiter.Wait()
+	answers, err := waiter.Wait()
+	if resolveLocally {
+		s.resolveApprovalQuestion(qs, answers, err)
+	}
+	return answers, err
 }
 
 func askUserQuestionToolCall(qs claudeagent.QuestionSet) types.ToolCall {

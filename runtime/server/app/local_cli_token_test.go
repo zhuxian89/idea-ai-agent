@@ -70,6 +70,7 @@ func TestLocalCLITokenStoreWritesSinglePrivateFile(t *testing.T) {
 
 func setTestConfigHome(t *testing.T, dir string) {
 	t.Helper()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("HOME", dir)
 	t.Setenv("AppData", dir)

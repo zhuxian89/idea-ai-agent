@@ -14,6 +14,7 @@ import (
 
 func TestGetOrCreateDeviceIDStable(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -36,6 +37,7 @@ func TestGetOrCreateDeviceIDStable(t *testing.T) {
 
 func TestCredentialsStoreSaveLoad(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -75,6 +77,7 @@ func TestCredentialsStoreSaveLoad(t *testing.T) {
 
 func TestCredentialsStoreClear(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -165,6 +168,7 @@ func TestPrepareLocalProxyHeadersKeepsRelayedHeaderForNodeProxy(t *testing.T) {
 
 func TestServicePollBind(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -206,6 +210,7 @@ func TestServicePollBind(t *testing.T) {
 
 func TestServiceStoreRelayNodeNameFromHandshake(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -234,6 +239,7 @@ func TestServiceStoreRelayNodeNameFromHandshake(t *testing.T) {
 
 func TestManagerStartBindingGeneratesPendingCode(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -270,6 +276,7 @@ func TestManagerStartBindingGeneratesPendingCode(t *testing.T) {
 
 func TestManagerNoRelayerDoesNotGeneratePendingCode(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -293,6 +300,7 @@ func TestManagerNoRelayerDoesNotGeneratePendingCode(t *testing.T) {
 
 func TestManagerPollConfirmedStartsRelay(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -360,6 +368,7 @@ func TestManagerPollConfirmedStartsRelay(t *testing.T) {
 
 func TestManagerPollTerminalBindStatusStopsPolling(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -417,6 +426,7 @@ func TestManagerPollTerminalBindStatusStopsPolling(t *testing.T) {
 
 func TestManagerDefaultsRelayBaseToLocalhost(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -440,6 +450,7 @@ func TestManagerDefaultsRelayBaseToLocalhost(t *testing.T) {
 
 func TestManagerPermanentRelayErrorClearsCredentialsAndWaitsForExplicitRebind(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 
@@ -501,6 +512,7 @@ func TestManagerPermanentRelayErrorClearsCredentialsAndWaitsForExplicitRebind(t 
 
 func TestManagerStartClearsCredentialsWhenRelayBaseChanges(t *testing.T) {
 	configRoot := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", configRoot)
 	t.Setenv("HOME", configRoot)
 

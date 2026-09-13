@@ -1874,6 +1874,16 @@ func (s *Service) ensureAgentSession(
 				}
 				log.Printf("[session/plan] switch.done session=%s agent=%s plan_mode=%t pool_session=%s", current.Key, agentName, nextPlanMode, poolSessionKey)
 			}
+			// The transcript mode can drift from the live runtime (CLI reset,
+			// native plan entry, dropped bypass). Re-check before the next send
+			// and abort the turn when the runtime refuses to re-sync.
+			if err := ensureRuntimePermissionMode(ctx, current, agentName, nextMode, existing); err != nil {
+				if prober := s.Registry.GetProber(); prober != nil {
+					prober.ReportRuntimeFailure(agentName, err)
+				}
+				log.Printf("[session/mode] verify.error session=%s agent=%s mode=%q pool_session=%s err=%v", poolSessionKey, agentName, nextMode, poolSessionKey, err)
+				return nil, nil, err
+			}
 			var currentSeq *int
 			if current != nil {
 				last := current.AgentCtxSeq[agentName]
@@ -2065,6 +2075,62 @@ func resolveSessionExchangeMode(current *session.Session) string {
 		}
 	}
 	return ""
+}
+
+// duckPermissionModeReader is implemented by runtime sessions that can report
+// their live permission mode. Currently only the Claude SDK session does;
+// keeping this duck-typed avoids touching the shared session interface and
+// other providers.
+type duckPermissionModeReader interface {
+	CurrentMode() string
+}
+
+// runtimePermissionMode returns the live permission mode reported by a pooled
+// runtime session, or "" when it cannot report one (legacy providers/stubs).
+func runtimePermissionMode(runtime agenttypes.Session) string {
+	if runtime == nil {
+		return ""
+	}
+	reader, ok := runtime.(duckPermissionModeReader)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(reader.CurrentMode())
+}
+
+// ensureRuntimePermissionMode re-checks a pooled runtime session's live
+// permission mode against the mode resolved for the next message. The
+// transcript alone cannot be trusted: the CLI may have reset the mode, entered
+// plan natively, or dropped a bypass selection since the last exchange, so a
+// recorded-but-inactive bypass would otherwise never be corrected. When the
+// runtime disagrees, a SetMode control request is sent and must succeed
+// before the caller continues; after the ack both sides agree, so following
+// turns need no repeated control request.
+//
+// An empty nextMode keeps the CLI default semantics: nothing is forced.
+// Runtimes that cannot report their mode keep the legacy behavior. While the
+// runtime is planning, SetMode only records the requested base mode (see the
+// Claude session), so the plan approval flow is never bypassed and exiting
+// plan restores the user's selection.
+func ensureRuntimePermissionMode(ctx context.Context, current *session.Session, agentName, nextMode string, existing agenttypes.Session) error {
+	nextMode = strings.TrimSpace(nextMode)
+	if nextMode == "" || existing == nil {
+		return nil
+	}
+	runtimeMode := runtimePermissionMode(existing)
+	if runtimeMode == "" || runtimeMode == nextMode {
+		return nil
+	}
+	key := ""
+	if current != nil {
+		key = current.Key
+	}
+	log.Printf("[session/mode] verify.detected session=%s agent=%s runtime_mode=%q resolved_mode=%q action=set_runtime_mode", key, agentName, runtimeMode, nextMode)
+	if err := existing.SetMode(ctx, nextMode); err != nil {
+		return err
+	}
+	log.Printf("[session/mode] verify.done session=%s agent=%s mode=%q pool_session_runtime_mode=%q", key, agentName, nextMode, runtimePermissionMode(existing))
+	return nil
 }
 
 func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {

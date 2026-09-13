@@ -10,6 +10,7 @@ export const zhCN = {
   "idea.settings": "Agent 配置与安装",
   "idea.backToChat": "返回聊天",
   "idea.currentProject": "当前 IDEA 项目",
+  "idea.addEditorContext": "加入当前代码",
   "idea.startChat": "开始新的对话",
   "idea.startHint": "描述你想完成的任务，或从 IDEA 编辑器添加代码上下文。",
   "idea.addConfig": "添加 Agent 配置",

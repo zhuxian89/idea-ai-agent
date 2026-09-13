@@ -76,7 +76,7 @@ macOS/Linux 使用 `./gradlew buildPlugin`。构建会编译 Web 前端和当前
 
 回复下方保留复制、分叉、模型、推理强度、时间、耗时和上下文占用；数据以 Agent 实际返回为准。当前尚不显示输入/输出 Token 和缓存命中率明细。
 
-选中代码后通过右键「发送到 AI Agent」或 `Ctrl+Alt+A` 加入聊天草稿。没有选中内容时加入当前文件；未保存的编辑器内容会注明。添加上下文不会自动发送消息。模型执行结束后触发 IDE 文件刷新，会话中的文件链接可以打开当前 IDEA 项目内的文件。
+IDEA 原生标题栏保留新会话、历史、设置，网页内部不再重复显示同一工具栏；重新连接位于标题栏的更多菜单。选中代码后通过输入框旁的「加入当前代码」、右键「发送到 AI Agent」或 `Ctrl+Alt+A` 加入聊天草稿。没有选中内容时加入当前文件；未保存的编辑器内容会注明。添加上下文不会自动发送消息。模型执行结束后触发 IDE 文件刷新，会话中的文件链接可以打开当前 IDEA 项目内的文件。
 
 ## 验证
 
@@ -85,10 +85,12 @@ macOS/Linux 使用 `./gradlew buildPlugin`。构建会编译 Web 前端和当前
 ./gradlew.bat verifyPluginProjectConfiguration verifyPlugin
 cd runtime/web
 pnpm run typecheck
-cd ..
-go test ./server/app ./server/cmd/idea-agent ./server/internal/api -run TestIDE
-go test ./server/internal/agent ./server/internal/agent/codex ./server/internal/agent/acp
+node --test tests/*.test.mjs
+cd ../..
+node scripts/test-runtime.mjs
 ```
+
+服务端测试脚本使用临时 HOME/配置目录，并移除继承的 `IDE_AGENT_DATA_DIR` 和模型认证变量，避免从插件内运行测试时写入正在使用的运行时配置；Go 构建缓存仍复用。脚本后面可以附加 `go test` 参数，例如 `node scripts/test-runtime.mjs ./server/internal/agent/claude -count=1`。
 
 运行 `node scripts/smoke-runtime.mjs` 可验证本地服务和浏览器界面，需要本机 Chrome；仅验证 HTTP 时加 `--http-only`。测试使用空 Agent 配置，不调用模型。
 

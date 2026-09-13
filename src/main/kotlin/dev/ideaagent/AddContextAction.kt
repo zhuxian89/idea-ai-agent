@@ -1,6 +1,6 @@
 package dev.ideaagent
 
-import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -10,7 +10,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
 import java.nio.file.Path
 
-class AddContextAction : AnAction() {
+class AddContextAction : DumbAwareAction() {
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
 
     override fun update(event: AnActionEvent) {

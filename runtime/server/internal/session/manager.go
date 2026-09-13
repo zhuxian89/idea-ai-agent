@@ -373,6 +373,21 @@ func (m *Manager) AcceptPendingAskUserAnswer(ctx context.Context, sessionKey, ca
 	return nil
 }
 
+func (m *Manager) HasPendingAskUserQuestions(_ context.Context, sessionKey string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, call := range m.pendingToolCalls[strings.TrimSpace(sessionKey)] {
+		if call.Kind != agenttypes.ToolKindAskUser {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(call.Status)) {
+		case "", "running", "pending", "in_progress":
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Manager) ClearPendingExchangeAux(_ context.Context, sessionKey string) {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {

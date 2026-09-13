@@ -828,7 +828,7 @@ func (h *HTTPHandler) handleSessionGet(w http.ResponseWriter, r *http.Request) {
 		Key:    key,
 		Seq:    afterSeq,
 	})
-	respondJSON(w, http.StatusOK, h.sessionResponse(out, pendingUser, contextWindow, exchangeAux))
+	respondJSON(w, http.StatusOK, h.sessionResponse(r.Context(), rootID, out, pendingUser, contextWindow, exchangeAux))
 }
 
 func (h *HTTPHandler) handleSessionSync(w http.ResponseWriter, r *http.Request) {
@@ -870,7 +870,7 @@ func (h *HTTPHandler) handleSessionSync(w http.ResponseWriter, r *http.Request) 
 		Key:    key,
 		Seq:    afterSeq,
 	})
-	respondJSON(w, http.StatusOK, h.sessionResponse(out, nil, contextWindow, exchangeAux))
+	respondJSON(w, http.StatusOK, h.sessionResponse(r.Context(), rootID, out, nil, contextWindow, exchangeAux))
 }
 
 func (h *HTTPHandler) handleSessionToolCallGet(w http.ResponseWriter, r *http.Request) {
@@ -989,7 +989,7 @@ func (h *HTTPHandler) handleSessionFork(w http.ResponseWriter, r *http.Request) 
 	}
 	respondJSON(w, http.StatusOK, map[string]any{
 		"session_key": out.Session.Key,
-		"session":     h.sessionResponse(out.Session, nil, agenttypes.ContextWindow{}, nil),
+		"session":     h.sessionResponse(r.Context(), req.RootID, out.Session, nil, agenttypes.ContextWindow{}, nil),
 	})
 }
 
@@ -1092,7 +1092,49 @@ func (h *HTTPHandler) handleSessionDelete(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// applyHistoryDisplayOverrides rewrites the display copy of persisted user
+// exchanges that the native CLI generated as background task notifications.
+// It operates on the response copy only and never touches the cached session
+// pointer; exchange count, roles, seq, and timestamps are preserved so client
+// caches still advance, and any projection failure falls back to the stored
+// content instead of failing the history response.
+func (h *HTTPHandler) applyHistoryDisplayOverrides(ctx context.Context, rootID string, s *session.Session, exchanges []session.Exchange) {
+	if h == nil || h.AppContext == nil || s == nil || len(exchanges) == 0 {
+		return
+	}
+	hasUserText := false
+	for _, exchange := range exchanges {
+		if exchange.Seq > 0 && strings.EqualFold(strings.TrimSpace(exchange.Role), "user") && strings.TrimSpace(exchange.Content) != "" {
+			hasUserText = true
+			break
+		}
+	}
+	if !hasUserText {
+		return
+	}
+	overrides, err := h.service().SessionHistoryDisplayOverrides(ctx, usecase.SessionHistoryDisplayInput{
+		RootID: strings.TrimSpace(rootID),
+		Key:    s.Key,
+	})
+	if err != nil {
+		log.Printf("[session/display] projection incomplete root=%s session=%s err=%v", strings.TrimSpace(rootID), strings.TrimSpace(s.Key), err)
+	}
+	if len(overrides) == 0 {
+		return
+	}
+	for index := range exchanges {
+		if exchanges[index].Seq <= 0 || !strings.EqualFold(strings.TrimSpace(exchanges[index].Role), "user") {
+			continue
+		}
+		if display, ok := overrides[exchanges[index].Seq]; ok {
+			exchanges[index].Content = display
+		}
+	}
+}
+
 func (h *HTTPHandler) sessionResponse(
+	ctx context.Context,
+	rootID string,
 	s *session.Session,
 	pendingUser *session.Exchange,
 	contextWindow agenttypes.ContextWindow,
@@ -1102,6 +1144,7 @@ func (h *HTTPHandler) sessionResponse(
 		return map[string]any{}
 	}
 	exchanges := append([]session.Exchange{}, s.Exchanges...)
+	h.applyHistoryDisplayOverrides(ctx, rootID, s, exchanges)
 	if pendingUser != nil {
 		pendingUser.Seq = 0
 		exchanges = append(exchanges, *pendingUser)

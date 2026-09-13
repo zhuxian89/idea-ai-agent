@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { isIdeaChromeHost, subscribeIdeaNativeCommand } from "../services/ideaBridge";
 
 export type IdeaWorkbenchOptions = {
   projectName: string;
@@ -60,21 +61,41 @@ function ToolbarButton({ label, kind, pressed, onClick }: {
 export function IdeaWorkbench(props: Props) {
   const { t } = useI18n();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // Only the IDE host loads the page with ide_chrome=1; its native tool window
+  // already carries the "AI Agent" title, new/history/settings actions, and a
+  // gear menu. A plain browser keeps the embedded toolbar for standalone use.
+  const [chrome] = useState(isIdeaChromeHost);
   const view = props.settingsOpen ? "settings" : props.historyOpen ? "history" : "chat";
   const previousView = useRef(view);
-  const backToChat = () => { props.onCloseSettings?.(); props.onCloseHistory?.(); };
+  const commandView = useRef(view);
+  commandView.current = view;
+  const backToChat = () => { commandView.current = "chat"; props.onCloseSettings?.(); props.onCloseHistory?.(); };
+  const newSession = () => { backToChat(); props.onNewSession(); };
+  const toggleHistory = () => { if (commandView.current === "history") backToChat(); else { commandView.current = "history"; props.onCloseSettings?.(); props.onOpenHistory?.(); } };
+  const toggleSettings = () => { if (commandView.current === "settings") backToChat(); else { commandView.current = "settings"; props.onCloseHistory?.(); props.onOpenSettings?.(); } };
+  const commandRef = useRef<(command: string) => void>(() => {});
+  commandRef.current = (command) => {
+    if (command === "new") newSession();
+    else if (command === "history") toggleHistory();
+    else if (command === "settings") toggleSettings();
+  };
+  useEffect(() => {
+    if (!chrome) return;
+    // Native title actions arrive as commands; queued ones replay on subscribe.
+    return subscribeIdeaNativeCommand((command) => commandRef.current(command));
+  }, [chrome]);
   useEffect(() => {
     if (previousView.current !== view) headingRef.current?.focus();
     previousView.current = view;
   }, [view]);
   return (
-    <div className="idea-workbench" data-onboarding="shell" data-idea-view={view}>
-      <header className="idea-toolbar">
+    <div className="idea-workbench" data-onboarding="shell" data-idea-view={view} data-idea-chrome={chrome ? "true" : undefined}>
+      {!chrome ? <header className="idea-toolbar">
         <strong>AI Agent</strong>
-        <ToolbarButton kind="new" label={t("session.new")} onClick={() => { backToChat(); props.onNewSession(); }} />
-        <ToolbarButton kind="history" label={t("idea.history")} pressed={view === "history"} onClick={() => { if (view === "history") backToChat(); else { props.onCloseSettings?.(); props.onOpenHistory?.(); } }} />
-        <ToolbarButton kind="settings" label={t("idea.settings")} pressed={view === "settings"} onClick={() => { if (view === "settings") backToChat(); else { props.onCloseHistory?.(); props.onOpenSettings?.(); } }} />
-      </header>
+        <ToolbarButton kind="new" label={t("session.new")} onClick={newSession} />
+        <ToolbarButton kind="history" label={t("idea.history")} pressed={view === "history"} onClick={toggleHistory} />
+        <ToolbarButton kind="settings" label={t("idea.settings")} pressed={view === "settings"} onClick={toggleSettings} />
+      </header> : null}
       <header className="idea-view-heading">
         {view !== "chat" ? <button type="button" className="idea-icon-button" aria-label={t("idea.backToChat")} title={t("idea.backToChat")} onClick={backToChat}><Icon kind="back" /></button> : null}
         <div>

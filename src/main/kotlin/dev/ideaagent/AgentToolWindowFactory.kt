@@ -9,9 +9,11 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -31,31 +33,82 @@ import org.cef.handler.CefLoadHandlerAdapter
 import org.cef.handler.CefRequestHandlerAdapter
 import org.cef.network.CefRequest
 import java.awt.BorderLayout
+import java.awt.Color
 import java.nio.file.Path
+import javax.swing.Icon
 import javax.swing.JLabel
 import javax.swing.JPanel
 
-class AgentToolWindowFactory : ToolWindowFactory {
+class AgentToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = AgentPanel(project)
         val content = ContentFactory.getInstance().createContent(panel, "", false)
         content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
-        toolWindow.setTitleActions(listOf(
-            object : DumbAwareAction("加入当前代码", "将选中代码或当前文件加入聊天输入框", AllIcons.General.Add) {
-                override fun getActionUpdateThread() = ActionUpdateThread.EDT
-                override fun update(event: AnActionEvent) {
-                    event.presentation.isEnabled = !project.isDisposed &&
-                        FileEditorManager.getInstance(project).selectedTextEditor != null
-                }
-                override fun actionPerformed(event: AnActionEvent) = panel.addCurrentEditorContext()
-            },
+        // Keep a single "AI Agent" title on the native tool window stripe. The
+        // web page drops its duplicated toolbar in ide_chrome mode, so these
+        // title actions carry new/history/settings, and reconnecting moves into
+        // the tool window gear menu.
+        toolWindow.setTitleActions(NativeAgentCommands.all.map { command ->
+            NativeAgentCommandAction(command, panel::sendNativeCommand,
+                NativeAgentCommands.title(command), NativeAgentCommands.description(command),
+                NativeAgentCommands.icon(command))
+        })
+        toolWindow.setAdditionalGearActions(DefaultActionGroup(
             object : DumbAwareAction("重新连接", "重新连接本地 Agent 聊天界面", AllIcons.Actions.Refresh) {
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
                 override fun actionPerformed(event: AnActionEvent) = panel.start()
             },
         ))
         panel.start()
     }
+}
+
+internal object NativeAgentCommands {
+    val all = listOf("new", "history", "settings")
+
+    fun title(command: String): String = when (command) {
+        "new" -> "新会话"
+        "history" -> "聊天历史"
+        else -> "Agent 配置"
+    }
+
+    fun description(command: String): String = when (command) {
+        "new" -> "开始一个新的 Agent 会话"
+        "history" -> "打开或返回聊天历史"
+        else -> "打开或返回 Agent 配置与安装"
+    }
+
+    fun icon(command: String): Icon = when (command) {
+        "new" -> AllIcons.General.Add
+        "history" -> AllIcons.Vcs.History
+        else -> AllIcons.General.Settings
+    }
+}
+
+internal class NativeAgentCommandAction(
+    private val command: String,
+    private val send: (String) -> Unit,
+    text: String,
+    description: String,
+    icon: Icon,
+) : DumbAwareAction(text, description, icon) {
+    override fun getActionUpdateThread() = ActionUpdateThread.EDT
+    override fun actionPerformed(event: AnActionEvent) = fire()
+
+    internal fun fire() = send(command)
+}
+
+/** Commands clicked before the webview finishes loading replay once it has. */
+internal class WebviewCommandQueue {
+    private val pending = mutableListOf<String>()
+
+    fun offer(command: String) {
+        pending.add(command)
+    }
+
+    fun drain(): List<String> =
+        if (pending.isEmpty()) emptyList() else pending.toList().also { pending.clear() }
 }
 
 class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
@@ -66,11 +119,13 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
     private var loaded = false
     private var closed = false
     private val pendingContexts = mutableListOf<String>()
+    private val queuedCommands = WebviewCommandQueue()
     private val gson = Gson()
 
     init {
         body.add(status, BorderLayout.CENTER)
         add(body, BorderLayout.CENTER)
+        syncTheme()
         project.messageBus.connect(this).subscribe(LafManagerListener.TOPIC, LafManagerListener { syncTheme() })
     }
 
@@ -80,12 +135,25 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         }
     }
 
+    fun sendNativeCommand(command: String) {
+        if (closed) return
+        if (!loaded) {
+            queuedCommands.offer(command)
+            return
+        }
+        execute("window.ideaAgentNativeCommand?.(${gson.toJson(command)});")
+    }
+
     fun start() {
         if (closed) return
         if (!JBCefApp.isSupported()) {
             showStatus("当前运行环境不支持 JCEF。请使用 IDEA 自带的 JetBrains Runtime。")
             return
         }
+        // A (re)connect detaches the old page right away; keep every action
+        // queued until the new webview has loaded, or clicks would fire into
+        // the view that is about to be replaced and be lost.
+        loaded = false
         showStatus("正在启动本地 Agent…")
         project.getService(LocalRuntime::class.java).start().whenComplete { ready, error ->
             ApplicationManager.getApplication().invokeLater {
@@ -110,6 +178,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         connection = ready
         val view = JBCefBrowser()
         browser = view
+        val theme = syncTheme()
         Disposer.register(this, view)
         // Select the supported overload; the JBCefBrowser overload is scheduled for removal.
         val query = JBCefJSQuery.create(view as JBCefBrowserBase)
@@ -131,6 +200,9 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                         }
                     }
                     "refresh" -> VirtualFileManager.getInstance().asyncRefresh(null)
+                    "addContext" -> ApplicationManager.getApplication().invokeLater {
+                        if (!project.isDisposed) addCurrentEditorContext()
+                    }
                     else -> error("Unsupported IDE request")
                 }
                 JBCefJSQuery.Response("ok")
@@ -141,7 +213,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         view.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
             override fun onLoadEnd(cefBrowser: CefBrowser, frame: CefFrame, statusCode: Int) {
                 if (!frame.isMain || !LocalEndpoint.sameOrigin(ready.endpoint, frame.url)) return
-                cefBrowser.executeJavaScript("window.ideaAgent = { postMessage: payload => { ${query.inject("JSON.stringify(payload)")} } };", frame.url, 0)
+                cefBrowser.executeJavaScript("window.ideaAgent = { postMessage: payload => { ${query.inject("JSON.stringify(payload)")} } }; window.dispatchEvent(new Event(\"ideaAgentReady\"));", frame.url, 0)
                 ApplicationManager.getApplication().invokeLater {
                     if (closed || browser !== view) return@invokeLater
                     loaded = true
@@ -149,6 +221,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                     val contexts = pendingContexts.toList()
                     pendingContexts.clear()
                     contexts.forEach(::addContext)
+                    queuedCommands.drain().forEach(::sendNativeCommand)
                 }
             }
         }, view.cefBrowser)
@@ -169,7 +242,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         body.add(view.component, BorderLayout.CENTER)
         body.revalidate()
         body.repaint()
-        view.loadURL("${ready.endpoint}/?ide_token=${ready.token}")
+        view.loadURL("${ready.endpoint}/?ide_token=${ready.token}&ide_theme=$theme&ide_chrome=1")
     }
 
     private fun openExternal(url: String) {
@@ -182,11 +255,19 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         execute("window.ideaAgentReceiveContext?.(${gson.toJson(text)});")
     }
 
-    private fun syncTheme() {
-        if (!loaded) return
-        val background = UIUtil.getPanelBackground()
+    private fun syncTheme(): String {
+        val background = UIUtil.getPanelBackground() ?: Color(0x1e1f22)
+        this.background = background
+        body.background = background
+        browser?.let { view ->
+            view.component.background = background
+            view.cefBrowser.uiComponent.background = background
+            view.setPageBackgroundColor("#%06x".format(background.rgb and 0xffffff))
+        }
         val dark = (background.red * 299 + background.green * 587 + background.blue * 114) / 1000 < 128
-        execute("window.ideaAgentSetTheme?.(${gson.toJson(if (dark) "dark" else "light")});")
+        val theme = if (dark) "dark" else "light"
+        if (loaded) execute("window.ideaAgentSetTheme?.(${gson.toJson(theme)});")
+        return theme
     }
 
     private fun execute(script: String) {
@@ -195,5 +276,5 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         if (LocalEndpoint.sameOrigin(ready.endpoint, view.cefBrowser.url)) view.cefBrowser.executeJavaScript(script, ready.endpoint.toString(), 0)
     }
 
-    override fun dispose() { closed = true; pendingContexts.clear() }
+    override fun dispose() { closed = true; pendingContexts.clear(); queuedCommands.drain() }
 }

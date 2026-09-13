@@ -49,6 +49,20 @@ type sessionFileCandidate struct {
 type importedExchangeLocator struct {
 	agenttypes.ImportedExchange
 	ClaudeLastMessageUUID string
+	// Segments records each JSONL line's contribution to a merged exchange in
+	// merge order. It is display-projection metadata only and never changes the
+	// canonical ImportedExchange output shared with fork resolution.
+	Segments []importedContentSegment
+}
+
+// importedContentSegment mirrors appendMergedClaudeExchangeLocator's merge
+// order so the display projector can replay every intermediate merged state.
+// Notification marks only lines the native CLI explicitly tagged with
+// origin.kind = task-notification.
+type importedContentSegment struct {
+	Content      string
+	Timestamp    time.Time
+	Notification bool
 }
 
 type importedTurn struct {
@@ -120,20 +134,33 @@ func (i *Importer) ImportExternalSession(_ context.Context, in agenttypes.Import
 	if targetID == "" {
 		return agenttypes.ImportedExternalSession{}, errors.New("agent session id required")
 	}
-	if file, ok := i.lookupSessionFile(targetID, rootPath); ok {
-		return i.importSessionFile(file, in.AfterTimestamp, in.Cursor)
-	}
-	files, err := i.scanSessionFiles(context.Background(), rootPath, time.Time{}, time.Time{}, int(^uint(0)>>1), nil)
+	file, ok, err := i.resolveClaudeSessionFile(targetID, rootPath)
 	if err != nil {
 		return agenttypes.ImportedExternalSession{}, err
 	}
-	for _, file := range files {
-		if file.AgentSessionID != targetID {
-			continue
-		}
-		return i.importSessionFile(file, in.AfterTimestamp, in.Cursor)
+	if !ok {
+		return agenttypes.ImportedExternalSession{}, errors.New("external session not found")
 	}
-	return agenttypes.ImportedExternalSession{}, errors.New("external session not found")
+	return i.importSessionFile(file, in.AfterTimestamp, in.Cursor)
+}
+
+// resolveClaudeSessionFile locates the native JSONL file for one agent session
+// by session id, reusing the cached index first and the regular directory scan
+// as a fallback. It never hardcodes paths.
+func (i *Importer) resolveClaudeSessionFile(targetID, rootPath string) (claudeSessionFile, bool, error) {
+	if file, ok := i.lookupSessionFile(targetID, rootPath); ok {
+		return file, true, nil
+	}
+	files, err := i.scanSessionFiles(context.Background(), rootPath, time.Time{}, time.Time{}, int(^uint(0)>>1), nil)
+	if err != nil {
+		return claudeSessionFile{}, false, err
+	}
+	for _, file := range files {
+		if file.AgentSessionID == targetID {
+			return file, true, nil
+		}
+	}
+	return claudeSessionFile{}, false, nil
 }
 
 func (i *Importer) importSessionFile(file claudeSessionFile, after time.Time, previous agenttypes.ExternalSessionCursor) (agenttypes.ImportedExternalSession, error) {
@@ -693,7 +720,11 @@ func readClaudeImportedExchangeLocators(path string, after time.Time) ([]importe
 			applyClaudeToolResults(items, toolLocations, message["content"], raw["toolUseResult"], ts)
 			text := extractClaudeImportedUserText(message["content"])
 			if text != "" && isMeaningfulClaudeUserText(text) {
-				items, _, _ = appendMergedClaudeExchangeLocator(items, "user", text, ts, uuid, nil)
+				items, _, _ = appendMergedClaudeExchangeLocator(items, "user", text, ts, uuid, nil, importedContentSegment{
+					Content:      text,
+					Timestamp:    ts,
+					Notification: isClaudeTaskNotificationLine(raw),
+				})
 			}
 			return nil
 		}
@@ -710,6 +741,7 @@ func readClaudeImportedExchangeLocators(path string, after time.Time) ([]importe
 			ts,
 			uuid,
 			aux,
+			importedContentSegment{},
 		)
 		for index := auxStart; index < len(items[exchangeIndex].Aux); index++ {
 			toolCall := items[exchangeIndex].Aux[index].ToolCall
@@ -1000,6 +1032,7 @@ func appendMergedClaudeExchangeLocator(
 	ts time.Time,
 	uuid string,
 	aux []agenttypes.ImportedExchangeAux,
+	segment importedContentSegment,
 ) ([]importedExchangeLocator, int, int) {
 	content = strings.TrimSpace(content)
 	if content == "" && len(aux) == 0 {
@@ -1021,6 +1054,9 @@ func appendMergedClaudeExchangeLocator(
 		if strings.TrimSpace(uuid) != "" {
 			last.ClaudeLastMessageUUID = strings.TrimSpace(uuid)
 		}
+		if segment.Content != "" {
+			last.Segments = append(last.Segments, segment)
+		}
 		auxStart := len(last.Aux)
 		for _, item := range aux {
 			item.Line += lineOffset
@@ -1028,7 +1064,7 @@ func appendMergedClaudeExchangeLocator(
 		}
 		return items, len(items) - 1, auxStart
 	}
-	items = append(items, importedExchangeLocator{
+	item := importedExchangeLocator{
 		ImportedExchange: agenttypes.ImportedExchange{
 			Role:      role,
 			Content:   content,
@@ -1036,8 +1072,97 @@ func appendMergedClaudeExchangeLocator(
 			Aux:       aux,
 		},
 		ClaudeLastMessageUUID: strings.TrimSpace(uuid),
-	})
+	}
+	if segment.Content != "" {
+		item.Segments = append(item.Segments, segment)
+	}
+	items = append(items, item)
 	return items, len(items) - 1, 0
+}
+
+// isClaudeTaskNotificationLine reports whether the raw JSONL line was emitted
+// by the native CLI as a background task notification rather than typed by the
+// user. Only the explicit origin marker is trusted: identical text quoted or
+// pasted by a real user carries no origin and must stay visible, and unknown
+// origin kinds are treated as user content.
+func isClaudeTaskNotificationLine(raw map[string]any) bool {
+	origin, _ := raw["origin"].(map[string]any)
+	if origin == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(asString(origin["kind"])), "task-notification")
+}
+
+// ProjectExternalSessionDisplay derives display-only content overrides for the
+// canonical user exchanges ImportExternalSession returns for the same input.
+// It reuses the same parse and merge rules, and records every intermediate
+// merged state as a snapshot so persisted caches taken from an earlier, shorter
+// prefix of the JSONL file still match. The native file itself, the canonical
+// exchange list, and Seq/AgentCtxSeq bookkeeping are never modified.
+func (i *Importer) ProjectExternalSessionDisplay(ctx context.Context, in agenttypes.ImportExternalSessionInput) (agenttypes.ExternalSessionDisplayProjection, error) {
+	rootPath := normalizeComparablePath(in.RootPath)
+	if rootPath == "" {
+		return agenttypes.ExternalSessionDisplayProjection{}, errors.New("root path required")
+	}
+	targetID := strings.TrimSpace(in.AgentSessionID)
+	if targetID == "" {
+		return agenttypes.ExternalSessionDisplayProjection{}, errors.New("agent session id required")
+	}
+	file, ok, err := i.resolveClaudeDisplaySessionFile(ctx, targetID, rootPath)
+	if err != nil {
+		return agenttypes.ExternalSessionDisplayProjection{}, err
+	}
+	if !ok {
+		return agenttypes.ExternalSessionDisplayProjection{}, errors.New("external session not found")
+	}
+	locators, err := readClaudeImportedExchangeLocators(file.Path, time.Time{})
+	if err != nil {
+		return agenttypes.ExternalSessionDisplayProjection{}, err
+	}
+	users := make(map[int][]agenttypes.ExternalSessionDisplaySnapshot)
+	for index, locator := range locators {
+		if locator.Role != "user" || len(locator.Segments) == 0 {
+			continue
+		}
+		snapshots := claudeUserDisplaySnapshots(locator.Segments)
+		if len(snapshots) > 0 {
+			users[index] = snapshots
+		}
+	}
+	return agenttypes.ExternalSessionDisplayProjection{
+		AgentSessionID: file.AgentSessionID,
+		Users:          users,
+	}, nil
+}
+
+// claudeUserDisplaySnapshots replays the merge rule over the line-level
+// segments of one canonical user exchange and records each intermediate state.
+// Display content drops only segments whose source line was proven to be a
+// native task notification; segments without an explicit notification origin
+// are always kept.
+func claudeUserDisplaySnapshots(segments []importedContentSegment) []agenttypes.ExternalSessionDisplaySnapshot {
+	snapshots := make([]agenttypes.ExternalSessionDisplaySnapshot, 0, len(segments))
+	kept := make([]string, 0, len(segments))
+	merged := make([]string, 0, len(segments))
+	timestamp := time.Time{}
+	for _, segment := range segments {
+		if strings.TrimSpace(segment.Content) == "" {
+			continue
+		}
+		merged = append(merged, segment.Content)
+		if !segment.Notification {
+			kept = append(kept, segment.Content)
+		}
+		if !segment.Timestamp.IsZero() {
+			timestamp = segment.Timestamp
+		}
+		snapshots = append(snapshots, agenttypes.ExternalSessionDisplaySnapshot{
+			Content:   strings.TrimSpace(strings.Join(merged, "\n\n")),
+			Timestamp: timestamp,
+			Display:   strings.TrimSpace(strings.Join(kept, "\n\n")),
+		})
+	}
+	return snapshots
 }
 
 func buildImportedTurns(items []importedExchangeLocator) []importedTurn {

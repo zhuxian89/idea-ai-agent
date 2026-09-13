@@ -220,6 +220,39 @@ type StreamingExternalSessionImporter interface {
 	ScanExternalSessions(ctx context.Context, in ListExternalSessionsInput, visit ExternalSessionVisitFunc) error
 }
 
+// ExternalSessionDisplaySnapshot is one intermediate merged state of a
+// canonical imported user exchange. Native JSONL files grow between imports,
+// so a persisted client cache may hold any earlier state of an exchange; every
+// state is recorded as an exact match key together with the display content
+// that should be rendered for it.
+type ExternalSessionDisplaySnapshot struct {
+	// Content is the exact persisted content of the snapshot.
+	Content string
+	// Timestamp is the canonical exchange timestamp at this state.
+	Timestamp time.Time
+	// Display is the content to render once segments proven to be native task
+	// notifications are removed. Empty means the whole snapshot is hidden.
+	Display string
+}
+
+// ExternalSessionDisplayProjection maps the indexes of user exchanges in
+// ImportedExternalSession.Exchanges (for the same ImportExternalSessionInput)
+// to their ordered display snapshots. It never changes the canonical import
+// result: entry count, roles, merge behavior, and timestamps stay untouched.
+type ExternalSessionDisplayProjection struct {
+	AgentSessionID string
+	Users          map[int][]ExternalSessionDisplaySnapshot
+}
+
+// ExternalSessionDisplayProjector is an optional ExternalSessionImporter
+// extension. Implementations derive display-only content overrides from the
+// native source so native-generated user entries (background task
+// notifications) can be hidden from history views without rewriting the
+// persisted session.
+type ExternalSessionDisplayProjector interface {
+	ProjectExternalSessionDisplay(ctx context.Context, in ImportExternalSessionInput) (ExternalSessionDisplayProjection, error)
+}
+
 type ModelInfo struct {
 	ID            string   `json:"id"`
 	Name          string   `json:"name"`

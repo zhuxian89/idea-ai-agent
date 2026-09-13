@@ -1557,7 +1557,7 @@ type CachedSessionListRecord<T> = {
 const SESSION_CACHE_DB = "mindfs-session-cache";
 const SESSION_CACHE_STORE = "sessions";
 const SESSION_LIST_CACHE_STORE = "session-lists";
-const SESSION_CACHE_VERSION = 3;
+export const SESSION_CACHE_VERSION = 4;
 const MULTI_ROOT_SESSION_LIST_CACHE_KEY = "multi-root";
 let sessionDBPromise: Promise<IDBDatabase> | null = null;
 
@@ -1580,23 +1580,37 @@ function openSessionDB(): Promise<IDBDatabase> {
     request.onerror = () =>
       reject(request.error || new Error("failed to open indexeddb"));
     request.onupgradeneeded = (event) => {
-      const db = request.result;
-      if (
-        (event as IDBVersionChangeEvent).oldVersion < 2 &&
-        db.objectStoreNames.contains(SESSION_CACHE_STORE)
-      ) {
-        db.deleteObjectStore(SESSION_CACHE_STORE);
-      }
-      if (!db.objectStoreNames.contains(SESSION_CACHE_STORE)) {
-        db.createObjectStore(SESSION_CACHE_STORE, { keyPath: "cacheKey" });
-      }
-      if (!db.objectStoreNames.contains(SESSION_LIST_CACHE_STORE)) {
-        db.createObjectStore(SESSION_LIST_CACHE_STORE, { keyPath: "cacheKey" });
-      }
+      applySessionCacheUpgrade(
+        request.result,
+        (event as IDBVersionChangeEvent).oldVersion,
+      );
     };
     request.onsuccess = () => resolve(request.result);
   });
   return sessionDBPromise;
+}
+
+// Version 4 rebuilds the derived session cache: older builds persisted native
+// task-notification payloads as user bubbles, and an incremental sync from a
+// cached maxSeq would keep them forever. Only the per-session store is dropped
+// and recreated; session lists, drafts, attachments, and unrelated stores are
+// preserved.
+export function applySessionCacheUpgrade(
+  db: IDBDatabase,
+  oldVersion: number,
+): void {
+  if (
+    oldVersion < SESSION_CACHE_VERSION &&
+    db.objectStoreNames.contains(SESSION_CACHE_STORE)
+  ) {
+    db.deleteObjectStore(SESSION_CACHE_STORE);
+  }
+  if (!db.objectStoreNames.contains(SESSION_CACHE_STORE)) {
+    db.createObjectStore(SESSION_CACHE_STORE, { keyPath: "cacheKey" });
+  }
+  if (!db.objectStoreNames.contains(SESSION_LIST_CACHE_STORE)) {
+    db.createObjectStore(SESSION_LIST_CACHE_STORE, { keyPath: "cacheKey" });
+  }
 }
 
 function sessionRequestToPromise<T>(request: IDBRequest<T>): Promise<T> {

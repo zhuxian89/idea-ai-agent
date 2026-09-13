@@ -66,7 +66,15 @@
 .idea-agent-selector-label { font-size: 11px; color: var(--text-primary); max-width: min(180px, calc(100vw - 170px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .idea-composer [data-onboarding="agent-selector"] { display: inline-flex !important; vertical-align: middle; }
 .idea-composer .idea-agent-selector-label { max-width: min(180px, calc(100vw - 270px)); }
-.idea-permission-select { max-width: 104px; height: 26px; margin-left: 4px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--sidebar-bg); color: var(--text-primary); font: inherit; font-size: 11px; vertical-align: middle; }
+.idea-permission-select { display: inline-flex; align-items: center; gap: 5px; max-width: 128px; height: 26px; margin-left: 4px; padding: 0 7px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--sidebar-bg); color: var(--text-primary); font: inherit; font-size: 11px; vertical-align: middle; }
+.idea-permission-select > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idea-permission-select > svg { flex-shrink: 0; }
+.idea-permission-select[aria-expanded="true"] { border-color: var(--accent-color); }
+.idea-permission-menu { position: fixed; z-index: 1200; box-sizing: border-box; padding: 4px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--menu-border); border-radius: 6px; background: var(--menu-bg); color: var(--text-primary); box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+.idea-permission-menu > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 3px; background: transparent; color: inherit; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.idea-permission-menu > button > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.idea-permission-menu > button > span:last-child { flex: 0 0 14px; text-align: center; }
+.idea-permission-menu > button:hover, .idea-permission-menu > button:focus-visible, .idea-permission-menu > button[aria-selected="true"] { background: var(--selection-bg); color: var(--accent-color); }
 .idea-agent-menu { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
 .idea-agent-menu button:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; }
 [data-theme="dark"] .idea-workbench, [data-theme="dark"] .idea-agent-menu {

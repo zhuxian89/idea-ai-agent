@@ -991,12 +991,21 @@ func (s *AppContext) updateTaskAuxFlagsFromEvent(rootID, sessionKey string, even
 		}
 	case string(agenttypes.EventTypeToolUpdate):
 		toolCall, ok := event.Data.(agenttypes.ToolCall)
-		if !ok || toolCall.Kind != agenttypes.ToolKindAskUser || strings.TrimSpace(toolCall.Status) != "complete" {
+		if !ok || toolCall.Kind != agenttypes.ToolKindAskUser {
 			return
 		}
-		value := false
+		switch strings.ToLower(strings.TrimSpace(toolCall.Status)) {
+		case "complete", "completed", "failed", "canceled", "cancelled":
+		default:
+			return
+		}
+		manager, err := s.GetSessionManager(rootID)
+		if err != nil {
+			return
+		}
+		value := manager.HasPendingAskUserQuestions(context.Background(), sessionKey)
 		patch.AskUserWaiting = &value
-		eventType = "aux_ask_user_answered"
+		eventType = "aux_ask_user_resolved"
 	case string(agenttypes.EventTypePlanUpdate):
 		value := true
 		patch.HasPlan = &value
