@@ -1,0 +1,22 @@
+<idea-plugin>
+    <id>dev.ideaagent.local</id>
+    <name>Local AI Agent</name>
+    <vendor>Local AI Agent</vendor>
+    <description><![CDATA[
+        Use local Codex and Claude Code agents inside IntelliJ IDEA.
+        Includes MindFS conversations, streaming tool calls, model configuration,
+        session history, task boards, Git changes and worktrees.
+    ]]></description>
+    <depends>com.intellij.modules.platform</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="AI Agent" anchor="right" icon="/icons/agent.svg"
+                    factoryClass="dev.ideaagent.AgentToolWindowFactory"/>
+    </extensions>
+    <actions>
+        <action id="IdeaAgent.AddContext" class="dev.ideaagent.AddContextAction"
+                text="发送到 AI Agent" description="将选中代码或当前文件加入 AI Agent 输入框">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt A"/>
+        </action>
+    </actions>
+</idea-plugin>

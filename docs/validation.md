@@ -1,0 +1,57 @@
+# 验证记录
+
+环境：Windows amd64、开发 JDK 21、Go 1.26.5、Node.js 20.18.1、pnpm 12.4.1。
+
+## IDEA 2024 兼容性（0.1.1）
+
+构建基线已从 IDEA 2025.3 降到 IDEA Community 2024.1（build `241.14494.240`）；插件最低 build 为 `241`。业务项目的 JDK 8 配置不受影响，插件使用 IDEA 自带的运行环境。
+
+- `test buildPlugin verifyPluginProjectConfiguration` 通过，JUnit 2 项测试零失败。
+- 用 IDEA 2024.1 自带的 JBR `17.0.10+8-b1207.12` 和其 Kotlin 标准库直接运行同一组 JUnit 测试，2 项均通过。
+- 检查 ZIP 内的全部 14 个插件 class 文件，均未超过 Java 17 的 major version `61`；编译类的 Kotlin metadata 为 `[1,9,0]`，包内插件描述文件为 `since-build="241"`、版本 `0.1.1`。
+- `test buildPlugin verifyPluginProjectConfiguration verifyPlugin --offline` 通过。JetBrains Plugin Verifier 1.410 对同一个 `idea-ai-agent-0.1.1.zip` 的六个目标均返回 `Compatible`，没有内部、实验性、弃用或待移除 API 使用报告。
+
+| IDEA 版本 | 平台 build | 社区版 | 旗舰版 |
+| --- | --- | --- | --- |
+| 2024.1 | `241.14494.240` | Compatible | Compatible |
+| 2024.2 | `242.20224.300` | Compatible | Compatible |
+| 2024.3 | `243.21565.193` | Compatible | Compatible |
+
+最终日志为 `build/reports/idea2024-verifier-supported-api.log`，逐目标报告在 `build/reports/pluginVerifier/`。这验证了插件的二进制/API 兼容性，实际 IDEA 窗口及 Agent 操作的验证边界见下文。
+
+校验期间修正了两处问题：显示名称改为 `Local AI Agent` 以满足插件描述文件规则；启用 JVM 默认接口方法，避免 Kotlin 为 `ToolWindowFactory` 自动生成对内部方法的委托，并选用 `JBCefJSQuery.create(JBCefBrowserBase)` 公共重载。没有屏蔽校验项或降低失败级别。
+
+Java 版本与平台版本对应关系、Kotlin 标准库选择依据见 [JetBrains 平台版本表](https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html)和 [Kotlin 支持说明](https://plugins.jetbrains.com/docs/intellij/using-kotlin.html)。
+
+## 已有功能验证
+
+- Kotlin 编译、JUnit 地址及文件路径边界测试、插件 ZIP 打包。
+- TypeScript 类型检查和 Vite 生产构建。
+- Go 本地入口测试：子进程不继承 IDE 凭据；Host、Origin、Cookie 校验；项目管理限制及禁用的独立服务接口。
+- 项目绑定由服务层统一执行：会话、看板后台任务和内部注册不能创建 worktree 或更换项目；测试检查拒绝后没有文件和注册表改动。
+- 本地运行冒烟：中文和空格项目路径、清除旧项目注册、当前项目会话接口、静态资源、主进程关闭后退出。
+- Chrome 无头浏览器：实际加载打包资源、编辑器上下文进入草稿、明暗主题同步、430px 工具窗口布局、无未捕获页面错误。使用空 Agent 配置，未发起模型请求，观察到的 Relay/远程配置服务请求为零。
+- 原有 Agent、ACP、Codex 包回归；应用包回归跳过下述已复现的原仓库 Windows 失败项。
+- `server/internal/api` 整包测试通过；`server/internal/kanban` 的 18 个测试在 Windows 清理临时 SQLite 文件时失败，详见下表。
+
+## 原仓库已存在的失败项
+
+以下失败均在未修改的同级 MindFS 仓库复现，未通过删除测试或修改原有功能隐藏：
+
+| 测试 | Windows / 原仓库结果 |
+| --- | --- |
+| `TestLocalCLITokenStoreWritesSinglePrivateFile` | Windows 文件权限返回 0666，断言要求 Unix 0600。 |
+| `TestAutoAddExternalProjectRootsSkipsGitWorktrees` | 外部项目路径测试得到 0 个根，期望 1 个。IDE 入口已关闭此自动发现。 |
+| `TestClaudeProjectDirNameMatchesClaudeCodeOnDiskEncoding` | Unix 路径样例在 Windows 被转换为带盘符的路径。 |
+| `agent-lifecycle-restart.test.mjs` | 源码文案已为 `Agent config switch & restart`，测试仍匹配旧字符串 `Switch and restart Agent config`。 |
+| `server/internal/kanban` 的 18 个用例 | 清理临时目录时 `task-kanban.db` 仍被占用。以 `TestTaskCreateWorktreeIsTaskScoped` 在原仓库定向复现同样的清理失败；该包代码未作修改。 |
+
+因此没有声称原仓库的完整测试套件全部通过。`session-list-merge.test.mjs` 已通过。
+
+## 尚需实际使用验证
+
+- 在真实 IDEA 的 JCEF 工具窗口中启动、关闭和重新打开项目；浏览器冒烟不能替代这一环节。
+- 使用本机已登录的 Codex / Claude Code 完成一次真实写文件、审批、取消和历史恢复流程。当前验证没有调用付费模型，也没有更改本机 CLI 登录状态。
+- macOS / Linux 构建与运行。当前 ZIP 仅包含 Windows amd64 服务。
+
+Vite 的上游大 chunk 与 `zod` 注释警告，以及 Kotlin 编译器对 1.9 语言级别的弃用提示未阻止构建。保留 1.9 语言/API 基线用于适配 IDEA 2024.1 的标准库。

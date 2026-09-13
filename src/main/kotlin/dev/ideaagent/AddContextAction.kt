@@ -1,0 +1,43 @@
+package dev.ideaagent
+
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.wm.ToolWindowManager
+import java.nio.file.Path
+
+class AddContextAction : AnAction() {
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+
+    override fun update(event: AnActionEvent) {
+        event.presentation.isEnabledAndVisible = event.project != null && event.getData(CommonDataKeys.EDITOR) != null
+    }
+
+    override fun actionPerformed(event: AnActionEvent) {
+        val project = event.project ?: return
+        val editor = event.getData(CommonDataKeys.EDITOR) ?: return
+        val context = EditorContext.capture(project, editor) ?: return
+        val window = ToolWindowManager.getInstance(project).getToolWindow("AI Agent") ?: return
+        window.activate({ (window.contentManager.contents.firstOrNull()?.component as? AgentPanel)?.addContext(context) }, true)
+    }
+}
+
+internal object EditorContext {
+    fun capture(project: Project, editor: Editor): String? {
+        val file = FileDocumentManager.getInstance().getFile(editor.document) ?: return null
+        val projectRoot = project.basePath ?: return null
+        val path = runCatching { Path.of(projectRoot).relativize(file.toNioPath()).toString().replace('\\', '/') }.getOrDefault(file.path)
+        val selection = editor.selectionModel
+        val text = selection.selectedText ?: editor.document.text
+        val startLine = if (selection.hasSelection()) editor.document.getLineNumber(selection.selectionStart) + 1 else 1
+        val unsaved = FileDocumentManager.getInstance().isDocumentUnsaved(editor.document)
+        val content = text.take(128_000)
+        val fence = "`".repeat(maxOf(3, Regex("`+").findAll(content).maxOfOrNull { it.value.length + 1 } ?: 3))
+        return "文件：$path:$startLine${if (unsaved) "（编辑器中未保存的内容）" else ""}\n$fence\n$content\n$fence" +
+            if (text.length > content.length) "\n（内容过长，已截取前 128000 字符）" else ""
+    }
+}

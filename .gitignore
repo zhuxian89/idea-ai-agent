@@ -1,0 +1,13 @@
+.tools/
+.gradle/
+.intellijPlatform/
+build/
+.idea/
+*.iml
+.mindfs/
+runtime/web/node_modules/
+runtime/web/dist/
+runtime/build/
+runtime/*.exe
+runtime/.mindfs/
+
