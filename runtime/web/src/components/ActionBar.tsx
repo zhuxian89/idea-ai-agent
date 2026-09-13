@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { isIdeaRuntime, subscribeIdeaContext } from "../services/ideaBridge";
+import { subscribeIdeaContext } from "../services/ideaBridge";
 import { type SessionMode } from "./ModeSelector";
 import { ModeSelector } from "./ModeSelector";
 import { AgentSelector } from "./AgentSelector";
+import { getAgentDefaults } from "../services/agentDefaults";
 import { fetchAgents, fetchShells, restartAgent, type AgentStatus, type ShellStatus } from "../services/agents";
 import { fetchCandidates, type CandidateItem } from "../services/candidates";
 import { reportError } from "../services/error";
@@ -171,14 +172,6 @@ const chatBlurPlaceholderKeys: MessageKey[] = [
 const MOBILE_BREAKPOINT = 768;
 const IME_ENTER_GUARD_MS = 120;
 const CANDIDATE_FETCH_DEBOUNCE_MS = 512;
-
-function getAgentDefaults(agent?: AgentStatus | null) {
-  return {
-    model: agent?.default_model_id || agent?.current_model_id || "",
-    effort: agent?.default_effort || "",
-    fastService: (agent?.default_fast_service || "") as "" | "on" | "off",
-  } as const;
-}
 
 function buildPendingAttachment(file: File): PendingAttachment {
   const isImage = file.type.startsWith("image/");
@@ -647,7 +640,7 @@ export function ActionBar({
   const selectedModelInfo =
     (selectedAgent?.models ?? []).find((item) => item.id === model)
     || (selectedAgent?.models ?? []).find(
-      (item) => item.id === (selectedAgent?.default_model_id || selectedAgent?.current_model_id),
+      (item) => item.id === (getAgentDefaults(selectedAgent).model || selectedAgent?.current_model_id),
     );
   const availableEfforts = selectedModelInfo?.efforts ?? selectedAgent?.efforts ?? [];
   const isCodexEffortAgent = selectedAgent?.name === "codex";
@@ -1018,7 +1011,7 @@ export function ActionBar({
         supportsEffort ? effort || undefined : undefined,
         supportsServiceTier ? fastService : undefined,
         mode === "command" ? shell || undefined : undefined,
-        !isIdeaRuntime && !currentSession && mode !== "command" && currentRootIsGitRepo
+        !currentSession && mode !== "command" && currentRootIsGitRepo
           ? {
               create: createWorktree,
               branchMode: worktreeBranchMode,
@@ -1310,7 +1303,7 @@ export function ActionBar({
   return (
     <div data-onboarding="action-bar" style={{ width: "100%", minWidth: 0, padding: isMobile ? "0 0 var(--mindfs-actionbar-bottom-padding, calc(env(safe-area-inset-bottom, 0px) + 2px))" : "0 16px 12px", display: "flex", justifyContent: "center", boxSizing: "border-box", background: "var(--content-bg)" }}>
       <div style={{ position: "relative", width: "100%", minWidth: 0, display: "flex", flexDirection: "column", gap: 0 }}>
-        {planModeActive || (!isIdeaRuntime && !currentSession && currentRootIsGitRepo && mode !== "command") || (mode !== "command" && agent === "codex") ? (
+        {planModeActive || (!currentSession && currentRootIsGitRepo && mode !== "command") || (mode !== "command" && agent === "codex") ? (
           <div
             style={{
               position: "absolute",
@@ -1343,7 +1336,7 @@ export function ActionBar({
                   </button>
                 </div>
               ) : null}
-              {!isIdeaRuntime && !currentSession && currentRootIsGitRepo ? (
+              {!currentSession && currentRootIsGitRepo ? (
                 <>
                   <button type="button" onClick={() => setCreateWorktree((value) => !value)} disabled={sending} aria-label={createWorktree ? t("task.worktreeTitle") : t("task.noWorktreeTitle")} title={createWorktree ? t("task.worktreeTitle") : t("task.noWorktreeTitle")} style={{ height: "24px", borderRadius: "6px", border: createWorktree ? "1px solid rgba(22, 163, 74, 0.28)" : "1px solid var(--border-color)", background: createWorktree ? "linear-gradient(rgba(22, 163, 74, 0.08), rgba(22, 163, 74, 0.08)), var(--mobile-overlay-bg)" : "linear-gradient(rgba(100, 116, 139, 0.10), rgba(100, 116, 139, 0.10)), var(--mobile-overlay-bg)", color: createWorktree ? "#15803d" : "var(--text-secondary)", padding: createWorktree ? "0 8px" : "0 8px 0 5px", fontSize: "11px", fontWeight: 800, cursor: sending ? "not-allowed" : "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
                     {createWorktree ? "worktree" : <><NoWorktreeIcon size={12} />worktree</>}

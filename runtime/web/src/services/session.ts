@@ -296,6 +296,7 @@ class SessionService {
   private activeStreams = new Set<string>();
   private eventCursors = new Map<string, string>();
   private pendingMessages = new Map<string, PendingMessage>();
+  private pendingAnswers = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private listeners = new Set<(event: SessionServiceEvent) => void>();
   private reconnectTimer: number | null = null;
   private connectTimeoutTimer: number | null = null;
@@ -448,6 +449,7 @@ class SessionService {
 
     ws.onclose = (event) => {
       if (this.ws !== ws) return;
+      this.rejectPendingAnswers();
       this.clearConnectTimeout();
       this.ws = null;
       this.emit({
@@ -500,6 +502,7 @@ class SessionService {
   }
 
   private closeSocket() {
+    this.rejectPendingAnswers();
     this.clearConnectTimeout();
     this.clearProbe();
     this.openingSocket = false;
@@ -637,6 +640,16 @@ class SessionService {
   private handleMessage(msg: any) {
     const type = msg.type as string;
     const payload = msg.payload || {};
+    if (typeof msg.id === "string" && this.pendingAnswers.has(msg.id)) {
+      if (type === "session.answer_question.accepted") {
+        this.finishAnswer(msg.id);
+        return;
+      }
+      if (type === "session.error" || type === "error" || type === "e2ee.error") {
+        this.finishAnswer(msg.id, new Error(msg.error?.message || payload.message || "回答未被接收，请重试"));
+        return;
+      }
+    }
     if (type === "pong") {
       return;
     }
@@ -734,7 +747,8 @@ class SessionService {
   private async sendWSMessage(
     message: Record<string, unknown>,
   ): Promise<boolean> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    const socket = this.ws;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
       return false;
     }
     let serialized = JSON.stringify(message);
@@ -742,7 +756,9 @@ class SessionService {
       await e2eeService.ensureSession();
       serialized = await e2eeService.encodeWSMessage(message);
     }
-    this.ws.send(serialized);
+    if (this.ws !== socket || socket.readyState !== WebSocket.OPEN) return false;
+    if (message.type === "session.answer_question" && !this.pendingAnswers.has(String(message.id))) return false;
+    socket.send(serialized);
     return true;
   }
 
@@ -1024,13 +1040,12 @@ class SessionService {
     agent: string | undefined,
     toolUseId: string,
     answers: Record<string, string>,
-  ): Promise<boolean> {
+  ): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.error("[Session] WebSocket not connected");
-      return false;
+      throw new Error("连接已断开，请等待重新连接后重试");
     }
     if (!rootId || !sessionKey || !toolUseId) {
-      return false;
+      throw new Error("问题信息不完整，请重新打开会话");
     }
 
     const msg = {
@@ -1045,7 +1060,28 @@ class SessionService {
       },
     };
 
-    return this.sendWSMessage(msg);
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => this.finishAnswer(msg.id, new Error("尚未收到回答确认，请检查会话状态后重试")), 30000);
+      this.pendingAnswers.set(msg.id, { resolve, reject, timer });
+      this.sendWSMessage(msg).then((sent) => {
+        if (!sent) this.finishAnswer(msg.id, new Error("连接已断开，回答未发送"));
+      }, (error) => this.finishAnswer(msg.id, error instanceof Error ? error : new Error(String(error))));
+    });
+  }
+
+  private finishAnswer(id: string, error?: Error) {
+    const pending = this.pendingAnswers.get(id);
+    if (!pending) return;
+    this.pendingAnswers.delete(id);
+    clearTimeout(pending.timer);
+    if (error) pending.reject(error);
+    else pending.resolve();
+  }
+
+  private rejectPendingAnswers() {
+    for (const id of this.pendingAnswers.keys()) {
+      this.finishAnswer(id, new Error("连接已断开，请重新连接并检查回答状态"));
+    }
   }
 
   async markSessionReady(rootId: string, sessionKey: string): Promise<boolean> {

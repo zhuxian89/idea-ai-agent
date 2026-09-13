@@ -29,4 +29,6 @@ run('go', ['build', '-trimpath', '-ldflags=-s -w', '-o', path.join(output, `idea
   { ...process.env, GOOS: os, GOARCH: arch, CGO_ENABLED: '0' });
 cpSync(path.join(runtime, 'web/dist'), path.join(output, 'web'), { recursive: true });
 for (const file of ['agents.json', 'task_template.json', 'LICENSE']) cpSync(path.join(runtime, file), path.join(output, file));
+mkdirSync(path.join(output, 'licenses'), {recursive: true});
+cpSync(path.join(runtime, 'third_party/codex-go-sdk/LICENSE'), path.join(output, 'licenses/codex-go-sdk-LICENSE'));
 console.log(`Local runtime ready: ${output}`);

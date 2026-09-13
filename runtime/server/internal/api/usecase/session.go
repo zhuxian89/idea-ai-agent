@@ -1133,6 +1133,11 @@ func applyMessageRuntimeDefaultsFromStatus(
 	in.Model = ""
 	in.Effort = strings.TrimSpace(in.Effort)
 	in.FastService = strings.TrimSpace(in.FastService)
+	if status.Protocol == agent.ProtocolCodexSDK || status.Protocol == agent.ProtocolClaudeSDK || in.Agent == "codex" || in.Agent == "claude" {
+		// Cached discovery data and previous session preferences are not a
+		// user override for a new native CLI session.
+		return
+	}
 	if !statusOK {
 		return
 	}
@@ -2126,7 +2131,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 	developerInstructions := ""
 	includeReplyTipsInUserMessage := isInitial
 	if isInitial && agentPool.SupportsDeveloperInstructions(in.Agent) {
-		developerInstructions = replyTips
+		// Native configuration owns the developer/system prompt. Rendering hints
+		// must not replace the user's configured developer instructions.
 		includeReplyTipsInUserMessage = false
 	}
 	sess, agentCtxSeq, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, in.Agent, in.Model, in.Mode, in.Effort, in.FastService, rootAbs, developerInstructions)
@@ -2185,8 +2191,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		OnCreated:   in.OnSubSessionCreated,
 		OnUpdate:    in.OnSubSessionUpdate,
 	})
-	attachSessionUpdates := func(runtime agenttypes.Session) {
-		runtime.OnUpdate(func(update agenttypes.Event) {
+	attachSessionUpdates := func(runtime agenttypes.Session) func() {
+		return agenttypes.SubscribeTurnUpdates(runtime, func(update agenttypes.Event) {
 			update = normalizeAgentUpdatePaths(root, update)
 			if claudeSubagents.Handle(context.Background(), update) {
 				return
@@ -2304,7 +2310,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		})
 	}
 	sendWithAttachedUpdates := func(runtime agenttypes.Session, content string) error {
-		attachSessionUpdates(runtime)
+		unsubscribe := attachSessionUpdates(runtime)
+		defer unsubscribe()
 		finishUse := agentPool.BeginSessionUse(agentPoolSessionKey(current.Key, in.Agent))
 		defer finishUse()
 		return runtime.SendMessage(turnCtx, content)
@@ -2953,7 +2960,7 @@ func attachBackgroundSessionUpdates(ctx context.Context, in subagentSessionInput
 	auxBuffer := make([]session.ExchangeAux, 0, 8)
 	var thoughtBuffer strings.Builder
 	lastResponseUpdateType := ""
-	var doneMu sync.Mutex
+	var updateMu sync.Mutex
 	doneSent := false
 	currentThoughtID := ""
 	flushThought := func() {
@@ -2974,13 +2981,11 @@ func attachBackgroundSessionUpdates(ctx context.Context, in subagentSessionInput
 		})
 	}
 	finish := func(emit bool) {
-		doneMu.Lock()
+		// Called with updateMu held, including persistence and the final event.
 		if doneSent {
-			doneMu.Unlock()
 			return
 		}
 		doneSent = true
-		doneMu.Unlock()
 		defer in.Manager.ClearPendingExchangeAux(context.Background(), child.Key)
 		flushThought()
 		if err := in.Manager.AddExchangeForAgent(ctx, child, "agent", responseText, in.Agent, in.Mode, in.Effort, in.FastService); err != nil {
@@ -3002,6 +3007,11 @@ func attachBackgroundSessionUpdates(ctx context.Context, in subagentSessionInput
 		}
 	}
 	runtime.OnUpdate(func(update agenttypes.Event) {
+		updateMu.Lock()
+		defer updateMu.Unlock()
+		if doneSent {
+			return
+		}
 		switch update.Type {
 		case agenttypes.EventTypeThoughtChunk:
 			if chunk, ok := update.Data.(agenttypes.ThoughtChunk); ok && chunk.Content != "" {
@@ -3083,7 +3093,11 @@ func attachBackgroundSessionUpdates(ctx context.Context, in subagentSessionInput
 			in.OnUpdate(child.Key, clientUpdate)
 		}
 	})
-	return func() { finish(true) }
+	return func() {
+		updateMu.Lock()
+		defer updateMu.Unlock()
+		finish(true)
+	}
 }
 
 func (s *Service) sendCommandMessage(ctx context.Context, in SendMessageInput, manager *session.Manager, current *session.Session) error {
@@ -3457,13 +3471,9 @@ func (s *Service) AnswerQuestion(ctx context.Context, in AnswerQuestionInput) er
 		ToolUseID: strings.TrimSpace(in.ToolUseID),
 		Answers:   in.Answers,
 	}
-	if err := manager.MarkPendingAskUserAnswered(ctx, sessionKey, answer.ToolUseID, answer.Answers, time.Now()); err != nil {
-		return err
-	}
-	if err := sess.AnswerQuestion(ctx, answer); err != nil {
-		return err
-	}
-	return nil
+	return manager.AcceptPendingAskUserAnswer(ctx, sessionKey, answer.ToolUseID, answer.Answers, time.Now(), func() error {
+		return sess.AnswerQuestion(ctx, answer)
+	})
 }
 
 func currentAssistantLine(responseText string) int {

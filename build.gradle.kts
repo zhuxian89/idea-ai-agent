@@ -11,7 +11,7 @@ plugins {
 }
 
 group = "dev.ideaagent"
-version = "0.1.1"
+version = "0.1.2"
 
 repositories {
     mavenCentral()
@@ -71,6 +71,7 @@ val buildRuntime by tasks.registering(Exec::class) {
     workingDir = projectDir
     commandLine("node", "scripts/build-runtime.mjs")
     inputs.dir("runtime/server")
+    inputs.dir("runtime/third_party")
     inputs.dir("runtime/web/src")
     inputs.dir("runtime/web/public")
     inputs.files("runtime/go.mod", "runtime/go.sum", "runtime/agents.json", "runtime/task_template.json",

@@ -67,24 +67,19 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 	if opts.SessionKey == "" {
 		return nil, errors.New("session key required")
 	}
+	if err := validateCLIArguments(opts.Args); err != nil {
+		return nil, err
+	}
 
 	s := &session{
 		sessionKey:    opts.SessionKey,
 		model:         strings.TrimSpace(opts.Model),
 		planMode:      opts.PlanMode,
 		agentDebugLog: logs.NewAgentLogger(opts.RootPath, opts.SessionKey, opts.AgentName),
-		questionWaits: make(map[string]chan askUserAnswerResult),
+		questionWaits: make(map[string]*types.PendingQuestion[claudeagent.Answers]),
 	}
 
-	optionList := []claudeagent.Option{
-		claudeagent.WithCwd(opts.RootPath),
-		claudeagent.WithEnv(opts.Env),
-		claudeagent.WithVerbose(true),
-		claudeagent.WithIncludePartialMessages(true),
-		claudeagent.WithAgentProgressSummaries(true),
-		claudeagent.WithForwardSubagentText(true),
-		claudeagent.WithCanUseTool(s.handleCanUseTool),
-	}
+	optionList := s.nativeOptions(opts)
 	optionList = appendClaudeDeveloperInstructions(optionList, opts.DeveloperInstructions)
 	if strings.TrimSpace(opts.Command) != "" {
 		optionList = append(optionList, claudeagent.WithCLIPath(opts.Command))
@@ -122,6 +117,7 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 		optionList = append(optionList, claudeagent.WithPermissionMode(claudeagent.PermissionModePlan))
 	}
 
+	optionList = append(optionList, withCLIArguments(opts.Args))
 	client, err := claudeagent.NewClient(optionList...)
 	if err != nil {
 		return nil, err
@@ -133,11 +129,6 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 	}
 
 	selectedModel := strings.TrimSpace(opts.Model)
-	if selectedModel == "" && opts.ResumeSessionID == "" {
-		if candidate, ok := claudeFirstAvailableModel(client); ok {
-			selectedModel = candidate
-		}
-	}
 	if selectedModel != "" {
 		if err := stream.SetModel(ctx, selectedModel); err != nil {
 			client.Close()
@@ -173,31 +164,19 @@ func appendClaudeDeveloperInstructions(options []claudeagent.Option, developerIn
 
 func (r *Runtime) CloseAll() {}
 
-func claudeFirstAvailableModel(client *claudeagent.Client) (string, bool) {
-	if client == nil {
-		return "", false
-	}
-	for _, item := range client.SupportedModelsFromInit() {
-		candidate := strings.TrimSpace(item.Value)
-		if candidate == "" || strings.EqualFold(candidate, "default") {
-			continue
-		}
-		return candidate, true
-	}
-	return "", false
-}
-
 type session struct {
 	client *claudeagent.Client
 	stream *claudeagent.Stream
 
-	mu         sync.RWMutex
-	onUpdate   func(types.Event)
-	sessionID  string
-	sessionKey string
-	model      string
-	planMode   bool
-	context    types.ContextWindow
+	mu                     sync.RWMutex
+	onUpdate               func(types.Event)
+	sessionID              string
+	sessionKey             string
+	model                  string
+	planMode               bool
+	permissionMode         claudeagent.PermissionMode
+	previousPermissionMode claudeagent.PermissionMode
+	context                types.ContextWindow
 
 	sendMu          sync.Mutex
 	turnMu          sync.Mutex
@@ -219,12 +198,7 @@ type session struct {
 	taskInfos        map[string]claudeTaskInfo
 
 	questionMu    sync.Mutex
-	questionWaits map[string]chan askUserAnswerResult
-}
-
-type askUserAnswerResult struct {
-	answers claudeagent.Answers
-	err     error
+	questionWaits map[string]*types.PendingQuestion[claudeagent.Answers]
 }
 
 func (s *session) SendMessage(ctx context.Context, content string) error {
@@ -269,13 +243,6 @@ func (s *session) AnswerQuestion(ctx context.Context, answer types.AskUserAnswer
 		return errors.New("answers required")
 	}
 
-	s.questionMu.Lock()
-	waiter, ok := s.questionWaits[callID]
-	s.questionMu.Unlock()
-	if !ok {
-		return errors.New("question is not pending: " + callID)
-	}
-
 	answers := make(claudeagent.Answers, len(answer.Answers))
 	for key, value := range answer.Answers {
 		key = strings.TrimSpace(key)
@@ -288,22 +255,30 @@ func (s *session) AnswerQuestion(ctx context.Context, answer types.AskUserAnswer
 		return errors.New("answers required")
 	}
 
-	select {
-	case waiter <- askUserAnswerResult{answers: answers}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	s.questionMu.Lock()
+	defer s.questionMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
 	}
+	waiter, ok := s.questionWaits[callID]
+	if !ok {
+		return errors.New("question is not pending: " + callID)
+	}
+	if err := waiter.Answer(ctx, answers); err != nil {
+		return err
+	}
+	delete(s.questionWaits, callID)
+	return nil
 }
 
 func (s *session) handleCanUseTool(ctx context.Context, req claudeagent.ToolPermissionRequest) claudeagent.PermissionResult {
 	if req.ToolName != "AskUserQuestion" {
-		return claudeagent.PermissionAllow{}
+		return s.awaitToolPermission(ctx, req)
 	}
 
 	var input claudeagent.AskUserQuestionInput
 	if err := json.Unmarshal(req.Arguments, &input); err != nil || len(input.Questions) == 0 {
-		return claudeagent.PermissionAllow{}
+		return claudeagent.PermissionDeny{Reason: "invalid AskUserQuestion input"}
 	}
 
 	callID := strings.TrimSpace(req.Context.ToolUseID)
@@ -394,7 +369,15 @@ func (s *session) SetPlanMode(ctx context.Context, enabled bool) error {
 	if s == nil || s.stream == nil {
 		return errors.New("claude session not initialized")
 	}
-	mode := claudeagent.PermissionModeDefault
+	s.mu.Lock()
+	if enabled && s.permissionMode != "" && s.permissionMode != claudeagent.PermissionModePlan {
+		s.previousPermissionMode = s.permissionMode
+	}
+	mode := s.previousPermissionMode
+	if mode == "" {
+		mode = claudeagent.PermissionModeDefault
+	}
+	s.mu.Unlock()
 	if enabled {
 		mode = claudeagent.PermissionModePlan
 	}
@@ -403,6 +386,7 @@ func (s *session) SetPlanMode(ctx context.Context, enabled bool) error {
 	}
 	s.mu.Lock()
 	s.planMode = enabled
+	s.permissionMode = mode
 	s.mu.Unlock()
 	return nil
 }
@@ -520,7 +504,7 @@ func (s *session) cancelPendingQuestions(err error) {
 	s.questionMu.Lock()
 	type pendingQuestion struct {
 		callID string
-		waiter chan askUserAnswerResult
+		waiter *types.PendingQuestion[claudeagent.Answers]
 	}
 	waiters := make([]pendingQuestion, 0, len(s.questionWaits))
 	for callID, waiter := range s.questionWaits {
@@ -530,9 +514,8 @@ func (s *session) cancelPendingQuestions(err error) {
 	s.questionMu.Unlock()
 
 	for _, pending := range waiters {
-		select {
-		case pending.waiter <- askUserAnswerResult{err: err}:
-		default:
+		if !pending.waiter.Cancel(err) {
+			continue
 		}
 		if update, ok := s.cancelPendingToolCall(pending.callID, err.Error()); ok {
 			s.emit(types.Event{
@@ -1025,15 +1008,18 @@ func (s *session) handleTaskNotificationMessage(msg claudeagent.TaskNotification
 }
 
 func (s *session) awaitAskUserQuestion(ctx context.Context, qs claudeagent.QuestionSet) (claudeagent.Answers, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	callID := strings.TrimSpace(qs.ToolUseID)
 	if callID == "" {
 		return nil, errors.New("ask user question missing tool use id")
 	}
 
-	waiter := make(chan askUserAnswerResult, 1)
+	waiter := types.NewPendingQuestion[claudeagent.Answers](ctx)
 	s.questionMu.Lock()
 	if s.questionWaits == nil {
-		s.questionWaits = make(map[string]chan askUserAnswerResult)
+		s.questionWaits = make(map[string]*types.PendingQuestion[claudeagent.Answers])
 	}
 	if _, exists := s.questionWaits[callID]; exists {
 		s.questionMu.Unlock()
@@ -1055,18 +1041,7 @@ func (s *session) awaitAskUserQuestion(ctx context.Context, qs claudeagent.Quest
 		Data:      toolCall,
 	})
 
-	select {
-	case result := <-waiter:
-		if result.err != nil {
-			return nil, result.err
-		}
-		if len(result.answers) == 0 {
-			return nil, errors.New("empty ask user answers")
-		}
-		return result.answers, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	return waiter.Wait()
 }
 
 func askUserQuestionToolCall(qs claudeagent.QuestionSet) types.ToolCall {
@@ -2310,6 +2285,20 @@ func (s *session) updateSessionID(msg any) {
 	switch m := msg.(type) {
 	case claudeagent.SystemMessage:
 		s.setSessionID(m.SessionID)
+		s.mu.Lock()
+		if strings.TrimSpace(m.Model) != "" {
+			s.model = m.Model
+		}
+		if m.PermissionMode != "" {
+			s.permissionMode = m.PermissionMode
+		}
+		s.mu.Unlock()
+	case claudeagent.StatusMessage:
+		s.mu.Lock()
+		if m.PermissionMode != "" {
+			s.permissionMode = m.PermissionMode
+		}
+		s.mu.Unlock()
 	case claudeagent.AssistantMessage:
 		s.setSessionID(m.SessionID)
 	case claudeagent.ResultMessage:

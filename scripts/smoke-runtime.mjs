@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -16,6 +16,8 @@ const project = path.join(work, '项目 with spaces');
 const data = path.join(work, 'data');
 mkdirSync(project);
 mkdirSync(data);
+execFileSync('git', ['init', '-q', project], {windowsHide: true});
+execFileSync('git', ['-C', project, '-c', 'user.name=Smoke', '-c', 'user.email=smoke@example.com', 'commit', '--allow-empty', '-qm', 'initial'], {windowsHide: true});
 // A stale standalone registration must never enable another project in the IDE.
 writeFileSync(path.join(data, 'registry.json'), JSON.stringify({dirs: [{id: 'other', name: 'other', root_path: work}], order: ['other']}));
 writeFileSync(path.join(project, 'Example.kt'), 'class Example { fun greeting() = "hello" }\n');
@@ -67,7 +69,7 @@ try {
   assert.equal(dirs[0].root_path, project);
   for (const route of ['/api/tasks', '/api/tasks/unused/input']) {
     const response = await fetch(`${ready.url}${route}`, {method: 'POST', headers: {...headers, 'Content-Type': 'application/json'}, body: JSON.stringify({root_id: ready.rootId, create_worktree: true})});
-    assert.equal(response.status, 403, 'task flow must not create a worktree');
+    assert.notEqual(response.status, 403, 'IDE task worktree must reach normal request validation');
   }
   for (const [route, method] of [['/api/dirs', 'POST'], ['/api/dirs', 'DELETE'], ['/api/local_dirs', 'GET'], ['/api/git/worktrees', 'POST']]) {
     assert.equal((await fetch(`${ready.url}${route}`, {method, headers})).status, 403);
@@ -94,7 +96,7 @@ try {
     await page.evaluate(() => window.ideaAgentReceiveContext('IDE_CONTEXT_SMOKE\n文件：Example.kt:1\nclass Example'));
     await page.waitForFunction(() => [...document.querySelectorAll('[contenteditable="true"]')].some(e => e.textContent.includes('IDE_CONTEXT_SMOKE')));
     await page.waitForLoadState('networkidle');
-    assert.equal(await page.getByRole('button', {name: /worktree/i}).count(), 0, 'IDE composer must not offer worktree creation');
+    assert.ok(await page.getByRole('button', {name: /worktree/i}).count() > 0, 'IDE composer must offer worktree creation for a Git project');
     const reports = path.join(root, 'build/reports');
     mkdirSync(reports, {recursive: true});
     await page.screenshot({path: path.join(reports, 'agent-wide.png'), animations: 'disabled'});

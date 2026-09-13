@@ -2,6 +2,18 @@
 
 环境：Windows amd64、开发 JDK 21、Go 1.26.5、Node.js 20.18.1、pnpm 12.4.1。
 
+## 原生能力修复（0.1.2）
+
+问题清单及每项定向测试见 [native-agent-compatibility.md](native-agent-compatibility.md)。新增测试先复现了推理降级、隐式模型/权限覆盖、用户回答提前报告成功、重复回答阻塞、worktree 禁用以及编辑器内容截断，再验证修复结果。
+
+会话记录的既有 `TestManagerMarkPendingAskUserAnsweredMergesAnswers` 在本轮暴露 Windows 临时 SQLite 清理失败，已为该测试添加 `Manager.Shutdown` 清理，原有答案合并断言保留。
+
+定向 Go 测试、4 项前端协议/默认配置测试及 TypeScript 类型检查已通过。最终构建的 3 项 Kotlin 测试、六个 IDEA 2024 目标的 Plugin Verifier 和打包浏览器冒烟均通过；同一 ZIP 覆盖 IC/IU 2024.1、2024.2、2024.3，未出现未捕获页面错误或独立远程服务请求。
+
+独立审查指出子会话事件并发和取消/答案接收交错两处问题；新增受控测试先复现后修复。同一独立审查者完成第二轮复核，代码候选树 `47d78c238eb2aad7f3f128187b4a4269814cc860` 通过，没有 unresolved 或新增 blocking/important；随后仅补充本验证记录。
+
+最终 `test buildPlugin verifyPluginProjectConfiguration verifyPlugin --offline` 返回退出码 0，日志为 `build/reports/native-0.1.2-build.log`。最终安装包重新运行 `node scripts/smoke-runtime.mjs`，本地入口、Git 项目 worktree 按钮、上下文草稿、明暗主题、窄窗口、服务退出均通过。ZIP 包含第三方 Codex SDK 的 MIT 许可证。
+
 ## IDEA 2024 兼容性（0.1.1）
 
 构建基线已从 IDEA 2025.3 降到 IDEA Community 2024.1（build `241.14494.240`）；插件最低 build 为 `241`。业务项目的 JDK 8 配置不受影响，插件使用 IDEA 自带的运行环境。
@@ -28,7 +40,7 @@ Java 版本与平台版本对应关系、Kotlin 标准库选择依据见 [JetBra
 - Kotlin 编译、JUnit 地址及文件路径边界测试、插件 ZIP 打包。
 - TypeScript 类型检查和 Vite 生产构建。
 - Go 本地入口测试：子进程不继承 IDE 凭据；Host、Origin、Cookie 校验；项目管理限制及禁用的独立服务接口。
-- 项目绑定由服务层统一执行：会话、看板后台任务和内部注册不能创建 worktree 或更换项目；测试检查拒绝后没有文件和注册表改动。
+- 0.1.1 的项目绑定检查覆盖全部 worktree；0.1.2 恢复会话和任务 worktree，保留项目注册约束，测试检查两项工作隔离且不更换 IDEA 项目。
 - 本地运行冒烟：中文和空格项目路径、清除旧项目注册、当前项目会话接口、静态资源、主进程关闭后退出。
 - Chrome 无头浏览器：实际加载打包资源、编辑器上下文进入草稿、明暗主题同步、430px 工具窗口布局、无未捕获页面错误。使用空 Agent 配置，未发起模型请求，观察到的 Relay/远程配置服务请求为零。
 - 原有 Agent、ACP、Codex 包回归；应用包回归跳过下述已复现的原仓库 Windows 失败项。

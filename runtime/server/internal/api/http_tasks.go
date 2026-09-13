@@ -176,10 +176,6 @@ func (h *HTTPHandler) handleKanbanTaskCreate(w http.ResponseWriter, r *http.Requ
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid json body"))
 		return
 	}
-	if req.CreateWorktree && h.AppContext.ProjectLocked {
-		respondError(w, http.StatusForbidden, ErrProjectLocked)
-		return
-	}
 	detail, err := svc.CreateTask(r.Context(), kanban.CreateTaskInput{
 		RootID:             req.RootID,
 		TaskTemplateID:     req.TaskTemplateID,
@@ -210,10 +206,6 @@ func (h *HTTPHandler) handleKanbanTaskInputUpdate(w http.ResponseWriter, r *http
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid json body"))
-		return
-	}
-	if req.CreateWorktree != nil && *req.CreateWorktree && h.AppContext.ProjectLocked {
-		respondError(w, http.StatusForbidden, ErrProjectLocked)
 		return
 	}
 	detail, err := svc.UpdateCurrentInput(r.Context(), kanban.UpdateTaskInput{

@@ -2020,7 +2020,7 @@ export function App({ onGoHome }: AppProps) {
 	        templateName: task.task_template_name || t("task.defaultTitle"),
 	        text: currentInput,
 	        previousInputs: previousTaskInputsFromDetail(detail, t),
-	        createWorktree: !isIdeaRuntime && detail.task.create_worktree === true,
+	        createWorktree: detail.task.create_worktree === true,
 	        worktreeBranchMode: detail.task.worktree_branch_mode === "existing" ? "existing" : "new",
 	        worktreeBranch: detail.task.worktree_branch || "",
 	        canToggleWorktree: detail.task.current_stage_index === 0 && !detail.task.worktree_path,
@@ -2089,7 +2089,7 @@ export function App({ onGoHome }: AppProps) {
 	    if (!templateId) return;
 	    const initialText = firstUserInputTemplate(template);
 	    const rootId = currentRootIdRef.current || "";
-	    const taskCanCreateWorktree = !isIdeaRuntime && managedRootByIdRef.current[rootId]?.is_git_repo === true;
+	    const taskCanCreateWorktree = managedRootByIdRef.current[rootId]?.is_git_repo === true;
 	    const worktreePref = loadTaskCreateWorktreePreference(rootId);
 	    setTaskInlineEdit({
 	      templateId,
@@ -2255,7 +2255,7 @@ export function App({ onGoHome }: AppProps) {
         attachmentTokens = uploaded.map((file) => `[file: ${file.agent_path || file.path}]`).join("\n");
       }
       const payload = [edit.text.trim(), attachmentTokens].filter(Boolean).join("\n");
-      const taskCanCreateWorktree = !isIdeaRuntime && managedRootByIdRef.current[rootId]?.is_git_repo === true;
+      const taskCanCreateWorktree = managedRootByIdRef.current[rootId]?.is_git_repo === true;
       const createWorktree = taskCanCreateWorktree && edit.createWorktree;
       const detail = edit.taskId
         ? await updateTaskInput(
@@ -14725,7 +14725,7 @@ export function App({ onGoHome }: AppProps) {
       ) : null}
       {taskInlineEdit ? (
 	        (() => {
-	          const taskInlineCanCreateWorktree = !isIdeaRuntime && managedRootByIdRef.current[currentRootId || ""]?.is_git_repo === true;
+	          const taskInlineCanCreateWorktree = managedRootByIdRef.current[currentRootId || ""]?.is_git_repo === true;
 	          const showTaskWorktreeControls = taskInlineCanCreateWorktree && (taskInlineEdit.canToggleWorktree || taskInlineEdit.taskId);
 	          const taskWorktreeControlsEditable = taskInlineEdit.canToggleWorktree;
 	          return (

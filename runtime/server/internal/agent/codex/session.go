@@ -54,12 +54,13 @@ func (r *Runtime) OpenSession(_ context.Context, opts OpenOptions) (types.Sessio
 		Model:                 strings.TrimSpace(opts.Model),
 		ModelReasoningEffort:  codexsdk.ModelReasoningEffort(strings.TrimSpace(opts.Effort)),
 		FastService:           strings.TrimSpace(opts.FastService),
-		SandboxMode:           codexsdk.SandboxModeFullAccess,
 		WorkingDirectory:      opts.RootPath,
 		DeveloperInstructions: strings.TrimSpace(opts.DeveloperInstructions),
-		ApprovalPolicy:        codexsdk.ApprovalModeNever,
-		ApprovalHandler: func(_ codexsdk.ApprovalRequest) (codexsdk.ApprovalDecision, error) {
-			return codexsdk.ApprovalDecisionApproved, nil
+		ApprovalHandler: func(req codexsdk.ApprovalRequest) (codexsdk.ApprovalDecision, error) {
+			if sess == nil {
+				return codexsdk.ApprovalDecisionRejected, errors.New("codex session not initialized")
+			}
+			return sess.handleApprovalRequest(req)
 		},
 		AskUserHandler: func(req codexsdk.AskUserRequest) (codexsdk.AskUserResponse, error) {
 			if sess == nil {
@@ -99,7 +100,7 @@ func (r *Runtime) OpenSession(_ context.Context, opts OpenOptions) (types.Sessio
 		threadID:      threadID,
 		sessionKey:    opts.SessionKey,
 		planMode:      opts.PlanMode,
-		questionWaits: make(map[string]chan codexAskUserAnswerResult),
+		questionWaits: make(map[string]*types.PendingQuestion[map[string]string]),
 		agentDebugLog: logs.NewAgentLogger(opts.RootPath, opts.SessionKey, opts.AgentName),
 	}
 	return sess, nil
@@ -203,12 +204,7 @@ type session struct {
 	agentDebugLog *logs.AgentLogger
 
 	questionMu    sync.Mutex
-	questionWaits map[string]chan codexAskUserAnswerResult
-}
-
-type codexAskUserAnswerResult struct {
-	answers map[string]string
-	err     error
+	questionWaits map[string]*types.PendingQuestion[map[string]string]
 }
 
 func (s *session) SendMessage(ctx context.Context, content string) error {
@@ -478,13 +474,6 @@ func (s *session) AnswerQuestion(ctx context.Context, answer types.AskUserAnswer
 		return errors.New("answers required")
 	}
 
-	s.questionMu.Lock()
-	waiter, ok := s.questionWaits[callID]
-	s.questionMu.Unlock()
-	if !ok {
-		return errors.New("question is not pending: " + callID)
-	}
-
 	answers := make(map[string]string, len(answer.Answers))
 	for key, value := range answer.Answers {
 		key = strings.TrimSpace(key)
@@ -497,15 +486,26 @@ func (s *session) AnswerQuestion(ctx context.Context, answer types.AskUserAnswer
 		return errors.New("answers required")
 	}
 
-	select {
-	case waiter <- codexAskUserAnswerResult{answers: answers}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	s.questionMu.Lock()
+	defer s.questionMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
 	}
+	waiter, ok := s.questionWaits[callID]
+	if !ok {
+		return errors.New("question is not pending: " + callID)
+	}
+	if err := waiter.Answer(ctx, answers); err != nil {
+		return err
+	}
+	delete(s.questionWaits, callID)
+	return nil
 }
 
 func (s *session) handleAskUserRequest(req codexsdk.AskUserRequest) (codexsdk.AskUserResponse, error) {
+	if req.Context != nil && req.Context.Err() != nil {
+		return codexsdk.AskUserResponse{}, req.Context.Err()
+	}
 	callID := strings.TrimSpace(req.ItemID)
 	if callID == "" {
 		return codexsdk.AskUserResponse{}, errors.New("ask user question missing item id")
@@ -514,10 +514,10 @@ func (s *session) handleAskUserRequest(req codexsdk.AskUserRequest) (codexsdk.As
 		return codexsdk.AskUserResponse{}, errors.New("ask user question missing questions")
 	}
 
-	waiter := make(chan codexAskUserAnswerResult, 1)
+	waiter := types.NewPendingQuestion[map[string]string](req.Context)
 	s.questionMu.Lock()
 	if s.questionWaits == nil {
-		s.questionWaits = make(map[string]chan codexAskUserAnswerResult)
+		s.questionWaits = make(map[string]*types.PendingQuestion[map[string]string])
 	}
 	if _, exists := s.questionWaits[callID]; exists {
 		s.questionMu.Unlock()
@@ -538,11 +538,11 @@ func (s *session) handleAskUserRequest(req codexsdk.AskUserRequest) (codexsdk.As
 		Data:      toolCall,
 	})
 
-	result := <-waiter
-	if result.err != nil {
-		return codexsdk.AskUserResponse{}, result.err
+	answers, err := waiter.Wait()
+	if err != nil {
+		return codexsdk.AskUserResponse{}, err
 	}
-	response := codexAskUserResponse(req.Questions, result.answers)
+	response := codexAskUserResponse(req.Questions, answers)
 	if len(response.Answers) == 0 {
 		return codexsdk.AskUserResponse{}, errors.New("empty ask user answers")
 	}
@@ -554,7 +554,7 @@ func (s *session) cancelPendingQuestions(err error) {
 		err = errors.New("turn canceled")
 	}
 	s.questionMu.Lock()
-	waiters := make([]chan codexAskUserAnswerResult, 0, len(s.questionWaits))
+	waiters := make([]*types.PendingQuestion[map[string]string], 0, len(s.questionWaits))
 	for callID, waiter := range s.questionWaits {
 		waiters = append(waiters, waiter)
 		delete(s.questionWaits, callID)
@@ -562,10 +562,7 @@ func (s *session) cancelPendingQuestions(err error) {
 	s.questionMu.Unlock()
 
 	for _, waiter := range waiters {
-		select {
-		case waiter <- codexAskUserAnswerResult{err: err}:
-		default:
-		}
+		waiter.Cancel(err)
 	}
 }
 

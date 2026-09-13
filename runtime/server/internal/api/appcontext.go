@@ -37,7 +37,7 @@ type RootContext struct {
 	Watcher *fs.SharedFileWatcher
 }
 
-var ErrProjectLocked = errors.New("project and worktree management is controlled by IDEA")
+var ErrProjectLocked = errors.New("project registration is controlled by IDEA")
 
 type AppContext struct {
 	// Set by the IDE host before any session or scheduler starts.
@@ -149,9 +149,6 @@ func (s *AppContext) GetKanbanService() (*kanban.Service, error) {
 }
 
 func (s *AppContext) CreateTaskWorktree(ctx context.Context, rootID, name, branchMode, branch string) (kanban.WorktreeInfo, error) {
-	if s.ProjectLocked {
-		return kanban.WorktreeInfo{}, ErrProjectLocked
-	}
 	root, err := s.GetRoot(rootID)
 	if err != nil {
 		return kanban.WorktreeInfo{}, err
@@ -183,9 +180,6 @@ func (s *AppContext) CreateTaskWorktree(ctx context.Context, rootID, name, branc
 }
 
 func (s *AppContext) CreateSessionWorktree(ctx context.Context, rootID, branchMode, branch string) (kanban.WorktreeInfo, error) {
-	if s.ProjectLocked {
-		return kanban.WorktreeInfo{}, ErrProjectLocked
-	}
 	root, err := s.GetRoot(rootID)
 	if err != nil {
 		return kanban.WorktreeInfo{}, err

@@ -566,10 +566,6 @@ func (h *WSHandler) handleSessionMessage(ctx context.Context, conn *websocket.Co
 	shell := getString(req.Payload, "shell")
 	terminalCols := getInt(req.Payload, "terminal_cols")
 	createWorktree := getBool(req.Payload, "create_worktree")
-	if createWorktree && h.AppContext.ProjectLocked {
-		h.sendWSError(conn, clientID, req.ID, "project_locked", ErrProjectLocked.Error())
-		return
-	}
 	worktreeBranchMode := getString(req.Payload, "worktree_branch_mode")
 	worktreeBranch := getString(req.Payload, "worktree_branch")
 	if content == "" || sessionType == "" || (agentName == "" && sessionType != session.TypeCommand) {

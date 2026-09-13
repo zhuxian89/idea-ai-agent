@@ -12,3 +12,8 @@ Local changes add a plugin-owned loopback runtime, isolated configuration,
 IDE editor integration, and a local-only web entry. The Agent adapters and
 session workflows originate from MindFS.
 
+`runtime/third_party/codex-go-sdk/` retains the MIT license from
+`github.com/yandc/codex-go-sdk` at `c8b61217fb04`. Local protocol patches are
+documented in its `README.idea-agent.md`; the license is included in the runtime
+distribution. Claude uses the existing pinned third-party Go SDK with adapter
+option overrides. Neither transport is represented as an official vendor SDK.

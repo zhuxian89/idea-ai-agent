@@ -35,9 +35,11 @@ internal object EditorContext {
         val text = selection.selectedText ?: editor.document.text
         val startLine = if (selection.hasSelection()) editor.document.getLineNumber(selection.selectionStart) + 1 else 1
         val unsaved = FileDocumentManager.getInstance().isDocumentUnsaved(editor.document)
-        val content = text.take(128_000)
-        val fence = "`".repeat(maxOf(3, Regex("`+").findAll(content).maxOfOrNull { it.value.length + 1 } ?: 3))
-        return "文件：$path:$startLine${if (unsaved) "（编辑器中未保存的内容）" else ""}\n$fence\n$content\n$fence" +
-            if (text.length > content.length) "\n（内容过长，已截取前 128000 字符）" else ""
+        return formatEditorContext(path, startLine, text, unsaved)
     }
+}
+
+internal fun formatEditorContext(path: String, startLine: Int, text: String, unsaved: Boolean): String {
+    val fence = "`".repeat(maxOf(3, Regex("`+").findAll(text).maxOfOrNull { it.value.length + 1 } ?: 3))
+    return "文件：$path:$startLine${if (unsaved) "（编辑器中未保存的内容）" else ""}\n$fence\n$text\n$fence"
 }

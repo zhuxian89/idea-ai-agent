@@ -657,6 +657,7 @@ function AskUserQuestionCard({
   const questions = getAskUserQuestions(toolCall);
   const [focusedCustomAnswerKey, setFocusedCustomAnswerKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [answerError, setAnswerError] = useState("");
   const status = `${toolCall.status || ""}`.toLowerCase();
   const isCurrent =
     status === "running" || status === "pending" || status === "in_progress";
@@ -930,10 +931,13 @@ function AskUserQuestionCard({
           onClick={async () => {
             if (!canSubmit || !rootId || !sessionKey || !toolUseId || !onAnswer) return;
             setSubmitting(true);
+            setAnswerError("");
             try {
               await onAnswer({ rootId, sessionKey, agent, toolUseId, answers });
               setSubmitted(true);
               setExpanded(false);
+            } catch (error) {
+              setAnswerError(error instanceof Error ? error.message : String(error));
             } finally {
               setSubmitting(false);
             }
@@ -952,6 +956,7 @@ function AskUserQuestionCard({
         >
           {submitted ? t("session.askSubmitted") : submitting ? t("session.askSubmitting") : t("session.askSubmit")}
         </button>
+        {answerError ? <div role="alert" style={{ color: "var(--text-primary)", fontSize: "13px" }}>{answerError}</div> : null}
         </div>
       ) : null}
     </div>

@@ -15,7 +15,9 @@
 
 插件入口关闭 Relay、Token Station、云端 Agent 配置拉取、服务自身更新和 PWA 入口；本机 Agent 仍按其配置连接模型服务。
 
-每个工具窗口固定使用当前 IDEA 项目，项目添加、重命名、移除和 worktree 管理交给 IDEA。可以在 IDEA 中打开已有 worktree 后使用插件；插件内不提供跨项目目录浏览或项目克隆。这是项目选择约束，Agent 命令本身仍遵循所选 CLI 的权限配置。
+每个工具窗口绑定当前 IDEA 项目。Git 项目支持会话和任务创建独立 worktree；项目添加、重命名、移除及跨项目切换由 IDEA 管理。Agent 命令遵循所选 CLI 的权限配置。
+
+原生会话默认跟随本机 CLI 的模型、推理和权限配置，支持原生方案选择及授权交互。已确认的差异、0.1.2 修复和验证边界见 [原生能力核对清单](docs/native-agent-compatibility.md)。
 
 ## 客户运行要求
 

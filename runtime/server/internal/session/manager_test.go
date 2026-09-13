@@ -572,6 +572,7 @@ func TestManagerGetFullToolCallReadsPendingAuxBeforeDisk(t *testing.T) {
 func TestManagerMarkPendingAskUserAnsweredMergesAnswers(t *testing.T) {
 	root := rootfs.NewRootInfo("mindfs", "mindfs", t.TempDir())
 	manager := NewManager(root)
+	t.Cleanup(func() { _ = manager.Shutdown() })
 
 	created, err := manager.Create(context.Background(), CreateInput{
 		Type: TypeChat,

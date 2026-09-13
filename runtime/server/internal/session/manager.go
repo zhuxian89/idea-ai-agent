@@ -308,7 +308,13 @@ func (m *Manager) UpsertPendingExchangeAux(_ context.Context, sessionKey string,
 	return nil
 }
 
-func (m *Manager) MarkPendingAskUserAnswered(_ context.Context, sessionKey, callID string, answers map[string]string, answeredAt time.Time) error {
+func (m *Manager) MarkPendingAskUserAnswered(ctx context.Context, sessionKey, callID string, answers map[string]string, answeredAt time.Time) error {
+	return m.AcceptPendingAskUserAnswer(ctx, sessionKey, callID, answers, answeredAt, nil)
+}
+
+// AcceptPendingAskUserAnswer keeps runtime admission and the history update in
+// order with turn completion. admit must be nonblocking and must not call Manager.
+func (m *Manager) AcceptPendingAskUserAnswer(ctx context.Context, sessionKey, callID string, answers map[string]string, answeredAt time.Time, admit func() error) error {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
 		return errors.New("session key required")
@@ -340,6 +346,17 @@ func (m *Manager) MarkPendingAskUserAnswered(_ context.Context, sessionKey, call
 	}
 	if existing.Kind != "" && existing.Kind != agenttypes.ToolKindAskUser {
 		return errors.New("pending tool call is not ask_user")
+	}
+	if existing.Status == "complete" {
+		return errors.New("question already answered")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if admit != nil {
+		if err := admit(); err != nil {
+			return err
+		}
 	}
 	meta := make(map[string]any, len(existing.Meta)+2)
 	for key, value := range existing.Meta {
@@ -1116,9 +1133,13 @@ func (m *Manager) ExchangeLogPath(key string) string {
 
 func (m *Manager) ExchangeLogAbsolutePath(key string) string {
 	path, err := m.exchangePath(key)
-	if err != nil { return "" }
+	if err != nil {
+		return ""
+	}
 	metaDir := m.root.MetaDir()
-	if metaDir == "" { return "" }
+	if metaDir == "" {
+		return ""
+	}
 	return filepath.Join(metaDir, filepath.FromSlash(path))
 }
 
