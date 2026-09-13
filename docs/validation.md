@@ -14,6 +14,14 @@
 
 最终 `test buildPlugin verifyPluginProjectConfiguration verifyPlugin --offline` 返回退出码 0，日志为 `build/reports/native-0.1.2-build.log`。最终安装包重新运行 `node scripts/smoke-runtime.mjs`，本地入口、Git 项目 worktree 按钮、上下文草稿、明暗主题、窄窗口、服务退出均通过。ZIP 包含第三方 Codex SDK 的 MIT 许可证。
 
+## macOS 安装包（0.1.2）
+
+- 从干净的 `v0.1.2` 提交 `3a02a6bb56740899675f4fcf38c82b600753cded`，在 Windows 设置 `GOOS=darwin`、`GOARCH=arm64/amd64`，分别执行 `buildPlugin --offline`。两次构建均退出 0；日志为 `build/reports/macos-arm64-build.log` 和 `build/reports/macos-amd64-build.log`。
+- 两个 ZIP 各只包含对应架构的 `idea-agent-darwin-*`，没有残留 Windows 或另一架构的服务。解析 Mach-O 头确认 64 位可执行格式及 CPU，最低 macOS 均为 `12.0.0`；Go 构建信息确认 `CGO_ENABLED=0`、正确的目标平台和提交、`vcs.modified=false`。
+- 每个包除平台服务之外的 167 个文件均与已发布 Windows 包逐项 SHA-256 相同，包括通过六个 IDEA 2024 目标兼容检查的插件 JAR、Web 前端、配置和许可证。未改动 Agent 实现。
+- ZIP SHA-256：Apple 芯片包 `614e1c08ef5333e41e80ccf9ef680ce70265db46c9d399d63263967fd6ef7abf`；Intel 包 `c12bf91a90db7f3950b74ebb5df4478bfb620b112e62a91d4850d88e3b1d3f65`。
+- 这是交叉编译和安装包静态校验结果，尚未在 macOS 上运行 IDEA、本地服务或真实 Agent。
+
 ## IDEA 2024 兼容性（0.1.1）
 
 构建基线已从 IDEA 2025.3 降到 IDEA Community 2024.1（build `241.14494.240`）；插件最低 build 为 `241`。业务项目的 JDK 8 配置不受影响，插件使用 IDEA 自带的运行环境。
@@ -64,6 +72,6 @@ Java 版本与平台版本对应关系、Kotlin 标准库选择依据见 [JetBra
 
 - 在真实 IDEA 的 JCEF 工具窗口中启动、关闭和重新打开项目；浏览器冒烟不能替代这一环节。
 - 使用本机已登录的 Codex / Claude Code 完成一次真实写文件、审批、取消和历史恢复流程。当前验证没有调用付费模型，也没有更改本机 CLI 登录状态。
-- macOS / Linux 构建与运行。当前 ZIP 仅包含 Windows amd64 服务。
+- macOS 的 IDEA 启动、服务退出及 Agent 实际运行；Apple 芯片和 Intel 安装包已完成上述交叉编译与静态校验。Linux 构建与运行尚未验证。
 
 Vite 的上游大 chunk 与 `zod` 注释警告，以及 Kotlin 编译器对 1.9 语言级别的弃用提示未阻止构建。保留 1.9 语言/API 基线用于适配 IDEA 2024.1 的标准库。

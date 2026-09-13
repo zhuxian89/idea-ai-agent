@@ -2,7 +2,15 @@
 
 把 MindFS 的本地 Agent 工作台集成到 IntelliJ IDEA。插件内置 Go 服务和 Web 前端，在 IDEA 右侧工具窗口中使用本机 Codex、Claude Code 及 MindFS 已支持的 Agent。
 
-[下载 Windows x64 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
+[下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
+
+| 系统 / 架构 | 0.1.2 安装包 |
+| --- | --- |
+| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.2/idea-ai-agent-0.1.2-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.2/idea-ai-agent-0.1.2-macos-arm64.zip) |
+| Mac，Intel 处理器 | [macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.2/idea-ai-agent-0.1.2-macos-amd64.zip) |
+
+Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。两个 Mac 包已完成交叉编译及安装包校验，尚未在 Mac 实机运行验证。
 
 ## 实现
 
@@ -37,6 +45,8 @@ cd ../..
 ```
 
 macOS/Linux 使用 `./gradlew buildPlugin`。构建会编译 Web 前端和当前系统架构的 Go 服务，将服务与静态资源一起打入插件 ZIP，产物在 `build/distributions/`。
+
+在 Windows 上交叉编译 Mac 包时，设置 `$env:GOOS = 'darwin'`，并设置 `$env:GOARCH = 'arm64'`（Apple 芯片）或 `'amd64'`（Intel），然后执行 `./gradlew.bat buildPlugin`。每次构建后及时将 ZIP 另存为对应架构的文件名；两个架构必须顺序构建，因为共用输出目录。恢复当前系统构建前清除这两个环境变量。
 
 ```powershell
 ./gradlew.bat runIde
