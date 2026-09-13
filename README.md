@@ -4,13 +4,15 @@
 
 [下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
 
-| 系统 / 架构 | 0.1.2 安装包 |
+| 系统 / 架构 | 0.1.3 安装包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.2/idea-ai-agent-0.1.2-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.2/idea-ai-agent-0.1.2-macos-arm64.zip) |
-| Mac，Intel 处理器 | [macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.2/idea-ai-agent-0.1.2-macos-amd64.zip) |
+| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.3/idea-ai-agent-0.1.3-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.3/idea-ai-agent-0.1.3-macos-arm64.zip) |
+| Mac，Intel 处理器 | [macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.3/idea-ai-agent-0.1.3-macos-amd64.zip) |
 
 Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。两个 Mac 包已完成交叉编译及安装包校验，尚未在 Mac 实机运行验证。
+
+0.1.3 修复了 Mac 从 Dock/Finder 启动 IDEA 时，终端可用的 CLI 在插件中无法识别的问题。插件使用 IDEA 从用户 shell 恢复的环境，让检测和执行继承相同的 `PATH`、Node 路径及 CLI 配置。升级后请完全退出并重新启动 IDEA；不需要重新安装 CLI。
 
 ## 实现
 

@@ -59,11 +59,7 @@ class LocalRuntime(private val project: Project) : Disposable {
             val dataDir = Path.of(PathManager.getConfigPath(), "idea-ai-agent", hash)
             Files.createDirectories(dataDir)
             val token = HexFormat.of().formatHex(ByteArray(32).also { SecureRandom().nextBytes(it) })
-            val builder = ProcessBuilder(executable.toString(), "--project", projectPath.toString())
-                .directory(runtime.toFile())
-            builder.environment()["IDE_AGENT_DATA_DIR"] = dataDir.toString()
-            builder.environment()["IDE_AGENT_TOKEN"] = token
-            builder.environment()["MINDFS_STATIC_DIR"] = runtime.resolve("web").toString()
+            val builder = runtimeProcess(executable, projectPath, dataDir, token)
             val child = synchronized(lock) {
                 if (disposed || result.isDone) return
                 builder.start().also { process = it }

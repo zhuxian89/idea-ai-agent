@@ -2,6 +2,17 @@
 
 环境：Windows amd64、开发 JDK 21、Go 1.26.5、Node.js 20.18.1、pnpm 12.4.1。
 
+## macOS CLI 检测修复（0.1.3）
+
+现场：Mac 终端通过 `/bin/zsh` 能找到 `~/.hermes/node/bin/codex` 和 `~/.local/bin/claude`，插件的 Agent 列表却为空。旧的 `ProcessBuilder` 只继承 IDEA 进程环境，没有使用 IDEA 恢复的 shell 环境；Go 的 `exec.LookPath` 因而可能判定 CLI 未安装，`/api/agents` 默认会过滤这些记录。[JetBrains 的环境加载说明](https://youtrack.jetbrains.com/articles/SUPPORT-A-1727)解释了桌面启动与终端环境的差异。
+
+- `RuntimeProcessTest` 的两个回归用例在旧行为下均失败：子进程报 `The runtime did not inherit the terminal environment`，配置用例没有收到 shell 的 `PATH`。红色日志为 `build/reports/mac-cli-red.log`。
+- 修复使用公开的 `EnvironmentUtil.getEnvironmentMap()`，为本地服务设置完整 shell 环境，再覆盖插件的数据目录、静态目录和本次访问令牌。不执行额外 shell 脚本，不硬编码用户安装目录，不改 Agent 权限或模型选项。
+- 回归测试在包含空格的临时目录中创建 `.hermes/node/bin` 和 `.local/bin`，实际启动 Java 子进程查找并执行 Codex、Claude 和 Node 替身；测试同时验证 CLI 配置继承、插件专属环境覆盖和共享 shell 环境不被修改。没有调用真实 CLI 或模型。
+- `test buildPlugin verifyPluginProjectConfiguration verifyPlugin --offline` 通过，5 项 JUnit 测试零失败，IC/IU 2024.1、2024.2、2024.3 六个目标均 `Compatible`。日志为 `build/reports/mac-cli-0.1.3-build.log`。
+- 既有 `go test ./server/cmd/idea-agent -run '^TestIDETokenNotInherited$' -count=1` 通过，插件访问令牌仍在启动 CLI 前从环境移除。
+- Windows 回归验证了环境传递和子进程查找；尚未在用户 Mac 上完成真实 IDEA 与 CLI 验证。若 IDEA 自身加载 shell 环境失败，仍需查看 IDEA 的 `EnvironmentUtil` 日志排查 shell 初始化。
+
 ## 原生能力修复（0.1.2）
 
 问题清单及每项定向测试见 [native-agent-compatibility.md](native-agent-compatibility.md)。新增测试先复现了推理降级、隐式模型/权限覆盖、用户回答提前报告成功、重复回答阻塞、worktree 禁用以及编辑器内容截断，再验证修复结果。
