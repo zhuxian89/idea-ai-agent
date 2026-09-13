@@ -21,6 +21,7 @@ type OpenOptions struct {
 	AgentName             string
 	SessionKey            string
 	Model                 string
+	Mode                  string
 	Effort                string
 	FastService           string
 	PlanMode              bool
@@ -71,6 +72,9 @@ func (r *Runtime) OpenSession(_ context.Context, opts OpenOptions) (types.Sessio
 	}
 	if opts.PlanMode {
 		threadOptions.CollaborationMode = codexCollaborationMode(true)
+	}
+	if err := applyPermissionMode(&threadOptions, opts.Mode); err != nil {
+		return nil, err
 	}
 
 	var thread *codexsdk.Thread
@@ -795,12 +799,51 @@ func (s *session) RuntimeDefaults(ctx context.Context) (types.RuntimeDefaults, e
 	return defaults, nil
 }
 
-func (s *session) SetMode(_ context.Context, _ string) error {
+func applyPermissionMode(opts *codexsdk.ThreadOptions, mode string) error {
+	switch strings.TrimSpace(mode) {
+	case "":
+		opts.SandboxMode, opts.ApprovalPolicy = "", ""
+	case "full-access":
+		opts.SandboxMode, opts.ApprovalPolicy = "danger-full-access", "never"
+	case "default":
+		opts.SandboxMode, opts.ApprovalPolicy = "workspace-write", "on-request"
+	case "read-only":
+		opts.SandboxMode, opts.ApprovalPolicy = "read-only", "on-request"
+	default:
+		return errors.New("unsupported Codex permission mode: " + mode)
+	}
+	return nil
+}
+
+func (s *session) SetMode(_ context.Context, mode string) error {
+	if s == nil || s.client == nil {
+		return errors.New("codex session not initialized")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	opts := s.threadOpts
+	if err := applyPermissionMode(&opts, mode); err != nil {
+		return err
+	}
+	threadID := s.threadID
+	if threadID == "" && s.thread != nil && s.thread.ID() != nil {
+		threadID = *s.thread.ID()
+	}
+	if threadID == "" {
+		s.thread = s.client.StartThread(opts)
+	} else {
+		s.thread = s.client.ResumeThread(threadID, opts)
+	}
+	s.threadOpts = opts
 	return nil
 }
 
 func (s *session) ListModes(_ context.Context) (types.ModeList, error) {
-	return types.ModeList{}, nil
+	return types.ModeList{Modes: []types.ModeInfo{
+		{ID: "full-access", Name: "Full access", Description: "Run commands and edit files without approval prompts."},
+		{ID: "default", Name: "Standard permissions", Description: "Workspace access; Codex requests approval when needed."},
+		{ID: "read-only", Name: "Read only", Description: "Read files; request approval for changes."},
+	}}, nil
 }
 
 func (s *session) ListCommands(ctx context.Context) (types.CommandList, error) {

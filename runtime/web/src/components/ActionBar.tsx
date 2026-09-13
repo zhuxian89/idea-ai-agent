@@ -4,6 +4,7 @@ import { type SessionMode } from "./ModeSelector";
 import { ModeSelector } from "./ModeSelector";
 import { AgentSelector } from "./AgentSelector";
 import { getAgentDefaults } from "../services/agentDefaults";
+import { nativePermissionChoices } from "../services/nativePermissions";
 import { fetchAgents, fetchShells, restartAgent, type AgentStatus, type ShellStatus } from "../services/agents";
 import { fetchCandidates, type CandidateItem } from "../services/candidates";
 import { reportError } from "../services/error";
@@ -639,6 +640,8 @@ export function ActionBar({
   }, [agent, model, agents]);
 
   const selectedAgent = agents.find((item) => item.name === agent);
+  const permissionChoices = compactWorkbench ? nativePermissionChoices(selectedAgent) : [];
+  const effectiveAgentMode = agentMode || permissionChoices[0]?.id || "";
   const selectedModelInfo =
     (selectedAgent?.models ?? []).find((item) => item.id === model)
     || (selectedAgent?.models ?? []).find(
@@ -1009,7 +1012,7 @@ export function ActionBar({
         mode,
         mode === "command" ? "" : agent,
         model || undefined,
-        agentMode || undefined,
+        effectiveAgentMode || undefined,
         supportsEffort ? effort || undefined : undefined,
         supportsServiceTier ? fastService : undefined,
         mode === "command" ? shell || undefined : undefined,
@@ -1055,7 +1058,7 @@ export function ActionBar({
         requestAnimationFrame(() => editorRef.current?.focus());
       }
     }
-  }, [serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, agentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t, currentSession, currentRootIsGitRepo, createWorktree, worktreeBranchMode, worktreeBranch]);
+  }, [serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t, currentSession, currentRootIsGitRepo, createWorktree, worktreeBranchMode, worktreeBranch]);
 
   const handleCancel = useCallback(async () => {
     const sessionKey = currentSession?.key;
@@ -1182,15 +1185,16 @@ export function ActionBar({
       return;
     }
     const clipboardItems = Array.from(event.clipboardData?.items || []);
-    const imageFiles = clipboardItems
-      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    const files = clipboardItems
+      .filter((item) => item.kind === "file")
       .map((item) => item.getAsFile())
       .filter((file): file is File => !!file);
-    if (imageFiles.length === 0) {
+    const pastedFiles = files.length > 0 ? files : Array.from(event.clipboardData?.files || []);
+    if (pastedFiles.length === 0) {
       return;
     }
     event.preventDefault();
-    appendPendingAttachments(imageFiles);
+    appendPendingAttachments(pastedFiles);
   }, [appendPendingAttachments, currentRootId, sending]);
 
   const resetForNewSession = useCallback(() => {
@@ -1910,7 +1914,7 @@ export function ActionBar({
                     <AgentSelector
                     agent={agent}
                     model={model}
-                    mode={agentMode}
+                    mode={effectiveAgentMode}
                     effort={effort}
                     agents={agents}
                     onAgentChange={(nextAgent, nextModel) => {
@@ -1918,7 +1922,7 @@ export function ActionBar({
                       const defaults = getAgentDefaults(nextStatus);
                       setAgent(nextAgent);
                       setModel(nextModel || defaults.model);
-                      setAgentMode("");
+                      if (nextAgent !== agent) setAgentMode("");
                       setEffort(defaults.effort);
                       setFastService(defaults.fastService);
                     }}
@@ -1941,6 +1945,10 @@ export function ActionBar({
                     defaultExpandOptions
                     onboardingId="agent-selector"
                     />
+                    {permissionChoices.length > 0 ? <select className="idea-permission-select" aria-label={t("permission.label")} title={t("permission.description")} value={effectiveAgentMode} disabled={sending} onChange={(event) => setAgentMode(event.target.value)}>
+                      {!permissionChoices.some((choice) => choice.id === effectiveAgentMode) ? <option value={effectiveAgentMode}>{effectiveAgentMode}</option> : null}
+                      {permissionChoices.map((choice) => <option key={choice.id} value={choice.id}>{t(choice.label)}</option>)}
+                    </select> : null}
                   </div>
                 ) : (
                   <ShellSelector

@@ -31,6 +31,19 @@ func TestNativeOptionsInheritCLIConfiguration(t *testing.T) {
 	}
 }
 
+func TestNativePermissionModeChoices(t *testing.T) {
+	modes, err := (&session{}).ListModes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range modes.Modes {
+		if mode.ID == "bypassPermissions" {
+			return
+		}
+	}
+	t.Fatal("Claude bypassPermissions permission choice is missing")
+}
+
 func TestNativeClientRetainsConfigurationValidation(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { smokeAgentManagement } from './smoke-agent-management.mjs';
+import { smokeMessageDelivery } from './smoke-message-delivery.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const toolsDir = path.join(root, '.tools');
@@ -112,7 +113,8 @@ try {
       return rect.x >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight && !!hit && editor.contains(hit);
     });
     await page.screenshot({path: path.join(reports, 'agent-sidebar.png'), animations: 'disabled'});
-    await smokeAgentManagement(page, reports);
+    if (!process.argv.includes('--delivery-only')) await smokeAgentManagement(page, reports);
+    await smokeMessageDelivery(page, reports);
     assert.deepEqual(errors, []);
     console.log('PASS: browser render, editor context draft, theme synchronization, narrow sidebar; no uncaught page errors.');
   }

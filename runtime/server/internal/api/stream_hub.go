@@ -20,14 +20,15 @@ import (
 )
 
 type StreamHub struct {
-	mu              sync.RWMutex
-	e2eeManager     *e2ee.Manager
-	clients         map[string]*websocket.Conn
-	connLocks       map[*websocket.Conn]*sync.Mutex
-	sessionClients  map[string]map[string]struct{}
-	pendingSessions map[string]*SessionPendingState
-	replayStates    map[string]*ClientReplayState
-	completed       map[string]*CompletedSessionState
+	mu                sync.RWMutex
+	queuePublishLocks sync.Map // session key -> *sync.Mutex; serializes queue snapshots on the wire
+	e2eeManager       *e2ee.Manager
+	clients           map[string]*websocket.Conn
+	connLocks         map[*websocket.Conn]*sync.Mutex
+	sessionClients    map[string]map[string]struct{}
+	pendingSessions   map[string]*SessionPendingState
+	replayStates      map[string]*ClientReplayState
+	completed         map[string]*CompletedSessionState
 }
 
 type PendingUserMessage struct {
@@ -817,7 +818,11 @@ func (h *StreamHub) SendToClient(clientID string, resp WSResponse) {
 	if conn == nil {
 		return
 	}
-	_ = h.WriteJSON(clientID, conn, resp)
+	if err := h.WriteJSON(clientID, conn, resp); err != nil {
+		// A broken UI connection must not hold up other clients or queue replay.
+		h.UnregisterClient(clientID, conn)
+		_ = conn.Close()
+	}
 }
 
 func (h *StreamHub) BroadcastAll(resp WSResponse) {
@@ -887,16 +892,25 @@ func (h *StreamHub) BroadcastSessionUserMessageAt(
 ) {
 	pendingUser := h.SetPendingUserAt(rootID, sessionKey, sessionName, agentName, model, mode, effort, fastService, planMode, content, timestamp, baseExchangeSeq...)
 	resp := buildSessionUserMessageResponse(rootID, sessionKey, sessionType, sessionName, agentName, model, mode, effort, fastService, planMode, content, pendingUser.Timestamp, queued)
+	// The sender's optimistic state can disagree with the server about whether
+	// this turn was queued. Every client needs the authoritative started message.
 	for _, clientID := range h.GetSessionClientIDs(sessionKey, false) {
-		if clientID == excludeClientID {
-			continue
-		}
 		h.SendToClient(clientID, resp)
 	}
 }
 
-func (h *StreamHub) BroadcastSessionQueueUpdated(rootID, sessionKey string, queue []QueuedUserMessage) {
-	_, _, frozen := h.queueSnapshot(sessionKey)
+func (h *StreamHub) queuePublishLock(sessionKey string) *sync.Mutex {
+	lock, _ := h.queuePublishLocks.LoadOrStore(sessionKey, &sync.Mutex{})
+	return lock.(*sync.Mutex)
+}
+
+func (h *StreamHub) BroadcastSessionQueueUpdated(rootID, sessionKey string, _ []QueuedUserMessage) {
+	lock := h.queuePublishLock(sessionKey)
+	lock.Lock()
+	defer lock.Unlock()
+	// A handler's earlier snapshot may already have been drained by another turn.
+	// Read the current state inside the publication lock, also used by replay.
+	_, queue, frozen := h.queueSnapshot(sessionKey)
 	resp := buildSessionQueueUpdatedResponse(rootID, sessionKey, queue, frozen)
 	for _, clientID := range h.GetSessionClientIDs(sessionKey, false) {
 		h.SendToClient(clientID, resp)
@@ -921,6 +935,9 @@ func (h *StreamHub) WriteJSON(clientID string, conn *websocket.Conn, value any) 
 	lock := h.getConnLock(conn)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return err
+	}
 	if h.e2eeManager != nil && h.e2eeManager.Enabled() {
 		if resp, ok := value.(WSResponse); ok && resp.Type == "e2ee.error" {
 			return conn.WriteJSON(resp)
@@ -1008,11 +1025,14 @@ func (h *StreamHub) replayStepToClient(rootID, clientID, sessionKey string, even
 }
 
 func (h *StreamHub) replayQueueToClient(rootID, clientID, sessionKey string) {
+	lock := h.queuePublishLock(sessionKey)
+	lock.Lock()
+	defer lock.Unlock()
 	stateRoot, queue, frozen := h.queueSnapshot(sessionKey)
 	if rootID == "" {
 		rootID = stateRoot
 	}
-	if rootID == "" || len(queue) == 0 {
+	if rootID == "" {
 		return
 	}
 	h.SendToClient(clientID, buildSessionQueueUpdatedResponse(rootID, sessionKey, queue, frozen))

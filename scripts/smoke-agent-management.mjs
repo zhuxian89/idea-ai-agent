@@ -135,6 +135,28 @@ export async function smokeAgentManagement(page, reports) {
     await editor.waitFor({state: 'visible'});
     await page.waitForFunction(() => document.querySelector('.idea-view-heading p')?.textContent.includes('with spaces'), null, {timeout: 30000});
     await page.locator('[data-agent="codex"]').waitFor({state: 'attached'});
+    await editor.evaluate(element => {
+      const data = new DataTransfer();
+      data.items.add(new File(['fixture content'], 'pasted-document.txt', {type: 'text/plain'}));
+      element.dispatchEvent(new ClipboardEvent('paste', {clipboardData: data, bubbles: true, cancelable: true}));
+    });
+    await page.getByRole('button', {name: 'Remove attachment pasted-document.txt', exact: true}).waitFor({timeout: 2000});
+    await page.getByRole('button', {name: 'Remove attachment pasted-document.txt', exact: true}).click();
+    const permissions = page.getByRole('combobox', {name: 'Execution permissions', exact: true});
+    assert.equal(await permissions.inputValue(), 'full-access');
+    await permissions.selectOption('default');
+    const agentSelector = page.locator('[data-onboarding="agent-selector"] > button');
+    await agentSelector.click();
+    await page.getByRole('button', {name: 'Test Model', exact: true}).click();
+    assert.equal(await permissions.inputValue(), 'default', 'Changing model must not raise permissions');
+    await agentSelector.click();
+    await page.locator('[data-agent-menu]').getByRole('button').filter({hasText: /^claude$/}).click();
+    assert.equal(await permissions.inputValue(), 'bypassPermissions');
+    await permissions.selectOption('default');
+    await agentSelector.click();
+    await page.locator('[data-agent-menu]').getByRole('button').filter({hasText: /^codex$/}).click();
+    assert.equal(await permissions.inputValue(), 'full-access');
+    console.log('PASS: document paste; visible Codex/Claude native permission choices; full-access default and explicit downgrade retained across model changes.');
     assert.equal(await page.locator('[data-onboarding="project-tabs"]').count(), 0);
     assert.equal(await page.getByRole('button', {name: /Open file sidebar|Expose local services/}).count(), 0);
     assert.equal(await page.getByText('Pending', {exact: true}).count(), 0);

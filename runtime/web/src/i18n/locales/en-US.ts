@@ -1,6 +1,12 @@
 import type { Messages } from "../types";
 
 export const enUS = {
+  "permission.label": "Execution permissions",
+  "permission.full": "Full access",
+  "permission.standard": "Standard",
+  "permission.readOnly": "Read only",
+  "permission.acceptEdits": "Accept edits",
+  "permission.description": "Applies to the next message. Full access allows commands and file changes without approval prompts; plan mode still applies.",
   "idea.chat": "Chat",
   "idea.history": "Chat history",
   "idea.settings": "Agent configuration and installation",
@@ -383,6 +389,15 @@ export const enUS = {
   "session.planModeSwitchFailedNotReady": "Plan mode switch failed: connection is not ready. Try again later.",
   "session.generating": "Generating...",
   "session.sentWaiting": "Sent, waiting for response...",
+  "session.activityWaiting": "Waiting for Agent",
+  "session.activitySending": "Sending, waiting for confirmation",
+  "session.activityThinking": "Thinking",
+  "session.activityTool": "Running tool: {name}",
+  "session.activityAnswer": "Waiting for your answer",
+  "session.activityDisconnected": "Connection interrupted; reconnecting…",
+  "session.activityElapsed": "Elapsed {seconds}s",
+  "session.activityLastUpdate": "Last update {seconds}s ago",
+  "session.activityQuiet": "No new activity for {seconds}s. You can keep waiting or stop this turn.",
   "session.relatedFiles": "Related files {count}",
   "session.expandRelatedFiles": "Expand related files",
   "session.collapseRelatedFiles": "Collapse related files",

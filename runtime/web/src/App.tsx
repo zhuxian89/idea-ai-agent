@@ -11434,6 +11434,7 @@ export function App({ onGoHome }: AppProps) {
       : 0;
   const sessionView = (
     <SessionViewer
+      connected={status === "connected"}
       session={selectedSessionSnapshot}
       agents={availableAgents}
       slashCommandResult={slashCommandResultForSession(
@@ -14556,6 +14557,7 @@ export function App({ onGoHome }: AppProps) {
           >
             {drawerSessionSnapshot ? (
               <SessionViewer
+                connected={status === "connected"}
                 session={drawerSessionSnapshot}
                 agents={availableAgents}
                 slashCommandResult={slashCommandResultForSession(

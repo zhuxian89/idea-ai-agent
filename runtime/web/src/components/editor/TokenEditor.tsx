@@ -380,7 +380,7 @@ function getPlainTextFromPasteEvent(event: ClipboardEvent | InputEvent | Keyboar
 
 function pasteEventHasFiles(event: ClipboardEvent | InputEvent | KeyboardEvent): boolean {
   const dataTransfer = getPasteDataTransfer(event);
-  return Array.from(dataTransfer?.items || []).some((item) => item.kind === "file");
+  return !!dataTransfer?.files.length || Array.from(dataTransfer?.items || []).some((item) => item.kind === "file");
 }
 
 function isKeyboardPasteInput(event: InputEvent): boolean {

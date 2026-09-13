@@ -9,7 +9,7 @@
 | 0.1.5 及此前的默认模型修复只覆盖选项/传输层，SDK 构造器仍拒绝空模型，实际启动报 `model must be specified` | 0.1.6 在原固定版本 SDK 上仅移除“模型不得为空”的校验，允许 CLI 读取默认配置；显式模型、权限及其他校验保留 | `TestNativeCLIFlagsAndArguments` 先经真实 `NewClient` 再连接记录器，分别验证默认/显式模型；`TestNativeClientRetainsConfigurationValidation` |
 | 新会话将缓存模型和推理档位当成用户选择 | 新会话的“默认”跟随 CLI；明确选择仍传递，已有会话保留其模型信息 | Go `TestNativeDefaultsDoNotPinCachedModelOrEffort`、前端 `native-defaults.test.mjs` |
 | Claude 只加载 `user,project` 配置 | 实际启动参数加载 `user,project,local`；包含项目的本地设置 | 检查 SDK 实际生成的 CLI 参数 |
-| Codex 强制全权限、从不询问；Claude 自动允许工具请求 | 默认省略权限覆盖，由 CLI 决定何时询问；展示其操作详情，等待用户允许或拒绝 | 原生选项和权限等待测试 |
+| 早期权限硬编码，用户无法选择 | 0.1.2 恢复 CLI 继承与授权交互；0.1.7 按用户要求在插件内提供原生权限选择并默认最高权限。已保存的普通权限保留，后端空模式调用继续继承 CLI，不自动允许工具回调 | 原生选项和权限等待测试；`TestNativePermissionModeChoices`、`TestNativeFullAccessAndPermissionDowngrade`、`TestNativePermissionCLIArguments`；打包浏览器权限切换检查 |
 | Codex 的额外排版提示可能覆盖原生 developer instructions | 普通原生会话不注入该覆盖 | 适配器参数检查；显式开发者指令接口仍保留 |
 | Claude 配置中的 CLI 附加参数未传递 | 保留顺序、重复参数和带空格的值；流式协议必需的三个参数冲突会明确报错 | `TestNativeCLIFlagsAndArguments` |
 | 方案选择仅凭 WebSocket 发出就显示成功，且后端先写入已回答状态 | 后端接受答案后才更新记录及确认；断线、超时、过期显示错误，保留填写内容；重复答案不阻塞 | 前端 `question-delivery.test.mjs`；Go `TestAnswer*` |

@@ -2,6 +2,30 @@
 
 环境：Windows amd64、开发 JDK 21、Go 1.26.5、Node.js 20.18.1、pnpm 12.4.1。
 
+## 消息同步与等待状态（0.1.8，未发布）
+
+- `go test ./server/internal/api -run '^TestDelivery' -count=1` 首次三项失败：重连只收到完成通知而没有空队列、晚到广播重新带回已出队的消息、发送者收不到正式用户消息。改为按会话串行发布当前队列快照、重连回传空队列、正式消息回传发送者后通过。
+- 独立审查首轮指出运行中工具被显示层统一改成完成，以及停止读取的 WebSocket 客户端可能无限占用队列发布锁。分别改为仅对结束的历史整理工具状态，并为界面 WebSocket 写入设置 5 秒上限、移除写失败连接。Agent 任务本身仍无新增超时。
+- 新增 `TestDeliveryStalledClientCannotBlockQueueForever`，用真实本地 TCP/WebSocket 缩小收发缓冲区并停止读取，修复前 7 秒内无法释放发布锁而失败；修复后广播返回、失败连接移除、新连接可以重放空队列。最终 `go test ./server/internal/api -count=1` 整包通过。
+- TypeScript 类型检查通过。`node --test tests/session-activity.test.mjs tests/question-delivery.test.mjs tests/native-defaults.test.mjs` 五项通过，涵盖执行中/结束历史的工具状态、原生默认参数和用户回答确认；不调用真实模型。
+- 打包浏览器测试先复现缺少等待状态，随后在运行工具标签处失败，证实原显示层提前结算普通工具。修复后 `node scripts/smoke-runtime.mjs --delivery-only` 通过正式用户消息、重放去重、思考/工具状态、65 秒无事件提示、队列清空及结束状态撤除；375px 截图为 `build/reports/ide-message-activity.png`。日志为 `build/reports/0.1.8-delivery-ui-green.log`。
+- Windows `buildPlugin --offline` 通过；保持 IDEA 2024.1 SDK、Java 17 字节码基线，本轮没有修改 Kotlin 代码。用户中断了后续完整 UI 重跑，因此该次 `0.1.8-ui-final.log` 只有启动部分，不作为完整检查通过的证据。
+
+本轮没有运行真实 Codex / Claude 模型，Mac IDEA/JCEF 仍需实机验证。测试清理时 `.tools/runtime-smoke-pmi1fX` 被占用，后续清理被自动审批以 `blocked by policy` 拒绝；目录暂时保留。本地测试包未提交或发布 GitHub Release。
+
+## 原生权限选择与文件粘贴（0.1.7，未发布）
+
+- 新增用例先确认 Codex / Claude 缺少权限选项，浏览器在旧资源上无法粘贴普通文件（`build/reports/0.1.7-paste-red.log`）。权限沿用现有 `mode` 字段传入两个原生适配器，插件默认最高权限，明确保存的选择继续保留。
+- `go test ./server/internal/agent/codex ./server/internal/agent/claude -run 'TestNative|TestOpenSessionInherits|Test.*Question|Test.*Answer|Test.*Permission' -count=1` 通过。覆盖原生权限选项、最高权限降回普通权限、非法模式拒绝、计划模式保留，以及原有用户询问/回答回归；没有调用真实模型。
+- Claude 真实构造器与传输参数测试发现 SDK 将 `AllowDangerouslySkipPermissions` 映射为立即启用的 `--dangerously-skip-permissions`。修复为 `--allow-dangerously-skip-permissions` 后，普通、最高权限及计划模式用例均通过；当前权限通过 `--permission-mode` 明确选择。
+- TypeScript 类型检查通过，`node --test tests/native-defaults.test.mjs tests/question-delivery.test.mjs` 四项通过。`node scripts/smoke-runtime.mjs` 检查实际 Windows 打包资源：普通文件粘贴/移除、Codex / Claude 默认最高权限、手动降权、切换模型不重置权限；原有工具栏提示、弹窗布局、配置、安装、重启、历史、明暗主题和 375px 窄窗检查均通过。日志为 `build/reports/0.1.7-ui-green.log`。
+- 独立审查冻结的生产代码和回归测试，结论为通过，无 blocking / important 问题。审查基线为 `c801ca89c968d49151b6f55ed38fa41991f7e326`，差异 SHA-256 为 `0456dadaa5fc5068c7b34dd0d99cd4d107880092599dc584fbfae4b16c7f3db1`。之后仅修正浏览器测试中 Agent 按钮的定位方式并补充说明文档。
+- Windows `buildPlugin --offline` 通过。首次构建遇到 Node 内存不足，停止本次 Gradle 后台进程后，以 Node 4 GB 上限和 Gradle 768 MB 上限完成顺序构建。0.1.7 ZIP 完整性通过，18 个插件 class 与已通过六个 IDEA 2024 兼容目标检查的 0.1.6 逐项相同，仍为 Java 17 字节码、最低 IDEA build 241；本轮没有重复运行六个目标的 Plugin Verifier。报告为 `build/reports/0.1.7-plugin-artifact.json`。
+
+- Mac arm64 / amd64 顺序交叉编译通过，三个最终 ZIP 完整性通过。两个 Mac 包各自的 168 个共用文件与 Windows 测试包逐项 SHA-256 相同，Mach-O 架构匹配，最低 macOS 12.0；报告为 `build/reports/macos-0.1.7-{arm64,amd64}-artifact.json`，安装包与 SHA-256 清单位于 `build/local-packages/`。
+
+浏览器合成的文件粘贴已通过，尚未验证 Mac Finder 或 IDEA 项目树的系统剪贴板。真实 CLI、Mac IDEA/JCEF 仍需用户本机验收；启动时短暂白色区域按用户要求暂不处理。本轮仅生成本地测试包，没有创建 GitHub Release。
+
 ## Claude 默认模型启动与界面交互修复（0.1.6，未发布）
 
 - 在原有 `TestNativeCLIFlagsAndArguments` 中补上真实 `claudeagent.NewClient` 调用，修复前得到与用户截图一致的 `invalid configuration for Model: model must be specified`。原测试绕过构造器，因而没有发现该错误。

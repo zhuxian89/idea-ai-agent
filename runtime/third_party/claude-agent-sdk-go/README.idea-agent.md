@@ -6,10 +6,16 @@ Source: `github.com/yandc/claude-agent-sdk-go` at `fc2d6ef2e3eb`
 `go.mod`, `go.sum`, and the MIT `LICENSE` are retained. CLI examples, documentation,
 and upstream CI files are omitted.
 
-The only production patch permits an empty model in `NewClient` validation.
+The constructor patch permits an empty model in `NewClient` validation.
 The existing transport already omits `--model` for that value; the installed
 Claude CLI then resolves its own model configuration. Explicit model choices,
 permission validation, session validation and all other behavior are unchanged.
+
+The transport also corrects `AllowDangerouslySkipPermissions` to emit
+`--allow-dangerously-skip-permissions`. Upstream incorrectly emitted
+`--dangerously-skip-permissions`, which activates bypass rather than only enabling
+later selection of that mode. The adapter explicitly sets `--permission-mode`
+when the user selects permissions; `plan` remains distinct from bypass.
 
 Regression coverage lives in the plugin adapter's `cli_arguments_test.go` and
 `native_options_test.go`. It exercises the real constructor and transport with

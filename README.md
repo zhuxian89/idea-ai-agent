@@ -4,13 +4,13 @@
 
 [下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
 
-当前源码版本为 0.1.6，尚未发布新的 GitHub Release。下面的安装包路径仅适用于本地构建目录，不包含在 Git 仓库中；上方 Release 链接仍为此前版本。
+当前源码版本为 0.1.8，尚未发布新的 GitHub Release。下面的安装包路径仅适用于本地构建目录，不包含在 Git 仓库中；上方 Release 链接仍为此前版本。
 
-| 系统 / 架构 | 0.1.6 本地测试包 |
+| 系统 / 架构 | 0.1.8 本地测试包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](build/local-packages/idea-ai-agent-0.1.6-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](build/local-packages/idea-ai-agent-0.1.6-macos-arm64.zip) |
-| Mac，Intel 处理器 | [macos-amd64.zip](build/local-packages/idea-ai-agent-0.1.6-macos-amd64.zip) |
+| Windows x64 | [windows-amd64.zip](build/local-packages/idea-ai-agent-0.1.8-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](build/local-packages/idea-ai-agent-0.1.8-macos-arm64.zip) |
+| Mac，Intel 处理器 | [macos-amd64.zip](build/local-packages/idea-ai-agent-0.1.8-macos-amd64.zip) |
 
 Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。两个 Mac 包已完成交叉编译及安装包校验，尚未在 Mac 实机运行验证。
 
@@ -19,6 +19,10 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 0.1.5 继续保留用户 PATH 的优先顺序，并在 Mac 上补充 `~/.local/bin`、`~/.hermes/node/bin` 和 Homebrew 常见目录，覆盖运行期间新建的安装目录。进入配置页或刷新列表会立即检查 CLI 是否存在；安装输出在命令会话展示，执行后返回配置页即可重新识别。重启后检测结果会自动更新，连接错误会显示在对应 Agent 卡片上。
 
 ## 实现
+
+0.1.8 修复队列快照过期和重连后残留、发送窗口漏显示正式消息的问题。等待区展示实际思考/工具/用户回答状态、已等待时间及最近更新间隔；运行中的工具保留原生状态。详情见 [0.1.8 本地测试版说明](docs/releases/v0.1.8.md)。
+
+0.1.7 在 Agent / 模型旁增加执行权限选择，按本插件的使用要求默认使用 Codex 和 Claude Code 的原生最高权限；可以切回普通权限，切换模型保留已选权限。修复输入框仅接收图片粘贴、忽略普通文件的问题。详情见 [0.1.7 本地测试版说明](docs/releases/v0.1.7.md)。
 
 0.1.6 修复适配层构造客户端时报 `model must be specified`，让 Claude 未指定模型时正常沿用 CLI 配置；补充真实构造器回归测试。顶部图标增加悬停提示，历史/配置支持再次点击收回，Agent / 模型弹窗固定两列；编辑器上下文和重连操作使用 IDEA 原生工具窗口按钮。
 
@@ -31,9 +35,9 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 
 插件入口关闭 Relay、Token Station、云端 Agent 配置拉取、服务自身更新和 PWA 入口；本机 Agent 仍按其配置连接模型服务。
 
-每个工具窗口绑定当前 IDEA 项目。项目和文件管理由 IDEA 承担；会话仍保留已有 worktree 能力，Agent 命令遵循所选 CLI 的权限配置。
+每个工具窗口绑定当前 IDEA 项目。项目和文件管理由 IDEA 承担；会话仍保留已有 worktree 能力，Agent 命令使用界面选定的原生权限模式。
 
-原生会话默认跟随本机 CLI 的模型、推理和权限配置，支持原生方案选择及授权交互。已确认的差异、0.1.2 修复和验证边界见 [原生能力核对清单](docs/native-agent-compatibility.md)。
+模型和推理默认跟随本机 CLI 配置。插件内 Codex / Claude Code 未保存权限选择的会话默认最高权限；普通权限下保留原生授权交互，方案选择与计划模式继续可用。已确认的差异与验证边界见 [原生能力核对清单](docs/native-agent-compatibility.md)。
 
 ## 客户运行要求
 

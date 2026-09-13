@@ -204,7 +204,7 @@ func (t *SubprocessTransport) Connect(ctx context.Context) error {
 
 	// Add permission bypass flags if configured.
 	if t.options.AllowDangerouslySkipPermissions {
-		args = append(args, "--dangerously-skip-permissions")
+		args = append(args, "--allow-dangerously-skip-permissions")
 	}
 
 	// Route permission prompts through SDK control channel if callback is set.

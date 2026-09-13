@@ -49,7 +49,7 @@ func TestNativeCLIFlagsAndArguments(t *testing.T) {
 			if model != "" && (modelFlag < 0 || modelFlag+1 >= len(recorder.args) || recorder.args[modelFlag+1] != model) {
 				t.Fatalf("explicit model must be forwarded: %v", recorder.args)
 			}
-			for _, forbidden := range []string{"--permission-mode", "--system-prompt", "--max-turns", "--max-budget-usd"} {
+			for _, forbidden := range []string{"--permission-mode", "--dangerously-skip-permissions", "--system-prompt", "--max-turns", "--max-budget-usd"} {
 				if slices.Contains(recorder.args, forbidden) {
 					t.Errorf("unexpected default CLI override: %s", forbidden)
 				}
@@ -66,6 +66,42 @@ func TestNativeCLIFlagsAndArguments(t *testing.T) {
 			}
 			if err := validateCLIArguments([]string{"--output-format=text"}); err == nil {
 				t.Fatal("incompatible transport flag silently accepted")
+			}
+		})
+	}
+}
+
+func TestNativePermissionCLIArguments(t *testing.T) {
+	for _, tc := range []struct {
+		mode     string
+		plan     bool
+		expected string
+	}{
+		{"bypassPermissions", false, "bypassPermissions"},
+		{"default", false, "default"},
+		{"bypassPermissions", true, "plan"},
+	} {
+		t.Run(tc.expected, func(t *testing.T) {
+			options := (&session{}).nativeOptions(OpenOptions{RootPath: t.TempDir(), Mode: tc.mode, PlanMode: tc.plan})
+			opts := claudeagent.DefaultOptions()
+			for _, option := range options {
+				option(&opts)
+			}
+			recorder := &argumentRecorder{}
+			transport := claudeagent.NewSubprocessTransportWithRunner(recorder, &opts)
+			client, err := claudeagent.NewClient(append(options, claudeagent.WithTransport(transport))...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := client.Connect(context.Background()); !errors.Is(err, errArgumentsRecorded) {
+				t.Fatal(err)
+			}
+			i := slices.Index(recorder.args, "--permission-mode")
+			if i < 0 || i+1 >= len(recorder.args) || recorder.args[i+1] != tc.expected {
+				t.Fatalf("incorrect native permission flags: %v", recorder.args)
+			}
+			if !slices.Contains(recorder.args, "--allow-dangerously-skip-permissions") {
+				t.Fatal("native bypass switching not enabled")
 			}
 		})
 	}

@@ -15,6 +15,7 @@ import { copyText } from "../services/clipboard";
 import type { AgentStatus } from "../services/agents";
 import { useI18n, type Locale } from "../i18n";
 import { formatSessionDuration } from "../services/sessionDuration";
+import { SessionActivity } from "./SessionActivity";
 import {
   relatedFileStatKey,
   useRelatedFileStats,
@@ -56,6 +57,7 @@ type SessionItem = {
 
 type SessionViewerProps = {
   session: SessionItem | null;
+  connected?: boolean;
   loading?: boolean;
   slashCommandResult?: {
     sessionKey?: string;
@@ -1011,6 +1013,7 @@ function UserMessageListIcon() {
 
 function SessionViewerInner({
   session,
+  connected = true,
   loading = false,
   slashCommandResult = null,
   rootId,
@@ -1052,7 +1055,7 @@ function SessionViewerInner({
   const sessionKey = session?.key || session?.session_key || null;
   const exchanges = Array.isArray(session?.exchanges) ? session.exchanges : [];
   const isAwaiting = !!(session as any)?.pending;
-  const { timeline, isStreaming, streamVersion, streamStatusText } = useSessionStream(
+  const { timeline, isStreaming, streamVersion, streamStatusText, lastEventAt } = useSessionStream(
     sessionKey,
     exchanges,
     session?.exchange_aux || {},
@@ -2477,29 +2480,7 @@ function SessionViewerInner({
             )}
             {renderSlashCommandResult()}
             {(isAwaiting || isStreaming) && (
-              <div
-                style={{
-                  marginTop: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "12px",
-                  color: "var(--text-secondary)",
-                }}
-              >
-                <span
-                  style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    background: "var(--accent-color)",
-                    animation: "pulse 1s infinite",
-                  }}
-                />
-                {isStreaming
-                  ? streamStatusText || t("session.generating")
-                  : t("session.sentWaiting")}
-              </div>
+              <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText} />
             )}
 
             {relatedFiles.length > 0 && (

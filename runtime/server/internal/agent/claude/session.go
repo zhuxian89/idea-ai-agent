@@ -45,6 +45,7 @@ type OpenOptions struct {
 	AgentName             string
 	SessionKey            string
 	Model                 string
+	Mode                  string
 	Effort                string
 	PlanMode              bool
 	RootPath              string
@@ -70,13 +71,18 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 	if err := validateCLIArguments(opts.Args); err != nil {
 		return nil, err
 	}
+	if err := validatePermissionMode(opts.Mode); err != nil {
+		return nil, err
+	}
 
 	s := &session{
-		sessionKey:    opts.SessionKey,
-		model:         strings.TrimSpace(opts.Model),
-		planMode:      opts.PlanMode,
-		agentDebugLog: logs.NewAgentLogger(opts.RootPath, opts.SessionKey, opts.AgentName),
-		questionWaits: make(map[string]*types.PendingQuestion[claudeagent.Answers]),
+		sessionKey:             opts.SessionKey,
+		model:                  strings.TrimSpace(opts.Model),
+		planMode:               opts.PlanMode,
+		permissionMode:         claudeagent.PermissionMode(strings.TrimSpace(opts.Mode)),
+		previousPermissionMode: claudeagent.PermissionMode(strings.TrimSpace(opts.Mode)),
+		agentDebugLog:          logs.NewAgentLogger(opts.RootPath, opts.SessionKey, opts.AgentName),
+		questionWaits:          make(map[string]*types.PendingQuestion[claudeagent.Answers]),
 	}
 
 	optionList := s.nativeOptions(opts)
@@ -112,9 +118,6 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 	}
 	if strings.TrimSpace(opts.Effort) != "" {
 		optionList = append(optionList, claudeagent.WithEffort(claudeagent.EffortLevel(strings.TrimSpace(opts.Effort))))
-	}
-	if opts.PlanMode {
-		optionList = append(optionList, claudeagent.WithPermissionMode(claudeagent.PermissionModePlan))
 	}
 
 	optionList = append(optionList, withCLIArguments(opts.Args))
@@ -435,12 +438,49 @@ func claudeEffortLevels() []string {
 	return []string{"low", "medium", "high", "xhigh", "max"}
 }
 
-func (s *session) SetMode(_ context.Context, _ string) error {
+func validatePermissionMode(mode string) error {
+	switch strings.TrimSpace(mode) {
+	case "", "default", "acceptEdits", "bypassPermissions", "auto", "dontAsk":
+		return nil
+	default:
+		return errors.New("unsupported Claude permission mode: " + mode)
+	}
+}
+
+func (s *session) SetMode(ctx context.Context, mode string) error {
+	if err := validatePermissionMode(mode); err != nil {
+		return err
+	}
+	if s == nil || s.stream == nil {
+		return errors.New("claude session not initialized")
+	}
+	next := claudeagent.PermissionMode(strings.TrimSpace(mode))
+	if next == "" {
+		next = claudeagent.PermissionModeDefault
+	}
+	s.mu.RLock()
+	planning := s.planMode
+	s.mu.RUnlock()
+	if !planning {
+		if err := s.stream.SetPermissionMode(ctx, next); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
+	s.previousPermissionMode = next
+	if !planning {
+		s.permissionMode = next
+	}
+	s.mu.Unlock()
 	return nil
 }
 
 func (s *session) ListModes(_ context.Context) (types.ModeList, error) {
-	return types.ModeList{}, nil
+	return types.ModeList{Modes: []types.ModeInfo{
+		{ID: "bypassPermissions", Name: "Full access", Description: "Run commands and edit files without approval prompts."},
+		{ID: "default", Name: "Standard permissions", Description: "Claude requests approval when needed."},
+		{ID: "acceptEdits", Name: "Accept edits", Description: "Allow file edits; keep command approval checks."},
+	}}, nil
 }
 
 func (s *session) ListCommands(ctx context.Context) (types.CommandList, error) {

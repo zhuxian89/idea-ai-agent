@@ -62,6 +62,7 @@ type UseSessionStreamResult = {
   isStreaming: boolean;
   streamVersion: number;
   streamStatusText: string;
+  lastEventAt: number;
 };
 
 type ContextWindowLike = {
@@ -463,6 +464,7 @@ export function useSessionStream(
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamVersion, setStreamVersion] = useState(0);
   const [streamStatusText, setStreamStatusText] = useState("");
+  const [lastEventAt, setLastEventAt] = useState(0);
 
   const baseTimeline = useMemo(
     () =>
@@ -476,6 +478,7 @@ export function useSessionStream(
   useEffect(() => {
     setStreamVersion(0);
     setStreamStatusText("");
+    setLastEventAt(0);
     if (!sessionKey) {
       setIsStreaming(false);
       return;
@@ -486,6 +489,7 @@ export function useSessionStream(
 
     const unsubscribe = sessionService.subscribe(sessionKey, {
       onStream: (event) => {
+        setLastEventAt(Date.now());
         setStreamVersion((value) => value + 1);
         if (event.type === "recovery") {
           setStreamStatusText(event.data?.message || translateNow("session.recovering"));
@@ -521,9 +525,10 @@ export function useSessionStream(
   }, [sessionKey, sessionPending]);
 
   return {
-    timeline: settleRunningTools(baseTimeline),
+    timeline: sessionPending || isStreaming ? baseTimeline : settleRunningTools(baseTimeline),
     isStreaming,
     streamVersion,
     streamStatusText,
+    lastEventAt,
   };
 }
