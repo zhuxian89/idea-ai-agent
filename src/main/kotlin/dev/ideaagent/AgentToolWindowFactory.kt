@@ -4,11 +4,15 @@ import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.ui.LafManagerListener
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -27,9 +31,7 @@ import org.cef.handler.CefLoadHandlerAdapter
 import org.cef.handler.CefRequestHandlerAdapter
 import org.cef.network.CefRequest
 import java.awt.BorderLayout
-import java.awt.FlowLayout
 import java.nio.file.Path
-import javax.swing.JButton
 import javax.swing.JLabel
 import javax.swing.JPanel
 
@@ -39,6 +41,19 @@ class AgentToolWindowFactory : ToolWindowFactory {
         val content = ContentFactory.getInstance().createContent(panel, "", false)
         content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
+        toolWindow.setTitleActions(listOf(
+            object : DumbAwareAction("加入当前代码", "将选中代码或当前文件加入聊天输入框", AllIcons.General.Add) {
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+                override fun update(event: AnActionEvent) {
+                    event.presentation.isEnabled = !project.isDisposed &&
+                        FileEditorManager.getInstance(project).selectedTextEditor != null
+                }
+                override fun actionPerformed(event: AnActionEvent) = panel.addCurrentEditorContext()
+            },
+            object : DumbAwareAction("重新连接", "重新连接本地 Agent 聊天界面", AllIcons.Actions.Refresh) {
+                override fun actionPerformed(event: AnActionEvent) = panel.start()
+            },
+        ))
         panel.start()
     }
 }
@@ -54,20 +69,15 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
     private val gson = Gson()
 
     init {
-        val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 6, 3))
-        toolbar.add(JButton("加入当前代码").apply {
-            toolTipText = "将选中代码或当前文件加入输入框"
-            addActionListener {
-                FileEditorManager.getInstance(project).selectedTextEditor?.let { editor ->
-                    EditorContext.capture(project, editor)?.let(::addContext)
-                }
-            }
-        })
-        toolbar.add(JButton("重新连接").apply { addActionListener { start() } })
-        add(toolbar, BorderLayout.NORTH)
         body.add(status, BorderLayout.CENTER)
         add(body, BorderLayout.CENTER)
         project.messageBus.connect(this).subscribe(LafManagerListener.TOPIC, LafManagerListener { syncTheme() })
+    }
+
+    fun addCurrentEditorContext() {
+        FileEditorManager.getInstance(project).selectedTextEditor?.let { editor ->
+            EditorContext.capture(project, editor)?.let(::addContext)
+        }
     }
 
     fun start() {

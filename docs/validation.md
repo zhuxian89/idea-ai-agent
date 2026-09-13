@@ -2,6 +2,33 @@
 
 环境：Windows amd64、开发 JDK 21、Go 1.26.5、Node.js 20.18.1、pnpm 12.4.1。
 
+## Claude 默认模型启动与界面交互修复（0.1.6，未发布）
+
+- 在原有 `TestNativeCLIFlagsAndArguments` 中补上真实 `claudeagent.NewClient` 调用，修复前得到与用户截图一致的 `invalid configuration for Model: model must be specified`。原测试绕过构造器，因而没有发现该错误。
+- 保留固定版本 `fc2d6ef2e3eb` 的第三方 Claude SDK 根 Go 源码、测试及许可证，构建改为本地替换。逐文件比较确认生产源码只有 `client.go` 一处校验变更：允许空模型，由既有传输层省略 `--model`，让 CLI 自行解析默认配置；未改变 SDK 的其他默认值或权限、会话校验。
+- `go test ./server/internal/agent/claude -run 'TestNative|Test.*Question|Test.*Answer|Test.*Permission' -count=1` 通过。回归经过真实构造器和传输层，再由记录器截获进程启动；验证默认模型不覆盖、显式模型原样传递、附加参数和工作目录保留、权限与 effort 的非法值仍拒绝、原生询问仍等待用户。SDK 自带的选项及定向传输参数测试通过。Claude 整包在 Windows 仍有下文已记录的 Unix 路径样例失败。
+- 浏览器测试先在旧打包资源上失败，确认三个可见悬停提示缺失、历史/配置再次点击不收回、模型列表按钮被输入区遮挡，日志为 `build/reports/0.1.6-ui-red.log`。修复后 `node scripts/smoke-runtime.mjs` 通过：悬停/键盘焦点提示及 Esc 关闭、历史/配置双击切换、Agent 列与模型列折叠后横向位置不变、错误详情切换、打开弹窗时缩窄到 375px、主题及焦点恢复；此前配置/安装/重启/草稿/历史检查也通过，日志为 `build/reports/0.1.6-ui-green.log`。
+- TypeScript 类型检查、前端原生默认值与重启检查通过；`buildPlugin test verifyPluginProjectConfiguration --offline` 通过，7 项 JUnit 测试零失败。最终 Web 调整后重新构建并重跑上述浏览器检查。
+- 最终 `verifyPlugin --offline` 通过，IC/IU 2024.1、2024.2、2024.3 六个目标均 `Compatible`，包含新增 IDEA 原生标题栏动作。日志为 `build/reports/0.1.6-plugin-verifier.log`。
+- Windows x64、Mac arm64、Mac amd64 三个 ZIP 均通过完整性检查；两个 Mac 包各自 168 个共用文件与 Windows 测试包逐项 SHA-256 相同。Mach-O 架构匹配，最低 macOS 12.0；运行时均包含 Claude SDK 许可证，插件版本为 0.1.6、最低 IDEA build 241、Java 17 字节码。报告为 `build/reports/macos-0.1.6-{arm64,amd64}-artifact.json`，安装包及 SHA-256 清单位于 `build/local-packages/`。
+
+以上没有运行真实 Claude 模型或安装器。Windows 浏览器检查不能替代 Mac 实机上的 Claude 登录、真实会话和 IDEA/JCEF 原生工具栏检查。本轮未提交、推送、打标签或创建 Release。
+
+## 聚焦 Agent 的界面与本地安装流程（0.1.5，未发布）
+
+插件改为聊天、聊天历史、Agent 配置与安装三个视图，移除项目列表、任务看板及独立文件/Git 管理面板。配置页优先展示 Codex、Claude Code 和已安装的 Agent，其他未安装项默认折叠。复用原有配置表单、命令会话和原生交互组件；没有修改 Agent 执行适配器或 SDK。
+
+- 修复项目尚未加载时就能点击安装的问题：初始化期间说明正在连接当前 IDEA 项目，并禁用安装/更新。配置页显示 CLI 识别结果和具体错误，重启请求受理后继续通过原有状态事件更新卡片。
+- 原来的列表刷新只读缓存，缺失 CLI 默认每五分钟检查一次；现在访问完整配置列表立即检查可执行文件是否存在。新增 Go 用例覆盖运行期间安装、移除，以及刷新保留原生模型、版本和运行错误。检查不启动 CLI 或模型。
+- Mac 启动环境保留 shell PATH 优先顺序，并补充 `.local/bin`、`.hermes/node/bin` 和 Homebrew 目录；Windows 补充用户 `.local/bin` 与 npm 全局目录。目录尚不存在时也保留搜索路径，覆盖 IDEA 运行期间的新安装。Kotlin 用例验证路径含空格、优先顺序、去重、原环境不被修改，以及替身 CLI 的子进程查找。
+- `node scripts/smoke-runtime.mjs` 通过：视图切换保留草稿、核心配置表单、已安装/未安装、连接错误、重启目标及失败重试、刷新错误恢复、历史回复/模型/推理强度/上下文元信息、375px/430px 和明暗主题。安装入口实际运行临时项目内的 `echo test-only`，验证流式输出、退出码 0、会话结束及重新打开配置页后的检测状态；不执行真实安装器、不写 Agent 配置、不调用模型。日志为 `build/reports/ide-workbench-smoke.log`，截图前缀为 `build/reports/ide-workbench-`。
+- TypeScript 类型检查、原生默认配置与生命周期前端检查通过。定向 Go 的安装识别、IDE 本地接口、令牌环境及配置切换用例通过；日志为 `build/reports/ide-workbench-go.log`。
+- `buildPlugin test verifyPluginProjectConfiguration verifyPlugin --offline` 通过：7 项 JUnit 测试零失败，IC/IU 2024.1、2024.2、2024.3 六个目标均 `Compatible`。日志为 `build/reports/ide-workbench-plugin.log`。
+- 安装命令与 [Codex 官方文档](https://learn.chatgpt.com/docs/codex/cli)、[Claude Code 官方文档](https://code.claude.com/docs/en/setup)核对一致。真实下载、用户网络/登录及 Mac 上的 IDEA/CLI 运行仍需要本机验收；测试不代表这些外部步骤已完成。
+- Windows、Apple Silicon、Intel Mac 三个最终 ZIP 在 `build/local-packages/`，SHA-256 清单为同目录 `SHA256SUMS.txt`。两个 Mac 包通过 Mach-O 架构检查，最低 macOS 为 12.0；各自 167 个共用文件均与通过浏览器检查的 Windows 包逐项 SHA-256 相同。报告为 `build/reports/macos-0.1.5-arm64-artifact.json` 与 `macos-0.1.5-amd64-artifact.json`。最后的界面折叠调整再次通过类型检查和打包浏览器检查，插件 JAR 没有变化。
+
+本轮按用户要求仅保留本地代码和测试 ZIP，未提交、推送、打标签或创建 GitHub Release。
+
 ## Agent 管理入口（0.1.4）
 
 同目录 MindFS 的 `FileTree.tsx` 已有配置添加、配置切换重启、安装更新弹层，本插件也保留了相同服务接口和 App 回调。本次补足默认收起侧栏时的可发现入口，增加识别状态及列表刷新，并让管理界面显示请求错误。

@@ -1,23 +1,29 @@
 # Local AI Agent
 
-把 MindFS 的本地 Agent 工作台集成到 IntelliJ IDEA。插件内置 Go 服务和 Web 前端，在 IDEA 右侧工具窗口中使用本机 Codex、Claude Code 及 MindFS 已支持的 Agent。
+在 IntelliJ IDEA 中使用本机 Codex、Claude Code 及 MindFS 已支持的 Agent。插件聚焦 Agent 配置与安装、聊天、聊天历史，复用 MindFS 已有的 Agent 执行和会话实现。
 
 [下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
 
-| 系统 / 架构 | 0.1.4 安装包 |
+当前源码版本为 0.1.6，尚未发布新的 GitHub Release。下面的安装包路径仅适用于本地构建目录，不包含在 Git 仓库中；上方 Release 链接仍为此前版本。
+
+| 系统 / 架构 | 0.1.6 本地测试包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.4/idea-ai-agent-0.1.4-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.4/idea-ai-agent-0.1.4-macos-arm64.zip) |
-| Mac，Intel 处理器 | [macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.4/idea-ai-agent-0.1.4-macos-amd64.zip) |
+| Windows x64 | [windows-amd64.zip](build/local-packages/idea-ai-agent-0.1.6-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](build/local-packages/idea-ai-agent-0.1.6-macos-arm64.zip) |
+| Mac，Intel 处理器 | [macos-amd64.zip](build/local-packages/idea-ai-agent-0.1.6-macos-amd64.zip) |
 
 Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。两个 Mac 包已完成交叉编译及安装包校验，尚未在 Mac 实机运行验证。
 
 0.1.3 修复了 Mac 从 Dock/Finder 启动 IDEA 时，终端可用的 CLI 在插件中无法识别的问题。插件使用 IDEA 从用户 shell 恢复的环境，让检测和执行继承相同的 `PATH`、Node 路径及 CLI 配置。升级后请完全退出并重新启动 IDEA；不需要重新安装 CLI。
 
+0.1.5 继续保留用户 PATH 的优先顺序，并在 Mac 上补充 `~/.local/bin`、`~/.hermes/node/bin` 和 Homebrew 常见目录，覆盖运行期间新建的安装目录。进入配置页或刷新列表会立即检查 CLI 是否存在；安装输出在命令会话展示，执行后返回配置页即可重新识别。重启后检测结果会自动更新，连接错误会显示在对应 Agent 卡片上。
+
 ## 实现
 
+0.1.6 修复适配层构造客户端时报 `model must be specified`，让 Claude 未指定模型时正常沿用 CLI 配置；补充真实构造器回归测试。顶部图标增加悬停提示，历史/配置支持再次点击收回，Agent / 模型弹窗固定两列；编辑器上下文和重连操作使用 IDEA 原生工具窗口按钮。
+
 - `runtime/server/internal/agent/`：沿用 MindFS 的 Codex app-server、Claude Code SDK、ACP 适配器。
-- `runtime/web/`：沿用原有会话、流式回复、工具卡片、模型/配置切换、历史导入与分叉、任务看板和 Git 界面。
+- `runtime/web/`：使用单栏插件界面，沿用原有会话、流式回复、工具卡片、模型/配置切换、安装更新、历史导入与分叉组件。项目列表、任务看板和独立文件/Git/Worktrees 面板不再出现在插件中。
 - `src/main/kotlin/`：IDEA 工具窗口、本地服务生命周期、编辑器上下文、文件打开和主题同步。
 - `runtime/server/cmd/idea-agent/`：插件专用本地启动入口。
 
@@ -25,7 +31,7 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 
 插件入口关闭 Relay、Token Station、云端 Agent 配置拉取、服务自身更新和 PWA 入口；本机 Agent 仍按其配置连接模型服务。
 
-每个工具窗口绑定当前 IDEA 项目。Git 项目支持会话和任务创建独立 worktree；项目添加、重命名、移除及跨项目切换由 IDEA 管理。Agent 命令遵循所选 CLI 的权限配置。
+每个工具窗口绑定当前 IDEA 项目。项目和文件管理由 IDEA 承担；会话仍保留已有 worktree 能力，Agent 命令遵循所选 CLI 的权限配置。
 
 原生会话默认跟随本机 CLI 的模型、推理和权限配置，支持原生方案选择及授权交互。已确认的差异、0.1.2 修复和验证边界见 [原生能力核对清单](docs/native-agent-compatibility.md)。
 
@@ -60,7 +66,11 @@ macOS/Linux 使用 `./gradlew buildPlugin`。构建会编译 Web 前端和当前
 
 在 IDEA 的「Settings → Plugins → 齿轮 → Install Plugin from Disk」中选择生成的 ZIP，打开项目和右侧「AI Agent」工具窗口。
 
-聊天区顶部常驻「Agent 管理」，点击后直接打开 MindFS 原有菜单：添加 Agent 配置、Agent 配置切换重启、Agent 安装和更新。在配置切换列表中可以单独重启所选 Agent；安装更新页显示「已识别 / 未检测到」状态、已获取的版本，并提供「刷新 Agent 列表」。自动检测和重启后的重新探测沿用原有后端，刷新列表读取服务端最新结果。安装更新仍使用原有命令会话展示执行过程。
+顶部提供新建会话、聊天历史、Agent 配置与安装三个入口。聊天、历史、配置在同一个工具窗口中切换，切换时保留输入草稿。配置页显示 Agent 识别状态和已获取的版本，提供添加/切换配置、安装更新、重启和列表刷新；外观与语言也保留在此页。所有操作复用原有表单和后端，安装更新继续通过原有命令会话展示执行过程。
+
+配置页默认展示 Codex、Claude Code 和其他已安装的 Agent，其余未安装项收在“其他 Agent”中。
+
+回复下方保留复制、分叉、模型、推理强度、时间、耗时和上下文占用；数据以 Agent 实际返回为准。当前尚不显示输入/输出 Token 和缓存命中率明细。
 
 选中代码后通过右键「发送到 AI Agent」或 `Ctrl+Alt+A` 加入聊天草稿。没有选中内容时加入当前文件；未保存的编辑器内容会注明。添加上下文不会自动发送消息。模型执行结束后触发 IDE 文件刷新，会话中的文件链接可以打开当前 IDEA 项目内的文件。
 

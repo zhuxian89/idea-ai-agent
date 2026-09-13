@@ -1,4 +1,5 @@
 import React from "react";
+import { IdeaAgentSettings } from "./IdeaAgentSettings";
 import { rootBadgeStyle } from "./rootBadgeStyle";
 import { openExternalURL } from "../services/platformNavigation";
 import { isNativeShellRuntime, shouldEnablePWAInstall } from "../services/runtime";
@@ -123,6 +124,9 @@ function isProjectTreeTab(value: unknown): value is ProjectTreeTab {
 }
 
 type FileTreeProps = {
+  agentSettingsOnly?: boolean;
+  agentSettingsActive?: boolean;
+  agentsVersion?: number;
   entries: FileEntry[];
   childrenByPath: Record<string, FileEntry[]>;
   expanded: string[];
@@ -1323,6 +1327,9 @@ const agentConfigIconButtonStyle = (disabled: boolean): React.CSSProperties => (
 });
 
 export function FileTree({
+  agentSettingsOnly = false,
+  agentSettingsActive = false,
+  agentsVersion = 0,
   entries,
   childrenByPath,
   expanded,
@@ -1469,6 +1476,7 @@ export function FileTree({
   const [agentLifecycleBusy, setAgentLifecycleBusy] = React.useState(false);
   const [agentLifecycleRunningAgent, setAgentLifecycleRunningAgent] = React.useState("");
   const [agentLifecycleError, setAgentLifecycleError] = React.useState("");
+  const [agentLifecycleNotice, setAgentLifecycleNotice] = React.useState("");
   const [dismissedRelayTipIds, setDismissedRelayTipIds] = React.useState<string[]>(() => {
     if (typeof window === "undefined") {
       return [];
@@ -1947,7 +1955,48 @@ export function FileTree({
     };
   }, [isMenuOpen]);
 
-  const openAgentConfigFlow = React.useCallback((flow: AgentConfigFlow) => {
+  const chooseAgentForConfig = React.useCallback(async (agentName: string, flow = agentConfigFlow, agents = agentConfigAgents) => {
+    setAgentConfigAgent(agentName);
+    setAgentConfigError("");
+    setAgentConfigBusy(true);
+    try {
+      const selectedAgent = agents.find((item) => item.name === agentName);
+      const supportsAPIProvider = Boolean(selectedAgent?.supports_api_provider_switch);
+      if (flow === "backup") {
+        const defaults = await fetchAgentConfigDefaults(agentName);
+        setAgentConfigName("");
+        setAgentConfigFileSourcesBody((defaults.file_sources || []).join("\n"));
+        setAgentConfigEnvBody((defaults.env_keys || []).map((key) => `${key}=`).join("\n"));
+        setAgentAPIProviderName("");
+        setAgentAPIProviderBaseURL("");
+        setAgentAPIProviderAPIKey("");
+        setAgentConfigAddTab("backup");
+        setAgentConfigStep("details");
+      } else {
+        const [backups, providers] = await Promise.all([
+          fetchAgentConfigBackups(agentName),
+          supportsAPIProvider ? fetchAgentAPIProviders(agentName) : Promise.resolve([]),
+        ]);
+        setAgentConfigBackups(backups);
+        setAgentAPIProviders(providers);
+        setSelectedAgentConfigID("");
+        const preferredProvider = providers.find((provider) => agentConfigPreferredProviderIDs.includes(provider.id));
+        setSelectedAgentAPIProviderID(preferredProvider?.id || "");
+        setAgentConfigSwitchSelection(preferredProvider ? { type: "api_provider", id: preferredProvider.id } : null);
+        setAgentConfigSwitchTab(supportsAPIProvider && selectedAgent?.last_config_selection?.type === "api_provider" ? "api_provider" : "backup");
+        if (supportsAPIProvider && agentConfigPreferredProviderIDs.length > 0) {
+          setAgentConfigSwitchTab("api_provider");
+        }
+        setAgentConfigStep("details");
+      }
+    } catch (error) {
+      setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.loadConfigFailed"));
+    } finally {
+      setAgentConfigBusy(false);
+    }
+  }, [agentConfigAgents, agentConfigFlow, agentConfigPreferredProviderIDs, t]);
+
+  const openAgentConfigFlow = React.useCallback((flow: AgentConfigFlow, agentName?: string) => {
 	setIdleReleaseOpen(false);
     setAgentLifecycleOpen(false);
     setAgentConfigFlow(flow);
@@ -1974,13 +2023,15 @@ export function FileTree({
     setAgentConfigBusy(true);
     fetchAgents(true, { throwOnError: true })
       .then((items) => {
-        setAgentConfigAgents(items.filter((item) => item.installed));
+        const installed = items.filter((item) => item.installed);
+        setAgentConfigAgents(installed);
+        if (agentName) return chooseAgentForConfig(agentName, flow, installed);
       })
       .catch((error) => {
         setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.loadAgentFailed"));
       })
       .finally(() => setAgentConfigBusy(false));
-  }, [t]);
+  }, [chooseAgentForConfig, t]);
 
   const openSessionNaming = React.useCallback(() => {
 	setIdleReleaseOpen(false);
@@ -2110,10 +2161,7 @@ export function FileTree({
     setAgentConfigRestartingAgent("");
   }, []);
 
-  const openAgentLifecycleFlow = React.useCallback(() => {
-    setAgentConfigFlow(null);
-    setAgentLifecycleOpen(true);
-    setIsMenuOpen(false);
+  const loadAgentLifecycleCatalog = React.useCallback(() => {
     setAgentLifecycleError("");
     setAgentLifecycleBusy(true);
     fetchAgentCatalog(true, { throwOnError: true })
@@ -2126,6 +2174,17 @@ export function FileTree({
       .finally(() => setAgentLifecycleBusy(false));
   }, [t]);
 
+  const openAgentLifecycleFlow = React.useCallback(() => {
+    setAgentConfigFlow(null);
+    setAgentLifecycleOpen(true);
+    setIsMenuOpen(false);
+    loadAgentLifecycleCatalog();
+  }, [loadAgentLifecycleCatalog]);
+
+  React.useEffect(() => {
+    if (agentSettingsOnly && protectedAPIReady) loadAgentLifecycleCatalog();
+  }, [agentSettingsOnly, agentSettingsActive, agentsVersion, protectedAPIReady, loadAgentLifecycleCatalog]);
+
   const closeAgentLifecycleFlow = React.useCallback(() => {
     setAgentLifecycleOpen(false);
     setAgentLifecycleError("");
@@ -2133,7 +2192,7 @@ export function FileTree({
   }, []);
 
   React.useEffect(() => {
-    if (!agentConfigFlow || agentConfigStep !== "agent") {
+    if (agentSettingsOnly || !agentConfigFlow || agentConfigStep !== "agent") {
       return;
     }
     const handlePointerDown = (event: MouseEvent) => {
@@ -2143,10 +2202,10 @@ export function FileTree({
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [agentConfigFlow, agentConfigStep, closeAgentConfigFlow]);
+  }, [agentSettingsOnly, agentConfigFlow, agentConfigStep, closeAgentConfigFlow]);
 
   React.useEffect(() => {
-    if (!agentLifecycleOpen) {
+    if (agentSettingsOnly || !agentLifecycleOpen) {
       return;
     }
     const handlePointerDown = (event: MouseEvent) => {
@@ -2156,7 +2215,7 @@ export function FileTree({
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [agentLifecycleOpen, closeAgentLifecycleFlow]);
+  }, [agentSettingsOnly, agentLifecycleOpen, closeAgentLifecycleFlow]);
 
   React.useEffect(() => {
     if (!relayServicesOpen) {
@@ -2205,55 +2264,17 @@ export function FileTree({
     }
     setAgentConfigRestartingAgent(agentName);
     setAgentConfigError("");
+    setAgentLifecycleNotice("");
     try {
       await onRestartAgent(agentName);
+      if (agentSettingsOnly) setAgentLifecycleNotice(t("idea.restartAccepted"));
     } catch (error) {
       setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.restartFailed"));
     } finally {
       setAgentConfigRestartingAgent("");
     }
-  }, [agentConfigRestartingAgent, onRestartAgent, t]);
+  }, [agentConfigRestartingAgent, agentSettingsOnly, onRestartAgent, t]);
 
-  const chooseAgentForConfig = React.useCallback(async (agentName: string) => {
-    setAgentConfigAgent(agentName);
-    setAgentConfigError("");
-    setAgentConfigBusy(true);
-    try {
-      const selectedAgent = agentConfigAgents.find((item) => item.name === agentName);
-      const supportsAPIProvider = Boolean(selectedAgent?.supports_api_provider_switch);
-      if (agentConfigFlow === "backup") {
-        const defaults = await fetchAgentConfigDefaults(agentName);
-        setAgentConfigName("");
-        setAgentConfigFileSourcesBody((defaults.file_sources || []).join("\n"));
-        setAgentConfigEnvBody((defaults.env_keys || []).map((key) => `${key}=`).join("\n"));
-        setAgentAPIProviderName("");
-        setAgentAPIProviderBaseURL("");
-        setAgentAPIProviderAPIKey("");
-        setAgentConfigAddTab("backup");
-        setAgentConfigStep("details");
-      } else {
-        const [backups, providers] = await Promise.all([
-          fetchAgentConfigBackups(agentName),
-          supportsAPIProvider ? fetchAgentAPIProviders(agentName) : Promise.resolve([]),
-        ]);
-        setAgentConfigBackups(backups);
-        setAgentAPIProviders(providers);
-        setSelectedAgentConfigID("");
-        const preferredProvider = providers.find((provider) => agentConfigPreferredProviderIDs.includes(provider.id));
-        setSelectedAgentAPIProviderID(preferredProvider?.id || "");
-        setAgentConfigSwitchSelection(preferredProvider ? { type: "api_provider", id: preferredProvider.id } : null);
-        setAgentConfigSwitchTab(supportsAPIProvider && selectedAgent?.last_config_selection?.type === "api_provider" ? "api_provider" : "backup");
-        if (supportsAPIProvider && agentConfigPreferredProviderIDs.length > 0) {
-          setAgentConfigSwitchTab("api_provider");
-        }
-        setAgentConfigStep("details");
-      }
-    } catch (error) {
-      setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.loadConfigFailed"));
-    } finally {
-      setAgentConfigBusy(false);
-    }
-  }, [agentConfigAgents, agentConfigFlow, agentConfigPreferredProviderIDs, t]);
 
   const saveAgentConfigBackup = React.useCallback(async (overwrite = false) => {
     if (!agentConfigName.trim()) {
@@ -2679,6 +2700,88 @@ export function FileTree({
       })}
     </ul>
   );
+
+  const agentConfiguration = agentConfigFlow ? (
+          <div
+            ref={agentConfigPopoverRef}
+            style={{
+              position: agentSettingsOnly ? "static" : "absolute",
+              top: "calc(100% + 6px)",
+              left: "8px",
+              right: "3px",
+              zIndex: 35,
+            }}
+          >
+            <AgentConfigPopover
+              flow={agentConfigFlow}
+              step={agentConfigStep}
+              agents={agentConfigAgents}
+              selectedAgent={agentConfigAgent}
+              addTab={agentConfigAddTab}
+              switchTab={agentConfigSwitchTab}
+              backupName={agentConfigName}
+              fileSourcesBody={agentConfigFileSourcesBody}
+              envBody={agentConfigEnvBody}
+              apiProviderName={agentAPIProviderName}
+              apiProviderBaseURL={agentAPIProviderBaseURL}
+              apiProviderAPIKey={agentAPIProviderAPIKey}
+              backups={agentConfigBackups}
+              apiProviders={agentAPIProviders}
+              selectedBackupID={selectedAgentConfigID}
+              selectedAPIProviderID={selectedAgentAPIProviderID}
+              confirmMessage={agentConfigConfirmMessage}
+              busy={agentConfigBusy}
+              restartingAgent={agentConfigRestartingAgent}
+              error={agentConfigError}
+              onChooseAgent={(name) => {
+                void chooseAgentForConfig(name);
+              }}
+              onAddTabChange={setAgentConfigAddTab}
+              onSwitchTabChange={setAgentConfigSwitchTab}
+              onBackupNameChange={setAgentConfigName}
+              onFileSourcesChange={setAgentConfigFileSourcesBody}
+              onEnvBodyChange={setAgentConfigEnvBody}
+              onAPIProviderNameChange={setAgentAPIProviderName}
+              onAPIProviderBaseURLChange={setAgentAPIProviderBaseURL}
+              onAPIProviderAPIKeyChange={setAgentAPIProviderAPIKey}
+              onSelectedBackupChange={selectAgentConfigBackup}
+              onSelectedAPIProviderChange={selectAgentAPIProvider}
+              onDeleteBackup={(id) => {
+                void deleteSelectedAgentConfigBackup(id);
+              }}
+              onDeleteAPIProvider={(id) => {
+                void deleteSelectedAgentAPIProvider(id);
+              }}
+              onSave={() => {
+                if (agentConfigAddTab === "api") {
+                  void saveAgentAPIProvider();
+                  return;
+                }
+                void saveAgentConfigBackup();
+              }}
+              onSwitch={() => {
+                void runAgentConfigSwitch(false);
+              }}
+              onRestartAgent={agentConfigFlow === "switch" ? restartAgentFromConfigList : undefined}
+              onConfirm={() => {
+                if (agentConfigFlow === "backup") {
+                  void saveAgentConfigBackup(true);
+                  return;
+                }
+                void runAgentConfigSwitch(true);
+              }}
+              onCancel={closeAgentConfigFlow}
+            />
+          </div>
+        ) : null;
+
+  if (agentSettingsOnly) {
+    return <IdeaAgentSettings agents={agentLifecycleAgents} busy={agentLifecycleBusy || agentConfigBusy}
+      projectReady={!!rootId} notice={agentLifecycleNotice}
+      restartingAgent={agentConfigRestartingAgent} error={agentLifecycleError || agentConfigError}
+      configuration={agentConfiguration} onConfigure={openAgentConfigFlow} onRefresh={openAgentLifecycleFlow}
+      onRestart={restartAgentFromConfigList} onRun={runAgentLifecycleCommand} />;
+  }
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -3356,79 +3459,7 @@ export function FileTree({
             </div>
           ) : null}
         </div>
-        {agentConfigFlow ? (
-          <div
-            ref={agentConfigPopoverRef}
-            style={{
-              position: "absolute",
-              top: "calc(100% + 6px)",
-              left: "8px",
-              right: "3px",
-              zIndex: 35,
-            }}
-          >
-            <AgentConfigPopover
-              flow={agentConfigFlow}
-              step={agentConfigStep}
-              agents={agentConfigAgents}
-              selectedAgent={agentConfigAgent}
-              addTab={agentConfigAddTab}
-              switchTab={agentConfigSwitchTab}
-              backupName={agentConfigName}
-              fileSourcesBody={agentConfigFileSourcesBody}
-              envBody={agentConfigEnvBody}
-              apiProviderName={agentAPIProviderName}
-              apiProviderBaseURL={agentAPIProviderBaseURL}
-              apiProviderAPIKey={agentAPIProviderAPIKey}
-              backups={agentConfigBackups}
-              apiProviders={agentAPIProviders}
-              selectedBackupID={selectedAgentConfigID}
-              selectedAPIProviderID={selectedAgentAPIProviderID}
-              confirmMessage={agentConfigConfirmMessage}
-              busy={agentConfigBusy}
-              restartingAgent={agentConfigRestartingAgent}
-              error={agentConfigError}
-              onChooseAgent={(name) => {
-                void chooseAgentForConfig(name);
-              }}
-              onAddTabChange={setAgentConfigAddTab}
-              onSwitchTabChange={setAgentConfigSwitchTab}
-              onBackupNameChange={setAgentConfigName}
-              onFileSourcesChange={setAgentConfigFileSourcesBody}
-              onEnvBodyChange={setAgentConfigEnvBody}
-              onAPIProviderNameChange={setAgentAPIProviderName}
-              onAPIProviderBaseURLChange={setAgentAPIProviderBaseURL}
-              onAPIProviderAPIKeyChange={setAgentAPIProviderAPIKey}
-              onSelectedBackupChange={selectAgentConfigBackup}
-              onSelectedAPIProviderChange={selectAgentAPIProvider}
-              onDeleteBackup={(id) => {
-                void deleteSelectedAgentConfigBackup(id);
-              }}
-              onDeleteAPIProvider={(id) => {
-                void deleteSelectedAgentAPIProvider(id);
-              }}
-              onSave={() => {
-                if (agentConfigAddTab === "api") {
-                  void saveAgentAPIProvider();
-                  return;
-                }
-                void saveAgentConfigBackup();
-              }}
-              onSwitch={() => {
-                void runAgentConfigSwitch(false);
-              }}
-              onRestartAgent={agentConfigFlow === "switch" ? restartAgentFromConfigList : undefined}
-              onConfirm={() => {
-                if (agentConfigFlow === "backup") {
-                  void saveAgentConfigBackup(true);
-                  return;
-                }
-                void runAgentConfigSwitch(true);
-              }}
-              onCancel={closeAgentConfigFlow}
-            />
-          </div>
-        ) : null}
+        {agentConfiguration}
         {idleReleaseOpen ? (
           <div
             style={{

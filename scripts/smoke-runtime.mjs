@@ -96,7 +96,7 @@ try {
     await page.locator('[contenteditable="true"]').first().waitFor({timeout: 30000});
     await page.evaluate(() => window.ideaAgentReceiveContext('IDE_CONTEXT_SMOKE\n文件：Example.kt:1\nclass Example'));
     await page.waitForFunction(() => [...document.querySelectorAll('[contenteditable="true"]')].some(e => e.textContent.includes('IDE_CONTEXT_SMOKE')));
-    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', {name: /worktree/i}).first().waitFor();
     assert.ok(await page.getByRole('button', {name: /worktree/i}).count() > 0, 'IDE composer must offer worktree creation for a Git project');
     const reports = path.join(root, 'build/reports');
     mkdirSync(reports, {recursive: true});
@@ -121,9 +121,20 @@ try {
   const exit = await Promise.race([once(child, 'exit'), new Promise((_, reject) => setTimeout(() => reject(new Error('Shutdown timed out')), 10000).unref())]);
   assert.equal(exit[0], 0);
   console.log('PASS: no remote service requests; host shutdown exits cleanly.');
+} catch (error) {
+  console.error('Smoke failed:', error);
+  throw error;
 } finally {
   if (browser) await browser.close();
-  if (child.exitCode === null && child.signalCode === null) { child.stdin.end('shutdown\n'); child.kill(); await once(child, 'exit'); }
+  if (child.exitCode === null && child.signalCode === null) {
+    const exited = once(child, 'exit');
+    child.stdin.end('shutdown\n');
+    await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 10000).unref())]);
+    if (child.exitCode === null && child.signalCode === null) { child.kill(); await exited; }
+  }
   await new Promise(resolve => remote.close(resolve));
-  if (path.resolve(work).startsWith(path.resolve(toolsDir) + path.sep)) rmSync(work, {recursive: true, force: true});
+  if (path.resolve(work).startsWith(path.resolve(toolsDir) + path.sep)) {
+    try { rmSync(work, {recursive: true, force: true, maxRetries: 3, retryDelay: 100}); }
+    catch (error) { console.warn('Smoke cleanup retained temporary files:', work, error.code); }
+  }
 }

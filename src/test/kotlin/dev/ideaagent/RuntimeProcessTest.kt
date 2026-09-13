@@ -64,13 +64,39 @@ class RuntimeProcessTest {
             val builder = runtimeProcess(executable, project, data, "fresh-token")
             assertEquals(listOf(executable.toString(), "--project", project.toString()), builder.command())
             assertEquals(executable.parent.toFile(), builder.directory())
-            assertEquals("/custom/bin:/usr/bin", builder.environment()["PATH"])
+            assertEquals(agentRuntimeEnvironment(shellEnvironment)["PATH"], builder.environment()["PATH"])
             assertEquals("/custom/codex", builder.environment()["CODEX_HOME"])
             assertEquals(data.toString(), builder.environment()["IDE_AGENT_DATA_DIR"])
             assertEquals("fresh-token", builder.environment()["IDE_AGENT_TOKEN"])
             assertEquals(executable.parent.resolve("web").toString(), builder.environment()["MINDFS_STATIC_DIR"])
             assertEquals("stale-token", EnvironmentUtil.getEnvironmentMap()["IDE_AGENT_TOKEN"])
         }
+    }
+
+    @Test fun macSearchIncludesFutureNativeInstallationsAndPreservesCustomPriority() {
+        val shell = mapOf("HOME" to "/Users/user with spaces", "PATH" to "/custom/node/bin:/usr/bin",
+            "CODEX_HOME" to "/custom/codex")
+        val environment = agentRuntimeEnvironment(shell, "Mac OS X", "/ignored")
+        val paths = environment.getValue("PATH").split(':')
+        assertEquals("/custom/node/bin", paths.first())
+        assertTrue(paths.contains("/Users/user with spaces/.local/bin"))
+        assertTrue(paths.contains("/Users/user with spaces/.hermes/node/bin"))
+        assertTrue(paths.contains("/opt/homebrew/bin"))
+        assertEquals(1, paths.count { it == "/usr/bin" })
+        assertEquals("/custom/codex", environment["CODEX_HOME"])
+        assertEquals("/custom/node/bin:/usr/bin", shell["PATH"])
+        assertEquals(shell, agentRuntimeEnvironment(shell, "Linux", "/ignored"))
+    }
+
+    @Test fun windowsSearchIncludesNewNativeAndNpmInstallations() {
+        val shell = mapOf("Path" to "C:\\custom\\bin;C:\\Windows\\System32",
+            "USERPROFILE" to "C:\\Users\\user with spaces", "APPDATA" to "C:\\Users\\user with spaces\\AppData\\Roaming")
+        val environment = agentRuntimeEnvironment(shell, "Windows 11", "C:\\ignored")
+        val paths = environment.getValue("Path").split(';')
+        assertEquals("C:\\custom\\bin", paths.first())
+        assertTrue(paths.contains("C:\\Users\\user with spaces\\.local\\bin"))
+        assertTrue(paths.contains("C:\\Users\\user with spaces\\AppData\\Roaming\\npm"))
+        assertFalse(environment.containsKey("PATH"))
     }
 
     private fun withShellEnvironment(environment: Map<String, String>, action: () -> Unit) {

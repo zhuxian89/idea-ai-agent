@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useI18n } from "../i18n";
+import { IdeaWorkbench, type IdeaWorkbenchOptions } from "./IdeaWorkbench";
 
 type AppShellProps = {
+  ideaWorkbench?: IdeaWorkbenchOptions;
   sidebar: React.ReactNode;
   main: React.ReactNode;
   rightSidebar?: React.ReactNode;
@@ -85,6 +87,7 @@ const footerStyle: React.CSSProperties = {
 };
 
 export function AppShell({
+  ideaWorkbench,
   sidebar,
   main,
   rightSidebar,
@@ -183,6 +186,11 @@ export function AppShell({
     ...footerStyle,
     flexShrink: 0,
   };
+
+  if (ideaWorkbench) {
+    return <IdeaWorkbench {...ideaWorkbench} chat={main} history={rightSidebar} settings={sidebar} footer={footer} drawer={drawer}
+      settingsOpen={leftOpen} historyOpen={rightOpen} onCloseSettings={onCloseLeft} onCloseHistory={onCloseRight} onOpenSettings={onOpenLeft} onOpenHistory={onOpenRight} />;
+  }
 
   return (
     <div style={shellStyle} data-onboarding="shell">

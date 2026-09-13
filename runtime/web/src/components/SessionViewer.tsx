@@ -305,7 +305,7 @@ function ContextWindowBadge({
       ? "#dc2626"
       : metrics.percent >= 75
         ? "#ea580c"
-        : "#0f766e";
+        : "var(--idea-context-color, #0f766e)";
   return (
     <span
       title={`Context Window ${metrics.percent}% used (${metrics.usedTokens}/${contextWindow?.modelContextWindow} used)`}
@@ -2042,6 +2042,7 @@ function SessionViewerInner({
             </div>
             {!hideAssistantMeta && (
               <span
+                className="mindfs-assistant-meta"
                 style={{
                   alignSelf: "flex-start",
                   display: "inline-flex",
@@ -2372,6 +2373,7 @@ function SessionViewerInner({
     >
       {interactionMode === "drawer" ? null : (
         <header
+          data-idea-session-heading
           style={{
             height: "36px",
             padding: "0 16px",

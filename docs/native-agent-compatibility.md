@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | Codex SDK 按模型名字将 `max/ultra` 改为 `xhigh` | 原样传递用户选择；能力列表及不支持的参数由 CLI 判断，包括计划模式 | `TestNativeEffortIsNeverDowngraded`、`TestBuildTurnParamsPreserves*` |
 | Claude SDK 固定旧默认模型，适配器又选择列表中的第一个模型 | 未选择时省略模型参数；读取 CLI 上报的实际模型 | `TestNativeOptionsInheritCLIConfiguration`、`TestNativeCLIFlagsAndArguments` |
+| 0.1.5 及此前的默认模型修复只覆盖选项/传输层，SDK 构造器仍拒绝空模型，实际启动报 `model must be specified` | 0.1.6 在原固定版本 SDK 上仅移除“模型不得为空”的校验，允许 CLI 读取默认配置；显式模型、权限及其他校验保留 | `TestNativeCLIFlagsAndArguments` 先经真实 `NewClient` 再连接记录器，分别验证默认/显式模型；`TestNativeClientRetainsConfigurationValidation` |
 | 新会话将缓存模型和推理档位当成用户选择 | 新会话的“默认”跟随 CLI；明确选择仍传递，已有会话保留其模型信息 | Go `TestNativeDefaultsDoNotPinCachedModelOrEffort`、前端 `native-defaults.test.mjs` |
 | Claude 只加载 `user,project` 配置 | 实际启动参数加载 `user,project,local`；包含项目的本地设置 | 检查 SDK 实际生成的 CLI 参数 |
 | Codex 强制全权限、从不询问；Claude 自动允许工具请求 | 默认省略权限覆盖，由 CLI 决定何时询问；展示其操作详情，等待用户允许或拒绝 | 原生选项和权限等待测试 |

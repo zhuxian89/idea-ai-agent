@@ -1560,6 +1560,7 @@ function SessionCard({
                 color: selected ? "var(--accent-color)" : "var(--text-primary)",
               })}
             </span>
+            <span className="idea-session-agent" style={{ display: "none" }}>{session.agent === "claude" ? "Claude Code" : session.agent === "codex" ? "Codex" : session.agent || session.type}</span>
             {snippet ? (
               <span
                 style={{

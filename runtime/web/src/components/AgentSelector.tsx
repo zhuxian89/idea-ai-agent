@@ -27,9 +27,11 @@ type AgentSelectorProps = {
   warnUnavailable?: boolean;
   menuPlacement?: "top" | "bottom";
   showChevron?: boolean;
+  showLabel?: boolean;
   defaultExpandOptions?: boolean;
   onboardingId?: string;
   viewportMenu?: boolean;
+  stableLayout?: boolean;
   allowDefaultModel?: boolean;
 };
 
@@ -154,9 +156,11 @@ export function AgentSelector({
   warnUnavailable = false,
   menuPlacement = "top",
   showChevron = false,
+  showLabel = false,
   defaultExpandOptions = false,
   onboardingId,
   viewportMenu = false,
+  stableLayout = false,
   allowDefaultModel = false,
 }: AgentSelectorProps) {
   const { t } = useI18n();
@@ -264,9 +268,17 @@ export function AgentSelector({
       }
     };
     if (isOpen) {
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key !== "Escape") return;
+        setIsOpen(false);
+        dropdownRef.current?.querySelector("button")?.focus();
+      };
       document.addEventListener("pointerdown", handlePointerOutside);
-      return () =>
+      document.addEventListener("keydown", handleEscape);
+      return () => {
         document.removeEventListener("pointerdown", handlePointerOutside);
+        document.removeEventListener("keydown", handleEscape);
+      };
     }
   }, [isOpen]);
 
@@ -292,28 +304,44 @@ export function AgentSelector({
     }
 
     if (viewportMenu) {
-      const anchor = dropdownRef.current?.getBoundingClientRect();
-      const menu = menuRef.current.getBoundingClientRect();
-      if (!anchor) return;
-      const viewport = window.visualViewport;
-      const viewportLeft = viewport?.offsetLeft ?? 0;
-      const viewportTop = viewport?.offsetTop ?? 0;
-      const viewportWidth = viewport?.width ?? window.innerWidth;
-      const viewportHeight = viewport?.height ?? window.innerHeight;
-      const margin = 8;
-      const maxLeft = viewportLeft + viewportWidth - menu.width - margin;
-      const left = Math.max(viewportLeft + margin, Math.min(anchor.left, maxLeft));
-      const below = anchor.bottom + 8;
-      const above = anchor.top - menu.height - 8;
-      const top = menuPlacement === "bottom" && below + menu.height <= viewportTop + viewportHeight - margin
-        ? below
-        : Math.max(viewportTop + margin, above);
-      setViewportMenuPosition((current) =>
-        current && Math.abs(current.top - top) < 0.5 && Math.abs(current.left - left) < 0.5
-          ? current
-          : { top, left },
-      );
-      return;
+      const updatePosition = () => {
+        const anchor = dropdownRef.current?.getBoundingClientRect();
+        const menu = menuRef.current?.getBoundingClientRect();
+        if (!anchor || !menu) return;
+        const viewport = window.visualViewport;
+        const viewportLeft = viewport?.offsetLeft ?? 0;
+        const viewportTop = viewport?.offsetTop ?? 0;
+        const viewportWidth = viewport?.width ?? window.innerWidth;
+        const viewportHeight = viewport?.height ?? window.innerHeight;
+        const margin = 8;
+        const maxLeft = viewportLeft + viewportWidth - menu.width - margin;
+        const left = Math.max(viewportLeft + margin, Math.min(anchor.left, maxLeft));
+        const below = anchor.bottom + 8;
+        const above = anchor.top - menu.height - 8;
+        const top = menuPlacement === "bottom" && below + menu.height <= viewportTop + viewportHeight - margin
+          ? below
+          : Math.max(viewportTop + margin, above);
+        setViewportMenuPosition((current) =>
+          current && Math.abs(current.top - top) < 0.5 && Math.abs(current.left - left) < 0.5
+            ? current
+            : { top, left },
+        );
+      };
+      updatePosition();
+      const observer = new ResizeObserver(updatePosition);
+      observer.observe(menuRef.current);
+      if (dropdownRef.current) observer.observe(dropdownRef.current);
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      window.visualViewport?.addEventListener("resize", updatePosition);
+      window.visualViewport?.addEventListener("scroll", updatePosition);
+      return () => {
+        observer.disconnect();
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+        window.visualViewport?.removeEventListener("resize", updatePosition);
+        window.visualViewport?.removeEventListener("scroll", updatePosition);
+      };
     }
 
     const viewport = window.visualViewport;
@@ -523,6 +551,7 @@ export function AgentSelector({
           agentName={agent}
           style={{ width: "16px", height: "16px" }}
         />
+        {showLabel ? <span className="idea-agent-selector-label">{agent === "claude" ? "Claude Code" : agent === "codex" ? "Codex" : agent} · {model || t("agent.defaultModel")}</span> : null}
         {showChevron ? (
           <svg
             width="12"
@@ -567,6 +596,8 @@ export function AgentSelector({
         <AgentMenuPortal enabled={viewportMenu}>
           <div
             ref={menuRef}
+            data-agent-menu="true"
+            className={stableLayout ? "idea-agent-menu" : undefined}
             style={{
             position: viewportMenu ? "fixed" : "absolute",
             ...(viewportMenu
@@ -583,7 +614,7 @@ export function AgentSelector({
             borderRadius: "12px",
             boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
             zIndex: 1000,
-            width: "max-content",
+            width: stableLayout ? "min(376px, calc(100vw - 16px))" : "max-content",
             minWidth: "0",
             maxWidth: "calc(100vw - 16px)",
             boxSizing: "border-box",
@@ -591,7 +622,7 @@ export function AgentSelector({
             display: "flex",
             alignItems: "stretch",
             height: menuBodyHeight ? `${menuBodyHeight + 16}px` : "auto",
-            maxHeight: "360px",
+            maxHeight: stableLayout ? "min(360px, calc(100dvh - 16px))" : "360px",
             transform:
               viewportMenu || menuHorizontalOffset === 0
                 ? undefined
@@ -601,14 +632,16 @@ export function AgentSelector({
           <div
             ref={agentColumnRef}
             style={{
-              width: "fit-content",
+              width: stableLayout ? "46%" : "fit-content",
+              flexShrink: stableLayout ? 0 : undefined,
               minWidth: "0",
               maxWidth:
-                submenuAgentStatus || errorAgentStatus
+                stableLayout ? "none" : submenuAgentStatus || errorAgentStatus
                   ? "min(44vw, 180px)"
                   : "min(72vw, 180px)",
               height: menuBodyHeight ? `${menuBodyHeight}px` : "auto",
-              maxHeight: `${AGENT_MENU_MAX_BODY_HEIGHT}px`,
+              maxHeight: stableLayout ? "100%" : `${AGENT_MENU_MAX_BODY_HEIGHT}px`,
+              minHeight: 0,
               overflowY: "auto",
             }}
           >
@@ -773,24 +806,27 @@ export function AgentSelector({
           <div
             style={{
               width:
-                submenuAgentStatus || errorAgentStatus ? "fit-content" : "0",
+                stableLayout ? "54%" : submenuAgentStatus || errorAgentStatus ? "fit-content" : "0",
+              flexShrink: stableLayout ? 0 : undefined,
               minWidth: submenuAgentStatus || errorAgentStatus ? "0" : "0",
               maxWidth:
-                submenuAgentStatus || errorAgentStatus
+                stableLayout ? "none" : submenuAgentStatus || errorAgentStatus
                   ? "min(40vw, 180px)"
                   : "0",
               borderLeft:
-                submenuAgentStatus || errorAgentStatus
+                stableLayout || submenuAgentStatus || errorAgentStatus
                   ? "1px solid var(--menu-divider)"
                   : "none",
               height: menuBodyHeight ? `${menuBodyHeight}px` : "auto",
-              maxHeight: `${AGENT_MENU_MAX_BODY_HEIGHT}px`,
+              maxHeight: stableLayout ? "100%" : `${AGENT_MENU_MAX_BODY_HEIGHT}px`,
+              minHeight: 0,
               overflowY: "auto",
               overflowX: "hidden",
-              transition: "width 0.16s ease, border-left-color 0.16s ease",
+              transition: stableLayout ? undefined : "width 0.16s ease, border-left-color 0.16s ease",
               boxSizing: "border-box",
             }}
           >
+            {stableLayout && !submenuAgentStatus && !errorAgentStatus ? <p style={{ margin: 0, padding: "12px", fontSize: "12px", lineHeight: 1.6, color: "var(--text-secondary)" }}>{t("agent.selectOptionsHint")}</p> : null}
             {errorAgentStatus &&
             parseAgentErrorMessage(errorAgentStatus.error) ? (
               <div
@@ -1152,6 +1188,7 @@ function SectionHeader({
     <button
       type="button"
       onClick={onToggle}
+      aria-expanded={expanded}
       style={{
         display: "flex",
         alignItems: "center",

@@ -489,6 +489,18 @@ func (p *Prober) GetAllStatuses() []Status {
 	return statuses
 }
 
+// RefreshInstallations checks executable presence without starting a CLI or model
+// session. Preserve runtime capabilities and errors when presence is unchanged.
+func (p *Prober) RefreshInstallations() {
+	for _, def := range p.configuredDefinitions() {
+		next := probeInstallStatus(def.Name, def, time.Now().UTC())
+		previous, ok := p.GetStatus(def.Name)
+		if !ok || previous.Installed != next.Installed {
+			p.setStatus(next)
+		}
+	}
+}
+
 // GetConfiguredStatuses returns statuses for agents declared in agents.json.
 func (p *Prober) GetConfiguredStatuses() []Status {
 	p.mu.RLock()

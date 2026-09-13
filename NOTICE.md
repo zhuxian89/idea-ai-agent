@@ -15,5 +15,8 @@ session workflows originate from MindFS.
 `runtime/third_party/codex-go-sdk/` retains the MIT license from
 `github.com/yandc/codex-go-sdk` at `c8b61217fb04`. Local protocol patches are
 documented in its `README.idea-agent.md`; the license is included in the runtime
-distribution. Claude uses the existing pinned third-party Go SDK with adapter
-option overrides. Neither transport is represented as an official vendor SDK.
+distribution. `runtime/third_party/claude-agent-sdk-go/` retains the MIT license
+from `github.com/yandc/claude-agent-sdk-go` at `fc2d6ef2e3eb`, also included in the
+distribution. Its `README.idea-agent.md` documents the minimal constructor patch
+that allows the CLI to choose its native model. Neither transport is represented
+as an official vendor SDK.

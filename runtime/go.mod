@@ -37,4 +37,4 @@ replace github.com/fanwenlin/codex-go-sdk => ./third_party/codex-go-sdk
 
 replace github.com/coder/acp-go-sdk => github.com/yandc/acp-go-sdk v0.0.0-20260709074204-a1ec7b200d08
 
-replace github.com/roasbeef/claude-agent-sdk-go => github.com/yandc/claude-agent-sdk-go v0.0.0-20260730033243-fc2d6ef2e3eb
+replace github.com/roasbeef/claude-agent-sdk-go => ./third_party/claude-agent-sdk-go

@@ -3,6 +3,7 @@ package claude
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	claudeagent "github.com/roasbeef/claude-agent-sdk-go"
 	"mindfs/server/internal/agent/types"
 	"reflect"
@@ -27,6 +28,26 @@ func TestNativeOptionsInheritCLIConfiguration(t *testing.T) {
 	}
 	if opts.SystemPrompt != "" {
 		t.Errorf("native system prompt replaced")
+	}
+}
+
+func TestNativeClientRetainsConfigurationValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		option claudeagent.Option
+		field  string
+	}{
+		{"permission", claudeagent.WithPermissionMode("invalid"), "PermissionMode"},
+		{"effort", claudeagent.WithEffort("invalid"), "Effort"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			options := (&session{}).nativeOptions(OpenOptions{RootPath: t.TempDir()})
+			_, err := claudeagent.NewClient(append(options, tc.option)...)
+			var configError *claudeagent.ErrInvalidConfiguration
+			if !errors.As(err, &configError) || configError.Field != tc.field {
+				t.Fatalf("expected %s validation, got %v", tc.field, err)
+			}
+		})
 	}
 }
 

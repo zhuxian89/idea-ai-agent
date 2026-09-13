@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IDEA Agent · 界面草案</title>
+<style>
+:root{color-scheme:dark;--canvas:#17181b;--bg:#202126;--raised:#292b31;--hover:#33363e;--border:#454851;--text:#e4e5e9;--muted:#a9adb8;--accent:#91afff;--primary:#355fc4;--on-primary:#fff;--selected:#29374f;--success:#91cda1}
+:root[data-theme=light]{color-scheme:light;--canvas:#eceef2;--bg:#fff;--raised:#f4f5f7;--hover:#e6e9ef;--border:#c0c5ce;--text:#252933;--muted:#5b6370;--accent:#2c53b1;--primary:#355fc4;--on-primary:#fff;--selected:#eaf0fc;--success:#26763e}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--canvas);color:var(--text);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}button,input,textarea,select{font:inherit;color:inherit}button,select,summary{cursor:pointer}button{border:1px solid transparent;background:transparent;border-radius:6px;padding:5px 9px;min-height:32px}button:hover{background:var(--hover)}button:disabled{cursor:default;opacity:.6}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}.icon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0}.icon[aria-current=page]{color:var(--accent);background:var(--selected)}.muted{color:var(--muted)}.mono{font-family:Consolas,"SFMono-Regular",monospace}.small{font-size:12px}.primary{background:var(--primary);color:var(--on-primary)}.primary:hover{background:#406dce}.outline{border-color:var(--border)}.link{color:var(--accent)}.flex{display:flex;align-items:center;gap:8px}
+.page-head{max-width:1260px;margin:0 auto;padding:28px 18px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px}.eyebrow{font-size:12px;color:var(--muted);letter-spacing:.06em}h1{font-size:23px;line-height:1.4;margin:6px 0;font-weight:600;letter-spacing:-.4px}.page-head p{margin:0;color:var(--muted);font-size:13px}.board{max-width:1260px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;margin:0 auto;padding:0 18px 24px}.caption{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.caption strong{font-size:14px;font-weight:500}.caption span{font-size:12px;color:var(--muted)}.window{height:724px;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--bg)}.chrome{height:43px;flex:none;padding:0 8px 0 14px;display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--border);background:var(--raised)}.brand{font-weight:600;font-size:13px;margin-right:auto}.view{display:flex;flex:1;min-height:0;flex-direction:column}.view-head{padding:14px 16px 12px;border-bottom:1px solid var(--border)}.view-head h2{font-size:14px;line-height:1.5;margin:0 0 3px;font-weight:600}.project{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}.project svg{width:13px;height:13px}
+.conversation{padding:18px 16px 10px;overflow:auto;min-height:0;flex:1}.user-message{padding:10px 12px;background:var(--raised);border-radius:8px;margin:0 0 22px 18px;line-height:1.7}.author{display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:12px}.author strong{font-size:13px}.agent-mark{font:600 11px/22px Consolas,monospace;border:1px solid var(--border);border-radius:5px;width:23px;text-align:center}.response{margin:0 0 13px;font-size:13px;line-height:1.85}.tool{color:var(--muted);font-size:12px;margin-bottom:16px}.tool summary{padding:4px 0}.tool pre{white-space:pre-wrap;font-size:11px;padding:8px;background:var(--raised);border-radius:4px}.question{border:1px solid var(--border);border-radius:7px;padding:12px;margin-top:12px}.question-title{font-size:12px;color:var(--muted);margin-bottom:7px}.question p{font-size:13px;margin:0 0 10px}.choice{display:flex;gap:9px;padding:9px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;align-items:flex-start;margin-bottom:8px;cursor:pointer}.choice:has(input:checked){background:var(--selected);border-color:var(--accent)}.choice input{accent-color:var(--accent);margin:3px 0 0}.choice small{display:block;color:var(--muted);font-size:11px;margin-top:2px}.badge{color:var(--accent);font-size:10px;margin-left:5px}.question-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}.question-footer button{font-size:12px}
+.composer{padding:10px 12px 12px;flex:none;border-top:1px solid var(--border)}.input-box{border:1px solid var(--border);border-radius:7px;background:var(--raised);padding:9px}.context{font-size:11px;display:inline-flex;align-items:center;max-width:100%;gap:6px;color:var(--muted)}.context svg{width:13px;height:13px}.context button{min-height:24px;width:24px;padding:0}.input-box textarea{background:transparent;border:0;resize:vertical;min-height:54px;max-height:140px;display:block;width:100%;padding:7px 1px;font-size:13px;line-height:1.6}.input-box textarea::placeholder{color:var(--muted)}.composer-controls{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:6px}.composer-controls select{background:transparent;border:0;border-radius:4px;font-size:11px;max-width:132px;min-height:28px;padding:2px}.composer-controls .icon{margin-left:auto}.input-help{font-size:10px;color:var(--muted);margin:6px 1px 0;display:flex;justify-content:space-between}
+.scroll{overflow:auto;min-height:0;flex:1;padding:16px}.search{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:5px;padding:7px 9px;background:var(--raised)}.search svg{width:15px;height:15px;color:var(--muted)}.search input{width:100%;background:none;border:0;min-width:0;font-size:12px;padding:0}.group-label{font-size:11px;color:var(--muted);margin:19px 2px 7px}.history-item{display:block;width:100%;padding:11px 10px;text-align:left;margin-bottom:5px;border-radius:6px}.history-item.current{background:var(--selected);border:1px solid var(--border)}.history-item strong{display:block;font-weight:500;font-size:13px}.history-meta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-top:4px}.history-meta time{margin-left:auto}.history-hint{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
+.section-title{font-size:11px;color:var(--muted);margin:0 0 10px}.agent-card{border:1px solid var(--border);border-radius:6px;padding:13px;margin-bottom:12px}.agent-title{display:flex;align-items:center;justify-content:space-between;gap:8px}.agent-title strong{font-size:13px;font-weight:600}.status{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--success)}.status-dot{width:6px;height:6px;border-radius:50%;background:currentColor}.agent-card p{font-size:12px;color:var(--muted);margin:8px 0 10px}.agent-actions{display:flex;gap:6px}.agent-actions button{font-size:12px}.path-details{font-size:11px;color:var(--muted);margin-top:9px}.path-details summary{padding:3px 0}.path-details input{font-size:10px;width:100%;background:var(--raised);border:1px solid var(--border);border-radius:4px;padding:7px;margin:6px 0}.refresh-row{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px;font-size:11px;color:var(--muted)}.refresh-row button{font-size:11px}.preferences{margin-top:25px;border-top:1px solid var(--border);padding-top:18px}.preference{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px;font-size:12px}.preference select{font-size:12px;max-width:180px;background:var(--raised);border:1px solid var(--border);border-radius:5px;padding:5px 9px}.toast{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--accent);background:var(--raised);flex:none}.footer-note{max-width:1260px;margin:0 auto 24px;padding:0 18px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:20px}.empty{padding:40px 10px;color:var(--muted);text-align:center}
+@media(max-width:1000px){.board{grid-template-columns:1fr;max-width:460px}.window{height:724px}.page-head{max-width:460px;align-items:flex-start}.page-head h1{font-size:20px}.page-head .outline{font-size:12px;white-space:nowrap}.footer-note{max-width:460px;flex-direction:column;gap:5px}}@media(prefers-reduced-motion:no-preference){button{transition:background-color .12s,color .12s}}
+.window{height:780px}
+</style>
+</head>
+<body>
+<svg aria-hidden="true" style="display:none"><defs>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="history" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6M12 7v5l3 2"/></symbol>
+<symbol id="settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></symbol>
+<symbol id="file" viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5zM14 3v6h5"/></symbol>
+<symbol id="send" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M3 6h7l2 3h9v11H3z"/></symbol>
+</defs></svg>
+<header class="page-head"><div><div class="eyebrow">IDEA 插件 / 界面草案 01</div><h1>Agent 配置与安装、聊天、历史</h1><p>复用现有 Agent 功能，只整理入口、布局和操作反馈。以下为交互示例。</p></div><button class="outline" id="theme-toggle">切换浅色预览</button></header>
+<main class="board" id="board"></main>
+<footer class="footer-note"><span>点击顶部图标可切换视图；可体验历史搜索、方案选择和外观切换。</span><span>设计预览 · 不连接 CLI，不修改配置</span></footer>
+<template id="window-template">
+<div class="window">
+ <header class="chrome"><span class="brand">AI Agent</span><button class="icon" data-action="new" title="新建会话" aria-label="新建会话"><svg><use href="#plus"/></svg></button><button class="icon" data-nav="history" title="聊天历史" aria-label="聊天历史"><svg><use href="#history"/></svg></button><button class="icon" data-nav="settings" title="Agent 配置与设置" aria-label="Agent 配置与设置"><svg><use href="#settings"/></svg></button></header>
+ <div class="view" data-view="chat">
+  <header class="view-head"><h2 class="chat-title">排查订单重复创建</h2><div class="project"><svg><use href="#folder"/></svg>order-service<span>· 当前 IDEA 项目</span></div></header>
+  <div class="conversation">
+   <div class="user-message">订单偶尔被重复创建，帮我定位原因并修复。</div>
+   <div class="author"><span class="agent-mark">&gt;_</span><strong>Codex</strong><span class="muted">等待你的选择</span></div>
+   <details class="tool"><summary>已读取 OrderService.java 及关联调用</summary><pre>读取订单创建逻辑
+检查幂等校验与事务边界</pre></details>
+   <p class="response">幂等校验和订单写入之间存在并发窗口。我可以先修复这个问题，也可以进一步整理订单创建流程。</p>
+   <div class="question"><div class="question-title">Codex 需要你的选择</div><p>你希望采用哪种处理方式？</p>
+    <label class="choice"><input type="radio" value="修复幂等校验" checked><span>修复幂等校验<span class="badge">推荐</span><small>保持现有流程，补充并发场景测试。</small></span></label>
+    <label class="choice"><input type="radio" value="梳理订单创建流程"><span>梳理订单创建流程<small>一并调整校验与写入的组织方式。</small></span></label>
+    <div class="question-footer"><button class="link" data-action="custom">补充自己的想法</button><button class="primary" data-action="answer">确认选择</button></div>
+   </div>
+  </div>
+  <div class="composer"><div class="input-box"><div class="context"><svg><use href="#file"/></svg>OrderService.java : 48–76<button aria-label="移除附加上下文" data-action="context">×</button></div><textarea aria-label="消息" placeholder="描述你想完成的修改…"></textarea><div class="composer-controls"><select aria-label="Agent"><option>Codex</option><option>Claude Code</option></select><select aria-label="模型"><option>默认模型</option></select><select aria-label="权限"><option>默认权限</option></select><button class="icon primary" data-action="send" aria-label="发送消息" title="发送消息"><svg><use href="#send"/></svg></button></div></div><div class="input-help"><span>Enter 发送 · Shift+Enter 换行</span><span>上下文来自 IDEA</span></div></div>
+ </div>
+ <div class="view" data-view="history" hidden>
+  <header class="view-head"><div class="flex"><button class="icon" data-nav="chat" title="返回聊天" aria-label="返回聊天"><svg><use href="#back"/></svg></button><div><h2>聊天历史</h2><div class="project">order-service · 当前 IDEA 项目</div></div></div></header>
+  <div class="scroll"><label class="search"><svg><use href="#search"/></svg><input type="search" aria-label="搜索会话" placeholder="搜索会话"></label>
+   <div class="history-group"><div class="group-label">今天</div>
+    <button class="history-item current" data-title="排查订单重复创建"><strong>排查订单重复创建</strong><span class="history-meta">Codex <span>· 等待选择</span><time>14:32</time></span></button>
+    <button class="history-item" data-title="为退款接口补充测试"><strong>为退款接口补充测试</strong><span class="history-meta">Claude Code<time>11:08</time></span></button>
+    <button class="history-item" data-title="解释订单状态流转"><strong>解释订单状态流转</strong><span class="history-meta">Codex<time>09:45</time></span></button>
+   </div>
+   <div class="history-group"><div class="group-label">昨天</div>
+    <button class="history-item" data-title="定位启动时的循环依赖"><strong>定位启动时的循环依赖</strong><span class="history-meta">Claude Code<time>18:20</time></span></button>
+    <button class="history-item" data-title="优化订单查询 SQL"><strong>优化订单查询 SQL</strong><span class="history-meta">Codex<time>15:06</time></span></button>
+   </div>
+   <p class="empty" data-search-empty hidden>没有匹配的会话</p>
+  </div><div class="history-hint">选择会话即可继续。新会话自动归属当前项目。</div>
+ </div>
+ <div class="view" data-view="settings" hidden>
+  <header class="view-head"><div class="flex"><button class="icon" data-nav="chat" title="返回聊天" aria-label="返回聊天"><svg><use href="#back"/></svg></button><div><h2>Agent 配置与安装</h2><div class="project">管理本机的 Codex 和 Claude Code</div></div></div></header>
+  <div class="scroll">
+   <div class="refresh-row"><span>本机 Agent</span><button class="link" data-action="detect">重新检测</button></div>
+   <section class="agent-card"><div class="agent-title"><strong>Codex</strong><span class="status"><span class="status-dot"></span>已识别</span></div><p>使用 Codex 本机配置与登录状态。</p><div class="agent-actions"><button class="outline" data-action="config">配置</button><button class="outline" data-action="install">安装 / 更新</button><button data-action="restart">重启</button></div></section>
+   <section class="agent-card"><div class="agent-title"><strong>Claude Code</strong><span class="status"><span class="status-dot"></span>已识别</span></div><p>使用 Claude Code 本机配置与登录状态。</p><div class="agent-actions"><button class="outline" data-action="config">配置</button><button class="outline" data-action="install">安装 / 更新</button><button data-action="restart">重启</button></div></section>
+   <div class="preferences"><h3 class="section-title">外观与语言</h3><label class="preference">外观<select class="appearance"><option value="auto">跟随 IDEA</option><option value="dark">深色</option><option value="light">浅色</option></select></label><label class="preference">语言<select class="language"><option>简体中文</option><option>English</option></select></label></div>
+  </div>
+ </div>
+ <div class="toast" role="status" hidden></div>
+</div>
+</template>
+<script>
+const board=document.querySelector('#board');
+const screens=[['chat','01 / 聊天','默认界面'],['history','02 / 聊天历史','按当前项目归属'],['settings','03 / 配置与安装','复用现有功能']];
+const initialConversation=document.querySelector('#window-template').content.querySelector('.conversation').innerHTML;
+function applyTheme(value){document.documentElement.dataset.theme=value==='auto'?'dark':value;document.querySelector('#theme-toggle').textContent=value==='light'?'切换深色预览':'切换浅色预览'}
+function notify(panel,text){const box=panel.querySelector('.toast');box.hidden=false;box.textContent=text}
+function show(panel,name,focus=false){panel.querySelectorAll('.view').forEach(v=>v.hidden=v.dataset.view!==name);panel.querySelectorAll('[data-nav]').forEach(b=>{if(b.dataset.nav===name)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});panel.querySelector('.toast').hidden=true;if(focus){const heading=panel.querySelector('[data-view="'+name+'"] h2');heading.tabIndex=-1;heading.focus()}}
+screens.forEach(([name,title,hint],index)=>{
+ const section=document.createElement('section');section.innerHTML='<div class="caption"><strong>'+title+'</strong><span>'+hint+'</span></div>';section.append(document.querySelector('#window-template').content.cloneNode(true));board.append(section);const panel=section.querySelector('.window');panel.querySelectorAll('input[type=radio]').forEach(r=>r.name='plan-'+index);panel.querySelectorAll('svg').forEach(svg=>svg.setAttribute('aria-hidden','true'));show(panel,name);
+ panel.addEventListener('click',e=>{const button=e.target.closest('button');if(!button)return;
+  if(button.dataset.nav){show(panel,button.dataset.nav,true);return}
+  if(button.dataset.title){panel.querySelector('.chat-title').textContent=button.dataset.title;panel.querySelector('.conversation').innerHTML=button.classList.contains('current')?initialConversation:'<p class="empty">历史会话内容预览<br>在此继续与 Agent 对话</p>';panel.querySelectorAll('input[type=radio]').forEach(r=>r.name='plan-'+index);show(panel,'chat',true);return}
+  const action=button.dataset.action;
+  if(action==='new'){show(panel,'chat');panel.querySelector('.chat-title').textContent='新会话';panel.querySelector('.conversation').innerHTML='<p class="empty">开始当前项目的新对话<br><span class="small">描述任务，或从 IDEA 添加代码上下文。</span></p>';panel.querySelector('textarea').value='';panel.querySelector('textarea').focus()}
+  if(action==='custom'){const input=panel.querySelector('textarea');input.value='我的想法是：';input.focus()}
+  if(action==='answer'){const chosen=panel.querySelector('input[type=radio]:checked');notify(panel,'示例：将你的选择原样提交给 Agent — '+chosen.value)}
+  if(action==='send'){const input=panel.querySelector('textarea');if(input.value.trim()){notify(panel,'消息发送效果预览；此草案不连接 Agent。');input.value=''}else input.focus()}
+  if(action==='context')button.closest('.context').hidden=true;
+  if(action==='detect')notify(panel,'演示结果：Codex、Claude Code 已识别。');
+  if(action==='restart')notify(panel,'重启交互预览；未执行真实 CLI 重启。');
+  if(action==='config')notify(panel,'此入口接入已有的添加配置、切换配置流程；当前仅为预览。');
+  if(action==='install')notify(panel,'此入口接入已有的 Agent 安装与更新流程；未执行安装。');
+ });
+ panel.querySelector('input[type=search]').addEventListener('input',e=>{let count=0;panel.querySelectorAll('.history-item').forEach(item=>{item.hidden=!item.textContent.toLowerCase().includes(e.target.value.toLowerCase());if(!item.hidden)count++});panel.querySelectorAll('.history-group').forEach(group=>group.hidden=![...group.querySelectorAll('.history-item')].some(item=>!item.hidden));panel.querySelector('[data-search-empty]').hidden=!!count});
+ panel.querySelector('.appearance').addEventListener('change',e=>applyTheme(e.target.value));
+ panel.querySelector('.language').addEventListener('change',()=>notify(panel,'语言切换入口预览；本草案只展示中文文案。'));
+ panel.querySelector('textarea').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();panel.querySelector('[data-action=send]').click()}});
+});
+document.querySelector('#theme-toggle').addEventListener('click',()=>applyTheme(document.documentElement.dataset.theme==='light'?'dark':'light'));
+</script>
+</body>
+</html>

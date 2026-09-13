@@ -73,6 +73,7 @@ function getSelectionPreview(text?: string): string {
 }
 
 type ActionBarProps = {
+  compactWorkbench?: boolean;
   status?: WSStatus;
   agentsVersion?: number;
   codexRateLimitsRefreshToken?: number;
@@ -392,6 +393,7 @@ function stripPlanCommandPrefix(input: string): string {
 }
 
 export function ActionBar({
+  compactWorkbench = false,
   status = "disconnected",
   agentsVersion = 0,
   codexRateLimitsRefreshToken = 0,
@@ -1263,15 +1265,15 @@ export function ActionBar({
     return () => window.removeEventListener("keydown", cancelOnEscape);
   }, [handleCancel, isCompositionActive, isMobile, showCancel]);
 
-  const inputPlaceholder = currentSession && !currentSession.pending
+  const inputPlaceholder = compactWorkbench ? t(modePlaceholderKeys[mode]) : currentSession && !currentSession.pending
     ? t("action.placeholder.newSessionSwipe")
     : mode === "chat" && !isFocused
       ? t(blurPlaceholderKey)
       : t(modePlaceholderKeys[mode]);
-  const editorRightInset = isMultiLine ? 14 : mode === "command" ? (isMobile ? 92 : 116) : isMobile ? 124 : 148;
-  const editorBottomInset = isMultiLine ? 44 : 12;
-  const editorMinHeight = 44;
-  const mobileFileSidebarButton = isMobile ? (
+  const editorRightInset = compactWorkbench || isMultiLine ? 14 : mode === "command" ? (isMobile ? 92 : 116) : isMobile ? 124 : 148;
+  const editorBottomInset = compactWorkbench || isMultiLine ? 44 : 12;
+  const editorMinHeight = compactWorkbench ? 104 : 44;
+  const mobileFileSidebarButton = isMobile && !compactWorkbench ? (
     <button
       type="button"
       onClick={onToggleLeftSidebar}
@@ -1284,7 +1286,7 @@ export function ActionBar({
       </svg>
     </button>
   ) : null;
-  const mobileSessionSidebarButton = isMobile ? (
+  const mobileSessionSidebarButton = isMobile && !compactWorkbench ? (
     <button
       type="button"
       onClick={onToggleRightSidebar}
@@ -1510,7 +1512,7 @@ export function ActionBar({
             ))}
           </div>
         ) : null}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "30px minmax(0, 1fr) 30px" : "1fr", alignItems: isMobile ? "end" : "center", gap: isMobile ? "1px" : 0, padding: isMobile ? "0 1px" : 0, minWidth: 0, maxWidth: "100%" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile && !compactWorkbench ? "30px minmax(0, 1fr) 30px" : "1fr", alignItems: isMobile ? "end" : "center", gap: isMobile ? "1px" : 0, padding: isMobile ? "0 1px" : 0, minWidth: 0, maxWidth: "100%" }}>
           {sidebarsSwapped ? mobileSessionSidebarButton : mobileFileSidebarButton}
 
           <div
@@ -1931,6 +1933,11 @@ export function ActionBar({
                     }}
                     compact={true}
                     warnUnavailable={isSelectedAgentUnavailable}
+                    showLabel={compactWorkbench}
+                    showChevron={compactWorkbench}
+                    stableLayout={compactWorkbench}
+                    viewportMenu={compactWorkbench}
+                    allowDefaultModel={compactWorkbench}
                     defaultExpandOptions
                     onboardingId="agent-selector"
                     />

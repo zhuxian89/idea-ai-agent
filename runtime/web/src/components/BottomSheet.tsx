@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 type BottomSheetProps = {
+  inline?: boolean;
   isOpen: boolean;
   onClose: () => void;
   children: React.ReactNode;
@@ -9,6 +10,7 @@ type BottomSheetProps = {
 };
 
 export function BottomSheet({
+  inline = false,
   isOpen,
   onClose,
   children,
@@ -25,6 +27,9 @@ export function BottomSheet({
     return () => window.removeEventListener("resize", handleResize);
   }, [isOpen]);
 
+  if (inline) {
+    return isOpen ? <div className="idea-active-conversation">{children}{footer}</div> : null;
+  }
   if (!isOpen && !isAnimating) return null;
 
   const pcStyles: React.CSSProperties = {

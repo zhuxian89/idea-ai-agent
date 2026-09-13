@@ -1237,6 +1237,7 @@ func (h *HTTPHandler) handleAgentsList(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.AppContext.GetProber().GetInstalledStatuses()
 	if r.URL.Query().Get("all") == "1" {
+		h.AppContext.GetProber().RefreshInstallations()
 		statuses = h.AppContext.GetProber().GetConfiguredStatuses()
 	}
 	if prefs := h.AppContext.GetPreferences(); prefs != nil {

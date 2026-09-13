@@ -1678,16 +1678,11 @@ export function App({ onGoHome }: AppProps) {
   const [sidebarsSwapped, setSidebarsSwapped] = useState(loadSidebarsSwapped);
   const [gitDiffSideBySide, setGitDiffSideBySide] = useState(loadGitDiffSideBySide);
   const [isLeftOpen, setIsLeftOpen] = useState(() => !isIdeaRuntime && window.innerWidth >= 768);
-  const [agentMenuRequest, setAgentMenuRequest] = useState<number | null>(null);
+
   const [isRightOpen, setIsRightOpen] = useState(
     () => !isIdeaRuntime && window.innerWidth >= 768,
   );
-  useEffect(() => {
-    if (isIdeaRuntime && isMobile) {
-      setIsLeftOpen(false);
-      setIsRightOpen(false);
-    }
-  }, [isMobile]);
+
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const onboardingAutoStartRef = useRef(false);
   const [currentRootId, setCurrentRootId] = useState<string | null>(null);
@@ -5010,7 +5005,7 @@ export function App({ onGoHome }: AppProps) {
     }
 
     let cancelled = false;
-    const searchAcrossRoots = multiProjectSessionsEnabled;
+    const searchAcrossRoots = !isIdeaRuntime && multiProjectSessionsEnabled;
     setSessionSearchLoading(true);
     void sessionService
       .searchSessions(currentRootId, sessionSearchAppliedQuery, 20, {
@@ -14013,7 +14008,7 @@ export function App({ onGoHome }: AppProps) {
           void handleLoadOlderExternalSessions();
         }}
       />
-    ) : multiProjectSessionsEnabled && !sessionSearchOpen && !sessionSearchResultsMode ? (
+    ) : !isIdeaRuntime && multiProjectSessionsEnabled && !sessionSearchOpen && !sessionSearchResultsMode ? (
       <MultiProjectSessionList
         groups={multiProjectSessionGroups}
         selectedKey={selectedSession?.key}
@@ -14032,7 +14027,7 @@ export function App({ onGoHome }: AppProps) {
         }}
         onSelect={(s) => {
           handleSelectSession(s);
-          if (isMobile) setIsRightOpen(false);
+          if (isMobile || isIdeaRuntime) setIsRightOpen(false);
         }}
         onSync={handleSyncSession}
         onPin={handlePinSession}
@@ -14118,7 +14113,7 @@ export function App({ onGoHome }: AppProps) {
         }}
         onSelect={(s) => {
           handleSelectSession(s);
-          if (isMobile) setIsRightOpen(false);
+          if (isMobile || isIdeaRuntime) setIsRightOpen(false);
         }}
         onSync={handleSyncSession}
         onPin={handlePinSession}
@@ -14310,6 +14305,11 @@ export function App({ onGoHome }: AppProps) {
   return (
     <>
       <AppShell
+        ideaWorkbench={isIdeaRuntime ? {
+          projectName: basenameOfPath(managedRootByIdRef.current[currentRootId || ""]?.root_path || currentRootId || ""),
+          sessionName: selectedSession?.name || currentSession?.name,
+          onNewSession: handleNewSession,
+        } : undefined}
         leftOpen={isLeftOpen}
         rightOpen={isRightOpen}
         sidebarsSwapped={sidebarsSwapped}
@@ -14319,6 +14319,9 @@ export function App({ onGoHome }: AppProps) {
         onOpenRight={() => setIsRightOpen(true)}
         sidebar={
           <FileTree
+            agentSettingsOnly={isIdeaRuntime}
+            agentSettingsActive={isLeftOpen}
+            agentsVersion={agentsVersion}
             entries={rootEntries}
             childrenByPath={entriesByPath}
             expanded={expanded}
@@ -14371,8 +14374,6 @@ export function App({ onGoHome }: AppProps) {
             renderRootRelatedContent={renderRootRelatedContent}
             projectTreeTabRequest={projectTreeTabRequest}
             agentConfigSwitchRequest={agentConfigSwitchRequest}
-            agentMenuRequest={agentMenuRequest}
-            onAgentMenuOpened={() => setAgentMenuRequest(null)}
             onAgentConfigSwitched={(agentName) => {
               if (agentName.trim().toLowerCase() === "codex") {
                 setCodexRateLimitsRefreshToken((value) => value + 1);
@@ -14404,7 +14405,10 @@ export function App({ onGoHome }: AppProps) {
             onGitDiffSideBySideChange={setGitDiffSideBySide}
             multiProjectSessionsEnabled={multiProjectSessionsEnabled}
             onMultiProjectSessionsChange={setMultiProjectSessionsEnabled}
-            onRunAgentLifecycleCommand={handleRunAgentLifecycleCommand}
+            onRunAgentLifecycleCommand={async (...args) => {
+              await handleRunAgentLifecycleCommand(...args);
+              if (isIdeaRuntime) { setIsLeftOpen(false); setIsRightOpen(false); }
+            }}
             onRestartAgent={handleRestartAgent}
             onGoHome={onGoHome}
           />
@@ -14423,22 +14427,7 @@ export function App({ onGoHome }: AppProps) {
               position: "relative",
             }}
           >
-            {isIdeaRuntime ? (
-              <div className="mindfs-ide-agent-tools">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLeftOpen(true);
-                    setAgentMenuRequest((request) => (request ?? 0) + 1);
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                    <path d="M4 7h16M4 17h16M8 4v6M16 14v6" />
-                  </svg>
-                  {t("agentConfig.management")}
-                </button>
-              </div>
-            ) : null}
+
             <div
               style={{
                 flex: 1,
@@ -14468,7 +14457,7 @@ export function App({ onGoHome }: AppProps) {
                   flexDirection: "column",
                 }}
               >
-                {workspaceView}
+                {isIdeaRuntime ? <div className="idea-empty-chat"><h2>{t("idea.startChat")}</h2><p>{t("idea.startHint")}</p></div> : workspaceView}
               </div>
             </div>
           </div>
@@ -14496,6 +14485,7 @@ export function App({ onGoHome }: AppProps) {
               </div>
             ) : null}
             <ActionBar
+              compactWorkbench={isIdeaRuntime}
               status={status}
               agentsVersion={agentsVersion}
               codexRateLimitsRefreshToken={codexRateLimitsRefreshToken}
@@ -14548,6 +14538,7 @@ export function App({ onGoHome }: AppProps) {
         }
         drawer={
           <BottomSheet
+            inline={isIdeaRuntime}
             isOpen={isDrawerOpen}
             onClose={() => {
               interactionModeRef.current = "main";

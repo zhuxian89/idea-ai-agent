@@ -1,6 +1,20 @@
 import type { Messages } from "../types";
 
 export const enUS = {
+  "idea.chat": "Chat",
+  "idea.history": "Chat history",
+  "idea.settings": "Agent configuration and installation",
+  "idea.backToChat": "Back to chat",
+  "idea.currentProject": "Current IDEA project",
+  "idea.startChat": "Start a conversation",
+  "idea.startHint": "Describe a task, or add code context from the IDEA editor.",
+  "idea.addConfig": "Add Agent config",
+  "idea.configure": "Configure",
+  "idea.preferences": "Appearance and language",
+  "idea.loadingProject": "Connecting to the current IDEA project…",
+  "idea.otherAgents": "Other Agents ({count})",
+  "idea.probePending": "CLI detected. Runtime status will update after a restart or conversation.",
+  "idea.restartAccepted": "Restart requested. Detection results will update here; any connection error appears on the Agent card.",
   "app.name": "MindFS",
   "app.initFailed": "Initialization failed",
   "common.cancel": "Cancel",
@@ -460,6 +474,7 @@ export const enUS = {
   "agent.notReady": "Not ready",
   "agent.currentUnavailable": "The current session's Agent ({name}) is unavailable",
   "agent.viewErrorInfo": "View {name} error details",
+  "agent.selectOptionsHint": "Expand an Agent to choose its model and options.",
   "agent.collapseModels": "Collapse {name} model list",
   "agent.expandModels": "Expand {name} model list",
   "agent.errorInfo": "Error details",

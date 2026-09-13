@@ -1,0 +1,2114 @@
+package claudeagent
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"iter"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func assertArgValue(t *testing.T, args []string, flag, value string) {
+	t.Helper()
+
+	for i, arg := range args {
+		if arg == flag {
+			require.Less(t, i+1, len(args), "flag %s missing value", flag)
+			assert.Equal(t, value, args[i+1])
+			return
+		}
+	}
+
+	require.Failf(t, "flag not found", "expected %s %s in args %v", flag, value, args)
+}
+
+func assertArgAbsent(t *testing.T, args []string, flag string) {
+	t.Helper()
+
+	assert.NotContains(t, args, flag)
+}
+
+func decodeMCPConfigArgs(t *testing.T, args []string) map[string]map[string]interface{} {
+	t.Helper()
+
+	configs := make(map[string]map[string]interface{})
+	for i, arg := range args {
+		if arg != "--mcp-config" {
+			continue
+		}
+		require.Less(t, i+1, len(args), "flag --mcp-config missing value")
+
+		var wrapper struct {
+			MCPServers map[string]map[string]interface{} `json:"mcpServers"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(args[i+1]), &wrapper))
+		require.Len(t, wrapper.MCPServers, 1)
+		for name, config := range wrapper.MCPServers {
+			configs[name] = config
+		}
+	}
+
+	return configs
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
+func argIndex(args []string, flag string) int {
+	for i, arg := range args {
+		if arg == flag {
+			return i
+		}
+	}
+	return -1
+}
+
+type mockTransport struct {
+	mu       sync.Mutex
+	written  []Message
+	incoming chan Message
+	closed   atomic.Bool
+	ended    atomic.Bool
+	ready    atomic.Bool
+}
+
+func newMockTransport(buf int) *mockTransport {
+	return &mockTransport{incoming: make(chan Message, buf)}
+}
+
+func (m *mockTransport) Connect(ctx context.Context) error {
+	m.ready.Store(true)
+	return nil
+}
+
+func (m *mockTransport) Write(ctx context.Context, msg Message) error {
+	if m.closed.Load() {
+		return &ErrTransportClosed{}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.written = append(m.written, msg)
+	return nil
+}
+
+func (m *mockTransport) ReadMessages(ctx context.Context) iter.Seq2[Message, error] {
+	return func(yield func(Message, error) bool) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-m.incoming:
+				if !ok || !yield(msg, nil) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func (m *mockTransport) EndInput() error {
+	m.ended.Store(true)
+	return nil
+}
+
+func (m *mockTransport) Close() error {
+	if !m.closed.CompareAndSwap(false, true) {
+		return nil
+	}
+	m.ready.Store(false)
+	close(m.incoming)
+	return nil
+}
+
+func (m *mockTransport) IsReady() bool {
+	return m.ready.Load() && !m.closed.Load()
+}
+
+var _ Transport = (*mockTransport)(nil)
+
+// TestMockTransportReadMessagesRoundTrip drives the mock's iterator end-to-end:
+// pushes messages onto incoming, asserts each is yielded in order, and verifies
+// the iterator returns when context is canceled. Also covers Close idempotence
+// (the Close path closes the incoming channel; a second Close must be a no-op).
+func TestMockTransportReadMessagesRoundTrip(t *testing.T) {
+	mock := newMockTransport(4)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, mock.Connect(ctx))
+	assert.True(t, mock.IsReady())
+
+	want := []Message{
+		UserMessage{Type: "user", SessionID: "one"},
+		UserMessage{Type: "user", SessionID: "two"},
+		UserMessage{Type: "user", SessionID: "three"},
+	}
+	for _, msg := range want {
+		mock.incoming <- msg
+	}
+
+	got := make([]Message, 0, len(want))
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for msg, err := range mock.ReadMessages(ctx) {
+			require.NoError(t, err)
+			got = append(got, msg)
+			if len(got) == len(want) {
+				cancel()
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ReadMessages did not yield all messages within timeout")
+	}
+	assert.Equal(t, want, got)
+
+	require.NoError(t, mock.Close())
+	require.NoError(t, mock.Close())
+	assert.False(t, mock.IsReady())
+
+	err := mock.Write(context.Background(), UserMessage{})
+	assert.IsType(t, &ErrTransportClosed{}, err)
+}
+
+// TestWithTransportOptionPlumbed verifies that WithTransport stores the
+// injected transport on Options so Client.Connect's injection branch picks it
+// up. End-to-end coverage through Client.Connect is deferred until the
+// control-channel initialize handshake is easier to fixture against a mock.
+func TestWithTransportOptionPlumbed(t *testing.T) {
+	mock := newMockTransport(1)
+
+	opts := NewOptions()
+	WithTransport(mock)(opts)
+
+	got, ok := opts.Transport.(*mockTransport)
+	require.True(t, ok, "Options.Transport should hold the injected mockTransport")
+	require.Same(t, mock, got)
+}
+
+// TestSubprocessTransportBasicCommunication tests stdin/stdout communication.
+func TestSubprocessTransportBasicCommunication(t *testing.T) {
+	// Create mock subprocess
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Connect
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Write a message from the "CLI" (mock) to the transport
+	go func() {
+		msg := AssistantMessage{
+			Type: "assistant",
+			Message: struct {
+				Role    string         `json:"role"`
+				Content []ContentBlock `json:"content"`
+			}{
+				Role: "assistant",
+				Content: []ContentBlock{
+					{Type: "text", Text: "Hello from Claude"},
+				},
+			},
+		}
+		data, _ := json.Marshal(msg)
+		data = append(data, '\n')
+		runner.StdoutPipe.Write(data)
+		runner.StdoutPipe.CloseWrite()
+	}()
+
+	// Read message
+	var receivedMsg Message
+	for msg, err := range transport.ReadMessages(ctx) {
+		require.NoError(t, err)
+		receivedMsg = msg
+		break
+	}
+
+	// Verify message
+	require.NotNil(t, receivedMsg)
+	assistantMsg, ok := receivedMsg.(AssistantMessage)
+	require.True(t, ok)
+	assert.Equal(t, "Hello from Claude", assistantMsg.ContentText())
+
+	// Write a message to the CLI.
+	userMsg := UserMessage{
+		Type:      "user",
+		SessionID: "",
+		Message: APIUserMessage{
+			Role: "user",
+			Content: []UserContentBlock{
+				{Type: "text", Text: "Test message"},
+			},
+		},
+	}
+
+	// Read from stdin in background
+	readDone := make(chan struct{})
+	var written UserMessage
+	go func() {
+		defer close(readDone)
+		decoder := json.NewDecoder(runner.StdinPipe)
+		err := decoder.Decode(&written)
+		require.NoError(t, err)
+	}()
+
+	err = transport.Write(ctx, userMsg)
+	require.NoError(t, err)
+
+	// Wait for read to complete.
+	select {
+	case <-readDone:
+		require.Len(t, written.Message.Content, 1)
+		assert.Equal(t, "Test message", written.Message.Content[0].Text)
+	case <-time.After(1 * time.Second):
+		t.Fatal("Failed to read from stdin")
+	}
+}
+
+// TestSubprocessTransportGracefulShutdown tests clean subprocess termination.
+func TestSubprocessTransportGracefulShutdown(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+
+	// Verify runner is alive
+	assert.True(t, runner.IsAlive())
+
+	// Close the transport
+	err = transport.Close()
+	require.NoError(t, err)
+
+	// Verify transport is closed
+	assert.True(t, transport.closed.Load())
+	assert.False(t, transport.IsAlive())
+}
+
+func TestSubprocessTransportEndInput(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	err = transport.EndInput()
+	require.NoError(t, err)
+	assert.Nil(t, transport.stdin)
+	assert.True(t, runner.IsAlive())
+	assert.True(t, transport.IsReady())
+}
+
+func TestSubprocessTransportEndInputIdempotent(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	require.NoError(t, transport.EndInput())
+	require.NoError(t, transport.EndInput())
+	assert.Nil(t, transport.stdin)
+}
+
+func TestSubprocessTransportCloseAfterEndInput(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, transport.EndInput())
+	require.NoError(t, transport.Close())
+	assert.True(t, transport.closed.Load())
+	assert.False(t, transport.IsReady())
+}
+
+// TestSubprocessTransportContextCancellation tests that context cancellation
+// stops message reading.
+func TestSubprocessTransportContextCancellation(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Start reading in a goroutine
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		for _, err := range transport.ReadMessages(ctx) {
+			if err != nil {
+				continue
+			}
+		}
+	}()
+
+	// Cancel context and close pipe to simulate subprocess termination.
+	// In real usage, context cancellation leads to subprocess termination
+	// which closes the pipes. The pipe close wakes up blocked readers.
+	cancel()
+	runner.StdoutPipe.Close()
+
+	// Wait for reader to stop
+	select {
+	case <-readDone:
+		// Success
+	case <-time.After(2 * time.Second):
+		t.Fatal("ReadMessages did not stop after context cancellation")
+	}
+}
+
+// TestSubprocessTransportMultipleMessages tests reading multiple messages.
+func TestSubprocessTransportMultipleMessages(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Write multiple messages from "CLI"
+	go func() {
+		messages := []Message{
+			AssistantMessage{
+				Type: "assistant",
+				Message: struct {
+					Role    string         `json:"role"`
+					Content []ContentBlock `json:"content"`
+				}{
+					Role: "assistant",
+					Content: []ContentBlock{
+						{Type: "text", Text: "Message 1"},
+					},
+				},
+			},
+			StreamEvent{
+				Type:  "stream_event",
+				Event: "delta",
+				Delta: "Message 2",
+			},
+			ResultMessage{
+				Type:   "result",
+				Status: "success",
+				Result: "Complete",
+			},
+		}
+
+		for _, msg := range messages {
+			data, _ := json.Marshal(msg)
+			data = append(data, '\n')
+			runner.StdoutPipe.Write(data)
+		}
+		runner.StdoutPipe.CloseWrite()
+	}()
+
+	// Read all messages
+	received := []Message{}
+	for msg, err := range transport.ReadMessages(ctx) {
+		require.NoError(t, err)
+		received = append(received, msg)
+	}
+
+	// Verify count
+	assert.Len(t, received, 3)
+
+	// Verify types
+	_, ok := received[0].(AssistantMessage)
+	assert.True(t, ok)
+	_, ok = received[1].(StreamEvent)
+	assert.True(t, ok)
+	_, ok = received[2].(ResultMessage)
+	assert.True(t, ok)
+}
+
+// TestSubprocessTransportEmptyLines tests that empty lines are skipped.
+func TestSubprocessTransportEmptyLines(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Write messages with empty lines
+	go func() {
+		runner.StdoutPipe.WriteString(`{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Hello"}]}}` + "\n")
+		runner.StdoutPipe.WriteString("\n") // Empty line
+		runner.StdoutPipe.WriteString(`{"type": "result", "status": "success", "result": "Done"}` + "\n")
+		runner.StdoutPipe.CloseWrite()
+	}()
+
+	// Read messages (should skip empty line)
+	count := 0
+	for _, err := range transport.ReadMessages(ctx) {
+		require.NoError(t, err)
+		count++
+	}
+
+	assert.Equal(t, 2, count, "should have read 2 messages, skipping empty line")
+}
+
+// TestSubprocessTransportParseError tests handling of malformed JSON.
+func TestSubprocessTransportParseError(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Write invalid JSON and then valid message
+	go func() {
+		runner.StdoutPipe.WriteString(`{invalid json}` + "\n")
+		msg := ResultMessage{
+			Type:   "result",
+			Status: "success",
+			Result: "Done",
+		}
+		data, _ := json.Marshal(msg)
+		data = append(data, '\n')
+		runner.StdoutPipe.Write(data)
+		runner.StdoutPipe.CloseWrite()
+	}()
+
+	// Read messages
+	parseErrorSeen := false
+	validMessageSeen := false
+
+	for msg, err := range transport.ReadMessages(ctx) {
+		if err != nil {
+			parseErrorSeen = true
+			continue
+		}
+		if _, ok := msg.(ResultMessage); ok {
+			validMessageSeen = true
+		}
+	}
+
+	assert.True(t, parseErrorSeen, "should have seen parse error")
+	assert.True(t, validMessageSeen, "should have successfully parsed valid message after error")
+}
+
+// TestSubprocessTransportWriteContextCancellation tests that Write respects context.
+func TestSubprocessTransportWriteContextCancellation(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Create canceled context
+	writeCtx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	msg := UserMessage{
+		Type:      "user",
+		SessionID: "",
+		Message: APIUserMessage{
+			Role:    "user",
+			Content: []UserContentBlock{{Type: "text", Text: "Test"}},
+		},
+	}
+
+	err = transport.Write(writeCtx, msg)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+// TestSubprocessTransportWriteAfterClose tests that writing after close fails.
+func TestSubprocessTransportWriteAfterClose(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+
+	// Close transport
+	transport.Close()
+
+	// Try to write
+	msg := UserMessage{
+		Type: "user",
+	}
+
+	err = transport.Write(ctx, msg)
+	assert.Error(t, err)
+
+	var closedErr *ErrTransportClosed
+	assert.ErrorAs(t, err, &closedErr)
+}
+
+// TestSubprocessTransportConcurrentWrites tests thread-safety of Write.
+func TestSubprocessTransportConcurrentWrites(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	numWriters := 10
+	numMessages := 100
+
+	var wg sync.WaitGroup
+	wg.Add(numWriters)
+
+	// Consume stdin in background
+	messagesWritten := make(chan struct{}, numWriters*numMessages)
+	go func() {
+		decoder := json.NewDecoder(runner.StdinPipe)
+		for {
+			var msg UserMessage
+			err := decoder.Decode(&msg)
+			if err != nil {
+				return
+			}
+			messagesWritten <- struct{}{}
+		}
+	}()
+
+	// Launch concurrent writers.
+	for i := 0; i < numWriters; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < numMessages; j++ {
+				msg := UserMessage{
+					Type:      "user",
+					SessionID: "",
+					Message: APIUserMessage{
+						Role:    "user",
+						Content: []UserContentBlock{{Type: "text", Text: "Message"}},
+					},
+				}
+				err := transport.Write(ctx, msg)
+				if err != nil {
+					t.Errorf("writer %d: write failed: %v", id, err)
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Give decoder time to process
+	time.Sleep(100 * time.Millisecond)
+
+	expected := numWriters * numMessages
+	assert.Len(t, messagesWritten, expected, "should have written all messages")
+}
+
+// TestDiscoverCLIPath tests CLI path discovery.
+func TestDiscoverCLIPath(t *testing.T) {
+	t.Run("explicit path", func(t *testing.T) {
+		opts := &Options{
+			CLIPath: "/custom/path/claude",
+		}
+
+		path, err := DiscoverCLIPath(opts)
+		require.NoError(t, err)
+		assert.Equal(t, "/custom/path/claude", path)
+	})
+
+	t.Run("from PATH", func(t *testing.T) {
+		opts := &Options{}
+
+		// This will fail if claude is not in PATH, which is expected
+		path, err := DiscoverCLIPath(opts)
+		if err != nil {
+			// Expected if claude not installed
+			var notFoundErr *ErrCLINotFound
+			assert.ErrorAs(t, err, &notFoundErr)
+		} else {
+			// If found, should be non-empty
+			assert.NotEmpty(t, path)
+		}
+	})
+}
+
+// syncBuffer is a thread-safe buffer for testing.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+// TestSubprocessTransportStderrForwarding tests stderr handling.
+func TestSubprocessTransportStderrForwarding(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	// Use a thread-safe buffer since the transport's stderr goroutine will
+	// write to it concurrently with our reads.
+	stderrBuf := &syncBuffer{}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+	transport.SetStderrLogger(stderrBuf)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Write some stderr output.
+	runner.StderrPipe.WriteString("Error line 1\n")
+	runner.StderrPipe.WriteString("Error line 2\n")
+
+	// Close write side to signal EOF to the scanner goroutine.
+	runner.StderrPipe.CloseWrite()
+
+	// Give the scanner goroutine time to process the data.
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify stderr was captured.
+	output := stderrBuf.String()
+	assert.Contains(t, output, "Error line 1")
+	assert.Contains(t, output, "Error line 2")
+}
+
+// TestSubprocessTransportIsAlive tests subprocess liveness check.
+func TestSubprocessTransportIsAlive(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	// Not alive before connection
+	assert.False(t, transport.IsAlive())
+
+	// Connect - should be alive
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	assert.True(t, transport.IsAlive())
+
+	// After close, not alive
+	transport.Close()
+	assert.False(t, transport.IsAlive())
+}
+
+// TestSubprocessTransportIteratorEarlyStop tests that stopping iteration
+// gracefully terminates the reader.
+func TestSubprocessTransportIteratorEarlyStop(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Write many messages
+	go func() {
+		for i := 0; i < 100; i++ {
+			msg := StreamEvent{
+				Type:  "stream_event",
+				Event: "delta",
+				Delta: "text",
+			}
+			data, _ := json.Marshal(msg)
+			data = append(data, '\n')
+			runner.StdoutPipe.Write(data)
+		}
+		runner.StdoutPipe.CloseWrite()
+	}()
+
+	// Read only first 3 messages
+	count := 0
+	for msg, err := range transport.ReadMessages(ctx) {
+		require.NoError(t, err)
+		require.NotNil(t, msg)
+		count++
+		if count >= 3 {
+			break // Stop early
+		}
+	}
+
+	assert.Equal(t, 3, count)
+	// Verify iterator stopped without blocking
+}
+
+// TestSubprocessTransportLargeMessage tests handling of large messages.
+func TestSubprocessTransportLargeMessage(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Create a large message (10KB text)
+	largeText := strings.Repeat("This is a large message. ", 400)
+
+	go func() {
+		msg := AssistantMessage{
+			Type: "assistant",
+			Message: struct {
+				Role    string         `json:"role"`
+				Content []ContentBlock `json:"content"`
+			}{
+				Role: "assistant",
+				Content: []ContentBlock{
+					{Type: "text", Text: largeText},
+				},
+			},
+		}
+		data, _ := json.Marshal(msg)
+		data = append(data, '\n')
+		runner.StdoutPipe.Write(data)
+		runner.StdoutPipe.CloseWrite()
+	}()
+
+	// Read the large message
+	var received Message
+	for m, err := range transport.ReadMessages(ctx) {
+		require.NoError(t, err)
+		received = m
+		break
+	}
+
+	require.NotNil(t, received)
+	assistantMsg, ok := received.(AssistantMessage)
+	require.True(t, ok)
+	assert.Equal(t, largeText, assistantMsg.ContentText())
+}
+
+// TestSubprocessTransportConnectArguments tests that Connect builds correct args.
+func TestSubprocessTransportConnectArguments(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	opts := &Options{
+		Model:          "claude-sonnet-4-5-20250929",
+		SystemPrompt:   "You are a helpful assistant",
+		PermissionMode: PermissionModePlan,
+		Verbose:        true,
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Verify runner was started and captured args.
+	assert.True(t, runner.started)
+	assert.Contains(t, runner.StartArgs, "--model")
+	assert.Contains(t, runner.StartArgs, "--verbose")
+}
+
+func TestSubprocessTransportExtraArgs(t *testing.T) {
+	tests := []struct {
+		name      string
+		extraArgs map[string]*string
+		wantTail  []string
+	}{
+		{
+			name:      "nil",
+			extraArgs: nil,
+			wantTail:  nil,
+		},
+		{
+			name:      "empty",
+			extraArgs: map[string]*string{},
+			wantTail:  nil,
+		},
+		{
+			name:      "bare flag",
+			extraArgs: map[string]*string{"debug": nil},
+			wantTail:  []string{"--debug"},
+		},
+		{
+			name: "valued flags sorted",
+			extraArgs: map[string]*string{
+				"foo": stringPtr("bar"),
+				"baz": stringPtr("qux"),
+			},
+			wantTail: []string{"--baz", "qux", "--foo", "bar"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockSubprocessRunner()
+			opts := NewOptions()
+			opts.ExtraArgs = tt.extraArgs
+
+			transport := NewSubprocessTransportWithRunner(runner, opts)
+
+			err := transport.Connect(context.Background())
+			require.NoError(t, err)
+			defer transport.Close()
+
+			if len(tt.wantTail) == 0 {
+				assertArgAbsent(t, runner.StartArgs, "--debug")
+				assertArgAbsent(t, runner.StartArgs, "--baz")
+				assertArgAbsent(t, runner.StartArgs, "--foo")
+				return
+			}
+
+			require.GreaterOrEqual(t, len(runner.StartArgs), len(tt.wantTail))
+			assert.Equal(t, tt.wantTail, runner.StartArgs[len(runner.StartArgs)-len(tt.wantTail):])
+		})
+	}
+}
+
+func TestSubprocessTransportSettingsPath(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	WithSettingsPath("/tmp/claude-settings.json")(opts)
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assertArgValue(t, runner.StartArgs, "--settings", "/tmp/claude-settings.json")
+	assertArgAbsent(t, runner.StartArgs, "--managed-settings")
+}
+
+func TestSubprocessTransportInlineSettings(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	WithSettings(Settings{
+		Model: "claude-sonnet-4-5-20250929",
+		Permissions: &SettingsPermissions{
+			Allow:       []string{"Bash(git status)"},
+			DefaultMode: PermissionModePlan,
+		},
+		EnabledPlugins: map[string]interface{}{
+			"formatter@anthropic-tools": true,
+		},
+		ExtraKnownMarketplaces: map[string]SettingsMarketplace{
+			"team-tools": {
+				Source: SettingsMarketplaceSource{
+					"source": "github",
+					"repo":   "example/tools",
+				},
+			},
+		},
+	})(opts)
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	settingsIndex := argIndex(runner.StartArgs, "--settings")
+	require.NotEqual(t, -1, settingsIndex, "expected --settings in %v", runner.StartArgs)
+	require.Less(t, settingsIndex+1, len(runner.StartArgs))
+
+	var got Settings
+	require.NoError(t, json.Unmarshal([]byte(runner.StartArgs[settingsIndex+1]), &got))
+	assert.Equal(t, "claude-sonnet-4-5-20250929", got.Model)
+	require.NotNil(t, got.Permissions)
+	assert.Equal(t, []string{"Bash(git status)"}, got.Permissions.Allow)
+	assert.Equal(t, PermissionModePlan, got.Permissions.DefaultMode)
+
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(runner.StartArgs[settingsIndex+1]), &raw))
+	assert.Equal(t, true, raw["enabledPlugins"].(map[string]interface{})["formatter@anthropic-tools"])
+	assert.Equal(t, "github",
+		raw["extraKnownMarketplaces"].(map[string]interface{})["team-tools"].(map[string]interface{})["source"].(map[string]interface{})["source"])
+}
+
+func TestSubprocessTransportManagedSettings(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	WithManagedSettings(Settings{
+		FallbackModel:   []string{"opus", "sonnet", "default"},
+		AvailableModels: []string{"opus", "sonnet"},
+		Sandbox: &SettingsSandbox{
+			Enabled:           boolPtr(true),
+			FailIfUnavailable: boolPtr(false),
+		},
+	})(opts)
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	managedIndex := argIndex(runner.StartArgs, "--managed-settings")
+	require.NotEqual(t, -1, managedIndex, "expected --managed-settings in %v", runner.StartArgs)
+	require.Less(t, managedIndex+1, len(runner.StartArgs))
+
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(runner.StartArgs[managedIndex+1]), &raw))
+	assert.Equal(t, []interface{}{"opus", "sonnet", "default"}, raw["fallbackModel"])
+	assert.Equal(t, []interface{}{"opus", "sonnet"}, raw["availableModels"])
+	assert.Equal(t, true, raw["sandbox"].(map[string]interface{})["enabled"])
+	assert.Equal(t, false, raw["sandbox"].(map[string]interface{})["failIfUnavailable"])
+	assertArgAbsent(t, runner.StartArgs, "--settings")
+}
+
+func TestSubprocessTransportSettingsBeforeExtraArgs(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	WithSettings(Settings{Model: "claude-opus-4-5-20250929"})(opts)
+	WithManagedSettings(Settings{ForceRemoteSettingsRefresh: boolPtr(true)})(opts)
+	WithExtraArgs(map[string]*string{
+		"zz-extra": stringPtr("tail"),
+	})(opts)
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	settingsIndex := argIndex(runner.StartArgs, "--settings")
+	managedIndex := argIndex(runner.StartArgs, "--managed-settings")
+	extraIndex := argIndex(runner.StartArgs, "--zz-extra")
+	require.NotEqual(t, -1, settingsIndex)
+	require.NotEqual(t, -1, managedIndex)
+	require.NotEqual(t, -1, extraIndex)
+	assert.Less(t, settingsIndex, extraIndex)
+	assert.Less(t, managedIndex, extraIndex)
+	assert.Equal(t, []string{"--zz-extra", "tail"}, runner.StartArgs[len(runner.StartArgs)-2:])
+}
+
+func TestSubprocessTransportMainAgentArguments(t *testing.T) {
+	tests := []struct {
+		name      string
+		mainAgent string
+		want      bool
+	}{
+		{
+			name:      "empty",
+			mainAgent: "",
+			want:      false,
+		},
+		{
+			name:      "reviewer",
+			mainAgent: "reviewer",
+			want:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockSubprocessRunner()
+			opts := NewOptions()
+			opts.MainAgent = tt.mainAgent
+
+			transport := NewSubprocessTransportWithRunner(runner, opts)
+
+			err := transport.Connect(context.Background())
+			require.NoError(t, err)
+			defer transport.Close()
+
+			if tt.want {
+				assertArgValue(t, runner.StartArgs, "--agent", tt.mainAgent)
+			} else {
+				assertArgAbsent(t, runner.StartArgs, "--agent")
+			}
+		})
+	}
+}
+
+func TestWithMainAgent(t *testing.T) {
+	opts := NewOptions()
+
+	WithMainAgent("reviewer")(opts)
+
+	assert.Equal(t, "reviewer", opts.MainAgent)
+}
+
+func TestSubprocessTransportThinkingArguments(t *testing.T) {
+	tests := []struct {
+		name       string
+		thinking   *ThinkingConfig
+		wantFlag   string
+		wantValue  string
+		absentFlag string
+	}{
+		{
+			name:       "adaptive",
+			thinking:   ThinkingAdaptive(),
+			wantFlag:   "--thinking",
+			wantValue:  "adaptive",
+			absentFlag: "--max-thinking-tokens",
+		},
+		{
+			name:       "enabled",
+			thinking:   ThinkingEnabled(4096),
+			wantFlag:   "--max-thinking-tokens",
+			wantValue:  "4096",
+			absentFlag: "--thinking",
+		},
+		{
+			name:       "enabled without budget uses adaptive",
+			thinking:   &ThinkingConfig{Type: "enabled"},
+			wantFlag:   "--thinking",
+			wantValue:  "adaptive",
+			absentFlag: "--max-thinking-tokens",
+		},
+		{
+			name:       "disabled",
+			thinking:   ThinkingDisabled(),
+			wantFlag:   "--thinking",
+			wantValue:  "disabled",
+			absentFlag: "--max-thinking-tokens",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockSubprocessRunner()
+			opts := NewOptions()
+			opts.Thinking = tt.thinking
+
+			transport := NewSubprocessTransportWithRunner(runner, opts)
+
+			err := transport.Connect(context.Background())
+			require.NoError(t, err)
+			defer transport.Close()
+
+			assertArgValue(t, runner.StartArgs, tt.wantFlag, tt.wantValue)
+			assertArgAbsent(t, runner.StartArgs, tt.absentFlag)
+		})
+	}
+}
+
+func TestSubprocessTransportThinkingNilOmitsFlags(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	opts.Thinking = nil
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assertArgAbsent(t, runner.StartArgs, "--thinking")
+	assertArgAbsent(t, runner.StartArgs, "--max-thinking-tokens")
+}
+
+func TestSubprocessTransportThinkingDisplay(t *testing.T) {
+	tests := []struct {
+		name    string
+		build   func() *ThinkingConfig
+		present bool
+		value   string
+	}{
+		{
+			name: "adaptive with summarized",
+			build: func() *ThinkingConfig {
+				c := ThinkingAdaptive()
+				c.Display = ThinkingDisplaySummarized
+				return c
+			},
+			present: true,
+			value:   "summarized",
+		},
+		{
+			name: "enabled with omitted",
+			build: func() *ThinkingConfig {
+				c := ThinkingEnabled(1024)
+				c.Display = ThinkingDisplayOmitted
+				return c
+			},
+			present: true,
+			value:   "omitted",
+		},
+		{
+			name: "disabled ignores display",
+			build: func() *ThinkingConfig {
+				c := ThinkingDisabled()
+				c.Display = ThinkingDisplaySummarized
+				return c
+			},
+			present: false,
+		},
+		{
+			name:    "adaptive without display omits flag",
+			build:   ThinkingAdaptive,
+			present: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockSubprocessRunner()
+			opts := NewOptions()
+			opts.Thinking = tt.build()
+
+			transport := NewSubprocessTransportWithRunner(runner, opts)
+
+			err := transport.Connect(context.Background())
+			require.NoError(t, err)
+			defer transport.Close()
+
+			if tt.present {
+				assertArgValue(t, runner.StartArgs, "--thinking-display", tt.value)
+			} else {
+				assertArgAbsent(t, runner.StartArgs, "--thinking-display")
+			}
+		})
+	}
+}
+
+func TestSubprocessTransportMCPConfigEncoding(t *testing.T) {
+	tests := []struct {
+		name       string
+		serverName string
+		config     MCPServerConfig
+		want       map[string]interface{}
+		absentKeys []string
+	}{
+		{
+			name:       "stdio explicit type",
+			serverName: "local",
+			config: MCPServerConfig{
+				Type:    "stdio",
+				Command: "x",
+				Args:    []string{"y"},
+			},
+			want: map[string]interface{}{
+				"type":    "stdio",
+				"command": "x",
+				"args":    []interface{}{"y"},
+			},
+		},
+		{
+			name:       "stdio with timeout",
+			serverName: "local",
+			config: MCPServerConfig{
+				Type:    "stdio",
+				Command: "x",
+				Timeout: func() *int {
+					v := 5000
+					return &v
+				}(),
+			},
+			want: map[string]interface{}{
+				"type":    "stdio",
+				"command": "x",
+				"timeout": float64(5000),
+			},
+		},
+		{
+			name:       "stdio with alwaysLoad",
+			serverName: "local",
+			config: MCPServerConfig{
+				Type:    "stdio",
+				Command: "x",
+				AlwaysLoad: func() *bool {
+					v := true
+					return &v
+				}(),
+			},
+			want: map[string]interface{}{
+				"type":       "stdio",
+				"command":    "x",
+				"alwaysLoad": true,
+			},
+		},
+		{
+			name:       "stdio implicit type",
+			serverName: "local",
+			config: MCPServerConfig{
+				Command: "x",
+			},
+			want: map[string]interface{}{
+				"type":    "stdio",
+				"command": "x",
+			},
+		},
+		{
+			name:       "http minimal",
+			serverName: "remote",
+			config: MCPServerConfig{
+				Type: "http",
+				URL:  "https://example.com/mcp",
+			},
+			want: map[string]interface{}{
+				"type": "http",
+				"url":  "https://example.com/mcp",
+			},
+			absentKeys: []string{"command", "headers", "tools"},
+		},
+		{
+			name:       "http with headers and tools",
+			serverName: "remote",
+			config: MCPServerConfig{
+				Type: "http",
+				URL:  "https://example.com/mcp",
+				Headers: map[string]string{
+					"Authorization": "Bearer token",
+				},
+				Tools: []MCPServerToolPolicy{
+					{Name: "foo", PermissionPolicy: MCPToolPolicyAllowAlways},
+					{Name: "bar", PermissionPolicy: MCPToolPolicyAskAlways, OrgMaxPermission: MCPOrgMaxPermissionAsk},
+				},
+			},
+			want: map[string]interface{}{
+				"type": "http",
+				"url":  "https://example.com/mcp",
+				"headers": map[string]interface{}{
+					"Authorization": "Bearer token",
+				},
+				"tools": []interface{}{
+					map[string]interface{}{
+						"name":              "foo",
+						"permission_policy": "always_allow",
+					},
+					map[string]interface{}{
+						"name":               "bar",
+						"permission_policy":  "always_ask",
+						"org_max_permission": "ask",
+					},
+				},
+			},
+		},
+		{
+			name:       "sse with headers",
+			serverName: "events",
+			config: MCPServerConfig{
+				Type: "sse",
+				URL:  "https://example.com/sse",
+				Headers: map[string]string{
+					"X-API-Key": "secret",
+				},
+			},
+			want: map[string]interface{}{
+				"type": "sse",
+				"url":  "https://example.com/sse",
+				"headers": map[string]interface{}{
+					"X-API-Key": "secret",
+				},
+			},
+		},
+		{
+			name:       "http omits empty headers and tools",
+			serverName: "remote",
+			config: MCPServerConfig{
+				Type:    "http",
+				URL:     "https://example.com/mcp",
+				Headers: map[string]string{},
+				Tools:   []MCPServerToolPolicy{},
+			},
+			want: map[string]interface{}{
+				"type": "http",
+				"url":  "https://example.com/mcp",
+			},
+			absentKeys: []string{"headers", "tools"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockSubprocessRunner()
+			opts := NewOptions()
+			opts.MCPServers = map[string]MCPServerConfig{
+				tt.serverName: tt.config,
+			}
+
+			transport := NewSubprocessTransportWithRunner(runner, opts)
+			err := transport.Connect(context.Background())
+			require.NoError(t, err)
+			defer transport.Close()
+
+			configs := decodeMCPConfigArgs(t, runner.StartArgs)
+			require.Len(t, configs, 1)
+			require.Contains(t, configs, tt.serverName)
+			assert.Equal(t, tt.want, configs[tt.serverName])
+			for _, key := range tt.absentKeys {
+				assert.NotContains(t, configs[tt.serverName], key)
+			}
+		})
+	}
+}
+
+func TestSubprocessTransportMCPConfigMultipleServers(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	opts.MCPServers = map[string]MCPServerConfig{
+		"local": {
+			Command: "local-mcp",
+		},
+		"remote": {
+			Type: "http",
+			URL:  "https://example.com/mcp",
+		},
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	configs := decodeMCPConfigArgs(t, runner.StartArgs)
+	require.Len(t, configs, 2)
+	assert.Equal(t, map[string]interface{}{
+		"type":    "stdio",
+		"command": "local-mcp",
+	}, configs["local"])
+	assert.Equal(t, map[string]interface{}{
+		"type": "http",
+		"url":  "https://example.com/mcp",
+	}, configs["remote"])
+
+	var flagCount int
+	for _, arg := range runner.StartArgs {
+		if arg == "--mcp-config" {
+			flagCount++
+		}
+	}
+	assert.Equal(t, 2, flagCount)
+}
+
+func TestSubprocessTransportEffortArguments(t *testing.T) {
+	tests := []struct {
+		name   string
+		effort EffortLevel
+	}{
+		{name: "low", effort: EffortLow},
+		{name: "medium", effort: EffortMedium},
+		{name: "high", effort: EffortHigh},
+		{name: "xhigh", effort: EffortXHigh},
+		{name: "max", effort: EffortMax},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockSubprocessRunner()
+			opts := NewOptions()
+			opts.Effort = tt.effort
+
+			transport := NewSubprocessTransportWithRunner(runner, opts)
+
+			err := transport.Connect(context.Background())
+			require.NoError(t, err)
+			defer transport.Close()
+
+			assertArgValue(t, runner.StartArgs, "--effort", string(tt.effort))
+		})
+	}
+}
+
+func TestSubprocessTransportEffortEmptyOmitsFlag(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	opts.Effort = ""
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assertArgAbsent(t, runner.StartArgs, "--effort")
+}
+
+func TestSubprocessTransportTaskBudgetArguments(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	opts.TaskBudget = &TaskBudget{Total: 1000}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assertArgValue(t, runner.StartArgs, "--task-budget", "1000")
+}
+
+func TestWithTaskBudgetSetsFreshBudget(t *testing.T) {
+	opts := NewOptions()
+
+	WithTaskBudget(1000)(opts)
+
+	require.NotNil(t, opts.TaskBudget)
+	assert.Equal(t, 1000, opts.TaskBudget.Total)
+}
+
+func TestSubprocessTransportTaskBudgetNilOmitsFlag(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	opts.TaskBudget = nil
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assertArgAbsent(t, runner.StartArgs, "--task-budget")
+}
+
+func TestSubprocessTransportMaxThinkingTokensStillWorks(t *testing.T) {
+	tokens := 2048
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	opts.MaxThinkingTokens = &tokens
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assertArgValue(t, runner.StartArgs, "--max-thinking-tokens", "2048")
+	assertArgAbsent(t, runner.StartArgs, "--thinking")
+}
+
+func TestSubprocessTransportMaxThinkingTokensZeroDisablesThinking(t *testing.T) {
+	tokens := 0
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	opts.MaxThinkingTokens = &tokens
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assertArgValue(t, runner.StartArgs, "--thinking", "disabled")
+	assertArgAbsent(t, runner.StartArgs, "--max-thinking-tokens")
+}
+
+func TestSubprocessTransportThinkingPrecedesMaxThinkingTokens(t *testing.T) {
+	tokens := 2048
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+	opts.Thinking = ThinkingDisabled()
+	opts.MaxThinkingTokens = &tokens
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	err := transport.Connect(context.Background())
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assertArgValue(t, runner.StartArgs, "--thinking", "disabled")
+	assertArgAbsent(t, runner.StartArgs, "--max-thinking-tokens")
+}
+
+// TestSubprocessTransportWorkingDirectory tests that Cwd option is passed to runner.
+func TestSubprocessTransportWorkingDirectory(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	opts := &Options{
+		Cwd: "/custom/working/directory",
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Verify cwd was passed to the runner.
+	assert.True(t, runner.started)
+	assert.Equal(t, "/custom/working/directory", runner.StartCwd)
+}
+
+// TestSubprocessTransportDefaultWorkingDirectory tests that empty Cwd uses the
+// default behavior (inheriting the parent process's working directory).
+func TestSubprocessTransportDefaultWorkingDirectory(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	opts := &Options{
+		// No Cwd set - should pass empty string.
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Verify empty cwd was passed to the runner.
+	assert.True(t, runner.started)
+	assert.Empty(t, runner.StartCwd)
+}
+
+// TestSubprocessTransportSessionOptions tests that session options are passed correctly.
+func TestSubprocessTransportSessionOptions(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	opts := &Options{
+		SessionOptions: SessionOptions{
+			Resume:          "session-123",
+			ForkSession:     true,
+			ResumeSessionAt: "msg-uuid-456",
+		},
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Verify session flags were passed to CLI.
+	assert.True(t, runner.started)
+	assert.Contains(t, runner.StartArgs, "--resume")
+	assert.Contains(t, runner.StartArgs, "session-123")
+	assert.Contains(t, runner.StartArgs, "--fork-session")
+	assert.Contains(t, runner.StartArgs, "--resume-session-at")
+	assert.Contains(t, runner.StartArgs, "msg-uuid-456")
+}
+
+// TestSubprocessTransportForkFrom verifies that WithForkSession emits
+// --resume <parentID> --fork-session so the CLI branches a new session.
+func TestSubprocessTransportForkFrom(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	opts := &Options{
+		SessionOptions: SessionOptions{
+			ForkFrom: "parent-session-abc",
+		},
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assert.True(t, runner.started)
+	assert.Contains(t, runner.StartArgs, "--resume")
+	assert.Contains(t, runner.StartArgs, "parent-session-abc")
+	assert.Contains(t, runner.StartArgs, "--fork-session")
+}
+
+// TestSubprocessTransportCloseTimeout tests forced kill on close timeout.
+func TestSubprocessTransportCloseTimeout(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+
+	// Don't let runner exit naturally - simulate hung process
+	// The Close method should timeout and force kill
+
+	// Close with timeout (this will take 5 seconds due to timeout)
+	done := make(chan struct{})
+	go func() {
+		transport.Close()
+		close(done)
+	}()
+
+	// Should complete within reasonable time (5s timeout + overhead)
+	select {
+	case <-done:
+		// Success - Close completed
+	case <-time.After(7 * time.Second):
+		t.Fatal("Close did not complete within timeout")
+	}
+
+	// Verify transport is closed
+	assert.True(t, transport.closed.Load())
+}
+
+// TestSubprocessTransportAdditionalDirectories tests that --add-dir flags are
+// passed to the CLI for each configured additional directory.
+func TestSubprocessTransportAdditionalDirectories(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	opts := &Options{
+		AdditionalDirectories: []string{"/tmp", "/var/data", "/home/user/docs"},
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Verify each directory is passed as --add-dir flag.
+	assert.True(t, runner.started)
+	for _, dir := range opts.AdditionalDirectories {
+		// Find --add-dir followed by the directory in the args.
+		found := false
+		for i, arg := range runner.StartArgs {
+			if arg == "--add-dir" && i+1 < len(runner.StartArgs) && runner.StartArgs[i+1] == dir {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "expected --add-dir %s in args: %v", dir, runner.StartArgs)
+	}
+}
+
+// TestSubprocessTransportBetas tests that Betas are passed to the CLI as a
+// single --betas flag with a comma-separated value.
+func TestSubprocessTransportBetas(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	opts := &Options{
+		Betas: []string{"context-1m-2025-08-07", "some-other-beta"},
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Find --betas followed by the comma-joined value.
+	assert.True(t, runner.started)
+	found := false
+	for i, arg := range runner.StartArgs {
+		if arg == "--betas" && i+1 < len(runner.StartArgs) {
+			assert.Equal(t,
+				"context-1m-2025-08-07,some-other-beta",
+				runner.StartArgs[i+1],
+				"betas should be comma-joined",
+			)
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "expected --betas in args: %v", runner.StartArgs)
+}
+
+// TestSubprocessTransportBetasEmpty verifies no --betas flag is emitted when
+// Betas is empty.
+func TestSubprocessTransportBetasEmpty(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	for _, arg := range runner.StartArgs {
+		assert.NotEqual(t, "--betas", arg,
+			"unexpected --betas in args: %v", runner.StartArgs)
+	}
+}
+
+func TestSubprocessTransportDebugOptions(t *testing.T) {
+	tests := []struct {
+		name               string
+		debug              bool
+		debugFile          string
+		wantDebug          bool
+		wantDebugFile      bool
+		wantDebugFileValue string
+	}{
+		{
+			name: "disabled",
+		},
+		{
+			name:      "debug enabled",
+			debug:     true,
+			wantDebug: true,
+		},
+		{
+			name:               "debug file enables debug",
+			debugFile:          "/tmp/x.log",
+			wantDebugFile:      true,
+			wantDebugFileValue: "/tmp/x.log",
+		},
+		{
+			name:               "debug file wins over debug",
+			debug:              true,
+			debugFile:          "/tmp/x.log",
+			wantDebugFile:      true,
+			wantDebugFileValue: "/tmp/x.log",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockSubprocessRunner()
+			opts := &Options{
+				Debug:     tt.debug,
+				DebugFile: tt.debugFile,
+			}
+
+			transport := NewSubprocessTransportWithRunner(runner, opts)
+
+			err := transport.Connect(context.Background())
+			require.NoError(t, err)
+			defer transport.Close()
+
+			if tt.wantDebug {
+				assert.Contains(t, runner.StartArgs, "--debug")
+			} else {
+				assertArgAbsent(t, runner.StartArgs, "--debug")
+			}
+
+			if tt.wantDebugFile {
+				assertArgValue(t, runner.StartArgs, "--debug-file", tt.wantDebugFileValue)
+			} else {
+				assertArgAbsent(t, runner.StartArgs, "--debug-file")
+			}
+		})
+	}
+}
+
+// TestSubprocessTransportExcludeDynamicSystemPromptSections tests the flag is
+// passed when the option is enabled.
+func TestSubprocessTransportExcludeDynamicSystemPromptSections(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	opts := &Options{
+		ExcludeDynamicSystemPromptSections: true,
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	assert.True(t, runner.started)
+	assert.Contains(t, runner.StartArgs,
+		"--exclude-dynamic-system-prompt-sections")
+}
+
+// TestSubprocessTransportExcludeDynamicSystemPromptSectionsDefault verifies
+// the flag is absent by default.
+func TestSubprocessTransportExcludeDynamicSystemPromptSectionsDefault(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	for _, arg := range runner.StartArgs {
+		assert.NotEqual(t, "--exclude-dynamic-system-prompt-sections", arg,
+			"unexpected flag in args: %v", runner.StartArgs)
+	}
+}
+
+// TestSubprocessTransportAdditionalDirectoriesEmpty tests that no --add-dir
+// flags are passed when AdditionalDirectories is empty.
+func TestSubprocessTransportAdditionalDirectoriesEmpty(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Verify no --add-dir flag is present.
+	for _, arg := range runner.StartArgs {
+		assert.NotEqual(t, "--add-dir", arg, "unexpected --add-dir in args: %v", runner.StartArgs)
+	}
+}
+
+func TestNewClientRejectsInvalidEffort(t *testing.T) {
+	_, err := NewClient(WithEffort(EffortLevel("invalid")))
+	require.Error(t, err)
+
+	var configErr *ErrInvalidConfiguration
+	require.ErrorAs(t, err, &configErr)
+	assert.Equal(t, "Effort", configErr.Field)
+}
+
+// TestSubprocessTransportLargeMessageExceeds64KB tests that messages larger
+// than the default bufio.MaxScanTokenSize (64KB) are handled correctly after
+// the scanner buffer increase.
+func TestSubprocessTransportLargeMessageExceeds64KB(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+	opts := NewOptions()
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Create a message exceeding the old 64KB scanner limit. The text
+	// content is ~200KB which, once JSON-encoded, produces a single line
+	// well above 64KB.
+	largeText := strings.Repeat("A", 200*1024)
+
+	go func() {
+		msg := AssistantMessage{
+			Type: "assistant",
+			Message: struct {
+				Role    string         `json:"role"`
+				Content []ContentBlock `json:"content"`
+			}{
+				Role: "assistant",
+				Content: []ContentBlock{
+					{Type: "text", Text: largeText},
+				},
+			},
+		}
+		data, _ := json.Marshal(msg)
+		data = append(data, '\n')
+		runner.StdoutPipe.Write(data)
+		runner.StdoutPipe.CloseWrite()
+	}()
+
+	// Read the large message — this would fail with the old 64KB buffer.
+	var received Message
+	for m, err := range transport.ReadMessages(ctx) {
+		require.NoError(t, err)
+		received = m
+		break
+	}
+
+	require.NotNil(t, received)
+	assistantMsg, ok := received.(AssistantMessage)
+	require.True(t, ok)
+	assert.Equal(t, largeText, assistantMsg.ContentText())
+}
+
+// TestStderrCallbackWriter tests that the stderrCallbackWriter adapter
+// correctly bridges io.Writer to a func(string) callback.
+func TestStderrCallbackWriter(t *testing.T) {
+	var captured []string
+	var mu sync.Mutex
+
+	writer := &stderrCallbackWriter{
+		callback: func(data string) {
+			mu.Lock()
+			defer mu.Unlock()
+			captured = append(captured, data)
+		},
+	}
+
+	// Write some data.
+	n, err := writer.Write([]byte("hello"))
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+
+	n, err = writer.Write([]byte("world"))
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+
+	// Verify callbacks were invoked with correct data.
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, captured, 2)
+	assert.Equal(t, "hello", captured[0])
+	assert.Equal(t, "world", captured[1])
+}
+
+// TestStderrCallbackWriterEmpty tests that empty writes still invoke the
+// callback and report zero bytes written.
+func TestStderrCallbackWriterEmpty(t *testing.T) {
+	callCount := 0
+	writer := &stderrCallbackWriter{
+		callback: func(data string) {
+			callCount++
+			assert.Equal(t, "", data)
+		},
+	}
+
+	n, err := writer.Write([]byte{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, n)
+	assert.Equal(t, 1, callCount)
+}
+
+// TestSubprocessTransportStderrCallbackWiring tests that when Options.Stderr
+// is set, Connect wires it to the transport via stderrCallbackWriter so that
+// stderr output from the CLI subprocess reaches the callback.
+func TestSubprocessTransportStderrCallbackWiring(t *testing.T) {
+	runner := NewMockSubprocessRunner()
+
+	var captured []string
+	var mu sync.Mutex
+
+	opts := &Options{
+		Stderr: func(data string) {
+			mu.Lock()
+			defer mu.Unlock()
+			captured = append(captured, data)
+		},
+	}
+
+	transport := NewSubprocessTransportWithRunner(runner, opts)
+
+	// Simulate what Client.Connect does: wire the stderr callback.
+	transport.SetStderrLogger(&stderrCallbackWriter{
+		callback: opts.Stderr,
+	})
+
+	ctx := context.Background()
+	err := transport.Connect(ctx)
+	require.NoError(t, err)
+	defer transport.Close()
+
+	// Write stderr output from the "CLI".
+	runner.StderrPipe.WriteString("debug: loading config\n")
+	runner.StderrPipe.WriteString("warn: deprecated option\n")
+	runner.StderrPipe.CloseWrite()
+
+	// Give the stderr goroutine time to process.
+	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// The transport's stderr goroutine uses bufio.Scanner which strips
+	// newlines and then fmt.Fprintln adds them back. The callback receives
+	// the full line including the trailing newline from Fprintln.
+	require.GreaterOrEqual(t, len(captured), 2)
+
+	joined := strings.Join(captured, "")
+	assert.Contains(t, joined, "debug: loading config")
+	assert.Contains(t, joined, "warn: deprecated option")
+}
+
+func TestPermissionModeStringValues(t *testing.T) {
+	assert.Equal(t, "auto", string(PermissionModeAuto))
+	assert.Equal(t, "dontAsk", string(PermissionModeDontAsk))
+}
+
+func TestSubprocessTransportPermissionModeArguments(t *testing.T) {
+	tests := []struct {
+		name string
+		mode PermissionMode
+		want string
+	}{
+		{name: "default", mode: PermissionModeDefault, want: "default"},
+		{name: "plan", mode: PermissionModePlan, want: "plan"},
+		{name: "accept edits", mode: PermissionModeAcceptEdits, want: "acceptEdits"},
+		{name: "bypass all", mode: PermissionModeBypassAll, want: "bypassPermissions"},
+		{name: "dont ask", mode: PermissionModeDontAsk, want: "dontAsk"},
+		{name: "auto", mode: PermissionModeAuto, want: "auto"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockSubprocessRunner()
+			opts := &Options{
+				PermissionMode: tt.mode,
+			}
+
+			transport := NewSubprocessTransportWithRunner(runner, opts)
+
+			ctx := context.Background()
+			err := transport.Connect(ctx)
+			require.NoError(t, err)
+			defer transport.Close()
+
+			found := false
+			for i, arg := range runner.StartArgs {
+				if arg == "--permission-mode" && i+1 < len(runner.StartArgs) {
+					assert.Equal(t, tt.want, runner.StartArgs[i+1])
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "expected --permission-mode %s in args: %v", tt.want, runner.StartArgs)
+		})
+	}
+}
