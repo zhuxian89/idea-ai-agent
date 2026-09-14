@@ -175,6 +175,26 @@ export function AgentSelector({
   const { t } = useI18n();
   const selectedAgentStatus = agents.find((item) => item.name === agent);
   const showUnavailableWarning = warnUnavailable && !selectedAgentStatus?.probe_pending;
+  const selectedModelStatus = useMemo(() => {
+    if (!selectedAgentStatus) return null;
+    const fallbackModel =
+      selectedAgentStatus.default_model_id ||
+      selectedAgentStatus.current_model_id ||
+      "";
+    return (
+      (selectedAgentStatus.models ?? []).find(
+        (item) => item.id === (model || fallbackModel),
+      ) ?? null
+    );
+  }, [selectedAgentStatus, model]);
+  const selectedEfforts =
+    selectedModelStatus?.efforts ?? selectedAgentStatus?.efforts ?? [];
+  const showSelectedEffort =
+    selectedEfforts.length > 0 && !!selectedModelStatus?.supportEffort;
+  const selectedEffort = showSelectedEffort
+    ? effort || selectedAgentStatus?.default_effort || "auto"
+    : "";
+  const selectedEffortLabel = selectedEffort;
   const [isOpen, setIsOpen] = useState(false);
   const [submenuAgent, setSubmenuAgent] = useState<string | null>(null);
   const [errorAgent, setErrorAgent] = useState<string | null>(null);
@@ -255,11 +275,14 @@ export function AgentSelector({
     if (showUnavailableWarning) {
       return t("agent.currentUnavailable", { name: agent });
     }
-    if (agent && model) {
-      return `${agent} · ${model}`;
+    if (agent) {
+      const modelLabel = model || t("agent.defaultModel");
+      return selectedEffortLabel
+        ? `${agent} · ${modelLabel} · ${t("agent.effort")}: ${selectedEffortLabel}`
+        : `${agent} · ${modelLabel}`;
     }
     return undefined;
-  }, [agent, model, t, showUnavailableWarning]);
+  }, [agent, model, selectedEffortLabel, t, showUnavailableWarning]);
 
   useEffect(() => {
     const handlePointerOutside = (e: PointerEvent) => {
@@ -595,7 +618,18 @@ export function AgentSelector({
           agentName={agent}
           style={{ width: "16px", height: "16px" }}
         />
-        {showLabel ? <span className="idea-agent-selector-label">{agent === "claude" ? "Claude Code" : agent === "codex" ? "Codex" : agent} · {model || t("agent.defaultModel")}</span> : null}
+        {showLabel ? (
+          <span className="idea-agent-selector-label">
+            <span className="idea-agent-selector-model">
+              {agent === "claude" ? "Claude Code" : agent === "codex" ? "Codex" : agent} · {model || t("agent.defaultModel")}
+            </span>
+            {selectedEffortLabel ? (
+              <span className="idea-agent-selector-effort">
+                {t("agent.effortShort", { effort: selectedEffortLabel })}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
         {showChevron ? (
           <svg
             width="12"

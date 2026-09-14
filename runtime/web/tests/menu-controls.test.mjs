@@ -355,10 +355,10 @@ test("isolated menu controls in headless Chromium", { timeout: 90_000 }, async (
     await menu.getByRole("button", { name: "Standard", exact: true }).click();
     await expect(menu).toBeVisible();
     await expect(menu.getByRole("button", { name: "Mode default", exact: true })).toHaveAttribute("aria-expanded", "true");
-    await menu.getByRole("button", { name: /^Effort / }).click();
+    await menu.getByRole("button", { name: /^Reasoning effort / }).click();
     await menu.getByRole("button", { name: "xhigh", exact: true }).click();
     await expect(menu).toBeVisible();
-    await expect(menu.getByRole("button", { name: "Effort xhigh", exact: true })).toHaveAttribute("aria-expanded", "true");
+    await expect(menu.getByRole("button", { name: "Reasoning effort xhigh", exact: true })).toHaveAttribute("aria-expanded", "true");
     await menu.getByRole("button", { name: /^Fast mode / }).click();
     await menu.getByRole("button", { name: "On", exact: true }).click();
     await expect(menu).toBeVisible();
@@ -424,13 +424,13 @@ test("isolated menu controls in headless Chromium", { timeout: 90_000 }, async (
       });
     }
     for (const effort of ["high", "xhigh"]) {
-      await t.test(`AgentSelector at ${width}px shows Effort=${effort} and Mode=bypassPermissions without truncation`, async (t) => {
+      await t.test(`AgentSelector at ${width}px shows reasoning effort=${effort} and mode=bypassPermissions without truncation`, async (t) => {
         const page = await openFixture(browser, bundle, t, { kind: "agent", width, effort });
         await page.locator('[data-onboarding="fixture-agent-selector"] > button').click();
         const menu = page.locator('[data-agent-menu="true"]');
         await expect(menu).toBeVisible();
         await expectWithinViewport(menu);
-        for (const [title, value] of [["Effort", effort], ["Mode", "bypassPermissions"]]) {
+        for (const [title, value] of [["Reasoning effort", effort], ["Mode", "bypassPermissions"]]) {
           const header = menu.getByRole("button", { name: `${title} ${value}`, exact: true });
           await expect(header).toHaveAttribute("aria-expanded", "false");
           await expectUnclippedText(header.locator(":scope > span").first());

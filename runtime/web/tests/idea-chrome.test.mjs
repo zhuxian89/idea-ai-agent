@@ -120,7 +120,7 @@ async function bundleFixture() {
         builder.onLoad({ filter: /^tool-icon$/, namespace: "fixture" }, () => ({ contents: "export const renderToolIcon = () => null; export const ToolCallCard = () => null;" }));
         builder.onResolve({ filter: /\/services\/agents$/ }, () => ({ path: "agents", namespace: "fixture" }));
         builder.onLoad({ filter: /^agents$/, namespace: "fixture" }, () => ({ contents: `
-          export async function fetchAgents() { return [{name:"fixture-agent", protocol:"claude-sdk", available:true, models:[], modes:[], efforts:[]}]; }
+          export async function fetchAgents() { return [{name:"codex", protocol:"codex-sdk", available:true, current_model_id:"gpt-test", default_effort:"high", models:[{id:"gpt-test",name:"GPT Test",supportEffort:true,efforts:["low","medium","high","xhigh"]}], modes:[], efforts:["low","medium","high","xhigh"]}]; }
           export async function fetchShells() { return []; }
           export async function restartAgent() { return {}; }
         ` }));
@@ -288,12 +288,15 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), [{ action: "addContext" }]);
   });
 
-  for (const width of [320, 400, 375]) {
+  for (const width of [320, 400, 375, 812]) {
     await t.test(`native composer controls remain usable at ${width}px with permissions loaded`, async () => {
-      const locale = width === 375 ? "zh-CN" : "en-US";
+      const locale = width === 375 || width === 812 ? "zh-CN" : "en-US";
       const page = await openFixture(browser, bundle, t, `?ide_chrome=1&locale=${locale}`, true, width);
       if (width === 375) await page.evaluate(() => window.ideaAgentSetTheme("light"));
       await expect(page.getByRole("button", { name: /^(Execution permissions|执行权限):/ })).toBeVisible();
+      await expect(page.locator(".idea-agent-selector-effort")).toHaveText(
+        locale === "zh-CN" ? "思考：high" : "Effort: high",
+      );
       const controls = page.locator('[data-onboarding="input-controls"] button:visible');
       for (let index = 0; index < await controls.count(); index += 1) {
         const button = controls.nth(index);
@@ -309,6 +312,12 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
       assert.ok(fileBox && fileBox.x >= 0 && fileBox.x + fileBox.width <= width);
       await fileButton.focus();
       await expect(fileButton).toBeFocused();
+      if (width === 812) {
+        await page.locator('[data-onboarding="agent-selector"] > button').click();
+        await page.getByRole("button", { name: /^思考强度/ }).click();
+        await page.getByRole("button", { name: "low", exact: true }).click();
+        await expect(page.locator(".idea-agent-selector-effort")).toHaveText("思考：low");
+      }
       const reports = path.join(webDir, "../../build/reports/file-context");
       mkdirSync(reports, { recursive: true });
       await page.screenshot({ path: path.join(reports, `composer-${width}.png`) });

@@ -1,12 +1,42 @@
 <idea-plugin>
     <id>dev.ideaagent.local</id>
     <name>Local AI Agent</name>
-    <vendor>Local AI Agent</vendor>
+    <vendor url="https://github.com/zhuxian89/idea-ai-agent">Local AI Agent</vendor>
     <description><![CDATA[
-        Use local Codex and Claude Code agents inside IntelliJ IDEA.
-        Includes MindFS conversations, streaming tool calls, model configuration,
-        session history, task boards, Git changes and worktrees.
+        <p>Use locally installed coding agents inside IntelliJ IDEA.</p>
+        <p>
+            Local AI Agent connects the current IDEA project to supported command-line
+            agents, including Codex CLI and Claude Code. Work with streaming replies,
+            tool activity, native permission prompts, and follow-up questions without
+            leaving the IDE.
+        </p>
+        <ul>
+            <li>Add selected code, the current file, or a project-tree file to a conversation.</li>
+            <li>Choose the Agent, model, reasoning effort, and execution permission level.</li>
+            <li>Resume project-scoped conversation history and inspect saved context usage.</li>
+            <li>Detect, configure, install, update, and restart supported local Agent CLIs.</li>
+            <li>Follow the IDEA light or dark theme and switch between English and Chinese.</li>
+        </ul>
+        <p>
+            <b>Requirements:</b> IntelliJ IDEA 2024.1–2024.3 with JCEF, plus at least
+            one supported Agent CLI. The CLI must be configured and signed in before use.
+            Plugin packages are specific to the operating system and CPU architecture.
+        </p>
+        <p>
+            The bundled service listens only on a random <code>127.0.0.1</code> port.
+            Conversations and plugin settings are stored on the local machine. Requests
+            sent by an Agent CLI remain subject to that CLI's configuration and provider terms.
+        </p>
     ]]></description>
+    <change-notes><![CDATA[
+        <p><b>0.1.18</b></p>
+        <ul>
+            <li>Shows the active reasoning effort beside the selected Agent and model.</li>
+            <li>Updates the displayed effort immediately when it changes.</li>
+            <li>Keeps Agent, model, effort, and permission controls usable in narrow tool windows.</li>
+            <li>Adds Marketplace metadata, compatibility bounds, a plugin logo, and privacy documentation.</li>
+        </ul>
+    ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="IdeaAgent.Context" displayType="BALLOON" isLogByDefault="false"/>

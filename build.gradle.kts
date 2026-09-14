@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "dev.ideaagent"
-version = "0.1.17"
+version = "0.1.18"
 
 repositories {
     mavenCentral()
@@ -54,8 +54,14 @@ intellijPlatform {
         id = "dev.ideaagent.local"
         name = "Local AI Agent"
         version = project.version.toString()
-        ideaVersion { sinceBuild = "241" }
-        vendor { name = "Local AI Agent" }
+        ideaVersion {
+            sinceBuild = "241"
+            untilBuild = "243.*"
+        }
+        vendor {
+            name = "Local AI Agent"
+            url = "https://github.com/zhuxian89/idea-ai-agent"
+        }
     }
     pluginVerification {
         ides {
