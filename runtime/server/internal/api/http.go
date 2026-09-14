@@ -880,6 +880,7 @@ func (h *HTTPHandler) handleSessionSync(w http.ResponseWriter, r *http.Request) 
 	response := h.sessionResponse(r.Context(), rootID, out, pendingUser, contextWindow, exchangeAux)
 	if pendingUser == nil {
 		response["activity_history_version"] = 1
+		response["reply_metadata_version"] = 1
 	}
 	respondJSON(w, http.StatusOK, response)
 }

@@ -314,6 +314,9 @@ func (s *session) handleStreamedEvents(ctx context.Context, events <-chan codexs
 		case *codexsdk.ThreadStartedEvent:
 			s.setThreadID(e.ThreadId)
 		case *codexsdk.TurnStartedEvent:
+			s.mu.Lock()
+			s.contextWindow = types.ContextWindow{}
+			s.mu.Unlock()
 			continue
 		case *codexsdk.ThreadGoalUpdatedEvent:
 			s.setThreadID(e.ThreadID)
@@ -1117,27 +1120,24 @@ func normalizeTodoStatus(status string) string {
 func parseContextWindow(raw json.RawMessage) (types.ContextWindow, bool) {
 	var payload struct {
 		TokenUsage struct {
-			Last struct {
+			Last *struct {
 				TotalTokens int `json:"totalTokens"`
 			} `json:"last"`
-			Total struct {
-				TotalTokens int `json:"totalTokens"`
-			} `json:"total"`
 			ModelContextWindow int `json:"modelContextWindow"`
 		} `json:"tokenUsage"`
+		Raw json.RawMessage `json:"raw"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return types.ContextWindow{}, false
 	}
-	totalTokens := payload.TokenUsage.Last.TotalTokens
-	if totalTokens == 0 {
-		totalTokens = payload.TokenUsage.Total.TotalTokens
+	if payload.TokenUsage.Last == nil && len(payload.Raw) > 0 && string(payload.Raw) != "null" {
+		return parseContextWindow(payload.Raw)
 	}
-	if totalTokens == 0 && payload.TokenUsage.ModelContextWindow == 0 {
+	if payload.TokenUsage.Last == nil || payload.TokenUsage.Last.TotalTokens < 0 || payload.TokenUsage.ModelContextWindow <= 0 {
 		return types.ContextWindow{}, false
 	}
 	return types.ContextWindow{
-		TotalTokens:        totalTokens,
+		TotalTokens:        payload.TokenUsage.Last.TotalTokens,
 		ModelContextWindow: payload.TokenUsage.ModelContextWindow,
 	}, true
 }

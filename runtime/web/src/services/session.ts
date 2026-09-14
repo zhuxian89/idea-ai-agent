@@ -95,6 +95,7 @@ export type ExchangeAux = {
 
 export type Session = {
   activity_history_version?: number;
+  reply_metadata_version?: number;
   key: string;
   session_key?: string;
   root_id?: string;
@@ -2050,7 +2051,7 @@ export async function syncSession(
 ): Promise<SyncSessionResult> {
   const base = await getCachedSession(rootId, sessionKey);
   const seq = getSessionMaxSeq(base);
-  const reconcileHistory = options?.full || !hasCurrentActivityHistory(base);
+  const reconcileHistory = options?.full || !hasCurrentActivityHistory(base) || base?.reply_metadata_version !== 1;
   let incoming = reconcileHistory
     ? await sessionService.syncExternalSession(rootId, sessionKey, 0)
     : await sessionService.getSession(rootId, sessionKey, seq);
@@ -2076,6 +2077,7 @@ export async function syncSession(
     ...incoming,
     key: sessionKey,
     activity_history_version: historyReconciled ? ACTIVITY_HISTORY_VERSION : base?.activity_history_version,
+    reply_metadata_version: reconcileHistory && incoming.reply_metadata_version === 1 ? 1 : base?.reply_metadata_version,
     exchanges: persistedDelta,
     exchange_aux: toPersistentExchangeAux(incoming.exchange_aux),
   });

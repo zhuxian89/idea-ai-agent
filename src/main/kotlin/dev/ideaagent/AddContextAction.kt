@@ -21,8 +21,7 @@ class AddContextAction : DumbAwareAction() {
         val project = event.project ?: return
         val editor = event.getData(CommonDataKeys.EDITOR) ?: return
         val context = EditorContext.capture(project, editor) ?: return
-        val window = ToolWindowManager.getInstance(project).getToolWindow("AI Agent") ?: return
-        window.activate({ (window.contentManager.contents.firstOrNull()?.component as? AgentPanel)?.addContext(context) }, true)
+        addContextToAgent(project, context)
     }
 }
 
@@ -42,4 +41,9 @@ internal object EditorContext {
 internal fun formatEditorContext(path: String, startLine: Int, text: String, unsaved: Boolean): String {
     val fence = "`".repeat(maxOf(3, Regex("`+").findAll(text).maxOfOrNull { it.value.length + 1 } ?: 3))
     return "文件：$path:$startLine${if (unsaved) "（编辑器中未保存的内容）" else ""}\n$fence\n$text\n$fence"
+}
+
+internal fun addContextToAgent(project: Project, context: String) {
+    val window = ToolWindowManager.getInstance(project).getToolWindow("AI Agent") ?: return
+    window.activate({ (window.contentManager.selectedContent?.component as? AgentPanel)?.addContext(context) }, true)
 }

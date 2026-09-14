@@ -1,4 +1,8 @@
 export const zhCN = {
+  "session.effortUnavailable": "思考强度未提供",
+  "session.contextUnavailable": "Context 未提供",
+  "session.contextUnavailableHint": "这条回复没有可用的上下文占用记录",
+  "session.contextUsage": "上下文已用 {percent}%（{used}/{capacity} Token）",
   "permission.label": "执行权限",
   "permission.full": "最高权限",
   "permission.standard": "普通权限",
@@ -11,6 +15,8 @@ export const zhCN = {
   "idea.backToChat": "返回聊天",
   "idea.currentProject": "当前 IDEA 项目",
   "idea.addEditorContext": "加入当前代码",
+  "idea.addCurrentFile": "加入当前文件",
+  "idea.addCurrentFileHint": "将当前激活文件的路径加入对话草稿，由 Agent 按需读取文件",
   "idea.startChat": "开始新的对话",
   "idea.startHint": "描述你想完成的任务，或从 IDEA 编辑器添加代码上下文。",
   "idea.addConfig": "添加 Agent 配置",

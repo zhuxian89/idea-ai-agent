@@ -33,6 +33,7 @@ func reconcileImportedActivity(ctx context.Context, manager *session.Manager, cu
 		}
 	}
 	updates := []session.ExchangeAux{}
+	metadata := []session.Exchange{}
 	imported = append([]agenttypes.ImportedExchange(nil), imported...)
 	position, lastMatched, userSeq := 0, -1, 0
 	unmatched := []agenttypes.ImportedExchange{}
@@ -85,6 +86,7 @@ func reconcileImportedActivity(ctx context.Context, manager *session.Manager, cu
 			continue
 		}
 		lastMatched = index
+		metadata = append(metadata, session.Exchange{Seq: seq, Role: incoming.Role, Agent: agentName, Effort: incoming.Effort, ContextWindow: incoming.ContextWindow})
 		for _, entry := range incoming.Aux {
 			if entry.ToolCall == nil {
 				continue
@@ -97,6 +99,9 @@ func reconcileImportedActivity(ctx context.Context, manager *session.Manager, cu
 		}
 	}
 	if err := manager.ReconcileImportedTools(ctx, current.Key, updates); err != nil {
+		return nil, err
+	}
+	if err := manager.ReconcileReplyMetadata(ctx, current.Key, metadata); err != nil {
 		return nil, err
 	}
 	if !full {

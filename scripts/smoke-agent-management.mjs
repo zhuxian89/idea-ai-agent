@@ -221,7 +221,7 @@ export async function smokeAgentManagement(page, reports) {
     await page.locator('.idea-chat:visible').waitFor();
     await page.getByText('Existing native reply preserved.', {exact: false}).waitFor();
     await page.getByText('Test Model · xhigh', {exact: true}).waitFor();
-    await page.locator('[title="Context Window 38% used (98000/258000 used)"]').waitFor();
+    await page.locator('[title="Context 38% used (98000/258000 tokens)"]').waitFor();
     await page.screenshot({path: path.join(reports, 'ide-workbench-chat.png'), animations: 'disabled'});
     await page.getByRole('button', {name: 'Chat history', exact: true}).click();
     await page.screenshot({path: path.join(reports, 'ide-workbench-history.png'), animations: 'disabled'});

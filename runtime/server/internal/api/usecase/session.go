@@ -2448,7 +2448,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		log.Printf("[session] persist.user.error root=%s session=%s agent=%s err=%v", in.RootID, current.Key, in.Agent, err)
 		return err
 	}
-	if err := manager.AddExchangeForAgent(exchangeCtx, current, "agent", responseText, in.Agent, resolvedMode, resolvedEffort, resolvedFastService); err != nil {
+	if err := manager.AddExchangeForAgent(session.WithExchangeContextWindow(exchangeCtx, &lastContextWindow), current, "agent", responseText, in.Agent, resolvedMode, resolvedEffort, resolvedFastService); err != nil {
 		log.Printf("[session] persist.agent.error root=%s session=%s agent=%s err=%v", in.RootID, current.Key, in.Agent, err)
 		return err
 	}

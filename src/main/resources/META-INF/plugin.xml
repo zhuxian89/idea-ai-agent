@@ -9,10 +9,16 @@
     ]]></description>
     <depends>com.intellij.modules.platform</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="IdeaAgent.Context" displayType="BALLOON" isLogByDefault="false"/>
         <toolWindow id="AI Agent" anchor="right" icon="/icons/agent.svg"
                     factoryClass="dev.ideaagent.AgentToolWindowFactory"/>
     </extensions>
     <actions>
+        <action id="IdeaAgent.AddFileContext" class="dev.ideaagent.AddFileContextAction"
+                text="加入 AI Agent 对话" description="将此文件的路径加入当前 AI Agent 对话草稿，不自动发送">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+        </action>
         <action id="IdeaAgent.AddContext" class="dev.ideaagent.AddContextAction"
                 text="发送到 AI Agent" description="将选中代码或当前文件加入 AI Agent 输入框">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>

@@ -1,5 +1,13 @@
 # 验证记录
 
+## 0.1.16 发布源码验证
+
+- 当前文件入口：26 项 Kotlin/IDEA 平台测试与 23 项桥接/浏览器测试通过，覆盖多文件切换后取激活标签页、右击文件、原有未保存代码片段、菜单注册、草稿保留和窄栏主题。日志为 `build/reports/file-context*`。
+- 回复信息：Codex、session、API/usecase Go 测试通过，原生 JSONL → 历史补录 → 磁盘重开保持每条回复的 effort/Context，重复同步幂等；实时保存覆盖 Codex/Claude、零值和快照隔离。流事件回归验证下一轮没有 usage 时不会沿用上一轮 Context。
+- 元数据、活动历史、缓存迁移及会话活动浏览器测试共 11 项通过；已查看 375px 中文浅色和 900px 英文深色截图。TypeScript、运行时构建和完整 App 冒烟通过，原有计时、后台回复、会话切换与模型发现回归通过。日志与截图位于 `build/reports/reply-metadata*`。
+
+发布构建及兼容检查证据保存在 `build/reports/release-0.1.16/`，平台 ZIP 与 SHA-256 清单位于 `build/releases/0.1.16/`。沿用 Mac arm64 和 Windows amd64 发布目标；Windows 交叉编译与 IDEA/JCEF 实机验收边界不变，不将自动化检查视为真实安装验收。输入/输出 Token 和缓存命中率按用户要求暂缓。
+
 ## 0.1.15 发布源码验证
 
 - Agent/API/usecase Go 回归通过；新增启动测试验证自动识别和失败退出等待状态，Windows Agent 测试包与完整运行时交叉编译通过。

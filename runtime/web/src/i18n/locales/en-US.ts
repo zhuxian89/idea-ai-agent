@@ -1,6 +1,10 @@
 import type { Messages } from "../types";
 
 export const enUS = {
+  "session.effortUnavailable": "Effort unavailable",
+  "session.contextUnavailable": "Context unavailable",
+  "session.contextUnavailableHint": "No context usage was recorded for this reply",
+  "session.contextUsage": "Context {percent}% used ({used}/{capacity} tokens)",
   "permission.label": "Execution permissions",
   "permission.full": "Full access",
   "permission.standard": "Standard",
@@ -13,6 +17,8 @@ export const enUS = {
   "idea.backToChat": "Back to chat",
   "idea.currentProject": "Current IDEA project",
   "idea.addEditorContext": "Add current code",
+  "idea.addCurrentFile": "Add current file",
+  "idea.addCurrentFileHint": "Add the active file path to the draft so the Agent can read the file as needed",
   "idea.startChat": "Start a conversation",
   "idea.startHint": "Describe a task, or add code context from the IDEA editor.",
   "idea.addConfig": "Add Agent config",

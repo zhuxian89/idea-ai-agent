@@ -31,7 +31,7 @@ test("historical activity survives backfill, IndexedDB reload and mixed-agent se
     { seq: 5, role: "agent", content: "检查完成，相关信息如下。", agent: "claude" },
   ];
   const full = {
-    key: "mixed", type: "chat", name: "History fixture", agent: "codex", activity_history_version: 1,
+    key: "mixed", type: "chat", name: "History fixture", agent: "codex", activity_history_version: 1, reply_metadata_version: 1,
     exchanges, exchange_aux: {
       "2": [{ seq: 2, line: 1, toolcall: compact(codex.native) }],
       "3": [{ seq: 3, line: 1, toolcall: compact(claude.b) }],

@@ -495,13 +495,13 @@ func appendImportedExchange(
 		return false, nil
 	}
 	if err := manager.AddExchangeForAgentAt(
-		ctx,
+		session.WithExchangeContextWindow(ctx, exchange.ContextWindow),
 		target,
 		role,
 		exchange.Content,
 		agentName,
 		"",
-		"",
+		exchange.Effort,
 		"",
 		exchange.Timestamp,
 	); err != nil {

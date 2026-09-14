@@ -4,12 +4,12 @@
 
 [下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
 
-当前版本为 **0.1.15**，更新说明见 [0.1.15 发布说明](docs/releases/v0.1.15.md)。
+当前版本为 **0.1.16**，更新说明见 [0.1.16 发布说明](docs/releases/v0.1.16.md)。
 
-| 系统 / 架构 | 0.1.15 安装包 |
+| 系统 / 架构 | 0.1.16 安装包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.15/idea-ai-agent-0.1.15-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.15/idea-ai-agent-0.1.15-macos-arm64.zip) |
+| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.16/idea-ai-agent-0.1.16-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.16/idea-ai-agent-0.1.16-macos-arm64.zip) |
 
 Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。各平台验证范围见发布说明。
 
@@ -18,6 +18,9 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 0.1.5 继续保留用户 PATH 的优先顺序，并在 Mac 上补充 `~/.local/bin`、`~/.hermes/node/bin` 和 Homebrew 常见目录，覆盖运行期间新建的安装目录。进入配置页或刷新列表会立即检查 CLI 是否存在；安装输出在命令会话展示，执行后返回配置页即可重新识别。重启后检测结果会自动更新，连接错误会显示在对应 Agent 卡片上。
 
 ## 实现
+
+0.1.16 新增「加入当前文件」路径入口及文件右键入口，恢复回复思考强度和 Context，修复历史补录与每轮上下文快照保存。
+
 
 0.1.15 修复重启后模型识别停在 `probe pending`、状态刷新遗漏及用户消息未贴齐右侧的问题。Agent 状态和错误摘要直接显示，“查看详情”和“重启 Agent”使用明确的文字入口。
 
@@ -79,9 +82,15 @@ macOS/Linux 使用 `./gradlew buildPlugin`。构建会编译 Web 前端和当前
 
 配置页默认展示 Codex、Claude Code 和其他已安装的 Agent，其余未安装项收在“其他 Agent”中。
 
-回复下方保留复制、分叉、模型、推理强度、时间、耗时和上下文占用；数据以 Agent 实际返回为准。当前尚不显示输入/输出 Token 和缓存命中率明细。
+回复下方保留复制、分叉、模型、思考强度、时间、耗时和 Context 上下文占用（例如 `Context 42% (109K/258K)`）。Context 按每条回复保存，重新打开和离线查看时保留各自的快照；已有 Codex 历史会从本机原生记录补回缺失的思考强度和 Context。数据以实际记录为准，缺失时显示“未提供”，不使用当前配置或最新一轮数值推算旧回复。输入/输出 Token 和缓存命中率明细暂缓实现。
 
-IDEA 原生标题栏保留新会话、历史、设置，网页内部不再重复显示同一工具栏；重新连接位于标题栏的更多菜单。选中代码后通过输入框旁的「加入当前代码」、右键「发送到 AI Agent」或 `Ctrl+Alt+A` 加入聊天草稿。没有选中内容时加入当前文件；未保存的编辑器内容会注明。添加上下文不会自动发送消息。模型执行结束后触发 IDE 文件刷新，会话中的文件链接可以打开当前 IDEA 项目内的文件。
+IDEA 原生标题栏保留新会话、历史、设置，网页内部不再重复显示同一工具栏；重新连接位于标题栏的更多菜单。
+
+- 「加入当前代码」、编辑器右键「发送到 AI Agent」或 `Ctrl+Alt+A`：加入选中片段，没有选中内容时加入当前文件的完整内容；保留并注明未保存的编辑器内容。
+- 输入框上方「加入当前文件」：只加入当前激活标签页文件的绝对路径。例如打开 10 个文件、正在查看第 8 个时，加入的是第 8 个文件的路径，由 Agent 按需读取磁盘文件，不粘贴全文或自动保存。
+- 项目文件树或文件标签页右键「加入 AI Agent 对话」：只加入右击文件的路径，无需先打开该文件。
+
+这些入口都会保留当前会话和已有草稿，不会自动发送消息。未保存的修改请继续通过「加入当前代码」提供，或先自行保存文件。模型执行结束后触发 IDE 文件刷新，会话中的文件链接可以打开当前 IDEA 项目内的文件。
 
 ## 验证
 

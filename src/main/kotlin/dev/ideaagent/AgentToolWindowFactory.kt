@@ -206,6 +206,13 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                     "addContext" -> ApplicationManager.getApplication().invokeLater {
                         if (!project.isDisposed) addCurrentEditorContext()
                     }
+                    "addFileContext" -> ApplicationManager.getApplication().invokeLater {
+                        if (!project.isDisposed) {
+                            val context = FileContext.current(project)
+                            if (context == null) FileContext.notifyUnavailable(project)
+                            else addContext(context)
+                        }
+                    }
                     else -> error("Unsupported IDE request")
                 }
                 JBCefJSQuery.Response("ok")
@@ -256,6 +263,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
     fun addContext(text: String) {
         if (closed) return
         if (!loaded) { pendingContexts.add(text); return }
+        sendNativeCommand("chat")
         execute("window.ideaAgentReceiveContext?.(${gson.toJson(text)});")
     }
 

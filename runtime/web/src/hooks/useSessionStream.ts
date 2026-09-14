@@ -47,6 +47,7 @@ export type TimelineItem =
       fastService?: string;
       pendingAck?: boolean;
       seq?: number;
+      showContextWindow?: boolean;
       contextWindow?: {
         totalTokens: number;
         modelContextWindow: number;
@@ -166,6 +167,7 @@ function assistantSegmentItem(
     effort: ex.effort,
     fastService: ex.fast_service,
     seq: ex.seq,
+    showContextWindow: includeContextWindow,
     contextWindow: includeContextWindow ? ex.context_window : undefined,
   };
 }
@@ -311,6 +313,7 @@ function buildAssistantTimeline(
       if (item.type === "assistant_text") {
         out[i] = {
           ...item,
+          showContextWindow: true,
           contextWindow: ex.context_window,
         };
         break;
@@ -443,47 +446,11 @@ function buildBaseTimeline(
   return out;
 }
 
-function applySessionContextWindow(
-  items: TimelineItem[],
-  contextWindow?: ContextWindowLike,
-): TimelineItem[] {
-  const totalTokens = Math.max(0, Number(contextWindow?.totalTokens || 0));
-  const modelContextWindow = Math.max(
-    0,
-    Number(contextWindow?.modelContextWindow || 0),
-  );
-  if (!totalTokens || !modelContextWindow) {
-    return items;
-  }
-  for (let i = items.length - 1; i >= 0; i -= 1) {
-    const item = items[i];
-    if (item.type !== "assistant_text") {
-      continue;
-    }
-    if (
-      item.contextWindow?.totalTokens &&
-      item.contextWindow?.modelContextWindow
-    ) {
-      return items;
-    }
-    const next = [...items];
-    next[i] = {
-      ...item,
-      contextWindow: {
-        totalTokens,
-        modelContextWindow,
-      },
-    };
-    return next;
-  }
-  return items;
-}
-
 export function useSessionStream(
   sessionKey: string | null,
   exchanges: ExchangeLike[] = [],
   exchangeAux: ExchangeAuxMapLike = {},
-  sessionContextWindow?: ContextWindowLike,
+  _sessionContextWindow?: ContextWindowLike,
   sessionPending = false,
 ): UseSessionStreamResult {
   const [streamState, setStreamState] = useState({ sessionKey, isStreaming: false });
@@ -494,13 +461,11 @@ export function useSessionStream(
   // briefly show the previous session's activity before resubscription settles.
   const activity = sessionKey ? sessionService.getSessionActivity(sessionKey) : undefined;
 
+  // Context snapshots belong to individual replies. Session-level totals may
+  // belong to a newer pending turn and must never fill an older reply.
   const baseTimeline = useMemo(
-    () =>
-      applySessionContextWindow(
-        buildBaseTimeline(exchanges, exchangeAux),
-        sessionContextWindow,
-      ),
-    [exchanges, exchangeAux, sessionContextWindow],
+    () => buildBaseTimeline(exchanges, exchangeAux),
+    [exchanges, exchangeAux],
   );
 
   useEffect(() => {

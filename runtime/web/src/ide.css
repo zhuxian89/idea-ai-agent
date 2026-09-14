@@ -29,6 +29,10 @@
 .idea-active-conversation { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--content-bg); }
 .idea-composer { flex-shrink: 0; border-top: 1px solid var(--border-color); padding-top: 8px; background: var(--content-bg); position: relative; z-index: 3; }
 .idea-composer [data-onboarding="action-bar"] { padding-left: 10px !important; padding-right: 10px !important; }
+.idea-file-context-actions { display: flex; padding: 0 10px 4px; }
+.idea-file-context-button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 5px; background: transparent; color: var(--text-primary); font: inherit; font-size: 12px; }
+.idea-file-context-button > svg { flex-shrink: 0; }
+.idea-file-context-button:hover { background: var(--selection-bg); }
 .idea-empty-chat { margin: auto; padding: 32px 24px; text-align: center; max-width: 420px; }
 .idea-empty-chat h2 { font-size: 16px; font-weight: 500; margin: 0 0 8px; }
 .idea-empty-chat p { font-size: 13px; line-height: 1.7; color: var(--text-secondary); }
@@ -59,6 +63,12 @@
 .idea-config-form input, .idea-config-form textarea { min-width: 0; }
 .idea-conversation [data-idea-session-heading] { display: none !important; }
 .idea-conversation .mindfs-assistant-meta { opacity: 1 !important; font-size: 11px !important; flex-wrap: wrap; max-width: 100%; line-height: 1.6; }
+.idea-reply-context { display: inline-block; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.idea-reply-context[data-level] { color: var(--idea-context-color, #0f766e); font-weight: 600; }
+.idea-reply-context[data-level="medium"] { color: #9a3412; }
+.idea-reply-context[data-level="high"] { color: #b91c1c; }
+[data-theme="dark"] .idea-reply-context[data-level="medium"] { color: #fdba74; }
+[data-theme="dark"] .idea-reply-context[data-level="high"] { color: #fca5a5; }
 .idea-history .idea-session-agent { display: block !important; color: var(--text-secondary); font-size: 11px; line-height: 1.6; margin-top: 4px; padding-bottom: 4px; }
 .idea-composer [data-onboarding="session-ring"] { display: none !important; }
 .idea-composer [data-onboarding="input-controls"] { left: 8px; right: 8px !important; bottom: 6px !important; transform: none !important; }

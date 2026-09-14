@@ -171,10 +171,12 @@ type ExternalSessionCursor struct {
 }
 
 type ImportedExchange struct {
-	Role      string
-	Content   string
-	Timestamp time.Time
-	Aux       []ImportedExchangeAux
+	Role          string
+	Effort        string
+	ContextWindow *ContextWindow
+	Content       string
+	Timestamp     time.Time
+	Aux           []ImportedExchangeAux
 }
 
 // ImportedExchangeAux is structured historical content attached to an imported

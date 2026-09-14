@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -106,11 +106,14 @@ async function bundleFixture() {
         builder.onLoad({ filter: /^english-i18n$/, namespace: "fixture" }, () => ({
           resolveDir: webDir,
           contents: `import { enUS } from "./src/i18n/locales/en-US";
+            import { zhCN } from "./src/i18n/locales/zh-CN";
+            const locale = new URLSearchParams(location.search).get("locale") || "en-US";
+            const messages = locale === "zh-CN" ? zhCN : enUS;
             export function translateNow(key, params = {}) {
-              if (!(key in enUS)) throw new Error("Missing English message: " + key);
-              return enUS[key].replace(/\\{(\\w+)\\}/g, (_, name) => String(params[name] ?? "{" + name + "}"));
+              if (!(key in messages)) throw new Error("Missing message: " + key);
+              return messages[key].replace(/\\{(\\w+)\\}/g, (_, name) => String(params[name] ?? "{" + name + "}"));
             }
-            export function useI18n() { return { t: translateNow, locale: "en-US", setLocale() {} }; }`,
+            export function useI18n() { return { t: translateNow, locale, setLocale() {} }; }`,
         }));
         // Tool-card/markdown rendering is outside this chrome/composer fixture.
         builder.onResolve({ filter: /\/stream\/ToolCallCard$/ }, () => ({ path: "tool-icon", namespace: "fixture" }));
@@ -238,6 +241,42 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     await expect(page.locator('[data-onboarding="message-input"]')).toContainText("int captured = 1;");
   });
 
+  await t.test("adding a file preserves the current conversation, code entry and draft without sending", async () => {
+    const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
+    const input = page.locator('[data-onboarding="message-input"]');
+    await input.locator('[contenteditable="true"]').fill("Please review this file");
+    await page.evaluate(() => {
+      window.__ideaHostMessages = [];
+      window.ideaAgent = { postMessage: (payload) => window.__ideaHostMessages.push(payload) };
+    });
+    const button = page.getByRole("button", { name: "Add current file", exact: true });
+    await expect(button).toHaveText("Add current file");
+    await button.click();
+    assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), [{ action: "addFileContext" }]);
+    await page.evaluate(() => {
+      window.ideaAgentNativeCommand("chat");
+      window.ideaAgentReceiveContext("文件：/project/src/第8个 file.kt");
+    });
+    await expect(input).toContainText("Please review this file");
+    await expect(input).toContainText("文件：/project/src/第8个 file.kt");
+    await expect(heading(page)).toHaveText("Fix session");
+    assert.deepEqual(await events(page), []);
+    await addCodeButton(page).click();
+    assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), [
+      { action: "addFileContext" }, { action: "addContext" },
+    ]);
+    await page.evaluate(() => window.ideaAgentReceiveContext("int selected = 1;"));
+    await expect(input).toContainText("int selected = 1;");
+    for (const viewName of ["history", "settings"]) {
+      await command(page, viewName);
+      await command(page, "chat");
+      await expect(view(page)).toHaveAttribute("data-idea-view", "chat");
+      await expect(input).toContainText("文件：/project/src/第8个 file.kt");
+      await expect(heading(page)).toHaveText("Fix session");
+    }
+    assert.equal((await events(page)).includes("new"), false);
+  });
+
   await t.test("add-code clicks queued before the bridge injects flush on ideaAgentReady", async () => {
     const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
     await addCodeButton(page).click();
@@ -249,10 +288,12 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), [{ action: "addContext" }]);
   });
 
-  for (const width of [320, 400]) {
+  for (const width of [320, 400, 375]) {
     await t.test(`native composer controls remain usable at ${width}px with permissions loaded`, async () => {
-      const page = await openFixture(browser, bundle, t, "?ide_chrome=1", true, width);
-      await expect(page.getByRole("button", { name: /^Execution permissions:/ })).toBeVisible();
+      const locale = width === 375 ? "zh-CN" : "en-US";
+      const page = await openFixture(browser, bundle, t, `?ide_chrome=1&locale=${locale}`, true, width);
+      if (width === 375) await page.evaluate(() => window.ideaAgentSetTheme("light"));
+      await expect(page.getByRole("button", { name: /^(Execution permissions|执行权限):/ })).toBeVisible();
       const controls = page.locator('[data-onboarding="input-controls"] button:visible');
       for (let index = 0; index < await controls.count(); index += 1) {
         const button = controls.nth(index);
@@ -263,6 +304,14 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
           return node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
         }), true, "composer controls must not cover one another");
       }
+      const fileButton = page.getByRole("button", { name: locale === "zh-CN" ? "加入当前文件" : "Add current file", exact: true });
+      const fileBox = await fileButton.boundingBox();
+      assert.ok(fileBox && fileBox.x >= 0 && fileBox.x + fileBox.width <= width);
+      await fileButton.focus();
+      await expect(fileButton).toBeFocused();
+      const reports = path.join(webDir, "../../build/reports/file-context");
+      mkdirSync(reports, { recursive: true });
+      await page.screenshot({ path: path.join(reports, `composer-${width}.png`) });
     });
   }
 
@@ -272,6 +321,7 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     await expect(page.locator(".idea-toolbar strong")).toHaveText("AI Agent");
     await expect(view(page)).toHaveAttribute("data-idea-view", "chat");
     await expect(addCodeButton(page)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Add current file", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "New session" }).click();
     assert.deepEqual(await events(page), ["new"]);
     await page.getByRole("button", { name: "Chat history" }).click();

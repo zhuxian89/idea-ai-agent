@@ -10,7 +10,7 @@ let receiveContext: ((text: string) => void) | undefined;
 // small bounded queues so no click is lost; the IDE side queues symmetrically
 // until the page reports loaded.
 const bridgeQueueLimit = 20;
-const nativeCommands = ["new", "history", "settings"];
+const nativeCommands = ["new", "history", "settings", "chat"];
 const pendingNativeCommands: string[] = [];
 const pendingHostMessages: Record<string, unknown>[] = [];
 let nativeCommandHandler: ((command: string) => void) | undefined;
@@ -82,6 +82,10 @@ if (typeof window.addEventListener === "function") {
 
 export function requestIdeaEditorContext(): void {
   postToHost({ action: "addContext" });
+}
+
+export function requestIdeaFileContext(): void {
+  postToHost({ action: "addFileContext" });
 }
 
 export function openIdeaFile(rootId: string, path: string): void {

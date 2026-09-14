@@ -592,6 +592,7 @@ func readCodexImportedExchangeLocators(path string, after time.Time) ([]imported
 	toolOrdinal := 0
 	sessionShell := ""
 	turnID := ""
+	metadata := importedReplyMetadata{agentIndex: -1}
 	err = forEachJSONLLine(file, func(line string) error {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -606,6 +607,7 @@ func readCodexImportedExchangeLocators(path string, after time.Time) ([]imported
 		case "turn_context":
 			payload, _ := raw["payload"].(map[string]any)
 			turnID = strings.TrimSpace(asString(payload["turn_id"]))
+			metadata.start(turnID, strings.TrimSpace(asString(payload["effort"])))
 		case "response_item":
 			payload, _ := raw["payload"].(map[string]any)
 			if payload == nil {
@@ -671,15 +673,18 @@ func readCodexImportedExchangeLocators(path string, after time.Time) ([]imported
 			}
 			items = appendImportedCodexNativeItem(items, toolLocations, payload, strings.TrimPrefix(asString(raw["type"]), "item."), nativeTurnID, timestamp)
 		case "event_msg":
+			metadata.tokenCount(raw, items)
 			if numTurns := codexRollbackTurns(raw); numTurns > 0 {
 				items = dropLastCodexUserTurns(items, numTurns)
 				toolLocations = rebuildImportedCodexToolLocations(items)
+				metadata = importedReplyMetadata{agentIndex: -1}
 			}
 		case "world_state":
 			if shell := importedCodexWorldStateShell(raw); shell != "" {
 				sessionShell = shell
 			}
 		}
+		metadata.attach(items)
 		return nil
 	})
 	if err != nil {
@@ -884,6 +889,10 @@ func codexExchangeLocatorsAfter(items []agenttypes.ImportedExchange, after time.
 			userCount,
 			item.Aux,
 		)
+		if len(out) > 0 {
+			out[len(out)-1].Effort = item.Effort
+			out[len(out)-1].ContextWindow = item.ContextWindow
+		}
 	}
 	return out
 }

@@ -4400,9 +4400,9 @@ export function App({ onGoHome }: AppProps) {
       sessionKey: string,
       contextWindow?: { totalTokens?: number; modelContextWindow?: number },
     ) => {
-      const totalTokens = Math.max(0, Number(contextWindow?.totalTokens || 0));
-      const modelContextWindow = Math.max(0, Number(contextWindow?.modelContextWindow || 0));
-      if (!totalTokens || !modelContextWindow) {
+      const totalTokens = Number(contextWindow?.totalTokens);
+      const modelContextWindow = Number(contextWindow?.modelContextWindow);
+      if (!Number.isFinite(totalTokens) || totalTokens < 0 || !Number.isFinite(modelContextWindow) || modelContextWindow <= 0) {
         return;
       }
       const cacheKey = rootSessionKey(rootID, sessionKey);
@@ -4410,6 +4410,7 @@ export function App({ onGoHome }: AppProps) {
         const list = [...(prevList || [])];
         for (let i = list.length - 1; i >= 0; i -= 1) {
           const item = list[i];
+          if (item?.role === "user") break;
           if (
             (item?.role === "agent" || item?.role === "assistant") &&
             String(item?.content || "").trim()

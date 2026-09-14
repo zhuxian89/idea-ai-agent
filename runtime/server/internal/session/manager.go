@@ -500,14 +500,14 @@ func exchangeModelDisplayNameFromContext(ctx context.Context) string {
 }
 
 func (m *Manager) AddExchangeForAgent(ctx context.Context, session *Session, role, content, agent, mode, effort, fastService string) error {
-	return m.addExchangeForAgentAt(session, role, content, agent, exchangeModelDisplayNameFromContext(ctx), mode, effort, fastService, time.Time{})
+	return m.addExchangeForAgentAt(session, role, content, agent, exchangeModelDisplayNameFromContext(ctx), mode, effort, fastService, time.Time{}, exchangeContextWindow(ctx))
 }
 
 func (m *Manager) AddExchangeForAgentAt(ctx context.Context, session *Session, role, content, agent, mode, effort, fastService string, timestamp time.Time) error {
-	return m.addExchangeForAgentAt(session, role, content, agent, exchangeModelDisplayNameFromContext(ctx), mode, effort, fastService, timestamp)
+	return m.addExchangeForAgentAt(session, role, content, agent, exchangeModelDisplayNameFromContext(ctx), mode, effort, fastService, timestamp, exchangeContextWindow(ctx))
 }
 
-func (m *Manager) addExchangeForAgentAt(session *Session, role, content, agent, modelDisplayName, mode, effort, fastService string, timestamp time.Time) error {
+func (m *Manager) addExchangeForAgentAt(session *Session, role, content, agent, modelDisplayName, mode, effort, fastService string, timestamp time.Time, contextWindow *agenttypes.ContextWindow) error {
 	if session == nil || strings.TrimSpace(session.Key) == "" {
 		return errors.New("session required")
 	}
@@ -539,6 +539,7 @@ func (m *Manager) addExchangeForAgentAt(session *Session, role, content, agent, 
 		ModelDisplayName: strings.TrimSpace(modelDisplayName),
 		Mode:             strings.TrimSpace(mode),
 		Effort:           strings.TrimSpace(effort),
+		ContextWindow:    cloneContextWindow(contextWindow),
 		FastService:      fastService,
 		Content:          content,
 		Timestamp:        ts,

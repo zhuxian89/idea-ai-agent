@@ -1,3 +1,4 @@
+import { ReplyContext } from "./stream/ReplyContext";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSessionStream, type TimelineItem } from "../hooks/useSessionStream";
 import type { TodoUpdate } from "../services/session";
@@ -225,39 +226,6 @@ function stripUploadAttachmentTokens(content: string): string {
     .replace(/^[\n\s]+|[\n\s]+$/g, "");
 }
 
-function formatContextWindowPercent(contextWindow?: {
-  totalTokens: number;
-  modelContextWindow: number;
-}) {
-  const usedTokens = Math.max(0, Number(contextWindow?.totalTokens || 0));
-  const modelContextWindow = Math.max(
-    0,
-    Number(contextWindow?.modelContextWindow || 0),
-  );
-  if (!usedTokens || !modelContextWindow) {
-    return null;
-  }
-  const usedRatio = Math.max(0, Math.min(1, usedTokens / modelContextWindow));
-  return {
-    usedTokens,
-    usedRatio,
-    percent: Math.round(usedRatio * 100),
-  };
-}
-
-function formatCompactTokenCount(value: number) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "0";
-  }
-  if (value >= 1_000_000) {
-    return `${Math.round(value / 1_000_000)}M`;
-  }
-  if (value >= 1_000) {
-    return `${Math.round(value / 1_000)}K`;
-  }
-  return String(Math.round(value));
-}
-
 function modelDisplayName(
   agents: AgentStatus[] | undefined,
   agentName?: string,
@@ -277,6 +245,7 @@ function modelDisplayName(
 function formatAssistantExchangeMeta(
   item: TimelineItem,
   agents?: AgentStatus[],
+  missingEffort = "",
 ): string {
   if (item.type !== "assistant_text") {
     return "";
@@ -284,7 +253,7 @@ function formatAssistantExchangeMeta(
   const parts = [
     `${item.modelDisplayName || ""}`.trim() ||
       modelDisplayName(agents, item.agent, item.model),
-    item.effort,
+    item.effort || ((item.agent === "codex" || item.agent === "claude") ? missingEffort : ""),
   ]
     .map((value) => `${value || ""}`.trim())
     .filter(Boolean);
@@ -292,48 +261,6 @@ function formatAssistantExchangeMeta(
     parts.push("fast");
   }
   return parts.join(" · ");
-}
-
-function ContextWindowBadge({
-  contextWindow,
-}: {
-  contextWindow?: { totalTokens: number; modelContextWindow: number };
-}) {
-  const metrics = formatContextWindowPercent(contextWindow);
-  if (!metrics) {
-    return null;
-  }
-  const hue =
-    metrics.percent >= 90
-      ? "#dc2626"
-      : metrics.percent >= 75
-        ? "#ea580c"
-        : "var(--idea-context-color, #0f766e)";
-  return (
-    <span
-      title={`Context Window ${metrics.percent}% used (${metrics.usedTokens}/${contextWindow?.modelContextWindow} used)`}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: hue,
-        lineHeight: 1.1,
-        flexShrink: 0,
-        fontSize: "10px",
-        fontWeight: 700,
-        letterSpacing: "0.01em",
-        fontVariantNumeric: "tabular-nums",
-      }}
-    >
-      <span>{metrics.percent}%</span>
-      <span>&middot;used</span>
-      <span>
-        {`(${formatCompactTokenCount(metrics.usedTokens)}/${formatCompactTokenCount(
-          contextWindow?.modelContextWindow || 0,
-        )})`}
-      </span>
-    </span>
-  );
 }
 
 function previousUserTimestamp(timeline: TimelineItem[], index: number): string {
@@ -1739,7 +1666,7 @@ function SessionViewerInner({
     const hasRichUserAttachments = imageAttachments.length > 0;
     const assistantMarkdownContent = !isUser ? (item.content || "").trim() : "";
     const assistantExchangeMeta = !isUser
-      ? formatAssistantExchangeMeta(item, agents)
+      ? formatAssistantExchangeMeta(item, agents, t("session.effortUnavailable"))
       : "";
     const assistantDurationLabel = !isUser
       ? formatSessionDuration(previousUserTimestamp(timeline, idx), item.timestamp)
@@ -2169,7 +2096,7 @@ function SessionViewerInner({
                   <span>{assistantExchangeMeta}</span>
                 ) : null}
                 <span>{time}{assistantDurationLabel ? ` ${assistantDurationLabel}` : ""}</span>
-                <ContextWindowBadge contextWindow={item.contextWindow} />
+                {item.showContextWindow !== false ? <ReplyContext value={item.contextWindow} /> : null}
               </span>
             )}
           </div>

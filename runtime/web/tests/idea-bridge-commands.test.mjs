@@ -88,6 +88,21 @@ test("editor capture requests reach an already-injected bridge directly", () => 
   assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), [{ action: "addContext" }]);
 });
 
+test("file references and selected code use separate host requests, including before startup", () => {
+  for (const ready of [true, false]) {
+    const bridge = loadBridge({ ready });
+    bridge.exports.requestIdeaFileContext();
+    bridge.exports.requestIdeaEditorContext();
+    if (!ready) {
+      bridge.injectBridge();
+      bridge.fireReady();
+    }
+    assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), [
+      { action: "addFileContext" }, { action: "addContext" },
+    ]);
+  }
+});
+
 test("editor capture clicks before the IDE injects window.ideaAgent flush once on ready", () => {
   const bridge = loadBridge();
   bridge.exports.requestIdeaEditorContext();

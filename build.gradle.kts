@@ -1,5 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
@@ -11,7 +12,7 @@ plugins {
 }
 
 group = "dev.ideaagent"
-version = "0.1.15"
+version = "0.1.16"
 
 repositories {
     mavenCentral()
@@ -21,6 +22,7 @@ repositories {
 dependencies {
     intellijPlatform {
         intellijIdeaCommunity(providers.gradleProperty("platformVersion"))
+        testFramework(TestFrameworkType.Bundled)
         pluginVerifier()
     }
     testImplementation("junit:junit:4.13.2")
