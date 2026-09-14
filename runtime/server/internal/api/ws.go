@@ -401,6 +401,7 @@ func (h *WSHandler) broadcastAgentStatusChange(status agent.Status) {
 			"protocol":                         status.Protocol,
 			"installed":                        status.Installed,
 			"available":                        status.Available,
+			"probe_pending":                    status.ProbePending,
 			"version":                          status.Version,
 			"error":                            status.Error,
 			"last_probe":                       status.LastProbe,

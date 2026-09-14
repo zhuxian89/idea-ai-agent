@@ -9,6 +9,7 @@ export type AgentStatus = {
   brief?: string;
   installed: boolean;
   available: boolean;
+  probe_pending?: boolean;
   version?: string;
   error?: string;
   last_probe?: string;
@@ -120,6 +121,8 @@ let lastFetch = 0;
 let lastCatalogFetch = 0;
 let inFlightAgents: Promise<{ agents: AgentStatus[]; shells: ShellStatus[] }> | null = null;
 let inFlightCatalog: Promise<{ agents: AgentStatus[]; shells: ShellStatus[] }> | null = null;
+let refreshAgentsAfterFlight = false;
+let refreshCatalogAfterFlight = false;
 const CACHE_TTL = 30000; // 30 seconds
 
 function normalizeShellStatus(input: unknown): ShellStatus | null {
@@ -154,15 +157,23 @@ async function fetchAgentRuntime(force = false, includeAll = false, throwOnError
     }
     return { agents: cachedAgents, shells: cachedShells };
   }
-  if (inFlight) {
-    return inFlight;
-  }
   if (!protectedAPIReady()) {
     return { agents: agentCache, shells: cachedShells };
   }
 
-  const request = (async () => {
-    const data = await protectedJSON<any>(appPath(includeAll ? "/api/agents?all=1" : "/api/agents"));
+  if (inFlight && force) {
+    // A status event may arrive after the server took the in-flight snapshot.
+    // Join the request, but require a newer snapshot before resolving callers.
+    if (includeAll) refreshCatalogAfterFlight = true;
+    else refreshAgentsAfterFlight = true;
+  }
+  const request = inFlight ?? (async () => {
+    let data: any;
+    do {
+      if (includeAll) refreshCatalogAfterFlight = false;
+      else refreshAgentsAfterFlight = false;
+      data = await protectedJSON<any>(appPath(includeAll ? "/api/agents?all=1" : "/api/agents"));
+    } while (includeAll ? refreshCatalogAfterFlight : refreshAgentsAfterFlight);
     const agentItems: unknown[] = Array.isArray(data) ? data : Array.isArray(data?.agents) ? data.agents : [];
     const shellItems: unknown[] = Array.isArray(data?.shells) ? data.shells : [];
     const nextAgents = agentItems
@@ -170,10 +181,10 @@ async function fetchAgentRuntime(force = false, includeAll = false, throwOnError
       : [];
     if (includeAll) {
       cachedAgentCatalog = nextAgents;
-      lastCatalogFetch = now;
+      lastCatalogFetch = Date.now();
     } else {
       cachedAgents = nextAgents;
-      lastFetch = now;
+      lastFetch = Date.now();
     }
     cachedShells = shellItems.map(normalizeShellStatus).filter((item): item is ShellStatus => item !== null);
     return { agents: nextAgents, shells: cachedShells };
@@ -190,9 +201,9 @@ async function fetchAgentRuntime(force = false, includeAll = false, throwOnError
     if (throwOnError) throw err;
     return { agents: agentCache, shells: cachedShells };
   } finally {
-    if (includeAll) {
+    if (includeAll && inFlightCatalog === request) {
       inFlightCatalog = null;
-    } else {
+    } else if (!includeAll && inFlightAgents === request) {
       inFlightAgents = null;
     }
   }

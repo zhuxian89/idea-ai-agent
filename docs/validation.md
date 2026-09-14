@@ -1,5 +1,15 @@
 # 验证记录
 
+## 0.1.15 发布源码验证
+
+- Agent/API/usecase Go 回归通过；新增启动测试验证自动识别和失败退出等待状态，Windows Agent 测试包与完整运行时交叉编译通过。
+- 模型刷新服务覆盖旧快照、多次事件合并、catalog 隔离及错误恢复。旧源码在同一回归中失败，见 `build/reports/agent-discovery-baseline.log`。
+- 状态文字、菜单和重启交互 20 项浏览器测试通过；320px 中文浅色、375px 英文深色及长名称/错误无横向溢出。完整 App 模型发现、连接恢复、消息与工具状态冒烟通过，见 `build/reports/agent-status-labels-smoke.log`。
+- 消息布局与活动分组 16 项回归通过，覆盖两个 Agent、375px/1080px、短文/长文/图片和操作栏。旧布局在 1080px 视口内停于 `854.390625px`，修复后贴齐 `1064px` 内容边界。日志位于 `build/reports/session-message-layout-*.log`。
+- TypeScript 检查通过。Kotlin 实现没有修改，Java 17 / IDEA build 241 基线保持不变。
+
+0.1.15 构建与包内应用检查记录保存在 `build/reports/release-0.1.15/`，安装包位于 `build/releases/0.1.15/`。Windows 与 IDEA/JCEF 实机验收边界不变；详细修复记录见 `.codestable/issues/2026-09-14-agent-model-startup/` 和 `.codestable/issues/2026-09-14-user-message-alignment/`。
+
 ## 0.1.14 发布源码验证
 
 本版发布工具活动 F1–F6 与 F7 已验证的修复，沿用本机 macOS arm64/JBR21 环境；发布不代表 F7 所有实机检查通过。

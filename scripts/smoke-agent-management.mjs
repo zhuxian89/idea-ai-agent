@@ -51,7 +51,7 @@ async function smokeWorkbenchControls(page, reports) {
     const collapsedMenu = await menu.boundingBox();
     assert.ok(Math.abs(initialMenu.x - collapsedMenu.x) < 1 && Math.abs(initialMenu.width - collapsedMenu.width) < 1);
     await menu.getByRole('button', {name: /^Model\b/}).click();
-    await page.getByRole('button', {name: 'View claude error details', exact: true}).click();
+    await page.getByRole('button', {name: 'View details: claude', exact: true}).click();
     const errorMenu = await menu.boundingBox();
     assert.ok(Math.abs(initialMenu.x - errorMenu.x) < 1 && Math.abs(initialMenu.width - errorMenu.width) < 1);
     await page.getByRole('button', {name: /Expand codex/}).click();

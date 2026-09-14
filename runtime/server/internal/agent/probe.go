@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -24,6 +23,7 @@ type Status struct {
 	Protocol                      Protocol                 `json:"protocol,omitempty"`
 	Installed                     bool                     `json:"installed"`
 	Available                     bool                     `json:"available"`
+	ProbePending                  bool                     `json:"probe_pending,omitempty"`
 	Version                       string                   `json:"version,omitempty"`
 	Error                         string                   `json:"error,omitempty"`
 	RuntimeError                  string                   `json:"-"`
@@ -256,12 +256,9 @@ func (s *probeSessionStore) saveLocked() error {
 
 // Start 启动定期探测
 func (p *Prober) Start(ctx context.Context) {
-	// 首次全量探测放到后台，避免阻塞服务启动和请求处理。
-	// Windows 下深度探测会启动外部 Agent CLI；部分 SDK/CLI 无法由 MindFS
-	// 注入 CREATE_NO_WINDOW，后台启动时会出现空白控制台窗口。
-	if shouldRunBackgroundRuntimeProbe(runtime.GOOS) {
-		go p.safeProbeAll(ctx)
-	}
+	// All transports now suppress Windows console windows at process creation.
+	// Discover capabilities on every platform without blocking server startup.
+	go p.safeProbeAll(ctx)
 
 	// 启动定期探测：只重试未安装命令。运行时失败不做主动恢复探测，
 	// 避免周期性打开 agent probe session。
@@ -315,13 +312,9 @@ func (p *Prober) UpdateConfig(ctx context.Context, cfg *Config) {
 		}
 	}
 	p.mu.Unlock()
-	if len(installed) > 0 && shouldRunBackgroundRuntimeProbe(runtime.GOOS) {
-		go p.probeInstalledAgents(ctx, installed)
+	if len(installed) > 0 {
+		go p.probeConfiguredAgents(ctx, installed)
 	}
-}
-
-func shouldRunBackgroundRuntimeProbe(goos string) bool {
-	return goos != "windows"
 }
 
 // ProbeAll 探测所有配置的 Agent
@@ -550,7 +543,8 @@ func probeConfiguredAgentWithPool(ctx context.Context, name string, def Definiti
 	return probeInstalledAgentWithPool(ctx, name, def, pool, probeSessions, status, phase)
 }
 
-func probeInstalledAgentWithPool(ctx context.Context, name string, def Definition, pool *Pool, probeSessions *probeSessionStore, status Status, phase probePhase) Status {
+func probeInstalledAgentWithPool(ctx context.Context, name string, def Definition, pool *Pool, probeSessions *probeSessionStore, status Status, phase probePhase) (result Status) {
+	defer func() { result.ProbePending = false }()
 	if !status.Installed {
 		return status
 	}
@@ -657,6 +651,9 @@ func statusChanged(prev Status, next Status) bool {
 		return true
 	}
 	if prev.Available != next.Available {
+		return true
+	}
+	if prev.ProbePending != next.ProbePending {
 		return true
 	}
 	if prev.Version != next.Version {
@@ -801,7 +798,7 @@ func probeInstallStatus(name string, def Definition, ts time.Time) Status {
 		return status
 	}
 	status.Installed = true
-	status.ProbeError = "probe pending"
+	status.ProbePending = true
 	return status
 }
 
@@ -901,6 +898,9 @@ func normalizeStatus(status Status) Status {
 		status.Error = status.ProbeError
 	default:
 		status.Error = strings.TrimSpace(status.Error)
+	}
+	if status.Available || status.Error != "" || !status.Installed {
+		status.ProbePending = false
 	}
 	return status
 }
@@ -1050,19 +1050,6 @@ func (p *Prober) probeInstallOnly(defs []Definition) {
 	})
 }
 
-func (p *Prober) probeInstalledAgents(ctx context.Context, defs []Definition) {
-	if len(defs) == 0 {
-		return
-	}
-
-	p.runDefinitionsConcurrently(defs, func(_ int, def Definition) {
-		status := unavailableStatus(def.Name, true, "probe pending", time.Now().UTC())
-		status.Protocol = agentDefinitionProtocol(def.Name, def)
-		status = safeProbeInstalledAgentWithPool(ctx, def.Name, def, p.pool, p.probeSessions, status, probePhaseBackground)
-		p.setStatus(status)
-	})
-}
-
 func safeProbeConfiguredAgentWithPool(ctx context.Context, name string, def Definition, pool *Pool, probeSessions *probeSessionStore, phase probePhase) (status Status) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -1071,19 +1058,6 @@ func safeProbeConfiguredAgentWithPool(ctx context.Context, name string, def Defi
 		}
 	}()
 	return probeConfiguredAgentWithPool(ctx, name, def, pool, probeSessions, phase)
-}
-
-func safeProbeInstalledAgentWithPool(ctx context.Context, name string, def Definition, pool *Pool, probeSessions *probeSessionStore, status Status, phase probePhase) (out Status) {
-	defer func() {
-		if r := recover(); r != nil {
-			out = status
-			out.Available = false
-			out.ProbeError = fmt.Sprintf("probe panic: %v", r)
-			out.LastProbe = time.Now().UTC()
-			log.Printf("[agent/probe] probe_installed.panic agent=%s phase=%s recovered=%v", name, phase, r)
-		}
-	}()
-	return probeInstalledAgentWithPool(ctx, name, def, pool, probeSessions, status, phase)
 }
 
 func loadProbeSessionBinding(store *probeSessionStore, agentName string) (ProbeSessionBinding, bool) {

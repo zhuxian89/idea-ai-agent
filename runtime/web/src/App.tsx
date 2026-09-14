@@ -9696,6 +9696,7 @@ export function App({ onGoHome }: AppProps) {
           break;
         case "ws.connected":
           setStatus("connected");
+          setAgentsVersion((v) => v + 1);
           void refreshManagedRoots();
           if (currentRootIdRef.current) {
             const newest = sessionsRef.current[0]?.updated_at || "";
@@ -9715,6 +9716,7 @@ export function App({ onGoHome }: AppProps) {
           break;
         case "ws.reconnected":
           setStatus("connected");
+          setAgentsVersion((v) => v + 1);
           void refreshManagedRoots();
           if (currentRootIdRef.current) {
             const newest = sessionsRef.current[0]?.updated_at || "";

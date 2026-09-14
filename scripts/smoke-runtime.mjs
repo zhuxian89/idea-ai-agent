@@ -12,6 +12,7 @@ import { smokeMessageDelivery } from './smoke-message-delivery.mjs';
 import { smokeNativeChrome } from './smoke-native-chrome.mjs';
 import { smokeSessionModel } from './smoke-session-model.mjs';
 import { smokeQuestionChoice } from './smoke-question-choice.mjs';
+import { smokeAgentDiscovery } from './smoke-agent-discovery.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const toolsDir = path.join(root, '.tools');
@@ -95,6 +96,7 @@ try {
     browser = await chromium.launch({headless: true, ...(chrome ? {executablePath: chrome} : {channel: 'chrome'})});
     const reports = path.join(root, 'build/reports');
     mkdirSync(reports, {recursive: true});
+    await smokeAgentDiscovery(browser, bootstrapURL, reports);
     await smokeQuestionChoice(browser, bootstrapURL, ready.rootId, reports);
     await smokeSessionModel(browser, bootstrapURL, ready.rootId, reports);
     await smokeNativeChrome(browser, bootstrapURL, ready.rootId, reports);

@@ -1,2 +1,4 @@
-.activity-group-member { min-width: 0; padding-inline-start: 18px; }
-.activity-group-member[hidden] { display: none; }
+/* Preserve message align-self rules through the stable grouping wrapper. */
+.activity-timeline-member { display: flex; flex-direction: column; min-width: 0; }
+.activity-group-member { padding-inline-start: 18px; }
+.activity-timeline-member[hidden] { display: none; }

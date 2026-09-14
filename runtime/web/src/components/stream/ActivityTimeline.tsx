@@ -40,7 +40,7 @@ export function ActivityTimeline({ timeline, rootId, sessionKey, rootPath, tailC
     // Every member stays at the same parent and key when an open segment
     // becomes a group. Only explicit group collapse unmounts its content.
     return <div key={key} id={memberId(key)} data-activity-member={group?.key}
-      className={group ? "activity-group-member" : undefined} hidden={!expanded}>
+      className={group ? "activity-timeline-member activity-group-member" : "activity-timeline-member"} hidden={!expanded}>
       {expanded ? renderItem(item, index, group ? first ? "4px" : "2px" : spacingAt(index, item)) : null}
     </div>;
   };
