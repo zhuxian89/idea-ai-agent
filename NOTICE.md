@@ -20,3 +20,7 @@ from `github.com/yandc/claude-agent-sdk-go` at `fc2d6ef2e3eb`, also included in 
 distribution. Its `README.idea-agent.md` documents the minimal constructor patch
 that allows the CLI to choose its native model. Neither transport is represented
 as an official vendor SDK.
+
+`github.com/santhosh-tekuri/jsonschema/v6` v6.0.3 validates native MCP form
+responses. Its Apache-2.0 license is retained in
+`runtime/third_party/jsonschema-v6-LICENSE` and included in runtime distributions.

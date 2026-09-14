@@ -853,6 +853,7 @@ func TestProtocolHandleElicitationRequest(t *testing.T) {
 		})
 
 		assert.Equal(t, "decline", resp.Response.Response["action"])
+		assert.Equal(t, "req_fields", got.RequestID)
 		assert.Equal(t, "auth-server", got.ServerName)
 		assert.Equal(t, "Enter credentials", got.Message)
 		assert.Equal(t, "form", got.Mode)
@@ -899,6 +900,7 @@ func TestProtocolHandleUserDialogRequest(t *testing.T) {
 			"result":   "yes",
 		}, resp.Response.Response)
 
+		assert.Equal(t, "req_ud", got.RequestID)
 		assert.Equal(t, "approve_edit", got.DialogKind)
 		assert.Equal(t, map[string]interface{}{"path": "/tmp/x", "lines": 12}, got.Payload)
 		assert.Equal(t, "tu_42", got.ToolUseID)

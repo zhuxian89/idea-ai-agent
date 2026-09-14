@@ -34,6 +34,7 @@ type rpcEnvelope struct {
 }
 
 type appEvent struct {
+	native *nativeRequestState
 	ID     *int64
 	Method string
 	Params json.RawMessage
@@ -64,8 +65,9 @@ type AppServerExec struct {
 	pending   map[int64]chan rpcEnvelope
 	pendingMu sync.Mutex
 
-	subsMu sync.RWMutex
-	subs   map[chan appEvent]struct{}
+	nativeRequests sync.Map
+	subsMu         sync.RWMutex
+	subs           map[chan appEvent]*appEventSubscription
 
 	knownThreadsMu sync.Mutex
 	knownThreads   map[string]struct{}
@@ -100,7 +102,7 @@ func NewAppServerExec(
 		baseURL:        baseURL,
 		apiKey:         apiKey,
 		pending:        make(map[int64]chan rpcEnvelope),
-		subs:           make(map[chan appEvent]struct{}),
+		subs:           make(map[chan appEvent]*appEventSubscription),
 		knownThreads:   make(map[string]struct{}),
 	}
 }
@@ -282,30 +284,46 @@ func (a *AppServerExec) forgetKnownThread(threadID string) {
 }
 
 func (a *AppServerExec) dispatchEvent(event appEvent) {
-	a.subsMu.RLock()
-	for ch := range a.subs {
-		select {
-		case ch <- event:
-		default:
-			// Drop if the subscriber is too slow.
+	if isNativeInteractionEvent(event.Method) && event.ID != nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		event.native = &nativeRequestState{ctx: ctx, cancel: cancel}
+		a.nativeRequests.Store(*event.ID, event.native)
+	}
+	if event.Method == "serverRequest/resolved" {
+		var params struct {
+			RequestID int64 `json:"requestId"`
+		}
+		if json.Unmarshal(event.Params, &params) == nil {
+			if value, ok := a.nativeRequests.LoadAndDelete(params.RequestID); ok {
+				value.(*nativeRequestState).cancel()
+			}
 		}
 	}
-	a.subsMu.RUnlock()
+
+	a.subsMu.RLock()
+	defer a.subsMu.RUnlock()
+	for _, sub := range a.subs {
+		sub.enqueue(event)
+	}
 }
 
 func (a *AppServerExec) subscribe() chan appEvent {
-	ch := make(chan appEvent, appServerSubscriberBuffer)
+	sub := newAppEventSubscription()
 	a.subsMu.Lock()
-	a.subs[ch] = struct{}{}
+	if a.closed.Load() {
+		sub.stop()
+	} else {
+		a.subs[sub.out] = sub
+	}
 	a.subsMu.Unlock()
-	return ch
+	return sub.out
 }
 
 func (a *AppServerExec) unsubscribe(ch chan appEvent) {
 	a.subsMu.Lock()
-	if _, ok := a.subs[ch]; ok {
+	if sub, ok := a.subs[ch]; ok {
 		delete(a.subs, ch)
-		close(ch)
+		sub.stop()
 	}
 	a.subsMu.Unlock()
 }
@@ -501,13 +519,19 @@ func (a *AppServerExec) failPendingCalls() {
 }
 
 func (a *AppServerExec) closeSubscribers() {
+	a.nativeRequests.Range(func(key, value any) bool {
+		value.(*nativeRequestState).cancel()
+		a.nativeRequests.Delete(key)
+		return true
+	})
+
 	a.subsMu.Lock()
 	subs := a.subs
-	a.subs = make(map[chan appEvent]struct{})
+	a.subs = make(map[chan appEvent]*appEventSubscription)
 	a.subsMu.Unlock()
 
-	for ch := range subs {
-		close(ch)
+	for _, sub := range subs {
+		sub.stop()
 	}
 }
 
@@ -666,6 +690,8 @@ func (a *AppServerExec) runTurn(args CodexExecArgs, output chan ExecResult) erro
 		}
 	}
 
+	sub := a.subscribe()
+	defer a.unsubscribe(sub)
 	turnID, err := a.startTurn(ctx, threadID, args)
 	if err != nil {
 		return err
@@ -676,7 +702,7 @@ func (a *AppServerExec) runTurn(args CodexExecArgs, output chan ExecResult) erro
 		a.logf("app server: missing turn id in response")
 	}
 
-	return a.streamTurn(ctx, threadID, turnID, args, output)
+	return a.streamTurnSubscribed(ctx, threadID, turnID, args, output, sub)
 }
 
 func (a *AppServerExec) subscribeThreadEvents(args CodexExecArgs, output chan ExecResult) error {
@@ -771,6 +797,9 @@ func (a *AppServerExec) subscribeThreadEvents(args CodexExecArgs, output chan Ex
 			if args.AskUserHandler != nil && isRequestUserInputEvent(event.Method) {
 				state.runRequest(func() { a.submitAskUserResponse(event, args.AskUserHandler, ctx) })
 			}
+			if isNativeInteractionEvent(event.Method) && event.ID != nil {
+				state.runRequest(func() { a.submitServerResponse(ctx, event, args.ServerRequestHandler) })
+			}
 			line, done, err := appEventToLegacyLine(event, state)
 			if err != nil {
 				return err
@@ -839,6 +868,9 @@ func (a *AppServerExec) runCompact(args CodexExecArgs, output chan ExecResult) e
 			}
 			if !eventMatchesTurn(event, threadID, "") {
 				continue
+			}
+			if isNativeInteractionEvent(event.Method) && event.ID != nil {
+				state.runRequest(func() { a.submitServerResponse(ctx, event, args.ServerRequestHandler) })
 			}
 			line, done, err := appEventToLegacyLine(event, state)
 			if err != nil {
@@ -1479,10 +1511,14 @@ func (a *AppServerExec) streamTurn(
 	args CodexExecArgs,
 	output chan ExecResult,
 ) error {
-	ctx, cancelRequests := context.WithCancel(ctx)
-	defer cancelRequests()
 	sub := a.subscribe()
 	defer a.unsubscribe(sub)
+	return a.streamTurnSubscribed(ctx, threadID, turnID, args, output, sub)
+}
+
+func (a *AppServerExec) streamTurnSubscribed(ctx context.Context, threadID, turnID string, args CodexExecArgs, output chan ExecResult, sub chan appEvent) error {
+	ctx, cancelRequests := context.WithCancel(ctx)
+	defer cancelRequests()
 
 	state := &turnState{
 		items: make(map[string]map[string]interface{}),
@@ -1711,6 +1747,9 @@ func (a *AppServerExec) handleTurnEvent(
 	if args.AskUserHandler != nil && isRequestUserInputEvent(event.Method) {
 		state.runRequest(func() { a.submitAskUserResponse(event, args.AskUserHandler, ctx) })
 	}
+	if isNativeInteractionEvent(event.Method) && event.ID != nil {
+		state.runRequest(func() { a.submitServerResponse(ctx, event, args.ServerRequestHandler) })
+	}
 	line, done, err := appEventToLegacyLine(event, state)
 	if err != nil {
 		return false, err
@@ -1830,6 +1869,9 @@ func eventMatchesTurn(event appEvent, threadID string, turnID string) bool {
 		return false
 	}
 	if turnID != "" {
+		if isNativeInteractionEvent(event.Method) && meta.TurnID == "" {
+			return meta.ThreadID == threadID
+		}
 		return meta.TurnID == turnID
 	}
 	if threadID != "" && meta.ThreadID != "" {

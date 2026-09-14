@@ -1278,6 +1278,7 @@ type GetHostAuthTokenFunc func(ctx context.Context) (string, error)
 
 // ElicitationRequest is the input to the OnElicitation callback.
 type ElicitationRequest struct {
+	RequestID       string                 `json:"-"`
 	ServerName      string                 `json:"serverName"`
 	Message         string                 `json:"message"`
 	Mode            string                 `json:"mode,omitempty"`
@@ -1310,6 +1311,7 @@ const (
 // protocol bump. Hosts MUST answer unrecognized kinds with
 // UserDialogBehaviorCancelled so the CLI applies the dialog default.
 type UserDialogRequest struct {
+	RequestID  string                 `json:"-"`
 	DialogKind string                 `json:"dialogKind"`
 	Payload    map[string]interface{} `json:"payload"`
 	ToolUseID  string                 `json:"toolUseID,omitempty"`

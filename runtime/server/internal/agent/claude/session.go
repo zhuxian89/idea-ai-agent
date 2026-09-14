@@ -201,8 +201,9 @@ type session struct {
 	pendingToolCalls map[string]types.ToolCall
 	taskInfos        map[string]claudeTaskInfo
 
-	questionMu    sync.Mutex
-	questionWaits map[string]*types.PendingQuestion[claudeagent.Answers]
+	questionMu         sync.Mutex
+	questionWaits      map[string]*types.PendingQuestion[claudeagent.Answers]
+	nativeInteractions map[string]*types.NativeInteraction
 }
 
 func (s *session) SendMessage(ctx context.Context, content string) error {
@@ -267,6 +268,11 @@ func (s *session) AnswerQuestion(ctx context.Context, answer types.AskUserAnswer
 	waiter, ok := s.questionWaits[callID]
 	if !ok {
 		return errors.New("question is not pending: " + callID)
+	}
+	if native := s.nativeInteractions[callID]; native != nil {
+		if err := native.Validate(answers); err != nil {
+			return err
+		}
 	}
 	if err := waiter.Answer(ctx, answers); err != nil {
 		return err

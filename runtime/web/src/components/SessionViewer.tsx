@@ -1,3 +1,4 @@
+import { NativeInteractionFields, getNativeInteraction } from "./NativeInteractionFields";
 import { ReplyContext } from "./stream/ReplyContext";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSessionStream, type TimelineItem } from "../hooks/useSessionStream";
@@ -585,6 +586,7 @@ function AskUserQuestionCard({
 }) {
   const { t } = useI18n();
   const questions = getAskUserQuestions(toolCall);
+  const native = getNativeInteraction(toolCall.meta?.nativeInteraction);
   const [focusedCustomAnswerKey, setFocusedCustomAnswerKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [answerError, setAnswerError] = useState("");
@@ -612,7 +614,7 @@ function AskUserQuestionCard({
     !!toolUseId &&
     !!onAnswer &&
     questions.length > 0 &&
-    questions.every((_, index) => (answers[`q_${index}`] || "").trim() !== "") &&
+    (native ? active && isCurrent && native.actions.includes(answers.q_0) : questions.every((_, index) => (answers[`q_${index}`] || "").trim() !== "")) &&
     !submitting &&
     !submitted;
 
@@ -726,7 +728,7 @@ function AskUserQuestionCard({
       </button>
       {expanded ? (
         <div style={{ padding: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          {questions.map((question, index) => {
+          {native ? <NativeInteractionFields interaction={native} answers={answers} onChange={setAnswers} disabled={submitting || submitted || !active || !isCurrent} /> : questions.map((question, index) => {
             const key = `q_${index}`;
             const options = Array.isArray(question.options) ? question.options : [];
             const selected = answers[key] || "";

@@ -24,3 +24,10 @@ a recording subprocess runner, without invoking a model.
 This is a third-party Go transport, not an official Anthropic SDK. The installed
 Claude Code CLI still executes the Agent. Builds use this local replacement,
 not edits to the developer's Go module cache.
+
+Native interaction patch (2026-09-14): callback requests now expose the original
+control `RequestID` (excluded from JSON serialization), allowing the host to
+identify concurrent MCP elicitations and user dialogs independently. Elicitation
+responses preserve an explicitly accepted empty content object. Protocol tests
+check both callback identities. The plugin registers elicitation and the known
+`refusal_fallback_prompt` dialog; unknown dialog kinds remain cancelled.

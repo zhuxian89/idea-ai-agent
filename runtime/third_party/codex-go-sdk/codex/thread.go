@@ -313,6 +313,7 @@ func (t *Thread) buildExecArgs(
 		ApprovalPolicy:        string(options.ApprovalPolicy),
 		ApprovalHandler:       options.ApprovalHandler,
 		AskUserHandler:        options.AskUserHandler,
+		ServerRequestHandler:  options.ServerRequestHandler,
 		AdditionalDirectories: options.AdditionalDirectories,
 		CollaborationMode:     collaborationMode,
 	}

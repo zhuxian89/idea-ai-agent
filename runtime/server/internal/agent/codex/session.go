@@ -63,6 +63,12 @@ func (r *Runtime) OpenSession(_ context.Context, opts OpenOptions) (types.Sessio
 			}
 			return sess.handleApprovalRequest(req)
 		},
+		ServerRequestHandler: func(req codexsdk.ServerRequest) (any, error) {
+			if sess == nil {
+				return nil, errors.New("codex session not initialized")
+			}
+			return sess.handleNativeRequest(req)
+		},
 		AskUserHandler: func(req codexsdk.AskUserRequest) (codexsdk.AskUserResponse, error) {
 			if sess == nil {
 				return codexsdk.AskUserResponse{}, errors.New("codex session not initialized")
@@ -207,9 +213,10 @@ type session struct {
 
 	agentDebugLog *logs.AgentLogger
 
-	questionMu    sync.Mutex
-	questionWaits map[string]*types.PendingQuestion[map[string]string]
-	questionItems map[string][]codexsdk.AskUserQuestion
+	questionMu         sync.Mutex
+	questionWaits      map[string]*types.PendingQuestion[map[string]string]
+	nativeInteractions map[string]*types.NativeInteraction
+	questionItems      map[string][]codexsdk.AskUserQuestion
 }
 
 func (s *session) SendMessage(ctx context.Context, content string) error {
@@ -533,6 +540,11 @@ func (s *session) AnswerQuestion(ctx context.Context, answer types.AskUserAnswer
 	if questions := s.questionItems[callID]; len(questions) > 0 {
 		if len(codexAskUserResponse(questions, answers).Answers) != len(questions) {
 			return errors.New("all questions require an explicit answer")
+		}
+	}
+	if native := s.nativeInteractions[callID]; native != nil {
+		if err := native.Validate(answers); err != nil {
+			return err
 		}
 	}
 	if err := waiter.Answer(ctx, answers); err != nil {

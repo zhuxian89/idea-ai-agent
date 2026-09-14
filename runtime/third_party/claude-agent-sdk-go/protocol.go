@@ -340,7 +340,7 @@ func (p *Protocol) handleHostAuthTokenRefresh(
 
 // handleElicitationRequest processes an MCP elicitation request from the CLI.
 func (p *Protocol) handleElicitationRequest(ctx context.Context, req ControlRequest) SDKControlResponse {
-	elReq := ElicitationRequest{}
+	elReq := ElicitationRequest{RequestID: req.RequestID}
 	elReq.ServerName, _ = req.Payload["mcp_server_name"].(string)
 	elReq.Message, _ = req.Payload["message"].(string)
 	elReq.Mode, _ = req.Payload["mode"].(string)
@@ -366,7 +366,7 @@ func (p *Protocol) handleElicitationRequest(ctx context.Context, req ControlRequ
 	respData := map[string]interface{}{
 		"action": result.Action,
 	}
-	if len(result.Content) > 0 {
+	if result.Content != nil {
 		respData["content"] = result.Content
 	}
 
@@ -387,7 +387,7 @@ func (p *Protocol) handleElicitationRequest(ctx context.Context, req ControlRequ
 // callback is unset or returns an error, the SDK answers `cancelled` so the
 // CLI applies the dialog's default behavior.
 func (p *Protocol) handleUserDialogRequest(ctx context.Context, req ControlRequest) SDKControlResponse {
-	udReq := UserDialogRequest{}
+	udReq := UserDialogRequest{RequestID: req.RequestID}
 	udReq.DialogKind, _ = req.Payload["dialog_kind"].(string)
 	if pl, ok := req.Payload["payload"].(map[string]interface{}); ok {
 		udReq.Payload = pl

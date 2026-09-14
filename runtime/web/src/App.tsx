@@ -6157,11 +6157,6 @@ export function App({ onGoHome }: AppProps) {
       effort?: string,
       fastService?: "" | "on" | "off",
       shell?: string,
-      newSessionWorktree?: {
-        create: boolean;
-        branchMode: "new" | "existing";
-        branch: string;
-      },
     ) => {
       const activeRoot = currentRootIdRef.current;
       if (!activeRoot) return;
@@ -6615,7 +6610,6 @@ export function App({ onGoHome }: AppProps) {
         context,
         effectiveShell || undefined,
         requestId,
-        newSessionWorktree,
       );
       if (sent && applyPendingPlanPrefix) {
         setPendingPlanMode(false);
@@ -14493,7 +14487,6 @@ export function App({ onGoHome }: AppProps) {
               agentsVersion={agentsVersion}
               codexRateLimitsRefreshToken={codexRateLimitsRefreshToken}
               currentRootId={currentRootId}
-              currentRootIsGitRepo={managedRootByIdRef.current[currentRootId || ""]?.is_git_repo === true}
               currentSession={actionBarSession}
               pendingPlanMode={pendingPlanMode}
               attachedFileContext={attachedFileContext}

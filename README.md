@@ -4,12 +4,12 @@
 
 [下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
 
-当前版本为 **0.1.16**，更新说明见 [0.1.16 发布说明](docs/releases/v0.1.16.md)。
+当前版本为 **0.1.17**，更新说明见 [0.1.17 发布说明](docs/releases/v0.1.17.md)。
 
-| 系统 / 架构 | 0.1.16 安装包 |
+| 系统 / 架构 | 0.1.17 安装包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.16/idea-ai-agent-0.1.16-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.16/idea-ai-agent-0.1.16-macos-arm64.zip) |
+| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.17/idea-ai-agent-0.1.17-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.17/idea-ai-agent-0.1.17-macos-arm64.zip) |
 
 Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。各平台验证范围见发布说明。
 
@@ -18,6 +18,8 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 0.1.5 继续保留用户 PATH 的优先顺序，并在 Mac 上补充 `~/.local/bin`、`~/.hermes/node/bin` 和 Homebrew 常见目录，覆盖运行期间新建的安装目录。进入配置页或刷新列表会立即检查 CLI 是否存在；安装输出在命令会话展示，执行后返回配置页即可重新识别。重启后检测结果会自动更新，连接错误会显示在对应 Agent 卡片上。
 
 ## 实现
+
+0.1.17 接通 MCP 表单和 URL 确认、Codex 额外权限及 Claude 已知原生对话框，修复 Codex 高频事件丢失，并移除聊天输入区的 worktree 创建入口。
 
 0.1.16 新增「加入当前文件」路径入口及文件右键入口，恢复回复思考强度和 Context，修复历史补录与每轮上下文快照保存。
 
@@ -43,7 +45,7 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 
 插件入口关闭 Relay、Token Station、云端 Agent 配置拉取、服务自身更新和 PWA 入口；本机 Agent 仍按其配置连接模型服务。
 
-每个工具窗口绑定当前 IDEA 项目。项目和文件管理由 IDEA 承担；会话仍保留已有 worktree 能力，Agent 命令使用界面选定的原生权限模式。
+每个工具窗口绑定当前 IDEA 项目。项目和文件管理由 IDEA 承担；新会话直接使用当前项目目录，输入区不提供 worktree 开关或分支选择，Agent 命令使用界面选定的原生权限模式。
 
 模型和推理默认跟随本机 CLI 配置。插件内 Codex / Claude Code 未保存权限选择的会话默认最高权限；普通权限下保留原生授权交互，方案选择与计划模式继续可用。已确认的差异与验证边界见 [原生能力核对清单](docs/native-agent-compatibility.md)。
 

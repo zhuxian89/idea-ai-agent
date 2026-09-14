@@ -26,5 +26,8 @@ func (s *session) nativeOptions(opts OpenOptions) []claudeagent.Option {
 		claudeagent.WithAgentProgressSummaries(true),
 		claudeagent.WithForwardSubagentText(true),
 		claudeagent.WithCanUseTool(s.handleCanUseTool),
+		claudeagent.WithOnElicitation(s.handleElicitation),
+		claudeagent.WithOnUserDialog(s.handleUserDialog),
+		claudeagent.WithSupportedDialogKinds("refusal_fallback_prompt"),
 	}
 }

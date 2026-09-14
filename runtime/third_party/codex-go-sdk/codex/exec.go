@@ -52,6 +52,7 @@ type CodexExecArgs struct {
 	ApprovalPolicy        string
 	ApprovalHandler       types.ApprovalHandler
 	AskUserHandler        types.AskUserHandler
+	ServerRequestHandler  types.ServerRequestHandler
 	CollaborationMode     *types.CollaborationMode
 }
 

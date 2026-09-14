@@ -14,7 +14,7 @@
 | Claude 配置中的 CLI 附加参数未传递 | 保留顺序、重复参数和带空格的值；流式协议必需的三个参数冲突会明确报错 | `TestNativeCLIFlagsAndArguments` |
 | 方案选择仅凭 WebSocket 发出就显示成功，且后端先写入已回答状态 | 后端接受答案后才更新记录及确认；断线、超时、过期显示错误，保留填写内容；重复答案不阻塞 | 前端 `question-delivery.test.mjs`；Go `TestAnswer*` |
 | 等待选择可能阻塞 Codex 后续事件、取消或任务结束 | 询问独立等待，取消和答案接收只有一个终态；主会话及子会话串行处理事件和完成记录，避免工具回调与流输出竞争 | `TestPendingQuestionDoesNotBlockTurnCompletion`、`TestTurnUpdatesSerializeAndIgnoreLateCallbacks`、`TestNativeBackgroundCompletion*`、`TestCanceledNativeQuestion*` |
-| IDEA 入口禁用会话及任务 worktree | Git 项目恢复会话和任务的独立 worktree，项目注册仍绑定 IDEA | `TestIDEProjectSupportsSessionAndTaskWorktrees`、打包界面冒烟 |
+| IDEA 输入区保留了不需要的 worktree 创建入口 | 移除会话 worktree 开关、分支选择和创建参数；新会话直接使用当前 IDEA 项目目录 | 打包界面冒烟验证 Git 项目不展示 worktree 入口 |
 | 编辑器内容截取前 128000 字符 | 传递完整选择/文件内容，保留未保存内容与安全 Markdown 围栏 | `EditorContextTest` |
 
 方案选择支持 Codex `request_user_input`、`request_user_input_async` 与 Claude `AskUserQuestion`，包括多问题、文字补充和 Claude 多选。0.1.13 保留异步消息中的问题数据，通过原生 `turn/interrupt` 暂停对应轮次，用户提交完整答案后在同一原生线程继续。协议测试验证答案映射回原生问题标识/问题文本；CLI 工具请求的允许或拒绝通过相同交互入口返回。Codex 会保留服务端提供的授权选项和结构化决定。

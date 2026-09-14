@@ -108,8 +108,7 @@ try {
     await page.locator('[contenteditable="true"]').first().waitFor({timeout: 30000});
     await page.evaluate(() => window.ideaAgentReceiveContext('IDE_CONTEXT_SMOKE\n文件：Example.kt:1\nclass Example'));
     await page.waitForFunction(() => [...document.querySelectorAll('[contenteditable="true"]')].some(e => e.textContent.includes('IDE_CONTEXT_SMOKE')));
-    await page.getByRole('button', {name: /worktree/i}).first().waitFor();
-    assert.ok(await page.getByRole('button', {name: /worktree/i}).count() > 0, 'IDE composer must offer worktree creation for a Git project');
+    assert.equal(await page.getByRole('button', {name: /worktree/i}).count(), 0, 'IDE composer must not offer worktree creation for a Git project');
     await page.screenshot({path: path.join(reports, 'agent-wide.png'), animations: 'disabled'});
     await page.setViewportSize({width: 430, height: 850});
     await page.evaluate(() => window.ideaAgentSetTheme('dark'));

@@ -1,5 +1,12 @@
 # 验证记录
 
+## 0.1.17 发布源码验证
+
+- Codex、Claude、共用表单校验、session 与 Codex SDK 全套相关 Go 测试及 race 检查通过；Claude SDK 原生交互协议测试和原生 usecase 回归通过。日志为 `build/reports/native-interactions-*-tests.log`。
+- 覆盖 2,048 条事件积压后的有序交付、启动响应前的完成事件、请求 ID 与并发去重、取消、表单校验失败后重试、权限范围，以及未知 Claude dialog 取消。
+- TypeScript 和真实 Chromium 原生交互／回答确认链路共 4 项测试通过；已检查 375px 移动端、900px 中文深色截图。详情见 `.codestable/issues/2026-09-14-native-interactions/native-interactions-fix-note.md`。
+- 发布构建日志目录为 `build/reports/release-0.1.17/`，平台 ZIP 与校验清单目录为 `build/releases/0.1.17/`。Windows 为交叉编译；本轮原生交互测试使用模拟协议，没有付费模型调用。
+
 ## 0.1.16 发布源码验证
 
 - 当前文件入口：26 项 Kotlin/IDEA 平台测试与 23 项桥接/浏览器测试通过，覆盖多文件切换后取激活标签页、右击文件、原有未保存代码片段、菜单注册、草稿保留和窄栏主题。日志为 `build/reports/file-context*`。

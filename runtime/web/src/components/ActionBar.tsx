@@ -21,9 +21,6 @@ import TokenEditor, {
 import { renderToolIcon } from "./stream/ToolCallCard";
 import { useI18n, type MessageKey } from "../i18n";
 import { CompactUploadProgress } from "./CompactUploadProgress";
-import { fetchGitBranches, type GitBranchesPayload } from "../services/git";
-import { WorktreeBranchSelector } from "./WorktreeBranchSelector";
-import { NoWorktreeIcon } from "./NoWorktreeIcon";
 import { CodexRateLimitIndicator } from "./CodexRateLimitIndicator";
 import { deletePrompt, savePrompt } from "../services/prompts";
 
@@ -80,7 +77,6 @@ type ActionBarProps = {
   agentsVersion?: number;
   codexRateLimitsRefreshToken?: number;
   currentRootId?: string | null;
-  currentRootIsGitRepo?: boolean;
   currentSession?: SessionInfo | null;
   pendingPlanMode?: boolean;
   attachedFileContext?: AttachedFileContext | null;
@@ -103,11 +99,6 @@ type ActionBarProps = {
     effort?: string,
     fastService?: "" | "on" | "off",
     shell?: string,
-    newSessionWorktree?: {
-      create: boolean;
-      branchMode: "new" | "existing";
-      branch: string;
-    },
   ) => void | Promise<void>;
   onSetPlanMode?: (
     enabled: boolean,
@@ -400,7 +391,6 @@ export function ActionBar({
   agentsVersion = 0,
   codexRateLimitsRefreshToken = 0,
   currentRootId,
-  currentRootIsGitRepo = false,
   currentSession,
   pendingPlanMode = false,
   attachedFileContext,
@@ -462,12 +452,6 @@ export function ActionBar({
   const [promptSaveError, setPromptSaveError] = useState("");
   const [promptCandidateRefresh, setPromptCandidateRefresh] = useState(0);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-  const [createWorktree, setCreateWorktree] = useState(false);
-  const [worktreeBranchMode, setWorktreeBranchMode] = useState<"new" | "existing">("new");
-  const [worktreeBranch, setWorktreeBranch] = useState("");
-  const [worktreeBranches, setWorktreeBranches] = useState<GitBranchesPayload>({ branches: [] });
-  const [worktreeBranchesLoading, setWorktreeBranchesLoading] = useState(false);
-  const [worktreeBranchError, setWorktreeBranchError] = useState("");
   const dragStartRef = useRef(0);
   const syncedSessionSignatureRef = useRef<string>("");
   const editorRef = useRef<TokenEditorHandle>(null);
@@ -552,45 +536,7 @@ export function ActionBar({
     if (!currentSession?.pending) {
       setCancelling(false);
     }
-    if (currentSession) {
-      setCreateWorktree(false);
-      setWorktreeBranchMode("new");
-      setWorktreeBranch("");
-    }
   }, [currentSession?.key, currentSession?.session_key, currentSession?.pending]);
-
-  useEffect(() => {
-    setCreateWorktree(false);
-    setWorktreeBranchMode("new");
-    setWorktreeBranch("");
-    setWorktreeBranches({ branches: [] });
-    setWorktreeBranchError("");
-  }, [currentRootId]);
-
-  useEffect(() => {
-    if (!createWorktree || currentSession || mode === "command" || !currentRootId || !currentRootIsGitRepo) {
-      setWorktreeBranchError("");
-      return;
-    }
-    let active = true;
-    setWorktreeBranchesLoading(true);
-    setWorktreeBranchError("");
-    fetchGitBranches(currentRootId)
-      .then((payload) => {
-        if (active) setWorktreeBranches(payload);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setWorktreeBranches({ branches: [] });
-        setWorktreeBranchError(error instanceof Error ? error.message : t("worktree.loadBranchFailed"));
-      })
-      .finally(() => {
-        if (active) setWorktreeBranchesLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [createWorktree, currentRootId, currentRootIsGitRepo, currentSession, mode, t]);
 
   useEffect(() => {
     Promise.all([fetchAgents(true), fetchShells(true)])
@@ -1018,13 +964,6 @@ export function ActionBar({
         supportsEffort ? effort || undefined : undefined,
         supportsServiceTier ? fastService : undefined,
         mode === "command" ? shell || undefined : undefined,
-        !currentSession && mode !== "command" && currentRootIsGitRepo
-          ? {
-              create: createWorktree,
-              branchMode: worktreeBranchMode,
-              branch: worktreeBranchMode === "existing" ? worktreeBranch : "",
-            }
-          : undefined,
       );
       editorRef.current?.clear();
       setSerializedInput("");
@@ -1042,9 +981,6 @@ export function ActionBar({
         return [];
       });
       setIsMultiLine(false);
-      setCreateWorktree(false);
-      setWorktreeBranchMode("new");
-      setWorktreeBranch("");
       if (isMobile) {
         requestAnimationFrame(() => editorRef.current?.blur());
       }
@@ -1060,7 +996,7 @@ export function ActionBar({
         requestAnimationFrame(() => editorRef.current?.focus());
       }
     }
-  }, [serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t, currentSession, currentRootIsGitRepo, createWorktree, worktreeBranchMode, worktreeBranch]);
+  }, [serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t]);
 
   const handleCancel = useCallback(async () => {
     const sessionKey = currentSession?.key;
@@ -1311,7 +1247,7 @@ export function ActionBar({
   return (
     <div data-onboarding="action-bar" style={{ width: "100%", minWidth: 0, padding: isMobile ? "0 0 var(--mindfs-actionbar-bottom-padding, calc(env(safe-area-inset-bottom, 0px) + 2px))" : "0 16px 12px", display: "flex", justifyContent: "center", boxSizing: "border-box", background: "var(--content-bg)" }}>
       <div style={{ position: "relative", width: "100%", minWidth: 0, display: "flex", flexDirection: "column", gap: 0 }}>
-        {planModeActive || (!currentSession && currentRootIsGitRepo && mode !== "command") || (mode !== "command" && agent === "codex") ? (
+        {planModeActive || (mode !== "command" && agent === "codex") ? (
           <div
             style={{
               position: "absolute",
@@ -1343,14 +1279,6 @@ export function ActionBar({
                     <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none" /><path fill="currentColor" fillRule="evenodd" d="M21 12a9 9 0 1 1-18 0a9 9 0 0 1 18 0M7.293 16.707a1 1 0 0 1 0-1.414L10.586 12L7.293 8.707a1 1 0 0 1 1.414-1.414L12 10.586l3.293-3.293a1 1 0 1 1 1.414 1.414L13.414 12l3.293 3.293a1 1 0 0 1-1.414 1.414L12 13.414l-3.293 3.293a1 1 0 0 1-1.414 0" clipRule="evenodd" /></svg>
                   </button>
                 </div>
-              ) : null}
-              {!currentSession && currentRootIsGitRepo ? (
-                <>
-                  <button type="button" onClick={() => setCreateWorktree((value) => !value)} disabled={sending} aria-label={createWorktree ? t("task.worktreeTitle") : t("task.noWorktreeTitle")} title={createWorktree ? t("task.worktreeTitle") : t("task.noWorktreeTitle")} style={{ height: "24px", borderRadius: "6px", border: createWorktree ? "1px solid rgba(22, 163, 74, 0.28)" : "1px solid var(--border-color)", background: createWorktree ? "linear-gradient(rgba(22, 163, 74, 0.08), rgba(22, 163, 74, 0.08)), var(--mobile-overlay-bg)" : "linear-gradient(rgba(100, 116, 139, 0.10), rgba(100, 116, 139, 0.10)), var(--mobile-overlay-bg)", color: createWorktree ? "#15803d" : "var(--text-secondary)", padding: createWorktree ? "0 8px" : "0 8px 0 5px", fontSize: "11px", fontWeight: 800, cursor: sending ? "not-allowed" : "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
-                    {createWorktree ? "worktree" : <><NoWorktreeIcon size={12} />worktree</>}
-                  </button>
-                  {createWorktree ? <><WorktreeBranchSelector branchMode={worktreeBranchMode} branch={worktreeBranch} branches={worktreeBranches.branches} disabled={sending} maxWidth={isMobile ? 150 : 240} menuAlign={isMobile ? "left" : "right"} menuPlacement="top" onChange={(nextMode, nextBranch) => { setWorktreeBranchMode(nextMode); setWorktreeBranch(nextBranch); }} />{worktreeBranchesLoading ? <span style={{ fontSize: "11px", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{t("common.loading")}</span> : worktreeBranchError ? <span title={worktreeBranchError} style={{ fontSize: "11px", color: "#b45309", whiteSpace: "nowrap" }}>{t("common.loadingFailed")}</span> : null}</> : null}
-                </>
               ) : null}
             </div>
             <div style={{ pointerEvents: "auto" }}>

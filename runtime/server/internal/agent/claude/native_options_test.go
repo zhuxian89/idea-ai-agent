@@ -17,6 +17,9 @@ func TestNativeOptionsInheritCLIConfiguration(t *testing.T) {
 	for _, option := range s.nativeOptions(OpenOptions{}) {
 		option(&opts)
 	}
+	if opts.OnElicitation == nil || opts.OnUserDialog == nil || !reflect.DeepEqual(opts.SupportedDialogKinds, []string{"refusal_fallback_prompt"}) {
+		t.Fatal("native interaction callbacks not registered")
+	}
 	if opts.Model != "" {
 		t.Errorf("implicit model override: %s", opts.Model)
 	}

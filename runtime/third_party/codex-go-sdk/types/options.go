@@ -224,7 +224,8 @@ type ThreadOptions struct {
 	// ApprovalHandler handles approval requests when the app server asks for permission.
 	ApprovalHandler ApprovalHandler
 	// AskUserHandler handles request_user_input requests when app-server asks the user.
-	AskUserHandler AskUserHandler
+	AskUserHandler       AskUserHandler
+	ServerRequestHandler ServerRequestHandler
 	// AdditionalDirectories are additional directories to include
 	AdditionalDirectories []string
 	// CollaborationMode selects the Codex collaboration mode for app-server turn/start.
@@ -250,3 +251,12 @@ type TurnOptions struct {
 	// This is app-server-only. CLI transport ignores it.
 	CollaborationMode *CollaborationMode
 }
+
+// ServerRequest preserves the native app-server interaction envelope.
+type ServerRequest struct {
+	Context context.Context
+	ID      int64
+	Method  string
+	Params  json.RawMessage
+}
+type ServerRequestHandler func(ServerRequest) (any, error)

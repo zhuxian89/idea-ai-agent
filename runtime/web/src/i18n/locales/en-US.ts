@@ -1,6 +1,22 @@
 import type { Messages } from "../types";
 
 export const enUS = {
+  "native.accept": "Accept",
+  "native.decline": "Decline",
+  "native.cancel": "Cancel",
+  "native.allowTurn": "Allow for this turn",
+  "native.allowSession": "Allow for this session",
+  "native.retryFallback": "Retry with fallback model",
+  "native.editPrompt": "Edit prompt",
+  "native.urlHint": "Open the link, complete the requested step, then confirm here.",
+  "native.details": "Request details",
+  "native.action": "Response",
+  "native.choose": "Choose…",
+  "native.yes": "Yes",
+  "native.no": "No",
+  "native.jsonContent": "Form content (JSON)",
+  "native.schema": "Requested form schema",
+
   "session.effortUnavailable": "Effort unavailable",
   "session.contextUnavailable": "Context unavailable",
   "session.contextUnavailableHint": "No context usage was recorded for this reply",

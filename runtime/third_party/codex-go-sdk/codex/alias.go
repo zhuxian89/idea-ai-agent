@@ -228,7 +228,9 @@ type (
 	// AskUserResponse resolves a request_user_input request.
 	AskUserResponse = types.AskUserResponse
 	// AskUserHandler handles request_user_input requests from the app server.
-	AskUserHandler = types.AskUserHandler
+	AskUserHandler       = types.AskUserHandler
+	ServerRequest        = types.ServerRequest
+	ServerRequestHandler = types.ServerRequestHandler
 	// ModelListParams configures model catalog queries.
 	ModelListParams = types.ModelListParams
 	// ModelListResponse contains paginated model catalog results.
