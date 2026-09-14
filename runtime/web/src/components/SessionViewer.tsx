@@ -16,6 +16,7 @@ import type { AgentStatus } from "../services/agents";
 import { useI18n, type Locale } from "../i18n";
 import { formatSessionDuration } from "../services/sessionDuration";
 import { SessionActivity } from "./SessionActivity";
+import { ActivityTimeline } from "./stream/ActivityTimeline";
 import {
   relatedFileStatKey,
   useRelatedFileStats,
@@ -1068,6 +1069,13 @@ function SessionViewerInner({
   const targetSeqFrameRef = useRef<number | null>(null);
   const targetSeqTimerRefs = useRef<number[]>([]);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const readingActivityRef = useRef(false);
+  const pauseForActivityReading = (event: React.SyntheticEvent) => {
+    if (!(event.target instanceof Element) || !event.target.closest("[data-activity-reading]")) return;
+    readingActivityRef.current = true;
+    shouldStickToBottomRef.current = false;
+    setShowJumpToLatest(true);
+  };
   const [userSummaryHoverOpen, setUserSummaryHoverOpen] = useState(false);
   const [userSummaryPinnedOpen, setUserSummaryPinnedOpen] = useState(false);
   const [currentUserMessageIndex, setCurrentUserMessageIndex] = useState(0);
@@ -1286,6 +1294,7 @@ function SessionViewerInner({
     const isSessionChanged = lastSessionKeyRef.current !== nextKey;
     if (isSessionChanged) {
       lastSessionKeyRef.current = nextKey;
+      readingActivityRef.current = false;
       shouldStickToBottomRef.current = true;
     }
     if (shouldStickToBottomRef.current) {
@@ -1344,7 +1353,9 @@ function SessionViewerInner({
       const isNearBottom = distanceFromBottom < 40;
       const movedUp = el.scrollTop < lastScrollTop;
       const movedDown = el.scrollTop > lastScrollTop;
-      if (isNearBottom) {
+      if (readingActivityRef.current) {
+        shouldStickToBottomRef.current = false;
+      } else if (isNearBottom) {
         shouldStickToBottomRef.current = true;
       } else if (movedUp) {
         shouldStickToBottomRef.current = false;
@@ -1653,12 +1664,16 @@ function SessionViewerInner({
                   ? (tc.meta.title as string)
                   : "")
               }
+              localKey={item.id}
               callId={tc.callId || ""}
               status={tc.status || "running"}
               content={tc.content}
               result={formatToolCallFallbackResult(tc)}
               locations={tc.locations}
               meta={tc.meta}
+              activity={tc.activity}
+              agent={item.agent}
+              sourceTurnKey={item.sourceTurnKey}
               rootPath={rootPath || undefined}
               rootId={rootId}
               sessionKey={sessionKey}
@@ -2429,7 +2444,7 @@ function SessionViewerInner({
 
       {/* 滚动容器 */}
       <div style={{ flex: 1, minHeight: 0, minWidth: 0, position: "relative" }}>
-        <div ref={scrollRef} style={{ flex: 1, minHeight: 0, minWidth: 0, height: "100%", overflowY: "auto", overflowX: "hidden", position: "relative", WebkitOverflowScrolling: "touch" }}>
+        <div ref={scrollRef} onPointerDownCapture={pauseForActivityReading} onFocusCapture={pauseForActivityReading} onWheelCapture={pauseForActivityReading} onTouchStartCapture={pauseForActivityReading} style={{ flex: 1, minHeight: 0, minWidth: 0, height: "100%", overflowY: "auto", overflowX: "hidden", position: "relative", WebkitOverflowScrolling: "touch" }}>
           <div style={{
             width: "100%",
             minWidth: 0,
@@ -2471,16 +2486,13 @@ function SessionViewerInner({
                 ))}
               </div>
             ) : null}
-            {timeline.map((item, idx) =>
-              renderTimelineItem(
-                item,
-                idx,
-                timelineItemSpacing(idx > 0 ? timeline[idx - 1] : null, item),
-              ),
-            )}
+            <ActivityTimeline timeline={timeline} rootId={rootId || ""} sessionKey={sessionKey || ""}
+              rootPath={rootPath || undefined} tailClosed={Boolean(slashCommandResult) || (!loading && !isAwaiting && !isStreaming)}
+              renderItem={renderTimelineItem} itemSpacing={timelineItemSpacing} />
             {renderSlashCommandResult()}
             {(isAwaiting || isStreaming) && (
-              <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText} />
+              <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText}
+                rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined} />
             )}
 
             {relatedFiles.length > 0 && (
@@ -2784,6 +2796,7 @@ function SessionViewerInner({
                   if (targetSeq) {
                     targetSeqScrollKeyRef.current = `${sessionKey || ""}:${targetSeq}:${targetSeqRequestKey}`;
                   }
+                  readingActivityRef.current = false;
                   shouldStickToBottomRef.current = true;
                   setShowJumpToLatest(false);
                   stickSessionToBottom("smooth");

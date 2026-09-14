@@ -45,6 +45,8 @@ type CommandExecutionItem struct {
 	AggregatedOutput *string `json:"aggregatedOutput,omitempty"`
 	// ExitCode is set when the command exits; omitted while still running
 	ExitCode *int `json:"exitCode,omitempty"`
+	// DurationMs is the native duration of this command, including valid zero.
+	DurationMs *float64 `json:"durationMs,omitempty"`
 	// Source identifies who initiated the command execution.
 	Source string `json:"source,omitempty"`
 	// Status is the current status of the command execution
@@ -63,6 +65,8 @@ func (i *CommandExecutionItem) UnmarshalJSON(data []byte) error {
 		AggregatedOutputAlt *string                `json:"aggregated_output"`
 		ExitCode            *int                   `json:"exitCode"`
 		ExitCodeAlt         *int                   `json:"exit_code"`
+		DurationMs          *float64               `json:"durationMs"`
+		DurationMsAlt       *float64               `json:"duration_ms"`
 		Source              string                 `json:"source"`
 		Status              CommandExecutionStatus `json:"status"`
 	}
@@ -88,6 +92,10 @@ func (i *CommandExecutionItem) UnmarshalJSON(data []byte) error {
 		i.ExitCode = payload.ExitCodeAlt
 	}
 	i.Source = payload.Source
+	i.DurationMs = payload.DurationMs
+	if i.DurationMs == nil {
+		i.DurationMs = payload.DurationMsAlt
+	}
 	i.Status = payload.Status
 	return nil
 }
@@ -202,6 +210,8 @@ type McpToolCallItem struct {
 	Result *McpToolCallResult `json:"result,omitempty"`
 	// Error message reported for failed calls
 	Error *McpToolCallError `json:"error,omitempty"`
+	// DurationMs is provided by the native tool completion event when available.
+	DurationMs *float64 `json:"durationMs,omitempty"`
 	// Status is the current status of the tool invocation
 	Status McpToolCallStatus `json:"status"`
 }

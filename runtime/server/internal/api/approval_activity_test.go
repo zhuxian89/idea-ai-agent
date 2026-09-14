@@ -60,14 +60,15 @@ func TestApprovalTerminalEventsUpdateTaskWaitingWithoutHidingOtherQuestions(t *t
 			t.Fatalf("ask_user_waiting = %v, want %v", detail.Task.AuxFlags.AskUserWaiting, want)
 		}
 	}
+	// Each scenario is a different native call; completed IDs cannot restart.
 	for _, terminal := range []string{"complete", "failed", "canceled", "cancelled"} {
 		t.Run(terminal, func(t *testing.T) {
-			emit(t, "approval-one", "running", agenttypes.EventTypeToolCall)
-			emit(t, "approval-two", "running", agenttypes.EventTypeToolCall)
+			emit(t, "approval-one-"+terminal, "running", agenttypes.EventTypeToolCall)
+			emit(t, "approval-two-"+terminal, "running", agenttypes.EventTypeToolCall)
 			assertWaiting(t, true)
-			emit(t, "approval-one", terminal, agenttypes.EventTypeToolUpdate)
+			emit(t, "approval-one-"+terminal, terminal, agenttypes.EventTypeToolUpdate)
 			assertWaiting(t, true)
-			emit(t, "approval-two", terminal, agenttypes.EventTypeToolUpdate)
+			emit(t, "approval-two-"+terminal, terminal, agenttypes.EventTypeToolUpdate)
 			assertWaiting(t, false)
 		})
 	}

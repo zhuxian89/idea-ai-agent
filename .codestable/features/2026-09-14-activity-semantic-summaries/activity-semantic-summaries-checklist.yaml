@@ -1,0 +1,40 @@
+feature: 2026-09-14-activity-semantic-summaries
+created: 2026-09-14
+steps:
+  - action: 计算规则：统一摘要与旧字段降级
+    exit_signal: 中英文语义目录及复杂命令计算用例通过
+    status: done
+  - action: 展示接入：活动行及底部名称共用入口
+    exit_signal: 类型检查通过，计时和详情所有权保留
+    status: done
+  - action: 行为与视觉验证：双 Agent 及计时回归
+    exit_signal: 浏览器、主题窄宽度和构建验证通过
+    status: done
+  - action: 验收归档：现状文档与阶段状态回写
+    exit_signal: S1–S8 有证据且 F3 完成状态一致
+    status: done
+checks:
+  - item: S1 描述优先和双 Agent 一致
+    source: 名词契约
+    status: passed
+  - item: S2 工具语义与缺省降级
+    source: 验收场景
+    status: passed
+  - item: S3 命令预览安全且原文保留
+    source: 流程级约束
+    status: passed
+  - item: S4 本地化、Unicode 和路径边界
+    source: 验收场景
+    status: passed
+  - item: S5 共用名称及原交互优先级
+    source: 编排骨架
+    status: passed
+  - item: S6 两项会话计时保留
+    source: 范围守护
+    status: passed
+  - item: S7 浏览器与构建验证
+    source: 验收场景
+    status: passed
+  - item: S8 纯计算和阶段边界
+    source: 挂载点
+    status: passed

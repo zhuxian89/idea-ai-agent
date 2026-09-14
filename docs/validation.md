@@ -1,5 +1,18 @@
 # 验证记录
 
+## 0.1.14 发布源码验证
+
+本版发布工具活动 F1–F6 与 F7 已验证的修复，沿用本机 macOS arm64/JBR21 环境；发布不代表 F7 所有实机检查通过。
+
+- F7 前端基线 145 项与新增 readiness 4 项通过，TypeScript 通过；16 组宽度/亮暗/100%–150% 布局、键盘/焦点、1000 项同机对照与 1 MiB 连续日志均有证据。
+- Codex、Claude、通用 Agent 类型、session、API/usecase 相关 Go 包通过；Codex 实测发现的包装重复与失败误判修复后，Codex、session、API/usecase 已再次通过。
+- Kotlin 21 项通过，构建与项目配置校验通过。0.1.14 Plugin Verifier 在本机缓存 IC 2024.1（241.14494.240）返回 Compatible，其他 IDEA 目标本次未重跑。F7 完整包内应用 smoke 覆盖提问提交、模型/权限、消息/排队、两项计时、后台会话恢复及主题桥接。
+- 真实 Codex 0.154：三次独立调用（读取 README、成功命令、预期 exit 7），完整历史同步前后保留 3 个原 ID、2 成功/1 失败；真实会话的浏览器详情与默认收起验证通过。最后的 runtime 二进制重读原生会话再次通过。
+- Claude Code 2.1.270 虽报告已登录，实际 adapter 请求在 180 秒内未返回终态。IDEA/JCEF 的主题、缩放、剪贴板、焦点与滚动未完成实机验收；系统录屏权限未授予。Windows 为 Mac 交叉编译，未验证 Windows 实机安装。
+
+上述功能证据在 `build/reports/activity-ide-readiness/`，完整记录见 [F7 部分验收](../.codestable/features/2026-09-14-activity-ide-readiness/activity-ide-readiness-acceptance.md)。0.1.14 发布构建、打包冒烟、Plugin Verifier 与平台文件/校验值记录在 `build/reports/release-0.1.14/`；发布产物为 `build/releases/0.1.14/` 的 Mac arm64、Windows x64 ZIP 和 SHA256SUMS.txt。新版本号仅在插件 manifest 层变化，F7 待验收项目继续保留。
+
+
 ## 0.1.13 发布源码验证
 
 本轮在 macOS arm64、IDEA 自带 JDK 21 环境验证：

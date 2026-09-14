@@ -3635,6 +3635,7 @@ func shouldPersistToolCallAux(toolCall agenttypes.ToolCall) bool {
 
 func mergeBufferedToolCall(base, next agenttypes.ToolCall) agenttypes.ToolCall {
 	merged := base
+	merged.Activity = agenttypes.MergeActivityFacts(base.Activity, next.Activity)
 	if strings.TrimSpace(next.CallID) != "" {
 		merged.CallID = next.CallID
 	}
@@ -3642,7 +3643,7 @@ func mergeBufferedToolCall(base, next agenttypes.ToolCall) agenttypes.ToolCall {
 		merged.Title = next.Title
 	}
 	if strings.TrimSpace(next.Status) != "" {
-		merged.Status = next.Status
+		merged.Status = agenttypes.MergeToolStatus(base.Status, next.Status)
 	}
 	if next.Kind != "" {
 		merged.Kind = next.Kind

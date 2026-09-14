@@ -17,13 +17,15 @@ export async function smokeMessageDelivery(page, reports) {
   await page.route('**/api/agents**', route => route.fulfill({json: {agents: [{name: 'codex', installed: true, available: true, models: []}], shells: []}}));
   await page.route('**/api/sessions**', route => {
     const url = new URL(route.request().url());
+    // F4 history migration uses POST /sync before incremental reads.
+    url.pathname = url.pathname.replace(/\/sync$/, '');
     rootId = url.searchParams.get('root') || rootId;
     if (url.pathname === '/api/sessions') {
       const items = [session, backgroundSession].filter(Boolean).map(item => ({...item, root_id: rootId}));
       return route.fulfill({json: {items, total_count: items.length}});
     }
-    if (url.pathname === '/api/sessions/delivery-test') return route.fulfill({json: {...session, root_id: rootId}});
-    if (backgroundSession && url.pathname === `/api/sessions/${backgroundSession.key}`) return route.fulfill({json: {...backgroundSession, root_id: rootId}});
+    if (url.pathname === '/api/sessions/delivery-test') return route.fulfill({json: {activity_history_version: 1, ...session, root_id: rootId}});
+    if (backgroundSession && url.pathname === `/api/sessions/${backgroundSession.key}`) return route.fulfill({json: {activity_history_version: 1, ...backgroundSession, root_id: rootId}});
     if (url.pathname.endsWith('/related-files')) return route.fulfill({json: []});
     return route.continue();
   });
@@ -59,7 +61,7 @@ export async function smokeMessageDelivery(page, reports) {
   assert.match(await status.innerText(), /Waiting for Agent|waiting for response/i);
   send('session.stream', {event: {type: 'thought_chunk', data: {content: 'Inspecting the request.'}}});
   await status.getByText('Thinking', {exact: true}).waitFor();
-  send('session.stream', {event: {type: 'tool_call', data: {callId: 'tool-test', kind: 'execute', status: 'running', title: 'Run tests'}}});
+  send('session.stream', {event: {type: 'tool_call', data: {callId: 'tool-test', kind: 'execute', status: 'running', title: 'Run tests', meta: {description: 'Run tests'}}}});
   await status.getByText('Running tool: Run tests', {exact: true}).waitFor();
   await page.clock.install();
   await page.clock.fastForward(65000);
@@ -86,7 +88,7 @@ export async function smokeMessageDelivery(page, reports) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await openHistory(backgroundSession.name);
   await chat.getByText('Another running request', {exact: true}).waitFor();
-  send('session.stream', {event: {type: 'tool_call_update', data: {callId: 'tool-test', kind: 'execute', status: 'running', title: 'Run tests in background'}}});
+  send('session.stream', {event: {type: 'tool_call_update', data: {callId: 'tool-test', kind: 'execute', status: 'running', title: 'Run tests in background', meta: {description: 'Run tests in background'}}}});
   // A visible acknowledgement on the same socket confirms that the preceding
   // background event was processed before advancing the browser clock.
   send('session.stream', {session_key: backgroundSession.key, event: {type: 'recovery', data: {message: 'Waiting while background task progresses'}}});

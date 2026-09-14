@@ -707,6 +707,10 @@ func readClaudeImportedExchangeLocators(path string, after time.Time) ([]importe
 			return nil
 		}
 		role := strings.ToLower(strings.TrimSpace(asString(raw["type"])))
+		if role == "permission_denied" || (role == "system" && asString(raw["subtype"]) == "permission_denied") {
+			importedClaudePermissionDenied(items, toolLocations, raw)
+			return nil
+		}
 		if role != "user" && role != "assistant" {
 			return nil
 		}
@@ -729,7 +733,7 @@ func readClaudeImportedExchangeLocators(path string, after time.Time) ([]importe
 			return nil
 		}
 		text := strings.TrimSpace(extractClaudeMessageText(message["content"]))
-		aux := extractClaudeToolUseAux(message["content"])
+		aux := mergeImportedClaudeTools(items, toolLocations, extractClaudeToolUseAux(message["content"]), strings.TrimSpace(asString(raw["parent_tool_use_id"])))
 		if text == "" && len(aux) == 0 {
 			return nil
 		}
@@ -876,15 +880,10 @@ func extractClaudeToolUseAux(raw any) []agenttypes.ImportedExchangeAux {
 			if callID == "" {
 				continue
 			}
-			kind := mapToolKind(name)
-			if kind != agenttypes.ToolKindExecute &&
-				kind != agenttypes.ToolKindEdit &&
-				kind != agenttypes.ToolKindThink &&
-				kind != agenttypes.ToolKindAskUser {
-				continue
-			}
 			input, _ := json.Marshal(item["input"])
 			toolCall := newRunningToolCall(callID, name, "tool_use", input)
+			toolCall.Activity = claudeActivityFacts(name, input, "")
+			toolCall.Activity.Origin = "imported"
 			aux = append(aux, agenttypes.ImportedExchangeAux{
 				Line:     importedAssistantLine(strings.Join(textParts, "\n\n")),
 				ToolCall: &toolCall,
@@ -928,10 +927,14 @@ func applyClaudeToolResults(
 		if output == "" {
 			output = summarizeGenericToolResult(item["content"])
 		}
-		isError, _ := item["is_error"].(bool)
-		if isError {
-			toolCall.Status = "failed"
-		} else {
+		result := toolUseResult
+		if len(parts) != 1 || result == nil {
+			result = item["content"]
+		}
+		outcome := importedClaudeOutcome(toolCall, item, result)
+		toolCall.Activity.Outcome = outcome
+		toolCall.Status = outcome
+		if outcome == "completed" {
 			toolCall.Status = "complete"
 		}
 		if strings.TrimSpace(output) != "" {

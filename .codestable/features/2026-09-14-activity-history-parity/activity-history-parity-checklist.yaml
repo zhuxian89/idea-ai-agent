@@ -1,0 +1,40 @@
+feature: 2026-09-14-activity-history-parity
+created: 2026-09-14
+steps:
+  - action: 历史计算：种类与事实补齐
+    exit_signal: 对应测试与契约核查通过
+    status: done
+  - action: 补录编排与持久化：按身份幂等合并
+    exit_signal: 对应测试与契约核查通过
+    status: done
+  - action: 缓存和展示上下文：完整补录后增量恢复
+    exit_signal: 对应测试与契约核查通过
+    status: done
+  - action: 验证与归档：浏览器及现状回写
+    exit_signal: 对应测试与契约核查通过
+    status: done
+checks:
+  - item: S1 双 Agent 历史种类与事实
+    source: 验收契约
+    status: passed
+  - item: S2 原生终态及耗时
+    source: 验收契约
+    status: passed
+  - item: S3 重复导入与原始日志保护
+    source: 验收契约
+    status: passed
+  - item: S4 完整紧凑及 WS 事实
+    source: 验收契约
+    status: passed
+  - item: S5 旧缓存补录与 IndexedDB 恢复
+    source: 验收契约
+    status: passed
+  - item: S6 Agent 与轮次可靠归属
+    source: 验收契约
+    status: passed
+  - item: S7 折叠详情和两项计时
+    source: 验收契约
+    status: passed
+  - item: S8 构建和阶段边界
+    source: 验收契约
+    status: passed

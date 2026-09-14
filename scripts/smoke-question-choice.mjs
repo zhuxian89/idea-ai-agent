@@ -20,9 +20,11 @@ export async function smokeQuestionChoice(browser, bootstrapURL, rootId, reports
   await page.route('**/api/agents**', route => route.fulfill({json: {agents: [{name: 'codex', available: true, installed: true, models: []}], shells: []}}));
   await page.route('**/api/sessions**', route => {
     const url = new URL(route.request().url());
+    // F4 history migration uses POST /sync before incremental reads.
+    url.pathname = url.pathname.replace(/\/sync$/, '');
     if (url.pathname === '/api/sessions') return route.fulfill({json: {items: sessions, total_count: sessions.length}});
     const session = sessions.find(item => url.pathname === `/api/sessions/${item.key}`);
-    if (session) return route.fulfill({json: {...session, exchanges: session.exchanges.filter(ex => ex.seq > Number(url.searchParams.get('seq') || 0))}});
+    if (session) return route.fulfill({json: {activity_history_version: 1, ...session, exchanges: session.exchanges.filter(ex => ex.seq > Number(url.searchParams.get('seq') || 0))}});
     if (url.pathname.endsWith('/related-files')) return route.fulfill({json: []});
     return route.continue();
   });

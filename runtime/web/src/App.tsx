@@ -1,4 +1,5 @@
 import { isIdeaRuntime, openIdeaFile, refreshIdeaFiles } from "./services/ideaBridge";
+import { mergeActivityFacts, mergeToolStatus } from "./services/activityFacts";
 import React, {
   useCallback,
   useEffect,
@@ -13,6 +14,7 @@ import {
   deleteCachedSession,
   getCachedMultiRootSessionList,
   getCachedSession,
+  hasCurrentActivityHistory,
   getCachedSessionList,
   saveCachedMultiRootSessionList,
   saveCachedSessionList,
@@ -4162,6 +4164,7 @@ export function App({ onGoHome }: AppProps) {
       const cacheKey = rootSessionKey(rootID, sessionKey);
       const mergeToolCall = (existing: any, incoming: any) => {
         const merged = { ...(existing || {}), ...incoming };
+        merged.activity = mergeActivityFacts(existing?.activity, incoming?.activity);
         const incomingMeta = (incoming?.meta || {}) as Record<string, unknown>;
         if (existing?.meta || incoming?.meta) {
           merged.meta = { ...(existing?.meta || {}), ...incomingMeta };
@@ -4185,19 +4188,7 @@ export function App({ onGoHome }: AppProps) {
         }
         if (!incoming.kind && existing?.kind) merged.kind = existing.kind;
         if (!incoming.title && existing?.title) merged.title = existing.title;
-        const existingStatus = `${existing?.status || ""}`.toLowerCase();
-        const incomingStatus = `${incoming?.status || ""}`.toLowerCase();
-        if (
-          (existingStatus === "failed" ||
-            existingStatus === "error" ||
-            existingStatus === "complete" ||
-            existingStatus === "success") &&
-          (incomingStatus === "running" ||
-            incomingStatus === "pending" ||
-            incomingStatus === "in_progress")
-        ) {
-          merged.status = existing.status;
-        }
+        merged.status = mergeToolStatus(existing?.status, incoming?.status);
         return merged;
       };
       const updateList = (prevList: Exchange[]) => {
@@ -5426,7 +5417,7 @@ export function App({ onGoHome }: AppProps) {
       const cached = sessionCacheRef.current[cacheKey];
       if (cached) {
         applySession(cached);
-        if (!shouldSyncHistory && hasSessionExchanges(cached)) {
+        if (!shouldSyncHistory && hasSessionExchanges(cached) && hasCurrentActivityHistory(cached)) {
           loadedSessionRef.current[cacheKey] = true;
           return;
         }
@@ -5434,13 +5425,13 @@ export function App({ onGoHome }: AppProps) {
         const persisted = await getCachedSession(targetRoot, key);
         if (persisted) {
           applySession(persisted);
-          if (!shouldSyncHistory && hasSessionExchanges(persisted)) {
+          if (!shouldSyncHistory && hasSessionExchanges(persisted) && hasCurrentActivityHistory(persisted)) {
             loadedSessionRef.current[cacheKey] = true;
             return;
           }
         }
       }
-      if (!shouldSyncHistory && loadedSessionRef.current[cacheKey]) {
+      if (!shouldSyncHistory && loadedSessionRef.current[cacheKey] && hasCurrentActivityHistory(sessionCacheRef.current[cacheKey])) {
         return;
       }
       try {
@@ -11042,10 +11033,10 @@ export function App({ onGoHome }: AppProps) {
     if (!isStale && loadedSessionRef.current[cacheKey]) {
       return;
     }
-    if (!isStale && hasSessionExchanges(cached)) {
+    if (!isStale && hasSessionExchanges(cached) && hasCurrentActivityHistory(cached)) {
       return;
     }
-    if (!isStale && hasSessionExchanges(selectedSessionSnapshot as Session | null)) {
+    if (!isStale && hasSessionExchanges(selectedSessionSnapshot as Session | null) && hasCurrentActivityHistory(selectedSessionSnapshot as Session | null)) {
       return;
     }
     if (loadingSessionRef.current[cacheKey]) {

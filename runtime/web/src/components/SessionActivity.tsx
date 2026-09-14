@@ -1,14 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TimelineItem } from "../hooks/useSessionStream";
 import { useI18n } from "../i18n";
+import { buildToolActivityView } from "../services/toolActivity";
 
-export function SessionActivity({ timeline, lastEventAt, connected, recoveryText }: {
+export function SessionActivity({ timeline, lastEventAt, connected, recoveryText, rootId = "", sessionKey = "", rootPath }: {
   timeline: TimelineItem[];
   lastEventAt: number;
   connected: boolean;
   recoveryText: string;
+  rootId?: string;
+  sessionKey?: string;
+  rootPath?: string;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [openedAt] = useState(Date.now);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -29,12 +33,15 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
   const runningTools = currentTurn.filter((item) => item.type === "tool" && ["running", "pending", "in_progress"].includes(item.toolCall.status || ""));
   const question = runningTools.find((item) => item.type === "tool" && item.toolCall.kind === "ask_user");
   const tool = runningTools[runningTools.length - 1];
+  const toolSummary = useMemo(() => tool?.type === "tool" ? buildToolActivityView(tool.toolCall, {
+    rootId, sessionKey, rootPath, locale, agent: tool.agent, sourceTurnKey: tool.sourceTurnKey, requiresInteraction: false,
+  }).summary : "", [tool, rootId, sessionKey, rootPath, locale]);
   const last = currentTurn[currentTurn.length - 1];
   const sending = user?.type === "user_text" && user.pendingAck;
   const label = !connected ? t("session.activityDisconnected")
     : question ? t("session.activityAnswer")
     : sending ? t("session.activitySending")
-    : recoveryText || (tool?.type === "tool" ? t("session.activityTool", { name: tool.toolCall.title || tool.toolCall.kind || "Agent" })
+    : recoveryText || (tool?.type === "tool" ? t("session.activityTool", { name: toolSummary })
     : last?.type === "thought" ? t("session.activityThinking")
     : last?.type === "assistant_text" ? t("session.generating")
     : t("session.activityWaiting"));
@@ -51,7 +58,7 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
   return <div data-session-activity className="session-activity">
     <div role="status" aria-live="polite" className="session-activity-label">
       <span aria-hidden="true" className="session-activity-dot" />
-      <span>{label}</span>
+      <span className={connected && !question && !sending && !recoveryText && tool?.type === "tool" ? "session-activity-tool-summary" : undefined}>{label}</span>
     </div>
     <div className="session-activity-time">
       {t("session.activityElapsed", { duration: formatDuration(elapsedSeconds) })}

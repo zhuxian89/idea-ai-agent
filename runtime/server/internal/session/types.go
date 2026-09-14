@@ -74,6 +74,7 @@ func CompactExchangeAux(aux ExchangeAux) (ExchangeAux, bool) {
 }
 
 func CompactToolCall(toolCall agenttypes.ToolCall) agenttypes.ToolCall {
+	toolCall.Activity = agenttypes.CloneActivityFacts(toolCall.Activity)
 	preserveContent := PreserveToolCallContent(toolCall.Kind)
 	switch {
 	case preserveContent:

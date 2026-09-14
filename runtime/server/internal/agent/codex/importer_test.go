@@ -283,15 +283,15 @@ func TestParseImportedCodexToolCallStructuresEditArguments(t *testing.T) {
 	}
 }
 
-func TestParseImportedCodexToolCallRejectsUnsupportedKinds(t *testing.T) {
+func TestParseImportedCodexToolCallIncludesSupportedKinds(t *testing.T) {
 	for _, name := range []string{"read_file", "web_search", "spawn_agent"} {
 		if toolCall, ok := parseImportedCodexToolCall(map[string]any{
 			"type":      "function_call",
 			"name":      name,
 			"call_id":   "unsupported",
 			"arguments": `{}`,
-		}, 0); ok {
-			t.Fatalf("parseImportedCodexToolCall(%q) = %#v, want rejected", name, toolCall)
+		}, 0); !ok {
+			t.Fatalf("parseImportedCodexToolCall(%q) = %#v, want included", name, toolCall)
 		}
 	}
 }

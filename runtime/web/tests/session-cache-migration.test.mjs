@@ -31,6 +31,7 @@ vm.runInNewContext(
           },
         };
       }
+      if (name === "./sessionHistory") return { hasCurrentActivityHistory: () => false };
       return require(name);
     },
   },

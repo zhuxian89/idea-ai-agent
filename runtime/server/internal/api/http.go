@@ -798,16 +798,65 @@ func (h *HTTPHandler) handleSessionGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uc := h.service()
+	auxAfterSeq := afterSeq
+	var pendingUser *session.Exchange
+	if h.AppContext != nil {
+		pendingUser = h.AppContext.GetSessionStreamHub().GetPendingUserExchange(key)
+	}
+	if pendingUser == nil {
+		if synced, err := uc.SyncExternalSessionDelta(r.Context(), usecase.SyncExternalSessionDeltaInput{
+			RootID: rootID,
+			Key:    key,
+		}); err != nil {
+			log.Printf("[session/sync] external delta best-effort failed root=%s session=%s err=%v", strings.TrimSpace(rootID), strings.TrimSpace(key), err)
+		} else if synced.RefreshAux {
+			auxAfterSeq = 0
+		}
+	}
+	out, err := uc.GetSession(r.Context(), usecase.GetSessionInput{
+		RootID: rootID,
+		Key:    key,
+		Seq:    afterSeq,
+	})
+	if err != nil {
+		respondError(w, http.StatusNotFound, err)
+		return
+	}
+	contextWindow, _ := uc.GetSessionContextWindow(r.Context(), usecase.GetSessionContextWindowInput{
+		RootID: rootID,
+		Key:    key,
+	})
+	exchangeAux, _ := uc.GetSessionExchangeAux(r.Context(), usecase.GetSessionExchangeAuxInput{
+		RootID: rootID,
+		Key:    key,
+		Seq:    auxAfterSeq,
+	})
+	respondJSON(w, http.StatusOK, h.sessionResponse(r.Context(), rootID, out, pendingUser, contextWindow, exchangeAux))
+}
+
+func (h *HTTPHandler) handleSessionSync(w http.ResponseWriter, r *http.Request) {
+	rootID := r.URL.Query().Get("root")
+	key := chi.URLParam(r, "key")
+	if strings.TrimSpace(key) == "" {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("session key required"))
+		return
+	}
+	afterSeq, err := parsePositiveIntQuery(r, "seq")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("seq must be a positive integer"))
+		return
+	}
+	uc := h.service()
 	var pendingUser *session.Exchange
 	if h.AppContext != nil {
 		pendingUser = h.AppContext.GetSessionStreamHub().GetPendingUserExchange(key)
 	}
 	if pendingUser == nil {
 		if _, err := uc.SyncExternalSessionDelta(r.Context(), usecase.SyncExternalSessionDeltaInput{
-			RootID: rootID,
-			Key:    key,
+			RootID: rootID, Key: key, Full: true,
 		}); err != nil {
-			log.Printf("[session/sync] external delta best-effort failed root=%s session=%s err=%v", strings.TrimSpace(rootID), strings.TrimSpace(key), err)
+			respondError(w, http.StatusBadRequest, err)
+			return
 		}
 	}
 	out, err := uc.GetSession(r.Context(), usecase.GetSessionInput{
@@ -828,49 +877,11 @@ func (h *HTTPHandler) handleSessionGet(w http.ResponseWriter, r *http.Request) {
 		Key:    key,
 		Seq:    afterSeq,
 	})
-	respondJSON(w, http.StatusOK, h.sessionResponse(r.Context(), rootID, out, pendingUser, contextWindow, exchangeAux))
-}
-
-func (h *HTTPHandler) handleSessionSync(w http.ResponseWriter, r *http.Request) {
-	rootID := r.URL.Query().Get("root")
-	key := chi.URLParam(r, "key")
-	if strings.TrimSpace(key) == "" {
-		respondError(w, http.StatusBadRequest, errInvalidRequest("session key required"))
-		return
+	response := h.sessionResponse(r.Context(), rootID, out, pendingUser, contextWindow, exchangeAux)
+	if pendingUser == nil {
+		response["activity_history_version"] = 1
 	}
-	afterSeq, err := parsePositiveIntQuery(r, "seq")
-	if err != nil {
-		respondError(w, http.StatusBadRequest, errInvalidRequest("seq must be a positive integer"))
-		return
-	}
-	uc := h.service()
-	if _, err := uc.SyncExternalSessionDelta(r.Context(), usecase.SyncExternalSessionDeltaInput{
-		RootID: rootID,
-		Key:    key,
-		Full:   true,
-	}); err != nil {
-		respondError(w, http.StatusBadRequest, err)
-		return
-	}
-	out, err := uc.GetSession(r.Context(), usecase.GetSessionInput{
-		RootID: rootID,
-		Key:    key,
-		Seq:    afterSeq,
-	})
-	if err != nil {
-		respondError(w, http.StatusNotFound, err)
-		return
-	}
-	contextWindow, _ := uc.GetSessionContextWindow(r.Context(), usecase.GetSessionContextWindowInput{
-		RootID: rootID,
-		Key:    key,
-	})
-	exchangeAux, _ := uc.GetSessionExchangeAux(r.Context(), usecase.GetSessionExchangeAuxInput{
-		RootID: rootID,
-		Key:    key,
-		Seq:    afterSeq,
-	})
-	respondJSON(w, http.StatusOK, h.sessionResponse(r.Context(), rootID, out, nil, contextWindow, exchangeAux))
+	respondJSON(w, http.StatusOK, response)
 }
 
 func (h *HTTPHandler) handleSessionToolCallGet(w http.ResponseWriter, r *http.Request) {

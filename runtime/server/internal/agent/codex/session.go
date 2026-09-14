@@ -331,14 +331,14 @@ func (s *session) handleStreamedEvents(ctx context.Context, events <-chan codexs
 			if s.handleNonToolItem(e.Item, true) {
 				continue
 			}
-			if toolCall, ok := mapToolItem(e.Item, true); ok {
+			if toolCall, ok := mapLiveToolItem(e.Item, "started", ""); ok {
 				s.emit(types.Event{Type: types.EventTypeToolCall, SessionID: s.SessionID(), Data: toolCall})
 				continue
 			}
 			logUnhandledEvent(s.sessionKey, "item.started", raw)
 		case *codexsdk.ItemUpdatedEvent:
 			s.logRawToolItem(e.Item)
-			if toolCall, ok := mapToolItem(e.Item, false); ok {
+			if toolCall, ok := mapLiveToolItem(e.Item, "updated", ""); ok {
 				s.emit(types.Event{Type: types.EventTypeToolUpdate, SessionID: s.SessionID(), Data: toolCall})
 				continue
 			}
@@ -362,7 +362,7 @@ func (s *session) handleStreamedEvents(ctx context.Context, events <-chan codexs
 				continue
 			}
 			s.logRawToolItem(e.Item)
-			if toolCall, ok := mapToolItem(e.Item, false); ok {
+			if toolCall, ok := mapLiveToolItem(e.Item, "completed", e.TurnID); ok {
 				s.emit(types.Event{Type: types.EventTypeToolUpdate, SessionID: s.SessionID(), Data: toolCall})
 				continue
 			}

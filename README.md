@@ -4,12 +4,12 @@
 
 [下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
 
-当前版本为 **0.1.13**，更新说明见 [0.1.13 发布说明](docs/releases/v0.1.13.md)。
+当前版本为 **0.1.14**，更新说明见 [0.1.14 发布说明](docs/releases/v0.1.14.md)。
 
-| 系统 / 架构 | 0.1.13 安装包 |
+| 系统 / 架构 | 0.1.14 安装包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.13/idea-ai-agent-0.1.13-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.13/idea-ai-agent-0.1.13-macos-arm64.zip) |
+| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.14/idea-ai-agent-0.1.14-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.14/idea-ai-agent-0.1.14-macos-arm64.zip) |
 
 Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。各平台验证范围见发布说明。
 
@@ -18,6 +18,8 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 0.1.5 继续保留用户 PATH 的优先顺序，并在 Mac 上补充 `~/.local/bin`、`~/.hermes/node/bin` 和 Homebrew 常见目录，覆盖运行期间新建的安装目录。进入配置页或刷新列表会立即检查 CLI 是否存在；安装输出在命令会话展示，执行后返回配置页即可重新识别。重启后检测结果会自动更新，连接错误会显示在对应 Agent 卡片上。
 
 ## 实现
+
+0.1.14 将 Codex/Claude 共用工具过程改为默认折叠的轻量活动行，连续完成的普通操作可收成组；保留进展正文、最终回答、主动展开选择，以及“已等待”和“最近更新于”两项计时。修复真实 Codex 完整历史同步后重复显示包装命令、失败被误判为成功的问题。Claude 与 IDEA/JCEF 的剩余实机验收范围见发布说明。
 
 0.1.13 修复原生标题栏按钮、发送后 Agent/模型串会话、异步选择题未等待回答、活动栏状态恢复和语言/外观持久化；同时包含此前本地测试版本的权限选择、消息同步与 Agent 管理改进。
 

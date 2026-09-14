@@ -1,0 +1,17 @@
+.activity-detail-feedback { min-width: 0; font-size: 12px; color: var(--text-secondary); }
+.activity-detail-notice, .activity-detail-actions, .activity-detail-copy {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0;
+}
+.activity-detail-notice, .activity-detail-actions { margin-top: 8px; }
+.activity-detail-notice { overflow-wrap: anywhere; }
+.activity-detail-feedback button {
+  min-height: 30px; padding: 3px 6px; border: 1px solid var(--border-color);
+  border-radius: 5px; background: transparent; color: var(--text-primary);
+  font: inherit; cursor: pointer;
+}
+.activity-detail-feedback button:hover { background: var(--hover-bg, rgba(148, 163, 184, 0.12)); }
+.activity-detail-feedback button:focus-visible, [data-activity-details]:focus-visible {
+  outline: 2px solid var(--accent-color, #2f80ed); outline-offset: 2px;
+}
+.activity-detail-feedback button[aria-disabled="true"] { opacity: .6; cursor: wait; }
+[data-activity-details] { scrollbar-color: var(--text-secondary) transparent; overflow-anchor: none; }

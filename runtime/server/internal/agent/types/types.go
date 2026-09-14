@@ -393,6 +393,7 @@ type ToolKind string
 
 const (
 	ToolKindRead       ToolKind = "read"
+	ToolKindList       ToolKind = "list"
 	ToolKindEdit       ToolKind = "edit"
 	ToolKindDelete     ToolKind = "delete"
 	ToolKindMove       ToolKind = "move"
@@ -431,6 +432,7 @@ type ToolCall struct {
 	Locations []ToolCallLocation    `json:"locations,omitempty"`
 	RawType   string                `json:"rawType,omitempty"`
 	Meta      map[string]any        `json:"meta,omitempty"`
+	Activity  *ActivityFactsV1      `json:"activity,omitempty"`
 }
 
 func (tc ToolCall) IsWriteOperation() bool {

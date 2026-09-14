@@ -1,0 +1,37 @@
+feature: 2026-09-14-activity-ide-readiness
+created: 2026-09-14
+steps:
+  - action: Web 组合与性能验证
+    exit_signal: S1 S2 S3 有实测证据
+    status: done
+  - action: 原生回归与本地验证包
+    exit_signal: S4 S7 通过且包哈希已记录
+    status: done
+  - action: 双 CLI 与 IDEA 实机验证
+    exit_signal: S5 S6 有真实环境证据
+    status: pending
+  - action: 验收与项目文档归档
+    exit_signal: 实际结果同步且不夸大通过范围
+    status: done
+checks:
+  - item: S1
+    source: 验收契约
+    status: passed
+  - item: S2
+    source: 验收契约
+    status: passed
+  - item: S3
+    source: 验收契约
+    status: passed
+  - item: S4
+    source: 验收契约
+    status: passed
+  - item: S5
+    source: 验收契约
+    status: pending
+  - item: S6
+    source: 验收契约
+    status: pending
+  - item: S7
+    source: 验收契约
+    status: passed

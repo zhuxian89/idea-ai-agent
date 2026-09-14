@@ -1555,6 +1555,7 @@ func (m *Manager) loadExchangeAuxEntries(key string, afterSeq int) ([]ExchangeAu
 
 func mergeToolCall(base, next agenttypes.ToolCall) agenttypes.ToolCall {
 	merged := base
+	merged.Activity = agenttypes.MergeActivityFacts(base.Activity, next.Activity)
 	if strings.TrimSpace(next.CallID) != "" {
 		merged.CallID = next.CallID
 	}
@@ -1562,7 +1563,7 @@ func mergeToolCall(base, next agenttypes.ToolCall) agenttypes.ToolCall {
 		merged.Title = next.Title
 	}
 	if strings.TrimSpace(next.Status) != "" {
-		merged.Status = next.Status
+		merged.Status = agenttypes.MergeToolStatus(base.Status, next.Status)
 	}
 	if next.Kind != "" {
 		merged.Kind = next.Kind
@@ -1602,6 +1603,7 @@ func (m *Manager) pendingFullToolCallUnsafe(sessionKey, callID string) (*agentty
 
 func cloneToolCall(toolCall agenttypes.ToolCall) agenttypes.ToolCall {
 	out := toolCall
+	out.Activity = agenttypes.CloneActivityFacts(toolCall.Activity)
 	out.Content = append([]agenttypes.ToolCallContentItem(nil), toolCall.Content...)
 	out.Locations = append([]agenttypes.ToolCallLocation(nil), toolCall.Locations...)
 	if len(toolCall.Meta) > 0 {

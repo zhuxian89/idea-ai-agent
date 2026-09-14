@@ -30,11 +30,13 @@ export async function smokeSessionModel(browser, bootstrapURL, rootId, reports) 
   await page.route('**/api/agents**', route => route.fulfill({json: {agents, shells: []}}));
   await page.route('**/api/sessions**', route => {
     const url = new URL(route.request().url());
+    // F4 history migration uses POST /sync before incremental reads.
+    url.pathname = url.pathname.replace(/\/sync$/, '');
     if (url.pathname === '/api/sessions') return route.fulfill({json: {items: sessions, total_count: sessions.length}});
     const session = sessions.find(item => url.pathname === `/api/sessions/${item.key}`);
     if (session) {
       const afterSeq = Number(url.searchParams.get('seq') || 0);
-      return route.fulfill({json: {...session, exchanges: session.exchanges.filter(exchange => exchange.seq > afterSeq)}});
+      return route.fulfill({json: {activity_history_version: 1, ...session, exchanges: session.exchanges.filter(exchange => exchange.seq > afterSeq)}});
     }
     if (url.pathname.endsWith('/related-files')) return route.fulfill({json: []});
     return route.continue();

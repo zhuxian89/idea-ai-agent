@@ -1,5 +1,8 @@
+import { ACTIVITY_HISTORY_VERSION, hasCurrentActivityHistory, mergeHistoryAux, mergeHistoryExchanges } from "./sessionHistory";
+export { hasCurrentActivityHistory } from "./sessionHistory";
 import { appURL, wsURL } from "./base";
-import { protectedFetch, protectedJSON } from "./api";
+import { ProtectedAPIError, protectedFetch, protectedJSON } from "./api";
+import type { ActivityDetailResult, ActivityRef } from "./activityDetails";
 import { e2eeService } from "./e2ee";
 
 // Session service for managing agent sessions
@@ -91,6 +94,7 @@ export type ExchangeAux = {
 };
 
 export type Session = {
+  activity_history_version?: number;
   key: string;
   session_key?: string;
   root_id?: string;
@@ -190,6 +194,7 @@ export type ToolCall = {
   locations?: ToolCallLocation[];
   meta?: Record<string, unknown>;
   rawType?: string;
+  activity?: import("./activityFacts").ActivityFactsV1;
 };
 
 export type TodoItem = {
@@ -1338,23 +1343,34 @@ class SessionService {
     sessionKey: string,
     callId: string,
   ): Promise<ToolCall | null> {
+    const result = await this.getToolCallDetails({ rootId, sessionKey, callId });
+    return result.kind === "loaded" ? result.toolCall : null;
+  }
+
+  async getToolCallDetails(
+    { rootId, sessionKey, callId }: ActivityRef,
+    signal?: AbortSignal,
+  ): Promise<ActivityDetailResult> {
     try {
-      if (!rootId || !sessionKey || !callId) return null;
+      if (!rootId || !sessionKey || !callId) return { kind: "missing" };
       const params = new URLSearchParams({ root: rootId });
       const data = await protectedJSON<{ toolcall?: ToolCall; toolCall?: ToolCall } | ToolCall>(
         appURL(
           `/api/sessions/${encodeURIComponent(sessionKey)}/toolcalls/${encodeURIComponent(callId)}`,
           params,
         ),
+        { signal },
       );
       const wrapped = data as { toolcall?: ToolCall; toolCall?: ToolCall };
-      if (wrapped?.toolcall) return wrapped.toolcall;
-      if (wrapped?.toolCall) return wrapped.toolCall;
-      const direct = data as ToolCall;
-      return direct?.callId ? direct : null;
+      const toolCall = wrapped?.toolcall || wrapped?.toolCall || data as ToolCall;
+      return toolCall?.callId ? { kind: "loaded", toolCall } : { kind: "missing" };
     } catch (err) {
-      console.error("[Session] Failed to get toolcall:", err);
-      return null;
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      const status = err instanceof ProtectedAPIError ? err.status : undefined;
+      if (status === 404) return { kind: "missing" };
+      const retryable = status === undefined || status === 408 || status === 429 || status >= 500;
+      return { kind: "unavailable", retryable,
+        message: retryable ? "toolActivity.detailsUnavailable" : "toolActivity.detailsRestricted" };
     }
   }
 
@@ -1817,7 +1833,7 @@ function appendExchangeAuxDelta(
     if (!Array.isArray(items) || items.length === 0) {
       continue;
     }
-    out[seq] = [...(out[seq] || []), ...items];
+    out[seq] = mergeHistoryAux(out[seq], items);
   }
   return out;
 }
@@ -1898,7 +1914,7 @@ function appendSessionDelta(
   const incomingExchangeAux = toPersistentExchangeAux(incoming?.exchange_aux);
   return {
     ...baseWithMeta,
-    exchanges: [...baseExchanges, ...incomingExchanges],
+    exchanges: mergeHistoryExchanges(baseExchanges, incomingExchanges),
     exchange_aux: appendExchangeAuxDelta(baseExchangeAux, incomingExchangeAux),
   };
 }
@@ -2034,9 +2050,15 @@ export async function syncSession(
 ): Promise<SyncSessionResult> {
   const base = await getCachedSession(rootId, sessionKey);
   const seq = getSessionMaxSeq(base);
-  const incoming = options?.full
-    ? await sessionService.syncExternalSession(rootId, sessionKey, seq)
+  const reconcileHistory = options?.full || !hasCurrentActivityHistory(base);
+  let incoming = reconcileHistory
+    ? await sessionService.syncExternalSession(rootId, sessionKey, 0)
     : await sessionService.getSession(rootId, sessionKey, seq);
+  const historyReconciled = reconcileHistory && hasCurrentActivityHistory(incoming);
+  // An unavailable native file must not hide already saved server history.
+  if (!incoming && reconcileHistory) {
+    incoming = await sessionService.getSession(rootId, sessionKey, seq);
+  }
   if (!incoming) {
     return { session: base, hasDelta: false };
   }
@@ -2053,6 +2075,7 @@ export async function syncSession(
   const persistedSession = appendSessionDelta(base, {
     ...incoming,
     key: sessionKey,
+    activity_history_version: historyReconciled ? ACTIVITY_HISTORY_VERSION : base?.activity_history_version,
     exchanges: persistedDelta,
     exchange_aux: toPersistentExchangeAux(incoming.exchange_aux),
   });
@@ -2068,6 +2091,6 @@ export async function syncSession(
   });
   return {
     session: displaySession ? cloneSession(displaySession) : null,
-    hasDelta: persistedDelta.length > 0,
+    hasDelta: persistedDelta.length > 0 || Object.keys(incoming.exchange_aux || {}).length > 0,
   };
 }

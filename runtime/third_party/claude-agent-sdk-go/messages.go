@@ -39,8 +39,11 @@ type APIUserMessage struct {
 
 // UserContentBlock represents a content block in a user message.
 type UserContentBlock struct {
-	Type string `json:"type"`           // "text" or other types
-	Text string `json:"text,omitempty"` // Text content
+	Type      string      `json:"type"`           // "text" or other types
+	Text      string      `json:"text,omitempty"` // Text content
+	ToolUseID string      `json:"tool_use_id,omitempty"`
+	Content   interface{} `json:"content,omitempty"`
+	IsError   *bool       `json:"is_error,omitempty"`
 }
 
 // UserMessageReplay represents a replayed user message during session resume.

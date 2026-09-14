@@ -1,0 +1,43 @@
+feature: 2026-09-14-activity-compact-rows
+created: 2026-09-14
+steps:
+  - action: 静态结构：提供独立轻量摘要头部与局部样式
+    exit_signal: 头部与样式可独立编译，尚未改变原有卡片流程
+    status: done
+  - action: 计算节点：实现旧字段展示模型与中英文基础摘要
+    exit_signal: 常见状态、描述优先与长标题输入输出可验证
+    status: done
+  - action: 状态接入：普通工具挂入轻量行并保留特殊分支与详情
+    exit_signal: 类型检查通过，普通工具可收展且特殊工具沿用旧分支
+    status: done
+  - action: 联调验收：浏览器、双 Agent 事件、计时、主题及文档回写
+    exit_signal: S1–S8 有证据，截图检查完成，roadmap 和现状文档已更新
+    status: done
+checks:
+  - item: S1 双 Agent 普通工具开始/完成与默认收起正确
+    source: 验收场景
+    status: passed
+  - item: S2 长命令/Unicode 不撑宽且详情保留原文
+    source: 验收场景
+    status: passed
+  - item: S3 主动展开和键盘/aria 状态正确
+    source: 验收场景
+    status: passed
+  - item: S4 折叠不请求，展开加载既有详情
+    source: 验收场景
+    status: passed
+  - item: S5 特殊工具原有分支及内部交互保留
+    source: 范围守护
+    status: passed
+  - item: S6 两项计时与会话生命周期保持
+    source: 流程级约束
+    status: passed
+  - item: S7 亮暗主题、窄宽度、对比度与焦点可用
+    source: 验收场景
+    status: passed
+  - item: S8 未修改后端/SDK/正文/输入区/计时或实现后续阶段
+    source: 范围守护
+    status: passed
+  - item: 展示模型遵循 roadmap F1 旧字段子集，挂载点可逆向卸载
+    source: 名词契约
+    status: passed

@@ -63,12 +63,14 @@ type ImportExternalSessionsBatchOutput struct {
 }
 
 type SyncExternalSessionDeltaInput struct {
+	Agent  string
 	RootID string
 	Key    string
 	Full   bool
 }
 
 type SyncExternalSessionDeltaOutput struct {
+	RefreshAux    bool
 	ImportedCount int
 	LastTimestamp time.Time
 }
@@ -175,6 +177,17 @@ func (s *Service) ImportExternalSession(ctx context.Context, in ImportExternalSe
 	importer, err := s.resolveExternalSessionImporter(in.Agent)
 	if err != nil {
 		return ImportExternalSessionOutput{}, err
+	}
+	lock := externalSessionSyncLock(in.RootID, "import:"+in.Agent+":"+in.AgentSessionID)
+	lock.Lock()
+	defer lock.Unlock()
+	binding, err := manager.FindAgentBindingByAgentSession(ctx, in.Agent, in.AgentSessionID)
+	if err != nil {
+		return ImportExternalSessionOutput{}, err
+	}
+	if binding != nil {
+		out, err := s.SyncExternalSessionDelta(ctx, SyncExternalSessionDeltaInput{RootID: in.RootID, Key: binding.SessionKey, Agent: in.Agent, Full: true})
+		return ImportExternalSessionOutput{SessionKey: binding.SessionKey, Agent: in.Agent, AgentSessionID: in.AgentSessionID, ImportedCount: out.ImportedCount}, err
 	}
 	imported, err := importer.ImportExternalSession(ctx, agenttypes.ImportExternalSessionInput{
 		RootPath:       root.RootPath,
@@ -285,7 +298,10 @@ func (s *Service) SyncExternalSessionDelta(ctx context.Context, in SyncExternalS
 	if err != nil {
 		return out, err
 	}
-	agentName := session.InferAgentFromSession(current)
+	agentName := strings.TrimSpace(in.Agent)
+	if agentName == "" {
+		agentName = session.InferAgentFromSession(current)
+	}
 	if agentName == "" {
 		return out, nil
 	}
@@ -297,7 +313,7 @@ func (s *Service) SyncExternalSessionDelta(ctx context.Context, in SyncExternalS
 		return out, nil
 	}
 	lastTimestamp := lastExternalSyncTimestamp(current.Exchanges)
-	if lastTimestamp.IsZero() {
+	if lastTimestamp.IsZero() && !in.Full {
 		return out, nil
 	}
 	out.LastTimestamp = lastTimestamp
@@ -328,10 +344,15 @@ func (s *Service) SyncExternalSessionDelta(ctx context.Context, in SyncExternalS
 		return out, err
 	}
 
-	delta := imported.Exchanges
+	copiedPrefix := 0
 	if in.Full {
-		delta = externalSessionDeltaAfterCtxSeq(imported.Exchanges, binding.AgentCtxSeq)
+		copiedPrefix = binding.AgentCtxSeq
 	}
+	delta, err := reconcileImportedActivity(ctx, manager, current, agentName, imported.Exchanges, copiedPrefix, in.Full)
+	if err != nil {
+		return out, err
+	}
+	out.RefreshAux = len(imported.Exchanges) > 0
 	importedCount := 0
 	for _, exchange := range delta {
 		added, err := appendImportedExchange(ctx, manager, current, agentName, exchange)
@@ -428,7 +449,11 @@ func syncImportedSubagentSessions(
 			if err != nil {
 				return importedCount, err
 			}
-			for _, exchange := range externalSessionDeltaAfterCtxSeq(item.Exchanges, start) {
+			delta, err := reconcileImportedActivity(ctx, manager, child, agentName, item.Exchanges, start, true)
+			if err != nil {
+				return importedCount, err
+			}
+			for _, exchange := range delta {
 				added, err := appendImportedExchange(ctx, manager, child, agentName, exchange)
 				if err != nil {
 					return importedCount, err
@@ -453,16 +478,6 @@ func syncImportedSubagentSessions(
 		pending = next
 	}
 	return importedCount, nil
-}
-
-func externalSessionDeltaAfterCtxSeq(exchanges []agenttypes.ImportedExchange, agentCtxSeq int) []agenttypes.ImportedExchange {
-	if agentCtxSeq <= 0 {
-		return exchanges
-	}
-	if agentCtxSeq >= len(exchanges) {
-		return nil
-	}
-	return exchanges[agentCtxSeq:]
 }
 
 func appendImportedExchange(
@@ -509,14 +524,6 @@ func appendImportedExchange(
 			continue
 		}
 		toolCall := *importedAux.ToolCall
-		if toolCall.Kind != agenttypes.ToolKindExecute &&
-			toolCall.Kind != agenttypes.ToolKindEdit &&
-			toolCall.Kind != agenttypes.ToolKindThink &&
-			toolCall.Kind != agenttypes.ToolKindAskUser &&
-			toolCall.Kind != agenttypes.ToolKindWebSearch &&
-			toolCall.Kind != agenttypes.ToolKindOther {
-			continue
-		}
 		if err := manager.AddExchangeAux(ctx, target.Key, session.ExchangeAux{
 			Seq:      seq,
 			Line:     importedAux.Line,

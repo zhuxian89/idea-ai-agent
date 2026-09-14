@@ -636,6 +636,9 @@ func (s *session) consumeMessages() {
 			s.flushAllDeltas()
 			s.logRawToolResult(m)
 			s.handleUserMessage(m)
+		case claudeagent.PermissionDeniedMessage:
+			s.flushAllDeltas()
+			s.handleToolPermissionDenied(m)
 		case claudeagent.TodoUpdateMessage:
 			s.flushAllDeltas()
 			s.handleTodoUpdateMessage(m)
@@ -801,6 +804,7 @@ func (s *session) handleAssistantMessage(msg claudeagent.AssistantMessage, sawDe
 			// arrives later as UserMessage + ToolUseResult.
 			s.logRawToolCallBlock(block)
 			toolCall := newRunningToolCall(block.ID, block.Name, block.Type, block.Input)
+			toolCall.Activity = claudeActivityFacts(block.Name, block.Input, meta.ParentToolUseID)
 			toolCall.Meta = mergeToolCallMeta(toolCall.Meta, meta.toMap())
 			if isTaskListToolName(block.Name) {
 				toolCall.Meta = mergeToolCallMeta(toolCall.Meta, map[string]any{
@@ -821,17 +825,13 @@ func (s *session) handleAssistantMessage(msg claudeagent.AssistantMessage, sawDe
 }
 
 func (s *session) handleUserMessage(msg claudeagent.UserMessage) {
-	// Claude tool results do not come back on AssistantMessage. They arrive
-	// here, and we map the result onto the earliest pending tool call.
-	update, ok := s.toolResultUpdate(msg)
-	if !ok {
-		return
+	for _, update := range s.toolResultUpdates(msg) {
+		s.emit(types.Event{
+			Type:      types.EventTypeToolUpdate,
+			SessionID: s.SessionID(),
+			Data:      update,
+		})
 	}
-	s.emit(types.Event{
-		Type:      types.EventTypeToolUpdate,
-		SessionID: s.SessionID(),
-		Data:      update,
-	})
 }
 
 func (s *session) handleTodoUpdateMessage(msg claudeagent.TodoUpdateMessage) {
@@ -1843,6 +1843,10 @@ func (s *session) cancelPendingToolCall(callID, reason string) (types.ToolCall, 
 	}
 	delete(s.pendingToolCalls, callID)
 	toolCall.Status = "failed"
+	toolCall.Activity = types.CloneActivityFacts(toolCall.Activity)
+	if toolCall.Activity != nil {
+		toolCall.Activity.Outcome = "cancelled"
+	}
 	toolCall.Meta = mergeToolCallMeta(toolCall.Meta, map[string]any{"error": reason, "canceled": true})
 	if len(toolCall.Content) == 0 && strings.TrimSpace(reason) != "" {
 		toolCall.Content = []types.ToolCallContentItem{{Type: "text", Text: reason}}
@@ -1878,7 +1882,18 @@ func (s *session) toolResultUpdate(msg claudeagent.UserMessage) (types.ToolCall,
 		result = summarizeUserToolResultMessage(msg)
 	}
 	update := base
-	update.Status = "complete"
+	outcome := claudeToolOutcome(msg, base.Kind)
+	if base.Activity != nil && base.Activity.Outcome == "declined" && outcome == "failed" {
+		outcome = "declined"
+	}
+	update.Activity = types.CloneActivityFacts(base.Activity)
+	if update.Activity != nil {
+		update.Activity.Outcome = outcome
+	}
+	update.Status = outcome
+	if outcome == "completed" {
+		update.Status = "complete"
+	}
 	if result != "" {
 		update.Meta = mergeToolCallMeta(update.Meta, map[string]any{"output": result})
 		if base.Kind != types.ToolKindEdit || len(base.Content) == 0 {
@@ -2214,6 +2229,11 @@ func extractToolResultCallID(raw any) string {
 
 func summarizeUserToolResultMessage(msg claudeagent.UserMessage) string {
 	for _, block := range msg.Message.Content {
+		if block.Type == "tool_result" && block.Content != nil {
+			if text := summarizeGenericToolResult(block.Content); strings.TrimSpace(text) != "" {
+				return text
+			}
+		}
 		if strings.TrimSpace(block.Text) == "" {
 			continue
 		}

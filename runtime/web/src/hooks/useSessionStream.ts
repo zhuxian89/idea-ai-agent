@@ -8,6 +8,7 @@ import {
   type ToolCall,
 } from "../services/session";
 import { translateNow } from "../i18n";
+import { readActivityFacts, type ActivityAgent } from "../services/activityFacts";
 
 type ExchangeLike = {
   seq?: number;
@@ -52,7 +53,7 @@ export type TimelineItem =
       };
     }
   | { id: string; type: "thought"; content: string }
-  | { id: string; type: "tool"; toolCall: ToolCall }
+  | { id: string; type: "tool"; toolCall: ToolCall; agent?: ActivityAgent; sourceTurnKey?: string }
   | { id: string; type: "todo"; todoUpdate: TodoUpdate; timestamp?: string }
   | { id: string; type: "plan"; planUpdate: PlanUpdate; timestamp?: string }
   | { id: string; type: "compact"; compactNotice: CompactNotice; timestamp?: string };
@@ -106,10 +107,11 @@ function normalizeToolCall(input: ToolCall): ToolCall {
     tool_call_id?: string;
   };
   const callId = raw.callId || raw.toolCallId || raw.tool_call_id || "";
+  const facts = readActivityFacts(raw.activity);
   return {
     ...input,
     callId,
-    status: normalizeToolCallStatus(raw.status),
+    status: normalizeToolCallStatus(facts?.outcome || raw.status),
   };
 }
 
@@ -128,7 +130,8 @@ function settleRunningTools(items: TimelineItem[]): TimelineItem[] {
         ...item,
         toolCall: {
           ...item.toolCall,
-          status: "complete",
+          // Ending a turn is not proof that each outstanding tool succeeded.
+          status: "unknown",
         },
       };
     }
@@ -318,17 +321,32 @@ function buildAssistantTimeline(
   return out;
 }
 
+function toolContext(call: ToolCall, exchangeAgent?: string, userTurnKey?: string): { agent?: ActivityAgent; sourceTurnKey?: string } {
+  const facts = readActivityFacts(call.activity);
+  const agent = facts?.agent || (exchangeAgent === "codex" || exchangeAgent === "claude" ? exchangeAgent : undefined);
+  return {
+    agent,
+    sourceTurnKey: facts?.nativeTurnId ? JSON.stringify(["native", facts.agent, facts.nativeTurnId]) : userTurnKey,
+  };
+}
+
+function withActivityContext(item: TimelineItem, agent?: string, sourceTurnKey?: string): TimelineItem {
+  return item.type === "tool" ? { ...item, ...toolContext(item.toolCall, agent, sourceTurnKey) } : item;
+}
+
 function buildBaseTimeline(
   exchanges: ExchangeLike[],
   exchangeAux: ExchangeAuxMapLike,
 ): TimelineItem[] {
   const out: TimelineItem[] = [];
   let inferredSeq = 0;
+  let sourceTurnKey: string | undefined;
   for (let index = 0; index < exchanges.length; index += 1) {
     const ex = exchanges[index];
     const role = normalizeRole(ex.role);
     const content = ex.content || "";
     if (role === "user") {
+      sourceTurnKey = Number(ex.seq) > 0 ? `user:${ex.seq}` : undefined;
       inferredSeq += 1;
       const seq = Number(ex.seq || 0) > 0 ? Number(ex.seq || 0) : inferredSeq;
       if (!content) continue;
@@ -341,13 +359,19 @@ function buildBaseTimeline(
         pendingAck: ex.pending_ack === true,
         seq,
       });
+      // Older imports can have a tools-only response attached after a known
+      // user anchor; there is no fabricated assistant text or sequence.
+      if (Number(ex.seq) > 0) {
+        out.push(...buildAssistantTimeline({ ...ex, content: "", seq }, index, exchangeAux[String(seq)] || [])
+          .map(item => withActivityContext(item, ex.agent, sourceTurnKey)));
+      }
       continue;
     }
     if (role === "agent" || role === "assistant") {
       inferredSeq += 1;
       const seq = Number(ex.seq || 0) > 0 ? Number(ex.seq || 0) : inferredSeq;
       const auxList = seq ? exchangeAux[String(seq)] || [] : [];
-      out.push(...buildAssistantTimeline({ ...ex, seq }, index, auxList));
+      out.push(...buildAssistantTimeline({ ...ex, seq }, index, auxList).map(item => withActivityContext(item, ex.agent, sourceTurnKey)));
       continue;
     }
     if (role === "thought") {
@@ -376,6 +400,7 @@ function buildBaseTimeline(
           ),
         type: "tool",
         toolCall: normalizedTool,
+        ...toolContext(normalizedTool, ex.agent, sourceTurnKey),
       });
       continue;
     }

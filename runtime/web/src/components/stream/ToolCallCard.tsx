@@ -1,7 +1,15 @@
-import React, { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { sessionService, type ToolCall, type ToolCallContentItem, type ToolCallLocation } from "../../services/session";
+import React, { memo, useLayoutEffect, useMemo } from "react";
+import { type ToolCall, type ToolCallContentItem, type ToolCallLocation } from "../../services/session";
 import { MarkdownViewer } from "../MarkdownViewer";
 import { useI18n } from "../../i18n";
+import { buildToolActivityView, type ActivityAgent } from "../../services/toolActivity";
+import { ToolActivityHeader } from "./ToolActivityHeader";
+import { mergeActivityFacts, mergeToolStatus, toolActivityState } from "../../services/activityFacts";
+
+import { useActivityDisclosure } from "../../hooks/useActivityDisclosure";
+import { useActivityDetails } from "../../hooks/useActivityDetails";
+import { useActivityDetailScroll } from "../../hooks/useActivityDetailScroll";
+import { ActivityDetailFeedback } from "./ActivityDetailFeedback";
 
 type ToolCallCardProps = {
   kind?: string;
@@ -12,10 +20,14 @@ type ToolCallCardProps = {
   result?: string;
   locations?: ToolCallLocation[];
   meta?: Record<string, unknown>;
+  activity?: ToolCall["activity"];
+  agent?: ActivityAgent;
+  sourceTurnKey?: string;
   rootPath?: string;
   rootId?: string | null;
   sessionKey?: string | null;
   defaultExpanded?: boolean;
+  localKey?: string;
 };
 
 type DetailSection =
@@ -26,27 +38,6 @@ function basename(path: string): string {
   const normalized = (path || "").replace(/\\/g, "/");
   const parts = normalized.split("/");
   return parts[parts.length - 1] || path;
-}
-
-function shouldPreserveDisplayStatus(current?: string, incoming?: string): boolean {
-  const currentStatus = (current || "").toLowerCase();
-  const incomingStatus = (incoming || "").toLowerCase();
-  const currentIsTerminal =
-    currentStatus === "complete" ||
-    currentStatus === "success" ||
-    currentStatus === "failed" ||
-    currentStatus === "error" ||
-    currentStatus === "cancelled";
-  const incomingIsRunning =
-    incomingStatus === "running" ||
-    incomingStatus === "pending" ||
-    incomingStatus === "in_progress";
-  return currentIsTerminal && incomingIsRunning;
-}
-
-function isRunningStatus(status?: string): boolean {
-  const normalized = (status || "").toLowerCase();
-  return normalized === "running" || normalized === "pending" || normalized === "in_progress";
 }
 
 function stringMeta(meta: Record<string, unknown> | undefined, key: string): string {
@@ -159,10 +150,10 @@ function normalizeTerminalText(text: string): string {
 }
 
 function extractExecuteCommand(meta: Record<string, unknown> | undefined, fallbackTitle: string): string {
-  const command = stringMeta(meta, "command");
+  const command = typeof meta?.command === "string" ? meta.command : "";
   if (command) return command;
 
-  const rawInput = stringMeta(meta, "input");
+  const rawInput = typeof meta?.input === "string" ? meta.input : "";
   if (rawInput) {
     try {
       const parsed = JSON.parse(rawInput) as { command?: unknown };
@@ -447,29 +438,32 @@ export const ToolCallCard = memo(function ToolCallCard({
   result,
   locations,
   meta,
+  activity: activityFacts,
+  agent,
+  sourceTurnKey,
   rootPath,
   rootId,
   sessionKey,
   defaultExpanded = false,
+  localKey,
 }: ToolCallCardProps) {
-  const { t } = useI18n();
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const [loadedToolCall, setLoadedToolCall] = useState<ToolCall | null>(null);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-  const [detailLoadFailed, setDetailLoadFailed] = useState(false);
-  const detailScrollRef = useRef<HTMLDivElement | null>(null);
-  const loadingDetailKeyRef = useRef("");
-  const loadedDetailKeyRef = useRef("");
-  const shouldStickDetailsToBottomRef = useRef(true);
-  const effectiveKind = loadedToolCall?.kind || kind;
-  const effectiveTitle = loadedToolCall?.title || title;
-  const effectiveStatus = isRunningStatus(status)
-    ? status
-    : shouldPreserveDisplayStatus(status, loadedToolCall?.status)
-    ? status
-    : loadedToolCall?.status || status;
+  const { t, locale } = useI18n();
+  const detailsId = React.useId();
+  const { expanded, toggle, focusProps } = useActivityDisclosure({ rootId, sessionKey, callId: _callId, localKey, defaultExpanded });
+  const canLoadDetails = Boolean(rootId && sessionKey && _callId);
+  const hasCompleteSpecialContent = Boolean(content?.length && (
+    ["edit", "delete", "move", "task"].includes((kind || "").toLowerCase()) ||
+    content.some(item => item.type === "diff" || ("text" in item && isDiffLikeText(item.text || "")))
+  )) || Boolean(meta?.rawType === "collabToolCall" || meta?.type === "collabAgentToolCall");
+  const details = useActivityDetails({ rootId: rootId || "", sessionKey: sessionKey || "", callId: _callId },
+    expanded && canLoadDetails && !hasCompleteSpecialContent,
+    { callId: _callId, kind: kind || "", status, content, meta, activity: activityFacts });
+  const loadedToolCall = details.toolCall;
+  const effectiveKind = kind || loadedToolCall?.kind;
+  const effectiveTitle = title || loadedToolCall?.title;
+  const effectiveStatus = mergeToolStatus(loadedToolCall?.status, status) || status;
   const effectiveContent = loadedToolCall?.content || content;
-  const effectiveLocations = loadedToolCall?.locations || locations;
+  const effectiveLocations = locations || loadedToolCall?.locations;
   const effectiveMeta =
     loadedToolCall?.meta || meta
       ? { ...(loadedToolCall?.meta || {}), ...(meta || {}) }
@@ -504,8 +498,6 @@ export const ToolCallCard = memo(function ToolCallCard({
   const hasExecuteOutput = executeOutputText.trim().length > 0;
   const hasUserShellOutput = userShellText.trim().length > 0;
   const hasCollabDetails = isCollabTool && !isCollabWait && Boolean(effectiveMeta?.prompt);
-  const canLoadDetails = Boolean(rootId && sessionKey && _callId);
-  const needsRemoteDetails = canLoadDetails && (isUserShell ? !hasUserShellOutput : isExecute ? !hasExecuteOutput : !hasContent);
   const hasDetails =
     (isUserShell
       ? hasUserShellOutput
@@ -545,103 +537,82 @@ export const ToolCallCard = memo(function ToolCallCard({
   }, [detailSections, effectiveLocations, rootPath]);
   const displayTitle = isFileChange && labelTitle.toLowerCase() === "file_change" ? "" : labelTitle;
   const displayFileNames = fileNames.filter((name) => name !== displayTitle && name !== basename(displayTitle));
-  const label = isUserShell
-    ? String(effectiveMeta?.command || displayTitle || "command")
-    : isCollabTool
-    ? displayTitle || collabToolName || "subagent"
-    : isFileChange
-    ? displayTitle
-    : displayTitle || "tool";
+  const mergedFacts = mergeActivityFacts(loadedToolCall?.activity, activityFacts);
+  const streamState = toolActivityState(status);
+  const effectiveFacts = mergedFacts && !activityFacts?.outcome && streamState !== "running" && streamState !== "unknown"
+    ? { ...mergedFacts, outcome: streamState } : mergedFacts;
+  const activity = buildToolActivityView({
+    callId: _callId,
+    kind: normalizedKind,
+    title: displayTitle,
+    status: effectiveStatus,
+    meta: effectiveMeta,
+    content: effectiveContent,
+    locations: effectiveLocations,
+    activity: effectiveFacts,
+  }, {
+    rootId: rootId || "",
+    sessionKey: sessionKey || "",
+    rootPath,
+    agent,
+    sourceTurnKey,
+    locale,
+    requiresInteraction: false,
+  });
+  const label = isUserShell ? String(effectiveMeta?.command || displayTitle || "command") : activity.summary;
+  const isCompactActivity = !isUserShell && !isFileChange && !isCollabTool && (
+    ["execute", "read", "list", "search", "web_search", "fetch"].includes(normalizedKind) ||
+    (["other", "mcp"].includes(normalizedKind) && activity.operation === "mcp")
+  );
   const isRunning = normalizedStatus === "running" || normalizedStatus === "in_progress";
   const isComplete = normalizedStatus === "complete" || normalizedStatus === "success";
   const isFailed = normalizedStatus === "failed" || normalizedStatus === "error";
   const progressText = toolProgressText(effectiveMeta);
   const showProgress = Boolean(progressText);
   const hasStructuredDetails = detailSections.length > 0;
-  useEffect(() => {
-    if (!hasDetails) {
-      setExpanded(false);
-      return;
-    }
-    if (defaultExpanded) {
-      setExpanded(true);
-    }
-  }, [defaultExpanded, hasDetails]);
+  const detailIdentity = JSON.stringify([rootId, sessionKey, _callId || localKey || detailsId]);
+  const { detailScrollRef, onScroll: onDetailScroll, followOutput } = useActivityDetailScroll(detailIdentity, expanded,
+    isExecute ? executeOutputText : effectiveContent || result);
+  const originalOutput = isExecute ? (isUserShell ? userShellText : executeOutputText)
+    : (effectiveContent || []).map(item => "text" in item ? item.text || "" : "").join("") || result || "";
 
-  useEffect(() => {
-    setLoadedToolCall(null);
-    setDetailLoadFailed(false);
-    setLoadingDetails(false);
-    loadingDetailKeyRef.current = "";
-    loadedDetailKeyRef.current = "";
-  }, [_callId, rootId, sessionKey]);
-
-  useEffect(() => {
-    if (!expanded || !needsRemoteDetails) return;
-    const detailKey = `${rootId || ""}::${sessionKey || ""}::${_callId}`;
-    if (loadedDetailKeyRef.current === detailKey || loadingDetailKeyRef.current === detailKey) return;
-    loadingDetailKeyRef.current = detailKey;
-    setLoadingDetails(true);
-    setDetailLoadFailed(false);
-    sessionService
-      .getToolCall(String(rootId || ""), String(sessionKey || ""), _callId)
-      .then((toolCall) => {
-        if (loadingDetailKeyRef.current !== detailKey) return;
-        if (toolCall) {
-          setLoadedToolCall(toolCall);
-          loadedDetailKeyRef.current = detailKey;
-        } else {
-          setDetailLoadFailed(true);
-        }
-      })
-      .catch(() => {
-        if (loadingDetailKeyRef.current === detailKey) setDetailLoadFailed(true);
-      })
-      .finally(() => {
-        if (loadingDetailKeyRef.current !== detailKey) return;
-        loadingDetailKeyRef.current = "";
-        setLoadingDetails(false);
-      });
-  }, [_callId, expanded, needsRemoteDetails, rootId, sessionKey]);
-
-  useEffect(() => {
-    const container = detailScrollRef.current;
-    if (!container || !isUserShell || !expanded) return;
-    const updateStickiness = () => {
-      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      shouldStickDetailsToBottomRef.current = distanceFromBottom < 48;
-    };
-    updateStickiness();
-    container.addEventListener("scroll", updateStickiness, { passive: true });
-    return () => container.removeEventListener("scroll", updateStickiness);
-  }, [expanded, isUserShell]);
-
-  const scrollUserShellDetailsToBottom = React.useCallback(() => {
-    const container = detailScrollRef.current;
-    if (!container || !shouldStickDetailsToBottomRef.current) return;
-    container.scrollTop = container.scrollHeight;
-  }, []);
-  
   const statusColor = statusColors[normalizedStatus] || "#9ca3af";
 
   return (
     <>
     <div
+      {...focusProps}
+      data-activity-reading="true"
+      data-tool-activity={isCompactActivity ? _callId || normalizedKind : undefined}
       style={{
         width: "100%",
         minWidth: 0,
-        borderRadius: "10px",
-        border: isFileChange ? "1px solid rgba(59, 130, 246, 0.22)" : "1px solid var(--border-color)",
-        background: isFileChange
+        borderRadius: isCompactActivity ? "0" : "10px",
+        border: isCompactActivity ? "none" : isFileChange ? "1px solid rgba(59, 130, 246, 0.22)" : "1px solid var(--border-color)",
+        background: isCompactActivity ? "transparent" : isFileChange
           ? "linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.03))"
           : "var(--content-bg)",
         boxShadow: isFileChange ? "inset 0 1px 0 rgba(255,255,255,0.35)" : "none",
-        overflow: "hidden",
+        overflow: isCompactActivity ? "visible" : "hidden",
       }}
     >
-      <button
+      {isCompactActivity ? (
+        <ToolActivityHeader
+          summary={activity.summary}
+          statusLabel={activity.state === "completed" ? undefined : t(`toolActivity.state.${activity.state}`)}
+          durationLabel={activity.durationMs === undefined ? undefined : t(activity.durationMs < 1000 ? "toolActivity.durationMs" : "toolActivity.durationSeconds", {
+            value: new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(activity.durationMs < 1000 ? activity.durationMs : activity.durationMs / 1000),
+          })}
+          kind={activity.operation}
+          expanded={expanded}
+          detailsId={detailsId}
+          onToggle={hasDetails ? toggle : undefined}
+        />
+      ) : <button
         type="button"
-        onClick={hasDetails ? () => setExpanded(!expanded) : undefined}
+        aria-expanded={hasDetails ? expanded : undefined}
+        aria-controls={hasDetails ? detailsId : undefined}
+        onClick={hasDetails ? toggle : undefined}
         style={{
           width: "100%",
           display: "flex",
@@ -663,7 +634,7 @@ export const ToolCallCard = memo(function ToolCallCard({
               {label}
             </span>
           ) : null}
-          {isFileChange && displayFileNames.length > 0 ? (
+          {isFileChange && displayFileNames.length > 1 ? (
             <span
               style={{
                 minWidth: 0,
@@ -725,31 +696,36 @@ export const ToolCallCard = memo(function ToolCallCard({
             </svg>
           </span>
         )}
-      </button>
+      </button>}
 
       {expanded && hasDetails && (
         <div
-          ref={isUserShell ? detailScrollRef : undefined}
+          id={detailsId}
+          ref={detailScrollRef}
+          data-activity-details="true"
+          tabIndex={0}
+          role="region"
+          aria-label={t("toolActivity.details")}
+          onScroll={onDetailScroll}
           style={{
             padding: "0 10px 22px",
             borderTop: "1px solid var(--border-color)",
             maxHeight: "min(60vh, 720px)",
             overflowY: "auto",
             WebkitOverflowScrolling: "touch",
-            overscrollBehavior: isUserShell ? "auto" : undefined,
+            overscrollBehavior: "contain",
           }}
         >
+          <ActivityDetailFeedback key={detailIdentity} result={details.result} loading={details.loading} onRetry={details.retry}
+            command={executeCommand} output={originalOutput.includes("\n...(truncated)") ? undefined : originalOutput} />
           {isUserShell ? (
-            <AnsiOutput text={userShellText} onRendered={scrollUserShellDetailsToBottom} />
+            <AnsiOutput text={userShellText} onRendered={followOutput} />
           ) : isExecute ? (
             <ExecuteToolDetails
               command={executeCommand}
               output={executeOutputText}
+              onOutputRendered={followOutput}
             />
-          ) : loadingDetails ? (
-            <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--text-secondary)" }}>{t("common.loading")}</div>
-          ) : detailLoadFailed && !hasContent && !hasLocations && !hasResult && !hasCollabDetails ? (
-            <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--text-secondary)" }}>{t("common.loadingFailed")}</div>
           ) : isCollabTool ? (
             <CollabToolDetails meta={effectiveMeta} rootId={rootId} />
           ) : hasStructuredDetails ? (
@@ -801,7 +777,7 @@ export const ToolCallCard = memo(function ToolCallCard({
               {effectiveLocations!.length > 3 && <div>{t("common.moreLocations", { count: effectiveLocations!.length - 3 })}</div>}
             </div>
           ) : null}
-          {!hasStructuredDetails && hasResult && <MarkdownViewer content={result || ""} root={rootId || undefined} />}
+          {!isExecute && !hasStructuredDetails && hasResult && <MarkdownViewer content={result || ""} root={rootId || undefined} />}
         </div>
       )}
 

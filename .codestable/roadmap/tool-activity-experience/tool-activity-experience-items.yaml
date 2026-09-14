@@ -1,0 +1,60 @@
+roadmap: tool-activity-experience
+created: 2026-09-14
+review_status: approved
+
+items:
+  - slug: activity-compact-rows
+    description: 用现有数据为 Codex 和 Claude 提供共用轻量活动行与可展开详情，形成最小可演示闭环
+    depends_on: []
+    status: done
+    feature: 2026-09-14-activity-compact-rows
+    minimal_loop: true
+    notes: F1；先支持旧字段降级与共用外观，保留用户 shell、审批、提问和 diff 内部行为
+
+  - slug: activity-native-facts
+    description: 贯通两种实时适配器的活动事实、可用耗时和真实终态，保持列表、完整详情与传输一致
+    depends_on: [activity-compact-rows]
+    status: done
+    feature: 2026-09-14-activity-native-facts
+    minimal_loop: false
+    notes: F2；依赖 F1 的共用展示入口作可见验证与向后兼容基线
+
+  - slug: activity-semantic-summaries
+    description: 基于统一事实和旧字段生成本地化语义摘要，并复用于活动行、组内子项和底部运行提示
+    depends_on: [activity-native-facts]
+    status: done
+    feature: 2026-09-14-activity-semantic-summaries
+    minimal_loop: false
+    notes: F3；依赖 F2 的结构化动作、来源与终态证据；底部仅统一工具摘要，必须保留累计等待和距上次更新两项计时
+
+  - slug: activity-history-parity
+    description: 对齐两个 Agent 的实时、历史导入和缓存展示，补齐稳定的调用归属与分组边界
+    depends_on: [activity-native-facts, activity-semantic-summaries]
+    status: done
+    feature: 2026-09-14-activity-history-parity
+    minimal_loop: false
+    notes: F4；依赖事实契约和统一摘要作为对比基线，与 F5 的先后可在评审时调整
+
+  - slug: activity-detail-lifecycle
+    description: 保持流式和切换会话时的主动展开选择，并处理详情请求、滚动意图、失败和中断状态
+    depends_on: [activity-native-facts, activity-semantic-summaries]
+    status: done
+    feature: 2026-09-14-activity-detail-lifecycle
+    minimal_loop: false
+    notes: F5；依赖稳定调用身份、终态事实和展示模型，为后续双层展开提供基础；保护两项运行计时的会话隔离与连续性
+
+  - slug: activity-segment-grouping
+    description: 按正文与交互边界聚合连续完成活动，保留原始顺序、计数和组内详情访问
+    depends_on: [activity-semantic-summaries, activity-history-parity, activity-detail-lifecycle]
+    status: done
+    feature: 2026-09-14-activity-segment-grouping
+    minimal_loop: false
+    notes: F6；依赖统一摘要、历史及 Agent/轮次身份、可靠的展开与详情生命周期
+
+  - slug: activity-ide-readiness
+    description: 完成 IDEA 场景中的主题、缩放、可访问性、性能和双 Agent 联调并交付本地验证包
+    depends_on: [activity-segment-grouping]
+    status: in-progress
+    feature: 2026-09-14-activity-ide-readiness
+    minimal_loop: false
+    notes: F7；依赖完整活动展示链路，真实 CLI 和 JCEF 未验证时不能标整体通过

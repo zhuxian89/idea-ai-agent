@@ -1,0 +1,43 @@
+feature: 2026-09-14-activity-native-facts
+created: 2026-09-14
+steps:
+  - action: 契约：可选活动类型、SDK 字段、克隆合并与校验
+    exit_signal: 类型及序列化/字段规则用例通过
+    status: done
+  - action: 原生投影：Codex 与 Claude 实时工具事实及结果证据
+    exit_signal: 两种固定协议样例覆盖原生数据和真实终态
+    status: done
+  - action: 保存传输：接入会话合并与完整及紧凑路径
+    exit_signal: 保存重读及精简传输保留事实，原文仍可读
+    status: done
+  - action: Web 接入：事实状态、原生耗时及无结果收尾
+    exit_signal: 浏览器状态及计时回归通过
+    status: done
+  - action: 验收归档：跨层验证、截图及现状文档回写
+    exit_signal: S1–S8 有证据，F2 完成状态同步
+    status: done
+checks:
+  - item: S1 可选事实及非法值兼容
+    source: 契约
+    status: passed
+  - item: S2 Codex 原生动作与结果
+    source: 原生投影
+    status: passed
+  - item: S3 Claude 原生信息及逐调用结果
+    source: 原生投影
+    status: passed
+  - item: S4 合并、重放及克隆隔离
+    source: 流程约束
+    status: passed
+  - item: S5 保存、紧凑列表与详情一致
+    source: 数据链路
+    status: passed
+  - item: S6 Web 证据状态和可用耗时
+    source: 验收场景
+    status: passed
+  - item: S7 计时与特殊交互保留
+    source: 范围守护
+    status: passed
+  - item: S8 后续阶段未提前实施
+    source: 范围守护
+    status: passed

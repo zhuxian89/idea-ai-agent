@@ -13,32 +13,6 @@ import (
 	"mindfs/server/internal/session"
 )
 
-func TestExternalSessionDeltaAfterCtxSeqSkipsCopiedPrefix(t *testing.T) {
-	exchanges := []agenttypes.ImportedExchange{
-		{Role: "user", Content: "u1"},
-		{Role: "agent", Content: "a1"},
-		{Role: "user", Content: "u2"},
-		{Role: "agent", Content: "a2"},
-	}
-	delta := externalSessionDeltaAfterCtxSeq(exchanges, 2)
-	if len(delta) != 2 {
-		t.Fatalf("len(delta) = %d, want 2", len(delta))
-	}
-	if delta[0].Content != "u2" || delta[1].Content != "a2" {
-		t.Fatalf("delta = %#v", delta)
-	}
-}
-
-func TestExternalSessionDeltaAfterCtxSeqReturnsEmptyWhenFullySynced(t *testing.T) {
-	exchanges := []agenttypes.ImportedExchange{
-		{Role: "user", Content: "u1"},
-		{Role: "agent", Content: "a1"},
-	}
-	if delta := externalSessionDeltaAfterCtxSeq(exchanges, 2); len(delta) != 0 {
-		t.Fatalf("delta = %#v, want empty", delta)
-	}
-}
-
 func TestSyncExternalSessionDeltaFastDoesNotApplyCtxSeqToFilteredImport(t *testing.T) {
 	root := fs.NewRootInfo("root", "Root", t.TempDir())
 	manager := session.NewManager(root)
@@ -100,7 +74,7 @@ func TestSyncExternalSessionDeltaFastDoesNotApplyCtxSeqToFilteredImport(t *testi
 	}
 }
 
-func TestImportExternalSessionOnlyPersistsSelectedAuxKinds(t *testing.T) {
+func TestImportExternalSessionPersistsAllAuxKinds(t *testing.T) {
 	root := fs.NewRootInfo("root", "Root", t.TempDir())
 	manager := session.NewManager(root)
 	importer := &syncDeltaTestImporter{
@@ -227,8 +201,8 @@ func TestImportExternalSessionOnlyPersistsSelectedAuxKinds(t *testing.T) {
 	if otherCall.Kind != agenttypes.ToolKindOther {
 		t.Fatalf("other tool call = %#v", otherCall)
 	}
-	if _, err := manager.GetFullToolCall(context.Background(), out.SessionKey, "read-1"); err == nil {
-		t.Fatal("read tool call was persisted, want it filtered")
+	if _, err := manager.GetFullToolCall(context.Background(), out.SessionKey, "read-1"); err != nil {
+		t.Fatalf("read tool call missing: %v", err)
 	}
 }
 

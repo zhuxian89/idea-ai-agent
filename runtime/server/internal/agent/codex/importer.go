@@ -591,6 +591,7 @@ func readCodexImportedExchangeLocators(path string, after time.Time) ([]imported
 	toolLocations := make(map[string]importedToolLocation)
 	toolOrdinal := 0
 	sessionShell := ""
+	turnID := ""
 	err = forEachJSONLLine(file, func(line string) error {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -602,6 +603,9 @@ func readCodexImportedExchangeLocators(path string, after time.Time) ([]imported
 		}
 		timestamp := parseTimeRFC3339(asString(raw["timestamp"]))
 		switch raw["type"] {
+		case "turn_context":
+			payload, _ := raw["payload"].(map[string]any)
+			turnID = strings.TrimSpace(asString(payload["turn_id"]))
 		case "response_item":
 			payload, _ := raw["payload"].(map[string]any)
 			if payload == nil {
@@ -631,6 +635,10 @@ func readCodexImportedExchangeLocators(path string, after time.Time) ([]imported
 				if !ok {
 					return nil
 				}
+				toolCall.Activity.NativeTurnID = turnID
+				if mergeImportedCodexCall(items, toolLocations, toolCall) {
+					return nil
+				}
 				aux := []agenttypes.ImportedExchangeAux{{
 					Line:     0,
 					ToolCall: &toolCall,
@@ -652,7 +660,16 @@ func readCodexImportedExchangeLocators(path string, after time.Time) ([]imported
 				}
 			case "function_call_output", "custom_tool_call_output":
 				applyImportedCodexToolOutput(items, toolLocations, payload, timestamp)
+			default:
+				items = appendImportedCodexNativeItem(items, toolLocations, payload, "completed", turnID, timestamp)
 			}
+		case "item.started", "item.updated", "item.completed":
+			payload, _ := raw["item"].(map[string]any)
+			nativeTurnID := strings.TrimSpace(asString(raw["turnId"]))
+			if nativeTurnID == "" {
+				nativeTurnID = turnID
+			}
+			items = appendImportedCodexNativeItem(items, toolLocations, payload, strings.TrimPrefix(asString(raw["type"]), "item."), nativeTurnID, timestamp)
 		case "event_msg":
 			if numTurns := codexRollbackTurns(raw); numTurns > 0 {
 				items = dropLastCodexUserTurns(items, numTurns)
@@ -895,8 +912,10 @@ func parseImportedCodexToolCall(payload map[string]any, ordinal int, sessionShel
 		return agenttypes.ToolCall{}, false
 	}
 
+	wrapperInput := input
+	isExecWrapper := rawType == "custom_tool_call" && name == "exec"
 	wrappedTool := false
-	if rawType == "custom_tool_call" && name == "exec" {
+	if isExecWrapper {
 		if innerName, innerInput, ok := importedCodexWrappedTool(input); ok {
 			name = innerName
 			input = innerInput
@@ -905,19 +924,16 @@ func parseImportedCodexToolCall(payload map[string]any, ordinal int, sessionShel
 	}
 	title := name
 	kind := importedCodexToolKind(name)
-	if kind != agenttypes.ToolKindExecute &&
-		kind != agenttypes.ToolKindEdit &&
-		kind != agenttypes.ToolKindThink &&
-		kind != agenttypes.ToolKindAskUser &&
-		!(wrappedTool && kind == agenttypes.ToolKindWebSearch) &&
-		!(wrappedTool && kind == agenttypes.ToolKindOther) {
-		return agenttypes.ToolCall{}, false
-	}
 	if title == "" {
 		title = rawType
 	}
 
 	meta := map[string]any{"rawType": rawType}
+	if isExecWrapper {
+		// The outer model call ID differs from app-server's nested command ID.
+		meta["wrapperTool"] = "exec"
+		meta["wrapperInput"] = importedCodexInputText(wrapperInput)
+	}
 	if wrappedTool {
 		meta["tool"] = name
 	}
@@ -974,6 +990,8 @@ func parseImportedCodexToolCall(payload map[string]any, ordinal int, sessionShel
 		status = "complete"
 	case "failed", "error":
 		status = "failed"
+	case "declined", "denied", "cancelled", "canceled", "interrupted":
+		status = agenttypes.NativeToolOutcome(asString(payload["status"]))
 	}
 	content := importedCodexToolInputContent(kind, input)
 	if kind == agenttypes.ToolKindEdit {
@@ -996,6 +1014,7 @@ func parseImportedCodexToolCall(payload map[string]any, ordinal int, sessionShel
 		Locations: locations,
 		RawType:   rawType,
 		Meta:      meta,
+		Activity:  importedCodexActivity(name, kind, input, payload),
 	}, true
 }
 
@@ -1027,6 +1046,9 @@ func applyImportedCodexToolOutput(
 		rawOutput = payload
 	}
 	output, failed := importedCodexToolOutput(rawOutput)
+	if toolCall.Kind == agenttypes.ToolKindExecute && toolCall.Meta["wrapperTool"] == "exec" {
+		failed = failed || importedCodexWrappedExecFailed(rawOutput)
+	}
 	if toolCall.Kind == agenttypes.ToolKindAskUser {
 		if answers := importedCodexAskUserAnswers(toolCall, rawOutput); len(answers) > 0 {
 			if toolCall.Meta == nil {
@@ -1038,11 +1060,7 @@ func applyImportedCodexToolOutput(
 	if toolCall.Kind == agenttypes.ToolKindExecute {
 		output = cleanImportedCodexExecOutput(output)
 	}
-	if failed || strings.EqualFold(strings.TrimSpace(asString(payload["status"])), "failed") {
-		toolCall.Status = "failed"
-	} else {
-		toolCall.Status = "complete"
-	}
+	applyImportedCodexOutcome(&toolCall, payload, rawOutput, failed)
 	if strings.TrimSpace(output) != "" {
 		if toolCall.Meta == nil {
 			toolCall.Meta = make(map[string]any)
@@ -1123,6 +1141,18 @@ func rebuildImportedCodexToolLocations(items []agenttypes.ImportedExchange) map[
 func importedCodexToolKind(name string) agenttypes.ToolKind {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	switch {
+	case strings.HasPrefix(normalized, "mcp__") || strings.HasPrefix(normalized, "mcp."):
+		return agenttypes.ToolKindOther
+	case normalized == "read_file" || normalized == "read":
+		return agenttypes.ToolKindRead
+	case normalized == "list_files" || normalized == "list_dir":
+		return agenttypes.ToolKindList
+	case normalized == "grep" || normalized == "glob" || normalized == "search" || normalized == "search_files":
+		return agenttypes.ToolKindSearch
+	case normalized == "web_fetch" || normalized == "fetch":
+		return agenttypes.ToolKindFetch
+	case normalized == "spawn_agent" || normalized == "send_input" || normalized == "wait_agent" || normalized == "close_agent" || normalized == "resume_agent":
+		return agenttypes.ToolKindTask
 	case normalized == "apply_patch" || strings.Contains(normalized, "edit") ||
 		strings.Contains(normalized, "write_file"):
 		return agenttypes.ToolKindEdit

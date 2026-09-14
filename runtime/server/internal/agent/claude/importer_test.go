@@ -32,7 +32,7 @@ func TestExtractClaudeImportedUserTextDropsOnlyInjectedBlocks(t *testing.T) {
 	}
 }
 
-func TestReadClaudeImportedExchangesIgnoresUnsupportedToolCall(t *testing.T) {
+func TestReadClaudeImportedExchangesIncludesReadToolCall(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session.jsonl")
 	content := `{"type":"user","uuid":"u1","timestamp":"2026-07-28T01:00:00Z","message":{"content":[{"type":"text","text":"inspect README"}]}}
@@ -54,8 +54,8 @@ func TestReadClaudeImportedExchangesIgnoresUnsupportedToolCall(t *testing.T) {
 	if items[0].Role != "user" || items[0].Content != "inspect README" {
 		t.Fatalf("user exchange = %#v", items[0])
 	}
-	if items[1].Role != "agent" || items[1].Content != "done" || len(items[1].Aux) != 0 {
-		t.Fatalf("assistant exchange = %#v, want text without aux", items[1])
+	if items[1].Role != "agent" || items[1].Content != "done" || len(items[1].Aux) != 1 {
+		t.Fatalf("assistant exchange = %#v, want text and Read aux", items[1])
 	}
 }
 

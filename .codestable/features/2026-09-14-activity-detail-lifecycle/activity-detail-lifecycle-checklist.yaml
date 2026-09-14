@@ -1,0 +1,43 @@
+feature: 2026-09-14-activity-detail-lifecycle
+created: 2026-09-14
+steps:
+  - action: 状态存储：隔离、有界选择和焦点保护
+    exit_signal: 对应契约验证通过
+    status: done
+  - action: 请求与快照：错误语义、合并与取消
+    exit_signal: 对应契约验证通过
+    status: done
+  - action: 交互接入：详情、复制与滚动
+    exit_signal: 对应契约验证通过
+    status: done
+  - action: 场景验证：浏览器、计时回归和构建
+    exit_signal: 对应契约验证通过
+    status: done
+  - action: 验收归档：现状与路线图同步
+    exit_signal: 对应契约验证通过
+    status: done
+checks:
+  - item: S1 展开选择与身份隔离
+    source: 验收契约
+    status: passed
+  - item: S2 有界内存和无 ID 降级
+    source: 验收契约
+    status: passed
+  - item: S3 详情错误与重试
+    source: 验收契约
+    status: passed
+  - item: S4 并发和迟到结果隔离
+    source: 验收契约
+    status: passed
+  - item: S5 流式更新及滚动意图
+    source: 验收契约
+    status: passed
+  - item: S6 复制及视觉可访问性
+    source: 验收契约
+    status: passed
+  - item: S7 计时和特殊交互守护
+    source: 验收契约
+    status: passed
+  - item: S8 构建和阶段边界
+    source: 验收契约
+    status: passed

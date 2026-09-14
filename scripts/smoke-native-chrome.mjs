@@ -18,10 +18,12 @@ export async function smokeNativeChrome(browser, bootstrapURL, rootId, reports) 
   };
   await page.route('**/api/sessions**', route => {
     const url = new URL(route.request().url());
+    // F4 history migration uses POST /sync before incremental reads.
+    url.pathname = url.pathname.replace(/\/sync$/, '');
     if (url.pathname === '/api/sessions') return route.fulfill({json: {items: [item], total_count: 1}});
     if (url.pathname === `/api/sessions/${item.key}`) {
       const afterSeq = Number(url.searchParams.get('seq') || 0);
-      return route.fulfill({json: {...item, exchanges: item.exchanges.filter(exchange => exchange.seq > afterSeq)}});
+      return route.fulfill({json: {activity_history_version: 1, ...item, exchanges: item.exchanges.filter(exchange => exchange.seq > afterSeq)}});
     }
     if (url.pathname.endsWith('/related-files')) return route.fulfill({json: []});
     return route.continue();
@@ -81,7 +83,7 @@ export async function smokeNativeChrome(browser, bootstrapURL, rootId, reports) 
     await page.screenshot({path: path.join(reports, 'ide-native-chrome.png'), animations: 'disabled'});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(errors, []);
-    console.log('PASS: real IDE bootstrap redirect, one toolbar, native new/history/settings commands, session URL changes, reload and reconnect.');
+    console.log('PASS: browser simulation of IDE bootstrap redirect, one toolbar, native new/history/settings commands, session URL changes, reload and reconnect.');
   } finally {
     await page.context().close();
   }
