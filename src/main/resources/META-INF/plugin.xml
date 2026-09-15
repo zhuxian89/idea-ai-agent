@@ -18,7 +18,7 @@
             <li>Follow the IDEA light or dark theme and switch between English and Chinese.</li>
         </ul>
         <p>
-            <b>Requirements:</b> IntelliJ IDEA 2024.1–2024.3 with JCEF, plus at least
+            <b>Requirements:</b> IntelliJ IDEA 2024.1 or later with JCEF, plus at least
             one supported Agent CLI. The CLI must be configured and signed in before use.
             Plugin packages are specific to the operating system and CPU architecture.
         </p>
@@ -29,12 +29,10 @@
         </p>
     ]]></description>
     <change-notes><![CDATA[
-        <p><b>0.1.18</b></p>
+        <p><b>0.1.19</b></p>
         <ul>
-            <li>Shows the active reasoning effort beside the selected Agent and model.</li>
-            <li>Updates the displayed effort immediately when it changes.</li>
-            <li>Keeps Agent, model, effort, and permission controls usable in narrow tool windows.</li>
-            <li>Adds Marketplace metadata, compatibility bounds, a plugin logo, and privacy documentation.</li>
+            <li>Sets IntelliJ IDEA 2024.1 as the minimum supported version without imposing an upper version limit.</li>
+            <li>Keeps the reasoning-effort display and Marketplace materials introduced in 0.1.18.</li>
         </ul>
     ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>

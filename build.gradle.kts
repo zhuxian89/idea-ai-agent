@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "dev.ideaagent"
-version = "0.1.18"
+version = "0.1.19"
 
 repositories {
     mavenCentral()
@@ -56,7 +56,7 @@ intellijPlatform {
         version = project.version.toString()
         ideaVersion {
             sinceBuild = "241"
-            untilBuild = "243.*"
+            untilBuild = provider { null }
         }
         vendor {
             name = "Local AI Agent"

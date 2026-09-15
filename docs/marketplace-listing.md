@@ -18,7 +18,7 @@ This file contains the values to use for the first Marketplace upload of Local A
 | Issue tracker | https://github.com/zhuxian89/idea-ai-agent/issues |
 | Privacy policy | https://github.com/zhuxian89/idea-ai-agent/blob/main/PRIVACY.md |
 | Tags | AI, Code tools, Productivity |
-| Supported IDE builds | 241–243 (IntelliJ IDEA 2024.1–2024.3) |
+| Supported IDE builds | 241 and later (IntelliJ IDEA 2024.1+) |
 | Release channel | Default |
 
 Use the public email attached to the JetBrains Vendor profile as the support email. The repository does not define a public support mailbox.
@@ -31,7 +31,7 @@ Use locally installed coding agents inside IntelliJ IDEA.
 
 The canonical Marketplace description is in `src/main/resources/META-INF/plugin.xml`. JetBrains reads it from the uploaded plugin ZIP. Do not paste a second, divergent description into the Marketplace page.
 
-## Version 0.1.18 change notes
+## Version 0.1.19 change notes
 
 The canonical change notes are also in `src/main/resources/META-INF/plugin.xml` and are included in the built ZIP.
 
@@ -59,7 +59,7 @@ The existing screenshots under `build/reports/` are test evidence and include fi
 
 - Build and verify both supported runtime binaries.
 - Confirm `pluginIcon.svg` is present under `META-INF` in the plugin JAR.
-- Confirm the built `plugin.xml` contains the English description, 0.1.18 change notes, and build range 241–243.
+- Confirm the built `plugin.xml` contains the English description, 0.1.19 change notes, `since-build="241"`, and no `until-build` attribute.
 - Install the release ZIP in IDEA 2024.1 and 2024.3 from disk.
 - Capture final 1280×800 screenshots from the installed release build.
 - Accept the JetBrains Marketplace Developer Agreement and declare trader or non-trader status.

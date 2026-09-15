@@ -2,14 +2,14 @@
 
 在 IntelliJ IDEA 中使用本机 Codex、Claude Code 及 MindFS 已支持的 Agent。插件聚焦 Agent 配置与安装、聊天、聊天历史，复用 MindFS 已有的 Agent 执行和会话实现。
 
-[下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。每个平台的同一份插件包兼容 IDEA 2024.1、2024.2、2024.3。
+[下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。最低支持 IntelliJ IDEA 2024.1，不限制更高版本。
 
-当前版本为 **0.1.18**，更新说明见 [0.1.18 发布说明](docs/releases/v0.1.18.md)。
+当前版本为 **0.1.19**，更新说明见 [0.1.19 发布说明](docs/releases/v0.1.19.md)。
 
-| 系统 / 架构 | 0.1.18 安装包 |
+| 系统 / 架构 | 0.1.19 安装包 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.18/idea-ai-agent-0.1.18-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.18/idea-ai-agent-0.1.18-macos-arm64.zip) |
+| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-windows-amd64.zip) |
+| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-macos-arm64.zip) |
 
 Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。各平台验证范围见发布说明。
 
@@ -18,6 +18,8 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 0.1.5 继续保留用户 PATH 的优先顺序，并在 Mac 上补充 `~/.local/bin`、`~/.hermes/node/bin` 和 Homebrew 常见目录，覆盖运行期间新建的安装目录。进入配置页或刷新列表会立即检查 CLI 是否存在；安装输出在命令会话展示，执行后返回配置页即可重新识别。重启后检测结果会自动更新，连接错误会显示在对应 Agent 卡片上。
 
 ## 实现
+
+0.1.19 将 2024.1 保留为最低版本并移除最高版本限制，让 IDEA 2024.1 及更高版本都可以安装。
 
 0.1.18 在输入区持续显示当前思考强度，切换后立即更新，并补充窄工具窗口下的布局验证；同时加入 Marketplace 英文介绍、插件图标和隐私说明。
 
@@ -53,7 +55,7 @@ Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；
 
 ## 客户运行要求
 
-- IntelliJ IDEA 2024.1、2024.2、2024.3，使用 IDEA 自带且包含 JCEF 的运行环境。同一个插件 ZIP 覆盖这三个版本，社区版和旗舰版均通过 Plugin Verifier 兼容检查。
+- IntelliJ IDEA 2024.1 或更高版本，使用 IDEA 自带且包含 JCEF 的运行环境。2024.1、2024.2、2024.3 的社区版和旗舰版已通过 Plugin Verifier 兼容检查；插件描述不设置最高版本限制。
 - 安装与操作系统、CPU 对应的插件 ZIP；至少安装并配置 Codex 或 Claude Code 等一个本地 Agent CLI。
 - 业务项目可以继续使用 JDK 8。插件运行在 IDEA 自带的 Java 环境中，客户不需要为插件另装 JDK、Go、Gradle 或前端开发工具。
 
@@ -114,7 +116,7 @@ node scripts/test-runtime.mjs
 
 项目保留 MindFS 的测试，原仓库中部分路径/权限测试依赖 Unix 语义。Windows 上的回归结果与实际验证范围见 [docs/validation.md](docs/validation.md)。
 
-`verifyPlugin` 使用 JetBrains Plugin Verifier 检查 IDEA 2024.1、2024.2、2024.3 的社区版和旗舰版。首次执行会下载对应 IDE；报告写入 `build/reports/pluginVerifier/`。较新的 IDEA 版本仍需按实际验证结果确认兼容性。
+`verifyPlugin` 使用 JetBrains Plugin Verifier 检查 IDEA 2024.1、2024.2、2024.3 的社区版和旗舰版。首次执行会下载对应 IDE；报告写入 `build/reports/pluginVerifier/`。这些是当前回归验证目标，不是允许安装的最高版本。
 
 ## 来源
 
