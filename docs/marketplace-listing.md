@@ -31,7 +31,7 @@ Use locally installed coding agents inside IntelliJ IDEA.
 
 The canonical Marketplace description is in `src/main/resources/META-INF/plugin.xml`. JetBrains reads it from the uploaded plugin ZIP. Do not paste a second, divergent description into the Marketplace page.
 
-## Version 0.1.19 change notes
+## Version 0.1.20 change notes
 
 The canonical change notes are also in `src/main/resources/META-INF/plugin.xml` and are included in the built ZIP.
 
@@ -41,7 +41,7 @@ Local AI Agent starts a bundled local service on a random `127.0.0.1` port. The 
 
 The plugin invokes supported Agent CLIs installed on the user's machine. Those CLIs may connect to model providers according to their existing configuration and authentication. The plugin itself has no vendor-operated backend, telemetry, advertising, or paid feature.
 
-Release packages contain an operating-system and CPU-specific Go executable. The initial release supports Windows x64 and macOS arm64. The Marketplace artifact must contain both executables before it is offered to both platforms; IDEA 2024.x does not support Marketplace native variants.
+GitHub Releases provide separate packages for Windows x64, Windows ARM64, macOS Apple Silicon, and macOS Intel. Upload `idea-ai-agent-0.1.20.zip` to Marketplace; it is the single universal plugin package and contains all four runtime executables. IDEA selects the matching executable when the plugin starts. IDEA 2024.x does not support Marketplace native variants.
 
 This is an independent open-source project. It is not affiliated with JetBrains, OpenAI, or Anthropic.
 
@@ -57,9 +57,9 @@ The existing screenshots under `build/reports/` are test evidence and include fi
 
 ## Upload checklist
 
-- Build and verify both supported runtime binaries.
+- Build and verify all four supported runtime binaries.
 - Confirm `pluginIcon.svg` is present under `META-INF` in the plugin JAR.
-- Confirm the built `plugin.xml` contains the English description, 0.1.19 change notes, `since-build="241"`, and no `until-build` attribute.
+- Confirm the built `plugin.xml` contains the English description, 0.1.20 change notes, `since-build="241"`, and no `until-build` attribute.
 - Install the release ZIP in IDEA 2024.1 and 2024.3 from disk.
 - Capture final 1280×800 screenshots from the installed release build.
 - Accept the JetBrains Marketplace Developer Agreement and declare trader or non-trader status.

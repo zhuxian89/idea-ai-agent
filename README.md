@@ -52,12 +52,14 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 
 ### 安装
 
-当前版本：**0.1.19** · [查看发布说明](docs/releases/v0.1.19.md)
+当前版本：**0.1.20** · [查看发布说明](docs/releases/v0.1.20.md)
 
 | 系统 / 架构 | 下载 |
 | --- | --- |
-| Windows x64 | [idea-ai-agent-0.1.19-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-windows-amd64.zip) |
-| macOS Apple 芯片（M 系列） | [idea-ai-agent-0.1.19-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-macos-arm64.zip) |
+| Windows x64 | [idea-ai-agent-0.1.20-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.20/idea-ai-agent-0.1.20-windows-amd64.zip) |
+| Windows ARM64 | [idea-ai-agent-0.1.20-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.20/idea-ai-agent-0.1.20-windows-arm64.zip) |
+| macOS Apple 芯片（M 系列） | [idea-ai-agent-0.1.20-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.20/idea-ai-agent-0.1.20-macos-arm64.zip) |
+| macOS Intel | [idea-ai-agent-0.1.20-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.20/idea-ai-agent-0.1.20-macos-amd64.zip) |
 
 1. 下载与你的操作系统和 CPU 对应的 ZIP，不要解压。
 2. 在 IDEA 中打开 **Settings → Plugins → 齿轮 → Install Plugin from Disk**，选择 ZIP 并重启 IDEA。
@@ -81,7 +83,7 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 - 支持 MindFS 已配置的 ACP Agent；实际能力取决于各 Agent 暴露的协议功能。
 - 插件最低平台 build 为 `241`，不设置 `until-build`，因此 IDEA 2024.1 及更高版本均可安装。
 - IDEA 社区版和旗舰版 2024.1、2024.2、2024.3 已通过 JetBrains Plugin Verifier。这些是回归检查目标，不是最高可安装版本。
-- 插件包包含平台相关的本地运行程序，请选择正确的操作系统和 CPU 架构。
+- GitHub Release 提供体积更小的单平台安装包；Marketplace 使用一个包含四种运行程序的通用 ZIP，插件会自动选择当前系统和 CPU 对应的程序。
 
 ### 开发与验证
 
@@ -159,12 +161,14 @@ The plugin starts a bundled service for the lifetime of the project. It listens 
 
 ### Installation
 
-Current version: **0.1.19** · [Release notes](docs/releases/v0.1.19.md)
+Current version: **0.1.20** · [Release notes](docs/releases/v0.1.20.md)
 
 | OS / architecture | Download |
 | --- | --- |
-| Windows x64 | [idea-ai-agent-0.1.19-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-windows-amd64.zip) |
-| macOS Apple Silicon | [idea-ai-agent-0.1.19-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-macos-arm64.zip) |
+| Windows x64 | [idea-ai-agent-0.1.20-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.20/idea-ai-agent-0.1.20-windows-amd64.zip) |
+| Windows ARM64 | [idea-ai-agent-0.1.20-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.20/idea-ai-agent-0.1.20-windows-arm64.zip) |
+| macOS Apple Silicon | [idea-ai-agent-0.1.20-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.20/idea-ai-agent-0.1.20-macos-arm64.zip) |
+| macOS Intel | [idea-ai-agent-0.1.20-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.20/idea-ai-agent-0.1.20-macos-amd64.zip) |
 
 1. Download the ZIP for your operating system and CPU. Do not extract it.
 2. In IDEA, open **Settings → Plugins → gear icon → Install Plugin from Disk**, select the ZIP, and restart IDEA.
@@ -188,7 +192,7 @@ Use the New Conversation, History, and Settings buttons at the top to switch vie
 - MindFS-configured ACP Agents are supported according to the capabilities exposed by each Agent.
 - The minimum platform build is `241`; no `until-build` is set, so IntelliJ IDEA 2024.1 and later can install the plugin.
 - IntelliJ IDEA Community and Ultimate 2024.1, 2024.2, and 2024.3 pass JetBrains Plugin Verifier. These are regression targets, not an installation ceiling.
-- Plugin packages contain a platform-specific local runtime. Select the correct operating system and CPU architecture.
+- GitHub Releases provide smaller platform-specific packages. Marketplace uses one universal ZIP containing all four runtimes, and the plugin selects the matching operating system and CPU automatically.
 
 ### Development and verification
 

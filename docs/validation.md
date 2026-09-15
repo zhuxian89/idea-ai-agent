@@ -1,5 +1,13 @@
 # 验证记录
 
+## 0.1.20 四架构与 Marketplace 通用包验证
+
+- Windows x64、Windows ARM64、macOS Apple Silicon、macOS Intel 四个单平台 ZIP 均只包含对应运行程序；通用 ZIP 包含全部四个运行程序。四个单平台包的其余 176 个文件逐项 SHA-256 一致。
+- 二进制格式检查通过：两个 Windows 程序分别为 PE32+ x86-64 与 AArch64；两个 macOS 程序分别为 Mach-O x86_64 与 arm64，最低 macOS 版本均为 12.0。通用包约 31 MB。
+- 通用包内插件版本为 0.1.20，包含插件图标和英文 Marketplace 描述；兼容范围只设置 `since-build="241"`，没有 `until-build`。
+- Plugin Verifier 1.410 对通用 ZIP 的 IDEA 社区版与旗舰版 2024.1、2024.2、2024.3 六个目标全部返回 `Compatible`。Kotlin/IDEA 测试、项目配置检查和隔离外部 Relay 配置后的 Go 全量测试通过。
+- 构建与验证在 macOS arm64 主机完成。Windows 与 macOS Intel/Windows ARM64 程序使用 Go 的 `CGO_ENABLED=0` 交叉编译并检查文件格式，没有在对应实体设备上完成安装测试。
+
 ## 0.1.17 发布源码验证
 
 - Codex、Claude、共用表单校验、session 与 Codex SDK 全套相关 Go 测试及 race 检查通过；Claude SDK 原生交互协议测试和原生 usecase 回归通过。日志为 `build/reports/native-interactions-*-tests.log`。
