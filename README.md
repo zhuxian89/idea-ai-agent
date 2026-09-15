@@ -1,108 +1,103 @@
 # Local AI Agent
 
-在 IntelliJ IDEA 中使用本机 Codex、Claude Code 及 MindFS 已支持的 Agent。插件聚焦 Agent 配置与安装、聊天、聊天历史，复用 MindFS 已有的 Agent 执行和会话实现。
+[中文](#中文) · [English](#english)
 
-[下载 Windows / macOS 插件及查看安装说明](https://github.com/zhuxian89/idea-ai-agent/releases/latest)。最低支持 IntelliJ IDEA 2024.1，不限制更高版本。
+## 中文
 
-当前版本为 **0.1.19**，更新说明见 [0.1.19 发布说明](docs/releases/v0.1.19.md)。
+在 IntelliJ IDEA 中直接使用本机 Coding Agent。Local AI Agent 的核心不是重新做一层聊天界面，而是把 Agent 在终端里的原生执行能力尽可能完整地带进 IDE。
 
-| 系统 / 架构 | 0.1.19 安装包 |
+> **最大限度还原原生 Agent 能力，零配置接入。** 如果 Codex CLI 或 Claude Code 已经能在你的终端中工作，安装插件后即可直接开始对话：无需复制 API Key、重复登录或重新配置模型与 MCP。
+
+### 为什么选择 Local AI Agent
+
+#### 尽可能完整地还原原生 Agent
+
+插件不会自行重写模型的工具循环。代码读取与修改、命令执行、推理、上下文压缩、项目指令和子 Agent 仍由本机 CLI 完成：
+
+| 原生能力 | 插件中的表现 |
 | --- | --- |
-| Windows x64 | [windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-windows-amd64.zip) |
-| Mac，Apple 芯片（M 系列） | [macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-macos-arm64.zip) |
+| 原生会话 | 恢复和延续 CLI 会话，而不是把每条消息当成独立请求 |
+| 模型与推理 | 默认跟随 CLI 配置，也可以按会话选择模型、思考强度和 Fast 模式 |
+| 权限与计划模式 | 保留原生权限请求、只读/普通/最高权限选择以及 Plan Mode |
+| 工具调用 | 实时显示读文件、改代码、执行命令、MCP 和子 Agent 等过程 |
+| 原生交互 | 支持方案选择、异步提问、MCP 表单、URL 确认和额外权限申请 |
+| 上下文 | 展示每轮真实 Context 占用，并保留历史回复的上下文快照 |
+| 项目规则 | 继续使用 CLI 自己的项目指令、配置、登录状态和 MCP 配置 |
 
-Mac 包要求 macOS 12 或更新版本。可在「关于本机」查看芯片；请使用对应架构的 IDEA。各平台验证范围见发布说明。
+Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协议运行；其他 MindFS Agent 可通过 ACP 接入。已核对的原生行为和验证边界见[原生能力清单](docs/native-agent-compatibility.md)。
 
-0.1.3 修复了 Mac 从 Dock/Finder 启动 IDEA 时，终端可用的 CLI 在插件中无法识别的问题。插件使用 IDEA 从用户 shell 恢复的环境，让检测和执行继承相同的 `PATH`、Node 路径及 CLI 配置。升级后请完全退出并重新启动 IDEA；不需要重新安装 CLI。
+#### 零配置接入
 
-0.1.5 继续保留用户 PATH 的优先顺序，并在 Mac 上补充 `~/.local/bin`、`~/.hermes/node/bin` 和 Homebrew 常见目录，覆盖运行期间新建的安装目录。进入配置页或刷新列表会立即检查 CLI 是否存在；安装输出在命令会话展示，执行后返回配置页即可重新识别。重启后检测结果会自动更新，连接错误会显示在对应 Agent 卡片上。
+已经安装并登录本机 Agent CLI 时：
 
-## 实现
+- 自动检测 Codex、Claude Code 和其他已安装的 Agent。
+- 自动复用 CLI 的登录状态、默认模型、推理配置、项目配置和 MCP。
+- 自动继承终端中的 `PATH`；从 Dock 或 Finder 启动 IDEA 时也能识别常见 CLI 安装目录。
+- 不要求在插件中再次填写 API Key。
 
-0.1.19 将 2024.1 保留为最低版本并移除最高版本限制，让 IDEA 2024.1 及更高版本都可以安装。
+尚未安装 CLI 时，可以在插件的 Agent 配置页执行安装或更新，再按对应 CLI 的方式完成登录。插件不提供模型账户或模型额度。
 
-0.1.18 在输入区持续显示当前思考强度，切换后立即更新，并补充窄工具窗口下的布局验证；同时加入 Marketplace 英文介绍、插件图标和隐私说明。
+#### 为 IDEA 工作流设计
 
-0.1.17 接通 MCP 表单和 URL 确认、Codex 额外权限及 Claude 已知原生对话框，修复 Codex 高频事件丢失，并移除聊天输入区的 worktree 创建入口。
+- 通过编辑器右键或 `Ctrl+Alt+A` 把选中代码加入当前对话；没有选区时加入当前文件内容。
+- 从输入区加入当前文件路径，或从项目文件树、文件标签页把指定文件加入对话。
+- Agent 修改文件后自动刷新 IDEA；回复中的项目文件链接可直接打开。
+- 每个工具窗口绑定当前 IDEA 项目，会话历史按项目保存。
+- 在同一个侧边栏中完成聊天、历史恢复、Agent/模型切换、权限选择和 Agent 管理。
+- 跟随 IDEA 深色/浅色主题，支持简体中文和英文界面。
 
-0.1.16 新增「加入当前文件」路径入口及文件右键入口，恢复回复思考强度和 Context，修复历史补录与每轮上下文快照保存。
+#### 本机运行
 
+插件自动启动随项目生命周期运行的本地服务，只监听随机的 `127.0.0.1` 端口，并使用临时令牌保护连接。会话和插件设置保存在本机。Agent CLI 是否向模型服务发送数据，取决于该 CLI 自己的配置和服务提供商。
 
-0.1.15 修复重启后模型识别停在 `probe pending`、状态刷新遗漏及用户消息未贴齐右侧的问题。Agent 状态和错误摘要直接显示，“查看详情”和“重启 Agent”使用明确的文字入口。
+### 安装
 
-0.1.14 将 Codex/Claude 共用工具过程改为默认折叠的轻量活动行，连续完成的普通操作可收成组；保留进展正文、最终回答、主动展开选择，以及“已等待”和“最近更新于”两项计时。修复真实 Codex 完整历史同步后重复显示包装命令、失败被误判为成功的问题。Claude 与 IDEA/JCEF 的剩余实机验收范围见发布说明。
+当前版本：**0.1.19** · [查看发布说明](docs/releases/v0.1.19.md)
 
-0.1.13 修复原生标题栏按钮、发送后 Agent/模型串会话、异步选择题未等待回答、活动栏状态恢复和语言/外观持久化；同时包含此前本地测试版本的权限选择、消息同步与 Agent 管理改进。
+| 系统 / 架构 | 下载 |
+| --- | --- |
+| Windows x64 | [idea-ai-agent-0.1.19-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-windows-amd64.zip) |
+| macOS Apple 芯片（M 系列） | [idea-ai-agent-0.1.19-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-macos-arm64.zip) |
 
-0.1.8 修复队列快照过期和重连后残留、发送窗口漏显示正式消息的问题。等待区展示实际思考/工具/用户回答状态、已等待时间及最近更新间隔；运行中的工具保留原生状态。详情见 [0.1.8 本地测试版说明](docs/releases/v0.1.8.md)。
+1. 下载与你的操作系统和 CPU 对应的 ZIP，不要解压。
+2. 在 IDEA 中打开 **Settings → Plugins → 齿轮 → Install Plugin from Disk**，选择 ZIP 并重启 IDEA。
+3. 打开项目，点击右侧 **AI Agent** 工具窗口。插件会自动检测已有 CLI 和配置。
 
-0.1.7 在 Agent / 模型旁增加执行权限选择，按本插件的使用要求默认使用 Codex 和 Claude Code 的原生最高权限；可以切回普通权限，切换模型保留已选权限。修复输入框仅接收图片粘贴、忽略普通文件的问题。详情见 [0.1.7 本地测试版说明](docs/releases/v0.1.7.md)。
+最低支持 IntelliJ IDEA 2024.1，不设置最高版本限制。需要使用 IDEA 自带且包含 JCEF 的运行环境；macOS 包要求 macOS 12 或更新版本。业务项目可以继续使用 JDK 8，不需要为插件安装额外 JDK、Go、Gradle 或 Node.js。
 
-0.1.6 修复适配层构造客户端时报 `model must be specified`，让 Claude 未指定模型时正常沿用 CLI 配置；补充真实构造器回归测试。顶部图标增加悬停提示，历史/配置支持再次点击收回，Agent / 模型弹窗固定两列；编辑器上下文和重连操作使用 IDEA 原生工具窗口按钮。
+### 使用
 
-- `runtime/server/internal/agent/`：沿用 MindFS 的 Codex app-server、Claude Code SDK、ACP 适配器。
-- `runtime/web/`：使用单栏插件界面，沿用原有会话、流式回复、工具卡片、模型/配置切换、安装更新、历史导入与分叉组件。项目列表、任务看板和独立文件/Git/Worktrees 面板不再出现在插件中。
-- `src/main/kotlin/`：IDEA 工具窗口、本地服务生命周期、编辑器上下文、文件打开和主题同步。
-- `runtime/server/cmd/idea-agent/`：插件专用本地启动入口。
+顶部的新建会话、历史和设置按钮用于切换主要视图。发送消息前可以选择 Agent、模型、思考强度和执行权限；未显式选择时继续使用 CLI 默认配置。
 
-服务只监听 `127.0.0.1` 的动态端口，插件自动启动和连接；关闭项目时退出。每个项目的插件配置保存在 IDEA 配置目录下的 `idea-ai-agent/<项目路径哈希>/`，原有会话仍使用 MindFS 的项目存储格式。CLI 的安装、登录和模型配置沿用 MindFS 原有能力。
+- **加入当前代码**：编辑器右键“发送到 AI Agent”或按 `Ctrl+Alt+A`。选中的代码会完整加入输入框，并保留未保存内容。
+- **加入当前文件**：输入区按钮只加入当前激活文件的绝对路径，让 Agent 按需读取磁盘内容。
+- **加入指定文件**：在项目文件树或文件标签页右键“加入 AI Agent 对话”，不会自动发送消息。
+- **继续历史会话**：从历史页恢复会话、原生线程、回复元数据和已保存的 Context 快照。
+- **切换权限**：最高权限适合让 Agent 连续完成任务；普通、只读等模式保留对应 CLI 的原生授权交互。
 
-插件入口关闭 Relay、Token Station、云端 Agent 配置拉取、服务自身更新和 PWA 入口；本机 Agent 仍按其配置连接模型服务。
+### 支持范围
 
-每个工具窗口绑定当前 IDEA 项目。项目和文件管理由 IDEA 承担；新会话直接使用当前项目目录，输入区不提供 worktree 开关或分支选择，Agent 命令使用界面选定的原生权限模式。
+- 原生重点支持 Codex CLI 和 Claude Code。
+- 支持 MindFS 已配置的 ACP Agent；实际能力取决于各 Agent 暴露的协议功能。
+- 插件最低平台 build 为 `241`，不设置 `until-build`，因此 IDEA 2024.1 及更高版本均可安装。
+- IDEA 社区版和旗舰版 2024.1、2024.2、2024.3 已通过 JetBrains Plugin Verifier。这些是回归检查目标，不是最高可安装版本。
+- 插件包包含平台相关的本地运行程序，请选择正确的操作系统和 CPU 架构。
 
-模型和推理默认跟随本机 CLI 配置。插件内 Codex / Claude Code 未保存权限选择的会话默认最高权限；普通权限下保留原生授权交互，方案选择与计划模式继续可用。已确认的差异与验证边界见 [原生能力核对清单](docs/native-agent-compatibility.md)。
+### 开发与验证
 
-## 客户运行要求
+开发和打包需要 JDK 21、Go 1.25+、Node.js 20+ 和 pnpm 12.4.1。插件以 IDEA 2024.1 SDK 编译，生成 Java 17 字节码。
 
-- IntelliJ IDEA 2024.1 或更高版本，使用 IDEA 自带且包含 JCEF 的运行环境。2024.1、2024.2、2024.3 的社区版和旗舰版已通过 Plugin Verifier 兼容检查；插件描述不设置最高版本限制。
-- 安装与操作系统、CPU 对应的插件 ZIP；至少安装并配置 Codex 或 Claude Code 等一个本地 Agent CLI。
-- 业务项目可以继续使用 JDK 8。插件运行在 IDEA 自带的 Java 环境中，客户不需要为插件另装 JDK、Go、Gradle 或前端开发工具。
-
-## 开发
-
-开发和打包需要 JDK 21、Go 1.25+、Node.js 20+ 和 pnpm 12.4.1。插件以 IDEA 2024.1 SDK 编译，最低平台 build 为 `241`，生成 Java 17 字节码，并使用 Kotlin 1.9 语言/API 基线与 IDEA 提供的标准库。开发工具的 JDK 21 要求不适用于客户的业务项目。
-
-```powershell
+```bash
 cd runtime/web
 pnpm install --reporter=append-only
 cd ../..
-./gradlew.bat buildPlugin
+./gradlew buildPlugin
 ```
 
-macOS/Linux 使用 `./gradlew buildPlugin`。构建会编译 Web 前端和当前系统架构的 Go 服务，将服务与静态资源一起打入插件 ZIP，产物在 `build/distributions/`。
+生成的插件位于 `build/distributions/`。完整验证命令：
 
-在 Windows 上交叉编译 Mac 包时，设置 `$env:GOOS = 'darwin'`，并设置 `$env:GOARCH = 'arm64'`（Apple 芯片）或 `'amd64'`（Intel），然后执行 `./gradlew.bat buildPlugin`。每次构建后及时将 ZIP 另存为对应架构的文件名；两个架构必须顺序构建，因为共用输出目录。恢复当前系统构建前清除这两个环境变量。
-
-```powershell
-./gradlew.bat runIde
-```
-
-开发使用独立的 IDEA 沙箱。至少安装并配置一个 Agent CLI；可通过原有 Agent 配置界面检查和切换配置。插件包按操作系统/CPU 构建，不能把 Windows 包作为 macOS/Linux 包使用。
-
-## 使用
-
-在 IDEA 的「Settings → Plugins → 齿轮 → Install Plugin from Disk」中选择生成的 ZIP，打开项目和右侧「AI Agent」工具窗口。
-
-顶部提供新建会话、聊天历史、Agent 配置与安装三个入口。聊天、历史、配置在同一个工具窗口中切换，切换时保留输入草稿。配置页显示 Agent 识别状态和已获取的版本，提供添加/切换配置、安装更新、重启和列表刷新；外观与语言也保留在此页。所有操作复用原有表单和后端，安装更新继续通过原有命令会话展示执行过程。
-
-配置页默认展示 Codex、Claude Code 和其他已安装的 Agent，其余未安装项收在“其他 Agent”中。
-
-回复下方保留复制、分叉、模型、思考强度、时间、耗时和 Context 上下文占用（例如 `Context 42% (109K/258K)`）。Context 按每条回复保存，重新打开和离线查看时保留各自的快照；已有 Codex 历史会从本机原生记录补回缺失的思考强度和 Context。数据以实际记录为准，缺失时显示“未提供”，不使用当前配置或最新一轮数值推算旧回复。输入/输出 Token 和缓存命中率明细暂缓实现。
-
-IDEA 原生标题栏保留新会话、历史、设置，网页内部不再重复显示同一工具栏；重新连接位于标题栏的更多菜单。
-
-- 「加入当前代码」、编辑器右键「发送到 AI Agent」或 `Ctrl+Alt+A`：加入选中片段，没有选中内容时加入当前文件的完整内容；保留并注明未保存的编辑器内容。
-- 输入框上方「加入当前文件」：只加入当前激活标签页文件的绝对路径。例如打开 10 个文件、正在查看第 8 个时，加入的是第 8 个文件的路径，由 Agent 按需读取磁盘文件，不粘贴全文或自动保存。
-- 项目文件树或文件标签页右键「加入 AI Agent 对话」：只加入右击文件的路径，无需先打开该文件。
-
-这些入口都会保留当前会话和已有草稿，不会自动发送消息。未保存的修改请继续通过「加入当前代码」提供，或先自行保存文件。模型执行结束后触发 IDE 文件刷新，会话中的文件链接可以打开当前 IDEA 项目内的文件。
-
-## 验证
-
-```powershell
-./gradlew.bat test
-./gradlew.bat verifyPluginProjectConfiguration verifyPlugin
+```bash
+./gradlew test verifyPluginProjectConfiguration verifyPlugin
 cd runtime/web
 pnpm run typecheck
 node --test --test-concurrency=1 tests/*.test.mjs
@@ -110,14 +105,111 @@ cd ../..
 node scripts/test-runtime.mjs
 ```
 
-服务端测试脚本使用临时 HOME/配置目录，并移除继承的 `IDE_AGENT_DATA_DIR` 和模型认证变量，避免从插件内运行测试时写入正在使用的运行时配置；Go 构建缓存仍复用。脚本后面可以附加 `go test` 参数，例如 `node scripts/test-runtime.mjs ./server/internal/agent/claude -count=1`。
+项目复用 [MindFS](https://github.com/a9gent/mindfs) 的本地 Agent 与会话实现，并按 GNU AGPL v3 分发。第三方来源和修改范围见 [NOTICE.md](NOTICE.md)，许可证见 [LICENSE](LICENSE)，隐私说明见 [PRIVACY.md](PRIVACY.md)。
 
-运行 `node scripts/smoke-runtime.mjs` 可验证本地服务和浏览器界面，需要本机 Chrome；仅验证 HTTP 时加 `--http-only`。测试使用空 Agent 配置，不调用模型。
+---
 
-项目保留 MindFS 的测试，原仓库中部分路径/权限测试依赖 Unix 语义。Windows 上的回归结果与实际验证范围见 [docs/validation.md](docs/validation.md)。
+## English
 
-`verifyPlugin` 使用 JetBrains Plugin Verifier 检查 IDEA 2024.1、2024.2、2024.3 的社区版和旗舰版。首次执行会下载对应 IDE；报告写入 `build/reports/pluginVerifier/`。这些是当前回归验证目标，不是允许安装的最高版本。
+Use locally installed coding agents directly inside IntelliJ IDEA. Local AI Agent is built to bring the Agent's native terminal capabilities into the IDE as faithfully as possible, rather than replacing them with a separate chat implementation.
 
-## 来源
+> **Maximum native Agent fidelity with zero-configuration setup.** If Codex CLI or Claude Code already works in your terminal, install the plugin and start chatting. There is no API key to copy, no second login, and no model or MCP configuration to recreate.
 
-本项目复用 MindFS 源码，按 GNU AGPL v3 分发。来源、基线及修改范围见 [NOTICE.md](NOTICE.md)，许可证见 [LICENSE](LICENSE)。
+### Why Local AI Agent
+
+#### Faithful native Agent behavior
+
+The plugin does not reimplement the model's tool loop. Reading and editing code, running commands, reasoning, compacting context, applying project instructions, and starting subagents remain the responsibility of the local CLI.
+
+| Native capability | Behavior in the plugin |
+| --- | --- |
+| Native sessions | Resumes CLI sessions instead of treating every message as an isolated request |
+| Models and reasoning | Follows CLI defaults or lets each session select a model, reasoning effort, and Fast mode |
+| Permissions and planning | Preserves native permission requests, access levels, and Plan Mode |
+| Tool calls | Streams file reads, code changes, commands, MCP calls, and subagent activity |
+| Native interactions | Supports choices, asynchronous questions, MCP forms, URL confirmation, and additional permission requests |
+| Context | Shows real context usage for each reply and retains historical context snapshots |
+| Project rules | Uses the CLI's existing project instructions, configuration, authentication, and MCP setup |
+
+Codex runs through its native `app-server` protocol, while Claude Code runs through its native streaming protocol. Other Agents supported by MindFS can connect through ACP. See the [native capability notes](docs/native-agent-compatibility.md) for verified behavior and test boundaries.
+
+#### Zero-configuration setup
+
+When a supported Agent CLI is already installed and authenticated, the plugin:
+
+- Detects Codex, Claude Code, and other installed Agents automatically.
+- Reuses CLI authentication, default models, reasoning settings, project configuration, and MCP servers.
+- Inherits the terminal `PATH`, including common CLI locations when IDEA starts from the macOS Dock or Finder.
+- Does not ask you to enter the same API key again.
+
+If a CLI is missing, use the Agent configuration page to run its installation or update command, then authenticate using that CLI's normal flow. The plugin does not provide model accounts or usage credits.
+
+#### Built for the IDEA workflow
+
+- Add selected code with the editor context menu or `Ctrl+Alt+A`; when there is no selection, add the current file contents.
+- Add the current file path from the composer, or add a specific file from the project tree or editor tab.
+- Refresh IDEA after Agent file changes and open project file links directly from replies.
+- Keep each tool window and its conversation history bound to the current IDEA project.
+- Chat, restore history, select Agents and models, control permissions, and manage CLIs in one sidebar.
+- Follow IDEA light and dark themes, with English and Simplified Chinese interfaces.
+
+#### Local runtime
+
+The plugin starts a bundled service for the lifetime of the project. It listens only on a random `127.0.0.1` port and protects the connection with an ephemeral token. Conversations and plugin settings stay on the local machine. Any data sent to a model service is controlled by the Agent CLI and its configured provider.
+
+### Installation
+
+Current version: **0.1.19** · [Release notes](docs/releases/v0.1.19.md)
+
+| OS / architecture | Download |
+| --- | --- |
+| Windows x64 | [idea-ai-agent-0.1.19-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-windows-amd64.zip) |
+| macOS Apple Silicon | [idea-ai-agent-0.1.19-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.19/idea-ai-agent-0.1.19-macos-arm64.zip) |
+
+1. Download the ZIP for your operating system and CPU. Do not extract it.
+2. In IDEA, open **Settings → Plugins → gear icon → Install Plugin from Disk**, select the ZIP, and restart IDEA.
+3. Open a project and select the **AI Agent** tool window on the right. The plugin detects existing CLIs and configuration automatically.
+
+The minimum supported version is IntelliJ IDEA 2024.1, with no upper version limit. IDEA must use a bundled runtime that includes JCEF. The macOS package requires macOS 12 or later. Projects may continue using JDK 8; users do not need to install JDK, Go, Gradle, or Node.js for the plugin.
+
+### Usage
+
+Use the New Conversation, History, and Settings buttons at the top to switch views. Before sending a message, you can select the Agent, model, reasoning effort, and execution permission. Leaving them at their defaults preserves the CLI configuration.
+
+- **Add current code:** choose “Send to AI Agent” from the editor context menu or press `Ctrl+Alt+A`. The plugin includes the complete selection and preserves unsaved editor content.
+- **Add current file:** the composer action adds the active file's absolute path so the Agent can read it when needed.
+- **Add a specific file:** choose “Add to AI Agent conversation” from the project tree or editor-tab context menu. Nothing is sent automatically.
+- **Resume a conversation:** restore its native thread, reply metadata, and saved context snapshots from History.
+- **Choose permissions:** Full Access supports uninterrupted task execution, while standard and read-only modes preserve the CLI's native approval interactions.
+
+### Support matrix
+
+- Codex CLI and Claude Code receive the deepest native integration.
+- MindFS-configured ACP Agents are supported according to the capabilities exposed by each Agent.
+- The minimum platform build is `241`; no `until-build` is set, so IntelliJ IDEA 2024.1 and later can install the plugin.
+- IntelliJ IDEA Community and Ultimate 2024.1, 2024.2, and 2024.3 pass JetBrains Plugin Verifier. These are regression targets, not an installation ceiling.
+- Plugin packages contain a platform-specific local runtime. Select the correct operating system and CPU architecture.
+
+### Development and verification
+
+Building requires JDK 21, Go 1.25+, Node.js 20+, and pnpm 12.4.1. The plugin targets the IDEA 2024.1 SDK and emits Java 17 bytecode.
+
+```bash
+cd runtime/web
+pnpm install --reporter=append-only
+cd ../..
+./gradlew buildPlugin
+```
+
+The plugin ZIP is written to `build/distributions/`. Run the complete verification suite with:
+
+```bash
+./gradlew test verifyPluginProjectConfiguration verifyPlugin
+cd runtime/web
+pnpm run typecheck
+node --test --test-concurrency=1 tests/*.test.mjs
+cd ../..
+node scripts/test-runtime.mjs
+```
+
+This project reuses the local Agent and session implementation from [MindFS](https://github.com/a9gent/mindfs) and is distributed under GNU AGPL v3. See [NOTICE.md](NOTICE.md) for third-party sources and modifications, [LICENSE](LICENSE) for license terms, and [PRIVACY.md](PRIVACY.md) for privacy details.
