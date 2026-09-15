@@ -103,6 +103,19 @@ test("file references and selected code use separate host requests, including be
   }
 });
 
+test("file navigation waits for the IDEA bridge instead of dropping the click", () => {
+  const bridge = loadBridge();
+  bridge.exports.openIdeaFile("project-root", "CheckPlanAutoJobStatusEnum");
+  assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), []);
+  bridge.injectBridge();
+  bridge.fireReady();
+  assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), [{
+    action: "openFile",
+    rootId: "project-root",
+    path: "CheckPlanAutoJobStatusEnum",
+  }]);
+});
+
 test("editor capture clicks before the IDE injects window.ideaAgent flush once on ready", () => {
   const bridge = loadBridge();
   bridge.exports.requestIdeaEditorContext();

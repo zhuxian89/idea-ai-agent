@@ -52,14 +52,14 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 
 ### 安装
 
-当前版本：**0.1.21** · [查看发布说明](docs/releases/v0.1.21.md)
+当前版本：**0.1.22** · [查看发布说明](docs/releases/v0.1.22.md)
 
 | 系统 / 架构 | 下载 |
 | --- | --- |
-| Windows x64 | [idea-ai-agent-0.1.21-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.21/idea-ai-agent-0.1.21-windows-amd64.zip) |
-| Windows ARM64 | [idea-ai-agent-0.1.21-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.21/idea-ai-agent-0.1.21-windows-arm64.zip) |
-| macOS Apple 芯片（M 系列） | [idea-ai-agent-0.1.21-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.21/idea-ai-agent-0.1.21-macos-arm64.zip) |
-| macOS Intel | [idea-ai-agent-0.1.21-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.21/idea-ai-agent-0.1.21-macos-amd64.zip) |
+| Windows x64 | [idea-ai-agent-0.1.22-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-windows-amd64.zip) |
+| Windows ARM64 | [idea-ai-agent-0.1.22-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-windows-arm64.zip) |
+| macOS Apple 芯片（M 系列） | [idea-ai-agent-0.1.22-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-macos-arm64.zip) |
+| macOS Intel | [idea-ai-agent-0.1.22-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-macos-amd64.zip) |
 
 1. 下载与你的操作系统和 CPU 对应的 ZIP，不要解压。
 2. 在 IDEA 中打开 **Settings → Plugins → 齿轮 → Install Plugin from Disk**，选择 ZIP 并重启 IDEA。
@@ -73,6 +73,11 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 
 - **加入当前代码**：编辑器右键“发送到 AI Agent”或按 `Ctrl+Alt+A`。选中的代码会完整加入输入框，并保留未保存内容。
 - **加入当前文件**：输入区按钮只加入当前激活文件的绝对路径，让 Agent 按需读取磁盘内容。
+- **语音输入**：输入区麦克风按钮打开录音浮层，标题下显示本次使用的语音供应商（不显示模型），同时显示音量波形和时长；点击“停止并转为文字”后将识别文字插入原光标位置，不自动发送。Esc 或“取消”丢弃本次录音，切换会话或离开聊天页也会取消。
+
+插件设置页常驻“语音输入 → 配置与测试”入口，并显示已保存启用的“当前供应商”，保存切换后立即更新，未配置时明确提示；录音浮层齿轮、工具窗口标题栏更多菜单，以及首次未配置提示，都打开同一份配置。可随时修改供应商和密钥，点击“测试语音识别”录一句话，再“停止并识别”；测试使用当前表单内容，结果只显示在配置窗口，验证通过后点击“保存”。取消测试或关闭窗口会停止本次测试。选择“硅基流动”后自动带出 `https://api.siliconflow.cn/v1/audio/transcriptions` 和 `FunAudioLLM/SenseVoiceSmall`，只需填写 API Key；配置页提供注册/实名认证、创建密钥和官方免费价格、限流说明链接。SenseVoiceSmall 当前免费，插件单次录音最多 120 秒。选择“腾讯云”后自动带出 `https://asr.tencentcloudapi.com` 和中文通用模型 `16k_zh`，只需填写 `SecretId`、`SecretKey`。页面提供[注册账号](https://cloud.tencent.com/register)、[开通语音识别](https://console.cloud.tencent.com/asr)、[获取密钥](https://console.cloud.tencent.com/cam/capi)的链接和三步说明。腾讯云一句话识别每月免费 5,000 次成功调用，个人日常使用通常足够；单次最多 60 秒，额度及超额规则见[官方计费说明](https://cloud.tencent.com/document/product/1093/35686)。
+
+“自定义服务”保留兼容 `/audio/transcriptions` 的地址、模型与 API Key 配置，单次最多 120 秒。各供应商凭据分别保存在 IDEA 密码保险箱；停止后才将内存中的 WAV 音频发往所选服务，未配置完整时不开始录音。首次录音需允许 IDEA 使用系统麦克风。
 - **加入指定文件**：在项目文件树或文件标签页右键“加入 AI Agent 对话”，不会自动发送消息。
 - **继续历史会话**：从历史页恢复会话、原生线程、回复元数据和已保存的 Context 快照。
 - **切换权限**：最高权限适合让 Agent 连续完成任务；普通、只读等模式保留对应 CLI 的原生授权交互。
@@ -161,14 +166,14 @@ The plugin starts a bundled service for the lifetime of the project. It listens 
 
 ### Installation
 
-Current version: **0.1.21** · [Release notes](docs/releases/v0.1.21.md)
+Current version: **0.1.22** · [Release notes](docs/releases/v0.1.22.md)
 
 | OS / architecture | Download |
 | --- | --- |
-| Windows x64 | [idea-ai-agent-0.1.21-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.21/idea-ai-agent-0.1.21-windows-amd64.zip) |
-| Windows ARM64 | [idea-ai-agent-0.1.21-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.21/idea-ai-agent-0.1.21-windows-arm64.zip) |
-| macOS Apple Silicon | [idea-ai-agent-0.1.21-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.21/idea-ai-agent-0.1.21-macos-arm64.zip) |
-| macOS Intel | [idea-ai-agent-0.1.21-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.21/idea-ai-agent-0.1.21-macos-amd64.zip) |
+| Windows x64 | [idea-ai-agent-0.1.22-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-windows-amd64.zip) |
+| Windows ARM64 | [idea-ai-agent-0.1.22-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-windows-arm64.zip) |
+| macOS Apple Silicon | [idea-ai-agent-0.1.22-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-macos-arm64.zip) |
+| macOS Intel | [idea-ai-agent-0.1.22-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-macos-amd64.zip) |
 
 1. Download the ZIP for your operating system and CPU. Do not extract it.
 2. In IDEA, open **Settings → Plugins → gear icon → Install Plugin from Disk**, select the ZIP, and restart IDEA.
@@ -185,6 +190,12 @@ Use the New Conversation, History, and Settings buttons at the top to switch vie
 - **Add a specific file:** choose “Add to AI Agent conversation” from the project tree or editor-tab context menu. Nothing is sent automatically.
 - **Resume a conversation:** restore its native thread, reply metadata, and saved context snapshots from History.
 - **Choose permissions:** Full Access supports uninterrupted task execution, while standard and read-only modes preserve the CLI's native approval interactions.
+
+Voice input is available from the microphone button. Stop recording to insert recognized text at the original draft cursor; it never sends the message automatically. The popover shows the provider used for that recording. Cancel, switch sessions, or leave the chat page to discard the result.
+
+Open **Settings → Voice input → Configure and test** to change providers, credentials, or record a test. Settings show the saved active provider; tests use the current form and show results only in the configuration dialog. Tencent Cloud is the initial default and requires SecretId and SecretKey; SiliconFlow requires an API Key; custom services accept a compatible transcription endpoint and model. Managed providers fill in their endpoint and model automatically. Provider credentials are stored separately in the IDE Password Safe. Audio remains in memory until it is sent directly to the selected provider for transcription. Recording requires the OS microphone permission for IDEA.
+
+Tencent Cloud allows up to 60 seconds per recording; other services allow up to 120 seconds. Tencent's sentence recognition includes 5,000 successful calls per month, and SiliconFlow SenseVoiceSmall is currently free. Provider terms, rate limits, and billing policies apply; links are available in the configuration dialog.
 
 ### Support matrix
 

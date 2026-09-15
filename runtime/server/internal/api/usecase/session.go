@@ -2223,6 +2223,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 	var lastContextWindow agenttypes.ContextWindow
 	plannedAssistantSeq := len(current.Exchanges) + 2
 	auxBuffer := make([]session.ExchangeAux, 0, 8)
+	var latestTurnDiff *agenttypes.TurnDiffUpdate
 	defer manager.ClearPendingExchangeAux(context.Background(), current.Key)
 	var thoughtBuffer strings.Builder
 	currentThoughtID := ""
@@ -2273,7 +2274,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 					update.Data = chunk
 					thoughtBuffer.WriteString(chunk.Content)
 				}
-			case agenttypes.EventTypeToolCall, agenttypes.EventTypeToolUpdate, agenttypes.EventTypeTodoUpdate, agenttypes.EventTypePlanUpdate, agenttypes.EventTypeCompact, agenttypes.EventTypeMessageChunk, agenttypes.EventTypeMessageDone:
+			case agenttypes.EventTypeToolCall, agenttypes.EventTypeToolUpdate, agenttypes.EventTypeTodoUpdate, agenttypes.EventTypePlanUpdate, agenttypes.EventTypeCompact, agenttypes.EventTypeTurnDiff, agenttypes.EventTypeMessageChunk, agenttypes.EventTypeMessageDone:
 				flushThought()
 			}
 			clientUpdate := compactAgentUpdate(update)
@@ -2349,6 +2350,12 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 					})
 				}
 			}
+			if update.Type == agenttypes.EventTypeTurnDiff {
+				if turnDiff, ok := update.Data.(agenttypes.TurnDiffUpdate); ok {
+					turnDiffCopy := turnDiff
+					latestTurnDiff = &turnDiffCopy
+				}
+			}
 			if update.Type == agenttypes.EventTypeMessageChunk {
 				if chunk, ok := update.Data.(agenttypes.MessageChunk); ok {
 					sawAssistantChunk = true
@@ -2422,6 +2429,14 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		}
 	}
 	flushThought()
+	if latestTurnDiff != nil && strings.TrimSpace(latestTurnDiff.Diff) != "" {
+		turnDiffCopy := *latestTurnDiff
+		auxBuffer = append(auxBuffer, session.ExchangeAux{
+			Seq:      plannedAssistantSeq,
+			Line:     currentAssistantLine(responseText),
+			TurnDiff: &turnDiffCopy,
+		})
+	}
 	claudeSubagents.FinishAll()
 	if sendErr != nil && !isCanceledTurnError(sendErr) {
 		log.Printf("[session] turn.send.error root=%s session=%s agent=%s err=%v", in.RootID, current.Key, in.Agent, sendErr)
@@ -3576,6 +3591,7 @@ func dedupeExchangeAuxBuffer(items []session.ExchangeAux) []session.ExchangeAux 
 	seenPlanIDs := make(map[string]struct{}, len(items))
 	seenCompactIDs := make(map[string]struct{}, len(items))
 	seenTodo := false
+	seenTurnDiff := false
 	out := make([]session.ExchangeAux, 0, len(items))
 	for i := len(items) - 1; i >= 0; i-- {
 		item := items[i]
@@ -3617,6 +3633,12 @@ func dedupeExchangeAuxBuffer(items []session.ExchangeAux) []session.ExchangeAux 
 				}
 				seenCompactIDs[compactID] = struct{}{}
 			}
+		}
+		if item.TurnDiff != nil {
+			if seenTurnDiff {
+				continue
+			}
+			seenTurnDiff = true
 		}
 		out = append(out, item)
 	}
@@ -3756,6 +3778,11 @@ type pathNormalizer interface {
 
 func normalizeAgentUpdatePaths(root pathNormalizer, update agenttypes.Event) agenttypes.Event {
 	if root == nil {
+		return update
+	}
+	if turnDiff, ok := update.Data.(agenttypes.TurnDiffUpdate); ok {
+		turnDiff.Diff = normalizeDiffTextPaths(root, turnDiff.Diff)
+		update.Data = turnDiff
 		return update
 	}
 	toolCall, ok := update.Data.(agenttypes.ToolCall)

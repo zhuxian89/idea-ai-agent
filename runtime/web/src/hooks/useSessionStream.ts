@@ -6,6 +6,7 @@ import {
   type PlanUpdate,
   type TodoUpdate,
   type ToolCall,
+  type TurnDiffUpdate,
 } from "../services/session";
 import { translateNow } from "../i18n";
 import { readActivityFacts, type ActivityAgent } from "../services/activityFacts";
@@ -57,7 +58,8 @@ export type TimelineItem =
   | { id: string; type: "tool"; toolCall: ToolCall; agent?: ActivityAgent; sourceTurnKey?: string }
   | { id: string; type: "todo"; todoUpdate: TodoUpdate; timestamp?: string }
   | { id: string; type: "plan"; planUpdate: PlanUpdate; timestamp?: string }
-  | { id: string; type: "compact"; compactNotice: CompactNotice; timestamp?: string };
+  | { id: string; type: "compact"; compactNotice: CompactNotice; timestamp?: string }
+  | { id: string; type: "turn_diff"; turnDiff: TurnDiffUpdate; timestamp?: string };
 
 type UseSessionStreamResult = {
   timeline: TimelineItem[];
@@ -178,15 +180,26 @@ function buildAssistantTimeline(
   auxList: ExchangeAux[],
 ): TimelineItem[] {
   const content = ex.content || "";
-  if (!auxList.length) {
+  const turnDiff = [...auxList].reverse().find((aux) => !!aux.turn_diff?.diff.trim())?.turn_diff;
+  const inlineAux = auxList.filter((aux) => !aux.turn_diff);
+  if (!inlineAux.length) {
     const single = assistantSegmentItem(index, ex, content, 0, true);
-    return single ? [single] : [];
+    const out: TimelineItem[] = single ? [single] : [];
+    if (turnDiff) {
+      out.push({
+        id: turnDiff.turnId || stableTimelineID("turn-diff", index, turnDiff.diff, ex.timestamp, ex.agent),
+        type: "turn_diff",
+        turnDiff,
+        timestamp: ex.timestamp,
+      });
+    }
+    return out;
   }
 
   const lines = content === "" ? [] : content.split("\n");
   const totalLines = lines.length;
   const out: TimelineItem[] = [];
-  const normalizedAux = auxList.map((aux, auxIndex) => ({
+  const normalizedAux = inlineAux.map((aux, auxIndex) => ({
     ...aux,
     auxIndex,
     line: Math.max(0, Math.min(totalLines, Number(aux.line || 0))),
@@ -321,6 +334,15 @@ function buildAssistantTimeline(
     }
   }
 
+  if (turnDiff) {
+    out.push({
+      id: turnDiff.turnId || stableTimelineID("turn-diff", index, turnDiff.diff, ex.timestamp, ex.agent),
+      type: "turn_diff",
+      turnDiff,
+      timestamp: ex.timestamp,
+    });
+  }
+
   return out;
 }
 
@@ -337,7 +359,7 @@ function withActivityContext(item: TimelineItem, agent?: string, sourceTurnKey?:
   return item.type === "tool" ? { ...item, ...toolContext(item.toolCall, agent, sourceTurnKey) } : item;
 }
 
-function buildBaseTimeline(
+export function buildBaseTimeline(
   exchanges: ExchangeLike[],
   exchangeAux: ExchangeAuxMapLike,
 ): TimelineItem[] {

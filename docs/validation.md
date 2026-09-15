@@ -1,5 +1,17 @@
 # 验证记录
 
+## 0.1.22 语音输入与文件变更（2026-09-16）
+
+- `node scripts/test-runtime.mjs` Go 全套通过；TypeScript 类型检查和 `node --test --test-concurrency=1 tests/*.test.mjs` 的 179 项前端测试通过，无失败、跳过或取消。
+- Kotlin/IDEA 测试 58 项通过；正式版本 `test buildPlugin verifyPluginProjectConfiguration --offline` 通过。语音测试覆盖录音控制器的取消/迟到结果、各供应商请求构造、凭据隔离、配置表单、配置测试面板和供应商展示。
+- 正式前端和 macOS arm64 本地运行时执行完整 `scripts/smoke-runtime.mjs` 通过，覆盖启动鉴权、Agent 发现、会话和草稿、权限提问、主题窄栏、历史恢复、活动计时与服务退出。浏览器未出现未捕获错误或远程服务请求。
+- 四个原生程序使用 `CGO_ENABLED=0` 构建并核对 PE/Mach-O CPU 类型；两个 macOS 程序最低系统版本均为 12.0。四个单平台安装包各包含一个对应程序；Marketplace 通用 ZIP 包含全部四个程序。五个包的插件 JAR、前端、配置、许可证等公共文件逐字节一致，ZIP 完整性及无重复条目检查通过。
+- 通用 ZIP 内版本为 0.1.22，包含图标、更新说明、`since-build="241"`，没有最高版本限制。五个安装包 SHA-256 记录在 Release 附件 `SHA256SUMS.txt`。
+- 最终通用 ZIP 经 Plugin Verifier 验证，IC/IU 2024.1、2024.2、2024.3 六个目标全部 `Compatible`。2024.3 仍报告 `CredentialAttributes` 构造器弃用提示，不影响二进制兼容性。
+- 本轮验证运行于 macOS arm64，其他架构完成交叉编译与静态检查；未在 Windows/Intel 实机安装，也未使用真实麦克风或供应商凭据发起识别请求。用户此前对腾讯云/硅基流动的效果反馈不能替代跨设备测试。
+
+日志：`build/reports/release-0.1.22-{go,web,build,build-final,smoke,package,verifier}.log`；产物：`build/releases/0.1.22/`。
+
 ## 0.1.21 Windows 更新文件锁修复
 
 - 插件不再直接启动安装目录中的 `idea-agent-windows-*.exe`。启动前会把当前操作系统与 CPU 对应的程序及公共 runtime 文件复制到 IDEA system cache 的完整内容 SHA-256 目录，其他平台程序不会复制。

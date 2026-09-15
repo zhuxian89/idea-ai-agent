@@ -59,11 +59,14 @@ async function bundleFixture() {
         import React, { useRef, useState } from "react";
         import { createRoot } from "react-dom/client";
         import { IdeaWorkbench } from "./src/layout/IdeaWorkbench";
+        import { IdeaAgentSettings } from "./src/components/IdeaAgentSettings";
         import { ActionBar } from "./src/components/ActionBar";
 
         const events = [];
         window.__ideaFixture = { events };
         function Fixture() {
+          const [sessionKey, setSessionKey] = useState("first");
+          window.__switchVoiceSession = () => setSessionKey("second");
           const [settingsOpen, setSettingsOpen] = useState(false);
           const [historyOpen, setHistoryOpen] = useState(false);
           // Record only real transitions: back-to-chat closes both views and
@@ -82,8 +85,8 @@ async function bundleFixture() {
             historyOpen={historyOpen}
             chat={<div data-testid="chat-view">chat body</div>}
             history={<div data-testid="history-view">history body</div>}
-            settings={<div data-testid="settings-view">settings body</div>}
-            footer={<ActionBar compactWorkbench status="connecting" />}
+            settings={<div data-testid="settings-view"><IdeaAgentSettings agents={[]} busy={false} projectReady={true} notice="" restartingAgent="" error="" configuration={null} onRefresh={() => {}} onConfigure={() => {}} onRestart={() => {}} onRun={() => {}} /></div>}
+            footer={<ActionBar compactWorkbench status="connecting" currentSession={{ key: sessionKey, name: "fixture", type: "chat", agent: "codex" }} />}
             drawer={null}
           />;
         }
@@ -146,6 +149,9 @@ async function openFixture(browser, bundle, t, query, mount = true, width = 900)
         body: '<!doctype html><html data-theme="dark"><head><meta charset="utf-8"></head><body><div id="root"></div></body></html>',
       });
     }
+    if (route.request().url().endsWith("/assets/agents/codex.svg")) {
+      return route.fulfill({ contentType: "image/svg+xml", body: readFileSync(path.join(webDir, "public/assets/agents/codex.svg")) });
+    }
     // The composer probes agents/shells on mount; empty payloads keep it idle.
     return route.fulfill({ contentType: "application/json", body: '{"agents":[],"shells":[]}' });
   });
@@ -170,7 +176,7 @@ const command = (page, name) => page.evaluate((name) => window.ideaAgentNativeCo
 const events = (page) => page.evaluate(() => window.__ideaFixture.events);
 const view = (page) => page.locator(".idea-workbench");
 const heading = (page) => page.locator(".idea-view-heading h1");
-const addCodeButton = (page) => page.getByRole("button", { name: "Add current code" });
+const voiceButton = (page) => page.getByRole("button", { name: "Voice input", exact: true });
 
 test("IDE chrome workbench keeps one AI Agent title and serves native commands", { timeout: 120_000 }, async (t) => {
   const browser = await launchBrowser();
@@ -187,7 +193,7 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     await expect(view(page)).toHaveAttribute("data-idea-chrome", "true");
     await expect(page.getByText("AI Agent", { exact: true })).toHaveCount(0);
     await expect(heading(page)).toHaveText("Fix session");
-    await expect(addCodeButton(page)).toHaveCount(1);
+    await expect(voiceButton(page)).toHaveCount(1);
   });
 
   await t.test("native commands open and return from history and settings", async () => {
@@ -227,21 +233,183 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     assert.deepEqual(await events(page), ["open-history", "close-history"]);
   });
 
-  await t.test("the composer add-code entry asks the IDE to capture the current editor", async () => {
+  await t.test("voice replaces add-code and inserts plain transcription at the original cursor", async () => {
     const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
+    await expect(page.getByRole("button", { name: "Add current code" })).toHaveCount(0);
+    const input = page.locator('[contenteditable="true"]');
+    await input.fill("before after");
+    for (let n = 0; n < 5; n++) await input.press("ArrowLeft");
+    assert.equal(await page.evaluate(() => window.getSelection()?.anchorOffset), 7);
     await page.evaluate(() => {
       window.__ideaHostMessages = [];
       window.ideaAgent = { postMessage: (payload) => window.__ideaHostMessages.push(payload) };
     });
-    await addCodeButton(page).click();
-    await expect.poll(async () => page.evaluate(() => window.__ideaHostMessages))
-      .toEqual([{ action: "addContext" }]);
-    // The captured context returns through the existing receive path.
+    await voiceButton(page).click();
+    const id = await page.evaluate(() => window.__ideaHostMessages.at(-1).id);
+    assert.equal(await page.evaluate(() => window.__ideaHostMessages[0].action), "voiceStart");
+    await page.evaluate((id) => window.ideaAgentVoiceEvent({ id, state: "recording", level: .8, elapsedMs: 12300, limitSeconds: 60 }), id);
+    await expect(page.getByRole("dialog")).toContainText("00:12");
+    await expect(page.getByRole("dialog")).toContainText("60s max");
+    await expect(page.locator('[data-onboarding="message-input"] [contenteditable]')).toHaveAttribute("contenteditable", "false");
+    await page.getByRole("button", { name: "Stop and transcribe", exact: true }).click();
+    assert.equal(await page.evaluate(() => window.__ideaHostMessages.at(-1).action), "voiceStop");
+    await page.evaluate((id) => window.ideaAgentVoiceEvent({ id, state: "transcribing" }), id);
+    await expect(page.getByRole("dialog")).toContainText("Transcribing");
+    await page.evaluate((id) => window.ideaAgentVoiceEvent({ id, state: "done", text: "你好 @literal " }), id);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.locator('[contenteditable="true"]')).toHaveText("before 你好 @literal after");
+    assert.deepEqual(await events(page), []);
+    // Existing native code capture still reaches this same draft.
     await page.evaluate(() => window.ideaAgentReceiveContext("int captured = 1;"));
     await expect(page.locator('[data-onboarding="message-input"]')).toContainText("int captured = 1;");
   });
 
-  await t.test("adding a file preserves the current conversation, code entry and draft without sending", async () => {
+  await t.test("Escape, hidden chat and session switching cancel recording and discard late text", async () => {
+    const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
+    await page.locator('[contenteditable="true"]').fill("keep draft");
+    await page.evaluate(() => {
+      window.__ideaHostMessages = [];
+      window.ideaAgent = { postMessage: (payload) => window.__ideaHostMessages.push(payload) };
+    });
+    for (const cancel of ["escape", "history", "session"]) {
+      await voiceButton(page).click();
+      const id = await page.evaluate(() => window.__ideaHostMessages.at(-1).id);
+      await page.evaluate((id) => window.ideaAgentVoiceEvent({ id, state: "recording", level: 0, elapsedMs: 100 }), id);
+      if (cancel === "escape") await page.keyboard.press("Escape");
+      else if (cancel === "history") await command(page, "history");
+      else await page.evaluate(() => window.__switchVoiceSession());
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      assert.equal(await page.evaluate(() => window.__ideaHostMessages.at(-1).action), "voiceCancel");
+      await page.evaluate((id) => window.ideaAgentVoiceEvent({ id, state: "done", text: "must not appear" }), id);
+      if (cancel === "history") await command(page, "chat");
+      await expect(page.locator('[contenteditable="true"]')).toHaveText("keep draft");
+    }
+  });
+
+  await t.test("unconfigured and failed recognition explain recovery without clearing the draft", async () => {
+    const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
+    await page.locator('[contenteditable="true"]').fill("keep draft");
+    await page.evaluate(() => {
+      window.__ideaHostMessages = [];
+      window.ideaAgent = { postMessage: (payload) => window.__ideaHostMessages.push(payload) };
+    });
+    await voiceButton(page).click();
+    const id = await page.evaluate(() => window.__ideaHostMessages.at(-1).id);
+    await page.evaluate((id) => window.ideaAgentVoiceEvent({ id, state: "configuration" }), id);
+    await expect(page.getByRole("dialog")).toContainText("Choose a speech provider");
+    await page.getByRole("button", { name: "Configure and test", exact: true }).click();
+    assert.equal(await page.evaluate(() => window.__ideaHostMessages.at(-1).action), "voiceConfigure");
+    await voiceButton(page).click();
+    const next = await page.evaluate(() => window.__ideaHostMessages.at(-1).id);
+    await page.evaluate((id) => window.ideaAgentVoiceEvent({ id, state: "error", error: "tencentAuthentication" }), next);
+    await expect(page.getByRole("alert")).toContainText("SecretId/SecretKey");
+    await page.keyboard.press("Escape");
+    await expect(page.locator('[contenteditable="true"]')).toHaveText("keep draft");
+  });
+
+  await t.test("persistent settings and recording gear open the same configuration without late insertion", async () => {
+    const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
+    await page.locator('[contenteditable="true"]').fill("keep draft");
+    await page.evaluate(() => {
+      window.__ideaHostMessages = [];
+      window.ideaAgent = { postMessage: payload => window.__ideaHostMessages.push(payload) };
+    });
+    for (const source of ["gear", "native-menu"]) {
+      await voiceButton(page).click();
+      const id = await page.evaluate(() => window.__ideaHostMessages.at(-1).id);
+      await page.evaluate(id => window.ideaAgentVoiceEvent({ id, state: "recording", elapsedMs: 500 }), id);
+      await expect(page.getByRole("button", { name: "Voice configuration and test", exact: true })).toBeVisible();
+      if (source === "gear") {
+        await page.getByRole("button", { name: "Voice configuration and test", exact: true }).click();
+        assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages.slice(-2).map(p => p.action)), ["voiceCancel", "voiceConfigure"]);
+      } else await page.evaluate(() => window.dispatchEvent(new Event("ideaAgentVoiceSettingsOpening")));
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await page.evaluate(id => window.ideaAgentVoiceEvent({ id, state: "done", text: "late text" }), id);
+      await expect(page.locator('[contenteditable="true"]')).toHaveText("keep draft");
+    }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await command(page, "settings");
+      await page.getByRole("button", { name: "Configure and test", exact: true }).click();
+      assert.equal(await page.evaluate(() => window.__ideaHostMessages.at(-1).action), "voiceConfigure");
+      if (process.env.VOICE_CAPTURE_SCREENSHOTS === "1" && attempt === 0) {
+        const reports = path.join(webDir, "../../build/reports/voice-input");
+        mkdirSync(reports, { recursive: true });
+        await page.screenshot({ path: path.join(reports, "persistent-settings.png") });
+      }
+      await command(page, "chat");
+    }
+    await expect(page.locator('[contenteditable="true"]')).toHaveText("keep draft");
+  });
+
+  await t.test("settings show the saved provider on bridge readiness, save and reopening", async () => {
+    const page = await openFixture(browser, bundle, t, "?ide_chrome=1&locale=zh-CN", true, 375);
+    await command(page, "settings");
+    const active = page.locator(".idea-voice-active");
+    await expect(active).toContainText("正在读取语音服务");
+    await page.evaluate(() => {
+      window.ideaAgent = { voiceProvider: null, postMessage() {} };
+      window.dispatchEvent(new Event("ideaAgentReady"));
+    });
+    await expect(active).toHaveText("当前供应商：未配置");
+    for (const [provider, label] of [["tencent", "腾讯云"], ["siliconflow", "硅基流动"], ["custom", "自定义服务"], ["tencent", "腾讯云"]]) {
+      await page.evaluate(provider => {
+        window.ideaAgent.voiceProvider = provider;
+        window.dispatchEvent(new Event("ideaAgentVoiceSettingsChanged"));
+      }, provider);
+      await expect(active).toHaveText(`当前供应商：${label}`);
+      await page.getByRole("button", { name: "配置与测试", exact: true }).click();
+      // Opening or cancelling configuration has no saved-settings event.
+      await expect(active).toHaveText(`当前供应商：${label}`);
+      await command(page, "chat");
+      await command(page, "settings");
+      await expect(active).toHaveText(`当前供应商：${label}`);
+    }
+    await expect(active).not.toContainText("16k_zh");
+    await expect(active).not.toContainText("SenseVoiceSmall");
+    if (process.env.VOICE_CAPTURE_SCREENSHOTS === "1") {
+      const reports = path.join(webDir, "../../build/reports/voice-active-provider");
+      mkdirSync(reports, { recursive: true });
+      await page.evaluate(() => window.ideaAgentSetTheme("dark"));
+      await page.locator(".idea-voice-settings").screenshot({ path: path.join(reports, "settings-375-dark.png") });
+      await page.setViewportSize({ width: 900, height: 640 });
+      await page.evaluate(() => window.ideaAgentSetTheme("light"));
+      await page.locator(".idea-voice-settings").screenshot({ path: path.join(reports, "settings-900-light.png") });
+    }
+  });
+
+  await t.test("recording shows only its actual provider and never a stale provider or model", async () => {
+    const page = await openFixture(browser, bundle, t, "?ide_chrome=1&locale=zh-CN");
+    await page.locator('[contenteditable="true"]').fill("保留草稿");
+    await page.evaluate(() => {
+      window.__ideaHostMessages = [];
+      window.ideaAgent = { postMessage: payload => window.__ideaHostMessages.push(payload) };
+    });
+    const mic = page.getByRole("button", { name: "语音输入", exact: true });
+    let previousId = "old";
+    for (const [provider, label] of [["siliconflow", "硅基流动"], ["tencent", "腾讯云"], ["custom", "自定义服务"]]) {
+      await mic.click();
+      const id = await page.evaluate(() => window.__ideaHostMessages.at(-1).id);
+      await expect(page.locator(".idea-voice-provider")).toHaveText("正在读取语音服务…");
+      await page.evaluate(id => window.ideaAgentVoiceEvent({ id, state: "recording", provider: "siliconflow" }), previousId);
+      await expect(page.locator(".idea-voice-provider")).toHaveText("正在读取语音服务…");
+      for (const state of ["starting", "recording", "transcribing", "error"]) {
+        await page.evaluate(({ id, state, provider }) => window.ideaAgentVoiceEvent({ id, state, provider, error: "service" }), { id, state, provider });
+        await expect(page.locator(".idea-voice-provider")).toHaveText(label);
+        await expect(page.getByRole("dialog")).not.toContainText("SenseVoiceSmall");
+        await expect(page.getByRole("dialog")).not.toContainText("16k_zh");
+        await expect(page.locator('[data-onboarding="input-controls"]')).not.toContainText(label);
+      }
+      await page.keyboard.press("Escape");
+      await expect(page.locator('[contenteditable="true"]')).toHaveText("保留草稿");
+      previousId = id;
+    }
+    await mic.click();
+    const id = await page.evaluate(() => window.__ideaHostMessages.at(-1).id);
+    await page.evaluate(id => window.ideaAgentVoiceEvent({ id, state: "configuration" }), id);
+    await expect(page.locator(".idea-voice-provider")).toHaveText("语音服务尚未配置");
+  });
+
+  await t.test("adding a file preserves the current conversation and draft without sending", async () => {
     const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
     const input = page.locator('[data-onboarding="message-input"]');
     await input.locator('[contenteditable="true"]').fill("Please review this file");
@@ -261,10 +429,7 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     await expect(input).toContainText("文件：/project/src/第8个 file.kt");
     await expect(heading(page)).toHaveText("Fix session");
     assert.deepEqual(await events(page), []);
-    await addCodeButton(page).click();
-    assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), [
-      { action: "addFileContext" }, { action: "addContext" },
-    ]);
+    assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), [{ action: "addFileContext" }]);
     await page.evaluate(() => window.ideaAgentReceiveContext("int selected = 1;"));
     await expect(input).toContainText("int selected = 1;");
     for (const viewName of ["history", "settings"]) {
@@ -277,15 +442,16 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     assert.equal((await events(page)).includes("new"), false);
   });
 
-  await t.test("add-code clicks queued before the bridge injects flush on ideaAgentReady", async () => {
+  await t.test("voice cannot start before the IDE bridge and is never queued for a later surprise recording", async () => {
     const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
-    await addCodeButton(page).click();
+    await voiceButton(page).click();
+    await expect(page.getByRole("alert")).toContainText("IDEA is not connected");
     await page.evaluate(() => {
       window.__ideaHostMessages = [];
       window.ideaAgent = { postMessage: (payload) => window.__ideaHostMessages.push(payload) };
       window.dispatchEvent(new Event("ideaAgentReady"));
     });
-    assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), [{ action: "addContext" }]);
+    assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), []);
   });
 
   for (const width of [320, 400, 375, 812]) {
@@ -324,12 +490,39 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     });
   }
 
+  for (const [width, locale, theme] of [[375, "zh-CN", "light"], [900, "en-US", "dark"]]) {
+    await t.test(`voice popover follows theme and viewport at ${width}px`, async () => {
+      const page = await openFixture(browser, bundle, t, `?ide_chrome=1&locale=${locale}`, true, width);
+      await page.evaluate((theme) => {
+        window.ideaAgentSetTheme(theme);
+        window.ideaAgent = { postMessage: (payload) => {
+          if (payload.action === "voiceStart") {
+            for (let n = 0; n < 21; n++) window.ideaAgentVoiceEvent({ id: payload.id, state: "recording", provider: "siliconflow", elapsedMs: 12300, level: Math.sin(n / 20 * Math.PI) * .85 });
+          }
+        } };
+      }, theme);
+      await page.getByRole("button", { name: locale === "zh-CN" ? "语音输入" : "Voice input", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      const rect = await dialog.boundingBox();
+      assert.ok(rect.x >= 0 && rect.x + rect.width <= width && rect.y >= 0);
+      const reports = path.join(webDir, "../../build/reports/voice-input");
+      mkdirSync(reports, { recursive: true });
+      const expectedPanel = theme === "dark" ? "rgb(41, 43, 49)" : "rgb(244, 245, 247)";
+      assert.equal(await dialog.evaluate(node => getComputedStyle(node).backgroundColor), expectedPanel);
+      // Captures are opt-in after the bounded visual review; functional reruns do not repolish.
+      if (process.env.VOICE_CAPTURE_SCREENSHOTS === "1") await page.screenshot({ path: path.join(reports, `recording-${width}-${theme}.png`) });
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    });
+  }
+
   await t.test("a plain browser preview keeps the embedded toolbar and actions", async () => {
     const page = await openFixture(browser, bundle, t, "?ide_token=t&ide_theme=dark");
     await expect(page.locator(".idea-toolbar")).toHaveCount(1);
     await expect(page.locator(".idea-toolbar strong")).toHaveText("AI Agent");
     await expect(view(page)).toHaveAttribute("data-idea-view", "chat");
-    await expect(addCodeButton(page)).toHaveCount(0);
+    await expect(voiceButton(page)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Add current file", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "New session" }).click();
     assert.deepEqual(await events(page), ["new"]);

@@ -58,3 +58,15 @@ func TestActivitySurvivesBufferedDedupeStreamAndDetailService(t *testing.T) {
 		t.Fatal("detail JSON roundtrip lost facts")
 	}
 }
+
+func TestDedupeExchangeAuxBufferKeepsOnlyLatestTurnDiff(t *testing.T) {
+	first := agenttypes.TurnDiffUpdate{TurnID: "turn-1", Diff: "first"}
+	latest := agenttypes.TurnDiffUpdate{TurnID: "turn-1", Diff: "latest"}
+	items := dedupeExchangeAuxBuffer([]session.ExchangeAux{
+		{Seq: 2, Line: 0, TurnDiff: &first},
+		{Seq: 2, Line: 3, TurnDiff: &latest},
+	})
+	if len(items) != 1 || items[0].TurnDiff == nil || items[0].TurnDiff.Diff != "latest" || items[0].Line != 3 {
+		t.Fatalf("deduped turn diff = %#v", items)
+	}
+}

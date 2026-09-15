@@ -332,6 +332,14 @@ func (s *session) handleStreamedEvents(ctx context.Context, events <-chan codexs
 			s.setThreadID(e.ThreadID)
 			continue
 		case *codexsdk.TurnDiffUpdatedEvent:
+			s.emit(types.Event{
+				Type:      types.EventTypeTurnDiff,
+				SessionID: s.SessionID(),
+				Data: types.TurnDiffUpdate{
+					TurnID: e.TurnId,
+					Diff:   e.Diff,
+				},
+			})
 			continue
 		case *codexsdk.ItemStartedEvent:
 			s.logRawToolItem(e.Item)

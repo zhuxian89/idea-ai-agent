@@ -89,7 +89,7 @@ export function requestIdeaFileContext(): void {
 }
 
 export function openIdeaFile(rootId: string, path: string): void {
-  window.ideaAgent?.postMessage({ action: "openFile", rootId, path });
+  postToHost({ action: "openFile", rootId, path });
 }
 
 export function refreshIdeaFiles(): void {

@@ -428,6 +428,27 @@ func TestManagerStoresFullToolCallAndReturnsCompactedAux(t *testing.T) {
 	}
 }
 
+func TestManagerPersistsTurnDiffAux(t *testing.T) {
+	root := rootfs.NewRootInfo("mindfs", "mindfs", t.TempDir())
+	manager := NewManager(root)
+	created, err := manager.Create(context.Background(), CreateInput{Type: TypeChat, Name: "Chat"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := agenttypes.TurnDiffUpdate{TurnID: "turn-1", Diff: "diff --git a/a.txt b/a.txt\n+x\n"}
+	if err := manager.AddExchangeAux(context.Background(), created.Key, ExchangeAux{Seq: 2, Line: 1, TurnDiff: &want}); err != nil {
+		t.Fatal(err)
+	}
+	manager.sessions = map[string]*Session{}
+	aux, err := manager.GetExchangeAux(context.Background(), created.Key, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aux[2]) != 1 || aux[2][0].TurnDiff == nil || *aux[2][0].TurnDiff != want {
+		t.Fatalf("turn diff aux = %#v", aux[2])
+	}
+}
+
 func TestManagerStoresPlanAndCompactAux(t *testing.T) {
 	root := rootfs.NewRootInfo("mindfs", "mindfs", t.TempDir())
 	manager := NewManager(root)

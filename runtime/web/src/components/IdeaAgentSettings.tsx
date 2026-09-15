@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import type { AgentStatus } from "../services/agents";
 import { APPEARANCE_CHANGE_EVENT, getAppearanceMode, setAppearanceMode, type AppearanceMode } from "../services/appearance";
+import { getActiveVoiceProvider, sendVoice } from "../services/voiceInput";
 import { AgentIcon } from "./AgentIcon";
 
 type Props = {
@@ -20,6 +21,17 @@ type Props = {
 
 export function IdeaAgentSettings(props: Props) {
   const { locale, setLocale, t } = useI18n();
+  const [voiceProvider, setVoiceProvider] = useState(getActiveVoiceProvider);
+  useEffect(() => {
+    const sync = () => setVoiceProvider(getActiveVoiceProvider());
+    window.addEventListener("ideaAgentReady", sync);
+    window.addEventListener("ideaAgentVoiceSettingsChanged", sync);
+    sync();
+    return () => {
+      window.removeEventListener("ideaAgentReady", sync);
+      window.removeEventListener("ideaAgentVoiceSettingsChanged", sync);
+    };
+  }, []);
   const [appearance, setAppearance] = useState(getAppearanceMode);
   useEffect(() => {
     const sync = () => setAppearance(getAppearanceMode());
@@ -57,6 +69,15 @@ export function IdeaAgentSettings(props: Props) {
     {!props.busy && !props.error && props.agents.length === 0 ? <p>{t("agentConfig.noAgents")}</p> : null}
     {primaryAgents.map(renderAgent)}
     {otherAgents.length ? <details className="idea-more-agents"><summary>{t("idea.otherAgents", { count: otherAgents.length })}</summary>{otherAgents.map(renderAgent)}</details> : null}
+    <section className="idea-preferences idea-voice-settings" aria-labelledby="idea-voice-settings-title">
+      <h2 id="idea-voice-settings-title">{t("voice.input")}</h2>
+      <p className="idea-voice-active" role="status">
+        <span>{t("voice.activeProvider")}</span>
+        <strong>{voiceProvider === undefined ? t("voice.provider.loading") : voiceProvider === null ? t("voice.notConfigured") : t(`voice.provider.${voiceProvider}`)}</strong>
+      </p>
+      <p>{t("voice.settingsHint")}</p>
+      <button type="button" onClick={() => sendVoice("voiceConfigure", "settings")}>{t("voice.settingsAction")}</button>
+    </section>
     <section className="idea-preferences">
       <h2>{t("idea.preferences")}</h2>
       <label>{t("appearance.title")}<select value={appearance} onChange={event => setAppearanceMode(event.target.value as AppearanceMode)}>

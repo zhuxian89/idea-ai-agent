@@ -50,19 +50,20 @@ type Exchange struct {
 }
 
 type ExchangeAux struct {
-	Seq       int                       `json:"seq"`
-	Line      int                       `json:"line"`
-	ToolCall  *agenttypes.ToolCall      `json:"toolcall,omitempty"`
-	Thought   string                    `json:"thought,omitempty"`
-	ThoughtID string                    `json:"thought_id,omitempty"`
-	Todo      *agenttypes.TodoUpdate    `json:"todo,omitempty"`
-	Plan      *agenttypes.PlanUpdate    `json:"plan,omitempty"`
-	Compact   *agenttypes.CompactNotice `json:"compact,omitempty"`
+	Seq       int                        `json:"seq"`
+	Line      int                        `json:"line"`
+	ToolCall  *agenttypes.ToolCall       `json:"toolcall,omitempty"`
+	Thought   string                     `json:"thought,omitempty"`
+	ThoughtID string                     `json:"thought_id,omitempty"`
+	Todo      *agenttypes.TodoUpdate     `json:"todo,omitempty"`
+	Plan      *agenttypes.PlanUpdate     `json:"plan,omitempty"`
+	Compact   *agenttypes.CompactNotice  `json:"compact,omitempty"`
+	TurnDiff  *agenttypes.TurnDiffUpdate `json:"turn_diff,omitempty"`
 }
 
 func CompactExchangeAux(aux ExchangeAux) (ExchangeAux, bool) {
 	if aux.ToolCall == nil {
-		if aux.Todo != nil || aux.Plan != nil || aux.Compact != nil {
+		if aux.Todo != nil || aux.Plan != nil || aux.Compact != nil || aux.TurnDiff != nil {
 			return aux, true
 		}
 		return ExchangeAux{}, false

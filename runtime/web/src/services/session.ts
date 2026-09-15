@@ -91,6 +91,12 @@ export type ExchangeAux = {
   todo?: TodoUpdate | null;
   plan?: PlanUpdate | null;
   compact?: CompactNotice | null;
+  turn_diff?: TurnDiffUpdate | null;
+};
+
+export type TurnDiffUpdate = {
+  turnId?: string;
+  diff: string;
 };
 
 export type Session = {

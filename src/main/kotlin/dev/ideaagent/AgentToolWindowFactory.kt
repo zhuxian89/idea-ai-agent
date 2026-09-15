@@ -7,16 +7,17 @@ import com.intellij.ide.ui.LafManagerListener
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
@@ -58,6 +59,12 @@ class AgentToolWindowFactory : ToolWindowFactory, DumbAware {
             object : DumbAwareAction("重新连接", "重新连接本地 Agent 聊天界面", AllIcons.Actions.Refresh) {
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
                 override fun actionPerformed(event: AnActionEvent) = panel.start()
+            },
+            object : DumbAwareAction("语音配置与测试 / Voice settings", "修改语音识别供应商、密钥并测试录音识别", AllIcons.General.Settings) {
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+                override fun actionPerformed(event: AnActionEvent) {
+                    panel.openVoiceSettings()
+                }
             },
         ))
         panel.start()
@@ -121,12 +128,21 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
     private val pendingContexts = mutableListOf<String>()
     private val queuedCommands = WebviewCommandQueue()
     private val gson = Gson()
+    private val voice = VoiceInputController(
+        config = { ApplicationManager.getApplication().getService(VoiceSettings::class.java).config() },
+        emit = { event -> ApplicationManager.getApplication().invokeLater {
+            if (!closed && loaded) execute("window.ideaAgentVoiceEvent?.(${gson.toJson(event)});")
+        } },
+    )
 
     init {
         body.add(status, BorderLayout.CENTER)
         add(body, BorderLayout.CENTER)
         syncTheme()
         project.messageBus.connect(this).subscribe(LafManagerListener.TOPIC, LafManagerListener { syncTheme() })
+        ApplicationManager.getApplication().messageBus.connect(this).subscribe(VoiceSettings.TOPIC, VoiceSettingsListener {
+            ApplicationManager.getApplication().invokeLater { syncVoiceSettings() }
+        })
     }
 
     fun addCurrentEditorContext() {
@@ -153,6 +169,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         // A (re)connect detaches the old page right away; keep every action
         // queued until the new webview has loaded, or clicks would fire into
         // the view that is about to be replaced and be lost.
+        voice.cancel()
         loaded = false
         showStatus("正在启动本地 Agent…")
         project.getService(LocalRuntime::class.java).start().whenComplete { ready, error ->
@@ -173,6 +190,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
     }
 
     private fun attach(ready: LocalRuntime.Connection) {
+        voice.cancel()
         browser?.let { Disposer.dispose(it) }
         loaded = false
         connection = ready
@@ -192,13 +210,28 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                 when (request.get("action")?.asString) {
                     "openFile" -> {
                         require(request.get("rootId")?.asString == ready.rootId) { "Different project" }
-                        val filePath = LocalEndpoint.projectFile(Path.of(requireNotNull(project.basePath)), request.get("path").asString)
-                        val line = (request.get("line")?.asInt ?: 1).coerceAtLeast(1) - 1
+                        val reference = parseIdeaFileReference(
+                            request.get("path")?.asString ?: "",
+                            request.get("line")?.takeUnless { it.isJsonNull }?.asInt,
+                        )
+                        val projectRoot = Path.of(requireNotNull(project.basePath))
                         ApplicationManager.getApplication().invokeLater {
-                            if (!project.isDisposed) LocalFileSystem.getInstance().refreshAndFindFileByNioFile(filePath)?.let {
-                                OpenFileDescriptor(project, it, line, 0).navigate(true)
+                            if (!project.isDisposed) DumbService.getInstance(project).runWhenSmart {
+                                if (project.isDisposed) return@runWhenSmart
+                                val file = ReadAction.compute<com.intellij.openapi.vfs.VirtualFile?, RuntimeException> {
+                                    findIdeaProjectFile(project, projectRoot, reference)
+                                }
+                                file?.let {
+                                    OpenFileDescriptor(project, it, reference.line - 1, 0).navigate(true)
+                                }
                             }
                         }
+                    }
+                    "voiceStart" -> voice.start(request.get("id").asString)
+                    "voiceStop" -> voice.stop(request.get("id").asString)
+                    "voiceCancel" -> voice.cancel(request.get("id").asString)
+                    "voiceConfigure" -> ApplicationManager.getApplication().invokeLater {
+                        openVoiceSettings()
                     }
                     "refresh" -> VirtualFileManager.getInstance().asyncRefresh(null)
                     "setLocale" -> preferences.setLocale(request.get("locale").asString)
@@ -221,13 +254,18 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
             }
         }
         view.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
+            override fun onLoadStart(cefBrowser: CefBrowser, frame: CefFrame, transitionType: org.cef.network.CefRequest.TransitionType) {
+                if (frame.isMain) voice.cancel()
+            }
             override fun onLoadEnd(cefBrowser: CefBrowser, frame: CefFrame, statusCode: Int) {
                 if (!frame.isMain || !LocalEndpoint.sameOrigin(ready.endpoint, frame.url)) return
                 val saved = preferences.getState()
-                cefBrowser.executeJavaScript("window.ideaAgent = { locale: ${gson.toJson(saved.locale)}, appearance: ${gson.toJson(saved.appearance)}, theme: ${gson.toJson(theme)}, postMessage: payload => { ${query.inject("JSON.stringify(payload)")} } }; window.dispatchEvent(new Event(\"ideaAgentReady\"));", frame.url, 0)
+                val voiceProvider = ApplicationManager.getApplication().getService(VoiceSettings::class.java).state.activeProvider()
+                cefBrowser.executeJavaScript("window.ideaAgent = { voiceProvider: ${gson.toJson(voiceProvider)}, locale: ${gson.toJson(saved.locale)}, appearance: ${gson.toJson(saved.appearance)}, theme: ${gson.toJson(theme)}, postMessage: payload => { ${query.inject("JSON.stringify(payload)")} } }; window.dispatchEvent(new Event(\"ideaAgentReady\"));", frame.url, 0)
                 ApplicationManager.getApplication().invokeLater {
                     if (closed || browser !== view) return@invokeLater
                     loaded = true
+                    syncVoiceSettings()
                     syncTheme()
                     val contexts = pendingContexts.toList()
                     pendingContexts.clear()
@@ -267,6 +305,20 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         execute("window.ideaAgentReceiveContext?.(${gson.toJson(text)});")
     }
 
+    fun openVoiceSettings() {
+        if (closed || project.isDisposed) return
+        voice.cancel()
+        execute("window.dispatchEvent(new Event(\"ideaAgentVoiceSettingsOpening\"));")
+        ApplicationManager.getApplication().getService(VoiceSettings::class.java)
+            .configure(project, ApplicationManager.getApplication().getService(AgentPreferences::class.java).state.locale == "en-US")
+    }
+
+    private fun syncVoiceSettings() {
+        if (closed || !loaded) return
+        val provider = ApplicationManager.getApplication().getService(VoiceSettings::class.java).state.activeProvider()
+        execute("if (window.ideaAgent) { window.ideaAgent.voiceProvider = ${gson.toJson(provider)}; window.dispatchEvent(new Event(\"ideaAgentVoiceSettingsChanged\")); }")
+    }
+
     private fun syncTheme(): String {
         val background = UIUtil.getPanelBackground() ?: Color(0x1e1f22)
         this.background = background
@@ -288,5 +340,5 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         if (LocalEndpoint.sameOrigin(ready.endpoint, view.cefBrowser.url)) view.cefBrowser.executeJavaScript(script, ready.endpoint.toString(), 0)
     }
 
-    override fun dispose() { closed = true; pendingContexts.clear(); queuedCommands.drain() }
+    override fun dispose() { closed = true; voice.close(); pendingContexts.clear(); queuedCommands.drain() }
 }

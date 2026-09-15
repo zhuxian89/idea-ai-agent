@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { isIdeaChromeHost, requestIdeaEditorContext, subscribeIdeaContext } from "../services/ideaBridge";
+import { isIdeaChromeHost, subscribeIdeaContext } from "../services/ideaBridge";
 import { type SessionMode } from "./ModeSelector";
 import { ModeSelector } from "./ModeSelector";
 import { AgentSelector } from "./AgentSelector";
@@ -20,6 +20,7 @@ import TokenEditor, {
 } from "./editor/TokenEditor";
 import { renderToolIcon } from "./stream/ToolCallCard";
 import { useI18n, type MessageKey } from "../i18n";
+import { VoiceRecordingPopover } from "./VoiceRecordingPopover";
 import { CompactUploadProgress } from "./CompactUploadProgress";
 import { CodexRateLimitIndicator } from "./CodexRateLimitIndicator";
 import { deletePrompt, savePrompt } from "../services/prompts";
@@ -433,6 +434,7 @@ export function ActionBar({
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [sending, setSending] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [editingQueueId, setEditingQueueId] = useState<string | null>(null);
@@ -905,6 +907,7 @@ export function ActionBar({
   }, [deletingPrompt, t]);
 
   const handleSend = useCallback(async () => {
+    if (voiceBusy) return;
     const messageText = serializedInput.trim();
     if ((!messageText && pendingAttachments.length === 0) || !isConnected || sending || (mode !== "command" && !agent)) return;
     const planCommand = pendingAttachments.length === 0 ? parsePlanCommand(messageText) : null;
@@ -996,7 +999,7 @@ export function ActionBar({
         requestAnimationFrame(() => editorRef.current?.focus());
       }
     }
-  }, [serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t]);
+  }, [voiceBusy, serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t]);
 
   const handleCancel = useCallback(async () => {
     const sessionKey = currentSession?.key;
@@ -1186,7 +1189,7 @@ export function ActionBar({
   }, [isDragging, handleDragEnd]);
 
   const isSelectedAgentUnavailable = agents.length > 0 ? agents.find((a) => a.name === agent)?.available === false : false;
-  const canSend = (!!serializedInput.trim() || pendingAttachments.length > 0) && isConnected && !sending && (mode === "command" || !!agent);
+  const canSend = (!!serializedInput.trim() || pendingAttachments.length > 0) && isConnected && !sending && !voiceBusy && (mode === "command" || !!agent);
   const hasBoundSession = !!currentSession;
   const hasDraft = !!serializedInput.trim() || pendingAttachments.length > 0;
   const showCancel = !!currentSession?.pending && !!currentSession?.key && !hasDraft;
@@ -1483,7 +1486,7 @@ export function ActionBar({
 	            <TokenEditor
 	              ref={editorRef}
 	              placeholder={inputPlaceholder}
-	              disabled={sending}
+	              disabled={sending || voiceBusy}
 	              isDark={isDark}
 	              rightInset={editorRightInset}
 	              topInset={0}
@@ -1926,36 +1929,17 @@ export function ActionBar({
                   <path d="M5 12h14" />
                 </svg>
                 </button>
-                {ideaChromeHost ? (
-                <button
-                type="button"
-                onClick={requestIdeaEditorContext}
-                title={t("idea.addEditorContext")}
-                aria-label={t("idea.addEditorContext")}
-                style={{
-                  width: "28px",
-                  height: "28px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--text-secondary)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="14 6 20 12 14 18" />
-                  <polyline points="10 6 4 12 10 18" />
-                </svg>
-                </button>
-                ) : null}
+                {ideaChromeHost ? <VoiceRecordingPopover
+                  scope={`${currentRootId || ""}:${sessionHistoryKey}:${mode}`}
+                  disabled={sending || mode === "command"}
+                  prepareInsertion={() => editorRef.current?.prepareVoiceInsertion()}
+                  onBusyChange={setVoiceBusy}
+                /> : null}
                 <button
                 data-onboarding="send-action"
                 type="button"
                 onClick={showCancel ? handleCancel : handleSend}
-                disabled={showCancel ? cancelling : !canSend}
+                disabled={voiceBusy || (showCancel ? cancelling : !canSend)}
                 style={{ width: "28px", height: "28px", borderRadius: "8px", border: "none", background: showCancel ? "rgba(239,68,68,0.14)" : (canSend ? "var(--accent-color)" : "transparent"), color: showCancel ? "#ef4444" : (canSend ? "#fff" : "var(--text-secondary)"), display: "flex", alignItems: "center", justifyContent: "center", cursor: showCancel ? (cancelling ? "wait" : "pointer") : (canSend ? "pointer" : "not-allowed"), transition: "all 0.2s", opacity: showCancel ? 1 : (canSend ? 1 : 0.3) }}
               >
                 {sending || cancelling ? (

@@ -11080,18 +11080,21 @@ export function App({ onGoHome }: AppProps) {
 
   const handleSelectedSessionFileClick = useCallback(
     (target: string | RelatedFileClickTarget) => {
-      setProjectTreeTabRequest((prev) => ({
-        tab: "related",
-        nonce: (prev?.nonce || 0) + 1,
-      }));
       const root =
         (selectedSessionRef.current?.root_id as string | undefined) ||
         currentRootIdRef.current;
       if (!root) return;
-      setExpanded((prev) => Array.from(new Set([...prev, root])));
       const file =
         typeof target === "string" ? { path: target } : target;
-      openIdeaFile(root, file.path);
+      if (isIdeaRuntime) {
+        openIdeaFile(root, file.path);
+        return;
+      }
+      setProjectTreeTabRequest((prev) => ({
+        tab: "related",
+        nonce: (prev?.nonce || 0) + 1,
+      }));
+      setExpanded((prev) => Array.from(new Set([...prev, root])));
       void openRelatedFileDiff(root, file);
     },
     [openRelatedFileDiff],
@@ -11149,6 +11152,10 @@ export function App({ onGoHome }: AppProps) {
       if (!root) return;
       const file =
         typeof target === "string" ? { path: target } : target;
+      if (isIdeaRuntime) {
+        openIdeaFile(root, file.path);
+        return;
+      }
       void openRelatedFileDiff(root, file);
     },
     [openRelatedFileDiff],

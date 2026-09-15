@@ -32,6 +32,28 @@ func TestStreamedContextDoesNotLeakIntoNextTurn(t *testing.T) {
 	}
 }
 
+func TestStreamedTurnDiffIsEmittedBeforeTurnCompletion(t *testing.T) {
+	s := &session{}
+	var updates []agenttypes.Event
+	s.OnUpdate(func(event agenttypes.Event) {
+		updates = append(updates, event)
+	})
+	events := make(chan codexsdk.ThreadEvent, 2)
+	events <- &codexsdk.TurnDiffUpdatedEvent{TurnId: "turn-7", Diff: "diff --git a/a.txt b/a.txt\n+new\n"}
+	events <- &codexsdk.TurnCompletedEvent{}
+	close(events)
+	if err := s.handleStreamedEvents(context.Background(), events, &asyncQuestionPause{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(updates) != 2 || updates[0].Type != agenttypes.EventTypeTurnDiff || updates[1].Type != agenttypes.EventTypeMessageDone {
+		t.Fatalf("unexpected updates: %#v", updates)
+	}
+	turnDiff, ok := updates[0].Data.(agenttypes.TurnDiffUpdate)
+	if !ok || turnDiff.TurnID != "turn-7" || turnDiff.Diff == "" {
+		t.Fatalf("turn diff = %#v", updates[0].Data)
+	}
+}
+
 func TestContextWindowUsesLastRequestNotCumulativeUsage(t *testing.T) {
 	for _, sample := range []struct {
 		raw   string

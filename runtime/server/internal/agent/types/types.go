@@ -301,6 +301,7 @@ const (
 	EventTypeTodoUpdate   EventType = "todo_update"
 	EventTypePlanUpdate   EventType = "plan_update"
 	EventTypeCompact      EventType = "compact_notice"
+	EventTypeTurnDiff     EventType = "turn_diff"
 	EventTypeLogin        EventType = "login_notice"
 	EventTypeMessageDone  EventType = "message_done"
 	EventTypeRecovery     EventType = "recovery"
@@ -362,6 +363,14 @@ type CompactNotice struct {
 	ID      string `json:"id,omitempty"`
 	Status  string `json:"status,omitempty"`
 	Summary string `json:"summary,omitempty"`
+}
+
+// TurnDiffUpdate is the latest complete diff snapshot for a single agent turn.
+// Codex may emit several snapshots while a turn is running; callers should
+// retain only the last one.
+type TurnDiffUpdate struct {
+	TurnID string `json:"turnId,omitempty"`
+	Diff   string `json:"diff"`
 }
 
 type LoginNotice struct {

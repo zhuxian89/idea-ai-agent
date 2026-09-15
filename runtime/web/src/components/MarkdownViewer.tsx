@@ -453,6 +453,19 @@ function isExternalHref(href: string): boolean {
   return /^(https?:|mailto:|tel:)/i.test(href);
 }
 
+function markdownText(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(markdownText).join("");
+  if (React.isValidElement<{ children?: React.ReactNode }>(node)) return markdownText(node.props.children);
+  return "";
+}
+
+function anchorSourceSymbol(href: string, children: React.ReactNode): string {
+  if (href && !href.startsWith("#")) return "";
+  const label = markdownText(children).trim();
+  return /^[A-Z_$][A-Za-z0-9_$]*(?:\.[A-Z_$][A-Za-z0-9_$]*)*$/.test(label) ? label : "";
+}
+
 function isDirectImageSrc(src: string): boolean {
   return /^(https?:|data:|blob:)/i.test(src);
 }
@@ -686,7 +699,8 @@ function MarkdownViewerInner({
             />
           ),
           a: ({ href = "", children, ...props }) => {
-            if (!href || href.startsWith("#") || isExternalHref(href) || !onFileClick) {
+            const symbolTarget = anchorSourceSymbol(href, children);
+            if ((!href || href.startsWith("#")) && !symbolTarget || isExternalHref(href) || !onFileClick) {
               const shouldOpenExternally = isExternalHref(href);
               return (
                 <a
@@ -707,7 +721,7 @@ function MarkdownViewerInner({
                 </a>
               );
             }
-            const resolvedPath = resolveMarkdownHref(currentPath, href);
+            const resolvedPath = symbolTarget || resolveMarkdownHref(currentPath, href);
             return (
               <a
                 href="#"

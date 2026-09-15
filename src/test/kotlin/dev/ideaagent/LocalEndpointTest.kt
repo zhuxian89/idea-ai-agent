@@ -5,6 +5,17 @@ import org.junit.Test
 import java.nio.file.Files
 
 class LocalEndpointTest {
+    @Test fun `IDE file references preserve class names and extract source lines`() {
+        assertEquals(IdeaFileReference("CheckPlanAutoJobStatusEnum", 1),
+            parseIdeaFileReference("CheckPlanAutoJobStatusEnum"))
+        assertEquals(IdeaFileReference("src/main/java/Example.java", 42),
+            parseIdeaFileReference("src/main/java/Example.java#L42-L48"))
+        assertEquals(IdeaFileReference("src/main/kotlin/Example.kt", 17),
+            parseIdeaFileReference("src/main/kotlin/Example.kt:17:4"))
+        assertEquals(IdeaFileReference("src/main/kotlin/Example.kt", 9),
+            parseIdeaFileReference("src/main/kotlin/Example.kt#L17", 9))
+    }
+
     @Test fun `only private listener endpoints are accepted`() {
         for (url in listOf("https://127.0.0.1:1234", "http://example.com:1234", "http://127.0.0.1", "http://user@127.0.0.1:1234", "http://127.0.0.1:1234/?token=x")) {
             assertTrue(url, runCatching { LocalEndpoint.parse(url) }.isFailure)

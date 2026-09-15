@@ -19,6 +19,7 @@ import { useI18n, type Locale } from "../i18n";
 import { formatSessionDuration } from "../services/sessionDuration";
 import { SessionActivity } from "./SessionActivity";
 import { ActivityTimeline } from "./stream/ActivityTimeline";
+import { TurnDiffSummary } from "./TurnDiffSummary";
 import {
   relatedFileStatKey,
   useRelatedFileStats,
@@ -1636,13 +1637,20 @@ function SessionViewerInner({
         </div>
       );
     }
+    if (item.type === "turn_diff") {
+      return (
+        <div key={timelineItemKey} style={{ marginTop: spacing, width: "100%", minWidth: 0 }}>
+          <TurnDiffSummary update={item.turnDiff} rootId={rootId} />
+        </div>
+      );
+    }
     const isUser = item.type === "user_text";
     const userMessageIndex = isUser
       ? timeline.slice(0, idx + 1).filter((timelineItem) => timelineItem.type === "user_text").length
       : undefined;
     const next = idx + 1 < timeline.length ? timeline[idx + 1] : null;
     const hasFollowingAssistantFlow =
-      !isUser && !!next && next.type !== "user_text";
+      !isUser && !!next && next.type !== "user_text" && next.type !== "turn_diff";
     const hideAssistantMeta =
       !isUser &&
       (hasFollowingAssistantFlow ||

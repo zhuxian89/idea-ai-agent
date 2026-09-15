@@ -15,6 +15,8 @@
             <li>Choose the Agent, model, reasoning effort, and execution permission level.</li>
             <li>Resume project-scoped conversation history and inspect saved context usage.</li>
             <li>Detect, configure, install, update, and restart supported local Agent CLIs.</li>
+            <li>Dictate drafts with optional Tencent Cloud, SiliconFlow, or a custom speech service; configure and test it from plugin settings.</li>
+            <li>Inspect Codex turn diffs and open referenced project files in IDEA.</li>
             <li>Follow the IDEA light or dark theme and switch between English and Chinese.</li>
         </ul>
         <p>
@@ -26,15 +28,17 @@
             The bundled service listens only on a random <code>127.0.0.1</code> port.
             Conversations and plugin settings are stored on the local machine. Requests
             sent by an Agent CLI remain subject to that CLI's configuration and provider terms.
+            Optional voice input uploads recorded audio directly to the speech provider you select.
         </p>
     ]]></description>
     <change-notes><![CDATA[
-        <p><b>0.1.21</b></p>
+        <p><b>0.1.22</b></p>
         <ul>
-            <li>Runs the local service from a content-addressed IDEA system cache so Windows updates cannot be blocked by a locked executable in the plugin directory.</li>
-            <li>Waits for active local services to stop before the plugin unloads or IDEA exits.</li>
-            <li>Includes native runtimes for Windows x64/ARM64 and macOS Apple Silicon/Intel in one Marketplace package.</li>
-            <li>Supports IntelliJ IDEA 2024.1 and later without an upper version limit.</li>
+            <li>Adds microphone recording and speech-to-text insertion at the draft cursor, without automatically sending a message.</li>
+            <li>Supports Tencent Cloud, SiliconFlow, and custom speech services with separate credentials stored in the IDE Password Safe.</li>
+            <li>Provides persistent voice configuration and recording tests, and shows the active provider in settings and the recording popover.</li>
+            <li>Shows expandable Codex turn diffs and opens referenced project files at their line in IDEA.</li>
+            <li>Includes Windows x64/ARM64 and macOS Apple Silicon/Intel runtimes; supports IDEA 2024.1 and later.</li>
         </ul>
     ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>

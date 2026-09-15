@@ -7,6 +7,7 @@ const pending = new Map<keyof Preferences, string>();
 declare global {
   interface Window {
     ideaAgent?: {
+      voiceProvider?: string | null;
       locale?: string | null;
       appearance?: string | null;
       theme?: "dark" | "light";

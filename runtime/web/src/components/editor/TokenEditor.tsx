@@ -8,6 +8,8 @@ import {
   $createTextNode,
   $getNearestNodeFromDOMNode,
   $getRoot,
+  $getNodeByKey,
+  $setSelection,
   $getSelection,
   $isLineBreakNode,
   $isRangeSelection,
@@ -41,6 +43,7 @@ export type TokenEditorHandle = {
   getHeight: () => number;
   clear: () => void;
   setText: (value: string) => void;
+  prepareVoiceInsertion: () => (text: string) => void;
   insertCandidate: (type: CandidateType, value: string) => void;
 };
 
@@ -466,13 +469,16 @@ function EditorBridge({
   onReady,
   onEnter,
   onDeleteToken,
+  disabled,
 }: {
+  disabled: boolean;
   onChange: TokenEditorProps["onChange"];
   onReady: (api: { editor: LexicalEditor; root: HTMLDivElement | null }) => void;
   onEnter?: (event: KeyboardEvent | null) => boolean;
   onDeleteToken: (forward: boolean) => boolean;
 }) {
   const [editor] = useLexicalComposerContext();
+  useEffect(() => { editor.setEditable(!disabled); }, [editor, disabled]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
 
@@ -685,6 +691,21 @@ const TokenEditor = forwardRef<TokenEditorHandle, TokenEditorProps>(function Tok
         $replaceWithSerializedText(value);
       });
       rootRef.current?.focus({ preventScroll: true });
+    },
+    prepareVoiceInsertion() {
+      const editor = editorRef.current;
+      const snapshot = editor?.getEditorState();
+      const bookmark = snapshot?.read(() => $getSelection()?.clone());
+      const originalText = snapshot?.read(() => $getRoot().getTextContent());
+      return (text: string) => {
+        if (!editor || !text.trim()) return;
+        editor.update(() => {
+          if ($isRangeSelection(bookmark) && $getNodeByKey(bookmark.anchor.key) && $getNodeByKey(bookmark.focus.key) && $getRoot().getTextContent() === originalText) $setSelection(bookmark.clone());
+          else $getRoot().selectEnd();
+          $insertPlainTextAtSelection(text);
+        });
+        requestAnimationFrame(() => rootRef.current?.focus({ preventScroll: true }));
+      };
     },
     insertCandidate(type: CandidateType, value: string) {
       const editor = editorRef.current;
@@ -918,6 +939,7 @@ const TokenEditor = forwardRef<TokenEditorHandle, TokenEditorProps>(function Tok
         />
         <HistoryPlugin />
         <EditorBridge
+          disabled={disabled}
           onChange={handleChange}
           onReady={({ editor, root }) => {
             editorRef.current = editor;
