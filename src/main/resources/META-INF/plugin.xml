@@ -29,10 +29,11 @@
         </p>
     ]]></description>
     <change-notes><![CDATA[
-        <p><b>0.1.20</b></p>
+        <p><b>0.1.21</b></p>
         <ul>
-            <li>Adds native runtime packages for Windows ARM64 and Intel-based Macs.</li>
-            <li>Provides one universal Marketplace package containing all four Windows and macOS runtimes.</li>
+            <li>Runs the local service from a content-addressed IDEA system cache so Windows updates cannot be blocked by a locked executable in the plugin directory.</li>
+            <li>Waits for active local services to stop before the plugin unloads or IDEA exits.</li>
+            <li>Includes native runtimes for Windows x64/ARM64 and macOS Apple Silicon/Intel in one Marketplace package.</li>
             <li>Supports IntelliJ IDEA 2024.1 and later without an upper version limit.</li>
         </ul>
     ]]></change-notes>
@@ -54,4 +55,10 @@
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt A"/>
         </action>
     </actions>
+    <applicationListeners>
+        <listener class="dev.ideaagent.AgentPluginLifecycleListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+        <listener class="dev.ideaagent.AgentPluginLifecycleListener"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
 </idea-plugin>

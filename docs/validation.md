@@ -1,5 +1,13 @@
 # 验证记录
 
+## 0.1.21 Windows 更新文件锁修复
+
+- 插件不再直接启动安装目录中的 `idea-agent-windows-*.exe`。启动前会把当前操作系统与 CPU 对应的程序及公共 runtime 文件复制到 IDEA system cache 的完整内容 SHA-256 目录，其他平台程序不会复制。
+- 缓存发布使用同一缓存根目录下的临时目录和原子目录移动；并发测试验证多个项目同时初始化时只复用一份已带完成标记的缓存。runtime 内容变化会生成新目录，不覆盖旧版本。
+- `DynamicPluginListener.beforePluginUnload` 与 `AppLifecycleListener.appWillBeClosed` 会同步停止所有活动服务：先发送正常关闭命令并等待，必要时强制终止并再次等待。回归测试实际启动独立 Java 子进程，验证关闭函数返回时进程已经退出。
+- Kotlin/IDEA 测试共 30 项通过，项目配置检查、插件构建与 Plugin Verifier 通过。通用 ZIP 对 IDEA 社区版和旗舰版 2024.1、2024.2、2024.3 六个目标均返回 `Compatible`；最低 build 为 241，没有 `until-build`。
+- 0.1.20 本身仍直接从插件目录运行服务，因此一个已经运行的 0.1.20 在 Windows 上首次更新到 0.1.21 时，仍可能需要退出 IDEA 并在任务管理器结束旧进程。安装 0.1.21 后，后续更新不再依赖手动结束进程。
+
 ## 0.1.20 四架构与 Marketplace 通用包验证
 
 - Windows x64、Windows ARM64、macOS Apple Silicon、macOS Intel 四个单平台 ZIP 均只包含对应运行程序；通用 ZIP 包含全部四个运行程序。四个单平台包的其余 176 个文件逐项 SHA-256 一致。

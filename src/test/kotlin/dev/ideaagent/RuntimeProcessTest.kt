@@ -99,6 +99,23 @@ class RuntimeProcessTest {
         assertFalse(environment.containsKey("PATH"))
     }
 
+    @Test fun runtimeShutdownWaitsUntilTheExecutableReleasesItsFile() {
+        val root = temporary.root.toPath()
+        val java = Path.of(System.getProperty("java.home"), "bin",
+            if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java")
+        val classes = Files.createDirectories(root.resolve("shutdown-probe"))
+        val classFile = classes.resolve("dev/ideaagent/RuntimeShutdownProbe.class")
+        Files.createDirectories(classFile.parent)
+        requireNotNull(RuntimeShutdownProbe::class.java.getResourceAsStream("/dev/ideaagent/RuntimeShutdownProbe.class"))
+            .use { Files.copy(it, classFile) }
+        val child = ProcessBuilder(java.toString(), "-cp", classes.toString(), RuntimeShutdownProbe::class.java.name).start()
+
+        stopRuntimeProcess(child)
+
+        assertFalse(child.isAlive)
+        assertEquals(0, child.exitValue())
+    }
+
     private fun withShellEnvironment(environment: Map<String, String>, action: () -> Unit) {
         // IDEA 2024.1 stores its recovered shell environment here. Only the test seeds this cache;
         // production uses the public getEnvironmentMap API. Restore it even when an assertion fails.
