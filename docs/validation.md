@@ -2,6 +2,9 @@
 
 ## 0.1.22 语音输入与文件变更（2026-09-16）
 
+- 2026-09-17 在功能验收完成后保持版本号 0.1.22 重新生成最终包；功能代码和四个平台运行程序未变，只更新插件 JAR 中的中英双语 Marketplace 描述以及源码、问题反馈和隐私政策链接。四个单平台包和一个通用包均重新计算 SHA-256。
+- 更新后的插件描述 XML 解析通过；通用包包含四个目标架构运行程序，单平台包各只包含对应程序，五个包的公共文件逐项一致且无重复 ZIP 条目。Plugin Verifier 再次检查 IC/IU 2024.1、2024.2、2024.3，六个目标全部 `Compatible`；2024.3 的既有 `CredentialAttributes` 弃用提示不影响兼容性。
+
 - `node scripts/test-runtime.mjs` Go 全套通过；TypeScript 类型检查和 `node --test --test-concurrency=1 tests/*.test.mjs` 的 179 项前端测试通过，无失败、跳过或取消。
 - Kotlin/IDEA 测试 58 项通过；正式版本 `test buildPlugin verifyPluginProjectConfiguration --offline` 通过。语音测试覆盖录音控制器的取消/迟到结果、各供应商请求构造、凭据隔离、配置表单、配置测试面板和供应商展示。
 - 正式前端和 macOS arm64 本地运行时执行完整 `scripts/smoke-runtime.mjs` 通过，覆盖启动鉴权、Agent 发现、会话和草稿、权限提问、主题窄栏、历史恢复、活动计时与服务退出。浏览器未出现未捕获错误或远程服务请求。

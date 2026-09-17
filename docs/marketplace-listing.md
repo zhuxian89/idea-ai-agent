@@ -17,7 +17,7 @@ This file contains the values to use for the first Marketplace upload of Local A
 | Documentation | https://github.com/zhuxian89/idea-ai-agent#readme |
 | Issue tracker | https://github.com/zhuxian89/idea-ai-agent/issues |
 | Privacy policy | https://github.com/zhuxian89/idea-ai-agent/blob/main/PRIVACY.md |
-| Tags | AI, Code tools, Productivity |
+| Tags | AI, Code Tools, Productivity, Tools Integration |
 | Supported IDE builds | 241 and later (IntelliJ IDEA 2024.1+) |
 | Release channel | Default |
 
@@ -25,11 +25,17 @@ Use the public email attached to the JetBrains Vendor profile as the support ema
 
 ## Short summary
 
-Use locally installed coding agents inside IntelliJ IDEA.
+Native Agent workflows in IntelliJ IDEA, with zero reconfiguration when your CLI already works.
 
 ## Description
 
-The canonical Marketplace description is in `src/main/resources/META-INF/plugin.xml`. JetBrains reads it from the uploaded plugin ZIP. Do not paste a second, divergent description into the Marketplace page.
+The canonical bilingual Marketplace description is in `src/main/resources/META-INF/plugin.xml`. English comes first because JetBrains requires the first 40 description characters and the primary listing language to be English; the complete Chinese description follows it.
+
+JetBrains reads this description from an uploaded plugin ZIP. The currently approved version is 0.1.21, so use `docs/marketplace-description-0.1.21.html` to update its public page without advertising unreleased 0.1.22 features. In **General Information → Description**, choose **use the UI description until next update**. The next upload will then replace it with the canonical bilingual `plugin.xml` description.
+
+## Getting Started
+
+The approved page's Getting Started section is also English-only. For the current 0.1.21 page, paste `docs/marketplace-getting-started-0.1.21.html` into the Marketplace Getting Started field. It contains the same steps in English first and Simplified Chinese second, and only documents features available in 0.1.21.
 
 ## Version 0.1.22 change notes
 
@@ -59,7 +65,7 @@ The existing screenshots under `build/reports/` are test evidence and include fi
 
 - Build and verify all four supported runtime binaries.
 - Confirm `pluginIcon.svg` is present under `META-INF` in the plugin JAR.
-- Confirm the built `plugin.xml` contains the English description, 0.1.22 change notes, `since-build="241"`, and no `until-build` attribute.
+- Confirm the built `plugin.xml` contains the English-first bilingual description, 0.1.22 change notes, `since-build="241"`, and no `until-build` attribute.
 - Install the release ZIP in IDEA 2024.1 and 2024.3 from disk.
 - Capture final 1280×800 screenshots from the installed release build.
 - Accept the JetBrains Marketplace Developer Agreement and declare trader or non-trader status.
