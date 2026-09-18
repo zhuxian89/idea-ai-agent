@@ -65,6 +65,14 @@ func localAccessMiddleware(token, rootID string, next http.Handler) http.Handler
 			http.Redirect(w, r, "/?"+query.Encode(), http.StatusSeeOther)
 			return
 		}
+		// IDEA native dialogs authenticate with the same private runtime token
+		// through a header because java.net.http.HttpClient has no JCEF cookie jar.
+		// Restrict this bypass to read-only endpoints that render native dialogs;
+		// the JCEF browser continues to use its private HttpOnly cookie.
+		if isNativeDialogRequest(r) && valid(r.Header.Get("X-MindFS-Local-CLI-Token")) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		cookie, err := r.Cookie(cookieName)
 		if err != nil || !valid(cookie.Value) {
 			http.Error(w, "IDE session required", http.StatusUnauthorized)
@@ -89,6 +97,26 @@ func localAccessMiddleware(token, rootID string, next http.Handler) http.Handler
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isNativeDialogRequest(r *http.Request) bool {
+	if r == nil || r.URL == nil || r.Method != http.MethodGet {
+		return false
+	}
+	if r.URL.Path == "/api/git/related-file/compare" {
+		return true
+	}
+	return isLocalTurnDiffPath(r.URL.Path)
+}
+
+func isLocalTurnDiffPath(path string) bool {
+	const prefix = "/api/sessions/"
+	const suffix = "/turn-diffs/"
+	start := strings.Index(path, suffix)
+	if !strings.HasPrefix(path, prefix) || start <= len(prefix) || start+len(suffix) >= len(path) {
+		return false
+	}
+	return !strings.Contains(path[start+len(suffix):], "/")
 }
 
 func localCookieName(token string) string {

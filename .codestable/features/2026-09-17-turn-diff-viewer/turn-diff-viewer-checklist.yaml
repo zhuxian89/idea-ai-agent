@@ -1,0 +1,49 @@
+feature: 2026-09-17-turn-diff-viewer
+created: 2026-09-17
+steps:
+- action: 微重构：抽出共享 Diff 代码表格渲染层，只搬不改行为
+  exit_signal: 前端类型检查/测试和既有 Git diff 相关回归通过，GitDiffViewer 对外行为不变
+  status: done
+- action: Web 状态接入：Turn diff 卡片渲染左右分栏并传递 IDEA 对比标识
+  exit_signal: 新旧 Turn diff 记录组件测试通过，旧记录不显示 IDEA 对比入口
+  status: done
+- action: Artifact 数据面：扩展 workspace 观察结果并持久化有界前后快照
+  exit_signal: Go 单测覆盖修改/删除/二进制/失败降级，artifact 不可用时保留现有 diff
+  status: done
+- action: 内部 API：实现受本机 token 保护的 Turn diff 内容读取接口
+  exit_signal: HTTP 测试覆盖成功、缺失、越权和路径边界
+  status: done
+- action: IDEA 弹窗：新增 bridge action 并调用 IntelliJ DiffManager
+  exit_signal: Kotlin 编译通过，bridge payload 只含短标识，IDEA API 使用 2024.1 兼容签名
+  status: done
+- action: 端到端与打包：运行相关回归并生成 Windows AMD64 本地测试包
+  exit_signal: 构建、包完整性/架构检查和本地包 SHA-256 记录通过
+  status: done
+checks:
+- item: 聊天内选中本轮文件显示左右分栏、行号和行内高亮
+  source: 验收场景
+  status: passed
+- item: 新记录可打开 IDEA 原生左右 Diff，左右内容来自本轮前后快照
+  source: 验收场景
+  status: passed
+- item: 用户后续手动修改文件后，历史弹窗内容不漂移
+  source: 名词契约
+  status: passed
+- item: 删除、二进制、空文件、mode-only 和混合 native/workspace 场景可诊断降级
+  source: 流程级约束
+  status: passed
+- item: local.14 旧记录保留左右分栏且不显示假 IDEA 对比入口
+  source: 验收场景
+  status: passed
+- item: 观察、artifact、API 或 DiffManager 失败不影响 Agent 原生轮次和现有 diff
+  source: 流程级约束
+  status: passed
+- item: 不修改 Codex/Claude/ACP 请求构造、工具、提示词和权限
+  source: 范围守护
+  status: passed
+- item: 未带本机 token 不能读取 artifact，路径不能逃逸 metadata 目录
+  source: 验收场景
+  status: passed
+- item: 查看动作不更新会话正文、lastEventAt 或 pending 状态
+  source: 编排骨架
+  status: passed

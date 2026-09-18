@@ -70,6 +70,37 @@ func TestIDEAccessBoundary(t *testing.T) {
 	}
 }
 
+func TestIDEAccessTokenAuthenticatesNativeDialogsWithoutCookie(t *testing.T) {
+	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	address := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 19731}
+	handler := localAccessMiddleware(token, "demo project", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for _, test := range []struct {
+		name   string
+		path   string
+		token  string
+		status int
+	}{
+		{"turn diff artifact", "/api/sessions/s/turn-diffs/id", token, http.StatusNoContent},
+		{"git compare", "/api/git/related-file/compare", token, http.StatusNoContent},
+		{"ordinary API does not accept header", "/api/sessions", token, http.StatusUnauthorized},
+		{"nested turn diff path rejected", "/api/sessions/s/turn-diffs/id/escape", token, http.StatusUnauthorized},
+		{"invalid native dialog token", "/api/sessions/s/turn-diffs/id", "wrong", http.StatusUnauthorized},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "http://"+address.String()+test.path, nil)
+			r = r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, address))
+			r.Header.Set("X-MindFS-Local-CLI-Token", test.token)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != test.status {
+				t.Fatalf("got %d, want %d", w.Code, test.status)
+			}
+		})
+	}
+}
+
 func TestIDEBootstrapPreservesHostPresentation(t *testing.T) {
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	address := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 19731}

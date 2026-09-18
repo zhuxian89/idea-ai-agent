@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -272,6 +273,18 @@ type GitRelatedFileDiffOutput struct {
 	Diff gitview.RelatedFileDiffResult
 }
 
+type GitFileCompareSide struct {
+	Present bool   `json:"present"`
+	Binary  bool   `json:"binary"`
+	Data    string `json:"dataBase64,omitempty"`
+}
+
+type GitFileCompareOutput struct {
+	Path     string             `json:"path"`
+	Head     GitFileCompareSide `json:"head"`
+	Worktree GitFileCompareSide `json:"worktree"`
+}
+
 func (s *Service) ReadFile(ctx context.Context, in ReadFileInput) (ReadFileOutput, error) {
 	if err := s.ensureRegistry(); err != nil {
 		return ReadFileOutput{}, err
@@ -458,6 +471,40 @@ func (s *Service) GetGitRelatedFileDiff(ctx context.Context, in GitRelatedFileDi
 	}
 	diff.FileMeta = fillFileMetaSessionInfo(ctx, s, in.RootID, meta)
 	return GitRelatedFileDiffOutput{Diff: diff}, nil
+}
+
+func (s *Service) GetGitFileCompare(ctx context.Context, in GitRelatedFileDiffInput) (GitFileCompareOutput, error) {
+	if err := s.ensureRegistry(); err != nil {
+		return GitFileCompareOutput{}, err
+	}
+	root, err := s.Registry.GetRoot(in.RootID)
+	if err != nil {
+		return GitFileCompareOutput{}, err
+	}
+	if strings.TrimSpace(in.Path) == "" {
+		return GitFileCompareOutput{}, errors.New("path required")
+	}
+	rootPath, _, path, _, err := resolveGitRelatedFileDiffTarget(ctx, root, in)
+	if err != nil {
+		return GitFileCompareOutput{}, err
+	}
+	compare, err := gitview.ReadHeadWorktreeFileCompare(ctx, rootPath, path)
+	if err != nil {
+		return GitFileCompareOutput{}, err
+	}
+	return GitFileCompareOutput{
+		Path:     compare.Path,
+		Head:     gitFileCompareSide(compare.Head),
+		Worktree: gitFileCompareSide(compare.Worktree),
+	}, nil
+}
+
+func gitFileCompareSide(side gitview.FileCompareSide) GitFileCompareSide {
+	return GitFileCompareSide{
+		Present: side.Present,
+		Binary:  side.Binary,
+		Data:    base64.StdEncoding.EncodeToString(side.Data),
+	}
 }
 
 func resolveGitRelatedFileDiffTarget(ctx context.Context, root fs.RootInfo, in GitRelatedFileDiffInput) (string, string, string, string, error) {

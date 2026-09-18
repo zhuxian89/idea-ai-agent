@@ -24,6 +24,68 @@ func TestDecodeGitDiffOutputDecodesGB18030Text(t *testing.T) {
 	}
 }
 
+func TestReadHeadWorktreeFileCompareSupportsWorktreeStates(t *testing.T) {
+	root := initTestRepo(t)
+	writeTestFile(t, root, "modified.txt", "base\n")
+	writeTestFile(t, root, "deleted.txt", "remove me\n")
+	writeTestFile(t, root, "old-name.txt", "base\n")
+	runTestGit(t, root, "add", "modified.txt", "deleted.txt", "old-name.txt")
+	runTestGit(t, root, "commit", "-m", "initial")
+
+	writeTestFile(t, root, "modified.txt", "worktree\n")
+	writeTestFile(t, root, "added.txt", "new file\n")
+	writeTestFile(t, root, "binary.dat", string([]byte{0x00, 0x01, 0x02}))
+	if err := os.Remove(filepath.Join(root, "deleted.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	modified, err := ReadHeadWorktreeFileCompare(context.Background(), root, "modified.txt")
+	if err != nil {
+		t.Fatalf("ReadHeadWorktreeFileCompare modified: %v", err)
+	}
+	if string(modified.Head.Data) != "base\n" || string(modified.Worktree.Data) != "worktree\n" {
+		t.Fatalf("modified sides = %#v", modified)
+	}
+
+	added, err := ReadHeadWorktreeFileCompare(context.Background(), root, "added.txt")
+	if err != nil {
+		t.Fatalf("ReadHeadWorktreeFileCompare added: %v", err)
+	}
+	if added.Head.Present || !added.Worktree.Present || string(added.Worktree.Data) != "new file\n" {
+		t.Fatalf("added sides = %#v", added)
+	}
+
+	deleted, err := ReadHeadWorktreeFileCompare(context.Background(), root, "deleted.txt")
+	if err != nil {
+		t.Fatalf("ReadHeadWorktreeFileCompare deleted: %v", err)
+	}
+	if !deleted.Head.Present || deleted.Worktree.Present || string(deleted.Head.Data) != "remove me\n" {
+		t.Fatalf("deleted sides = %#v", deleted)
+	}
+
+	binary, err := ReadHeadWorktreeFileCompare(context.Background(), root, "binary.dat")
+	if err != nil {
+		t.Fatalf("ReadHeadWorktreeFileCompare binary: %v", err)
+	}
+	if !binary.Worktree.Binary {
+		t.Fatal("binary worktree side was not detected")
+	}
+
+	renamedHead, renamedWorktree := "old-name.txt", "new-name.txt"
+	if err := os.Rename(filepath.Join(root, renamedHead), filepath.Join(root, renamedWorktree)); err != nil {
+		t.Fatal(err)
+	}
+	runTestGit(t, root, "add", "-A")
+
+	renamed, err := ReadHeadWorktreeFileCompare(context.Background(), root, renamedWorktree)
+	if err != nil {
+		t.Fatalf("ReadHeadWorktreeFileCompare renamed: %v", err)
+	}
+	if !renamed.Head.Present || !renamed.Worktree.Present || string(renamed.Head.Data) != "base\n" {
+		t.Fatalf("renamed sides = %#v", renamed)
+	}
+}
+
 func TestReadRelatedFileDiffUsesNextCommitAfterBase(t *testing.T) {
 	root := initTestRepo(t)
 	writeTestFile(t, root, "note.txt", "before\n")

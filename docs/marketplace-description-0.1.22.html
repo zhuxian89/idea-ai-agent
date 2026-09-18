@@ -1,0 +1,84 @@
+<p><b>Native Codex CLI and Claude Code workflows in IntelliJ IDEA, with zero reconfiguration when your CLI already works.</b></p>
+<p>
+  Local AI Agent connects the current IDEA project directly to locally installed coding agents.
+  It keeps native sessions, the tool loop, authentication, model settings, project instructions,
+  MCP servers, permission prompts, Plan Mode, and follow-up questions in IDEA. There is no second
+  API key, login, model, or MCP setup to recreate.
+</p>
+<h3>Native Agent capabilities</h3>
+<ul>
+  <li>Stream replies, reasoning status, commands, file edits, MCP calls, and subagent activity.</li>
+  <li>Resume native CLI sessions and project-scoped conversation history.</li>
+  <li>Choose the Agent, model, reasoning effort, Plan Mode, and execution permission level.</li>
+  <li>Detect, configure, install, update, and restart supported local Agent CLIs from IDEA.</li>
+</ul>
+<h3>Voice input that stays in your draft</h3>
+<p>
+  Click the microphone in the composer, speak, then stop recording to insert the recognized text
+  at the draft cursor. Recording never sends a message automatically. Configure Tencent Cloud,
+  SiliconFlow, or a compatible custom speech service with your own credentials; each provider's
+  credentials are stored separately in the IDE Password Safe.
+</p>
+<ul>
+  <li>Add selected code, the current file, or a project-tree file to the draft without sending it.</li>
+  <li>Open project-file references and inspect the files changed by a Codex turn in IDEA.</li>
+  <li>Follow the IDEA light or dark theme and switch between English and Simplified Chinese.</li>
+</ul>
+<p>
+  <b>Local by default:</b> the bundled service listens only on a random <code>127.0.0.1</code>
+  port. Conversations and plugin settings stay on the local machine. Requests made by an Agent CLI
+  follow that CLI's own configuration and provider terms. Optional voice input sends recorded audio
+  directly to the speech provider selected by the user.
+</p>
+<p>
+  <b>Requirements:</b> IntelliJ IDEA 2024.1 or later with JCEF, plus at least one supported
+  Agent CLI that is configured and signed in. Windows x64/ARM64 and macOS Apple Silicon/Intel
+  are supported.
+</p>
+<p>
+  <b>Resources:</b>
+  <a href="https://github.com/zhuxian89/idea-ai-agent">Documentation and source code</a> ·
+  <a href="https://github.com/zhuxian89/idea-ai-agent/issues">Report an issue</a> ·
+  <a href="https://github.com/zhuxian89/idea-ai-agent/blob/main/PRIVACY.md">Privacy policy</a>
+</p>
+
+<hr>
+<h2>中文</h2>
+<p><b>在 IntelliJ IDEA 中尽可能完整地还原 Codex CLI 和 Claude Code 的原生能力；本机 CLI 已可用时，安装后零配置接入。</b></p>
+<p>
+  Local AI Agent 将当前 IDEA 项目直接连接到本机安装的 Coding Agent。插件保留 Agent 原生的会话、
+  工具循环、登录状态、模型配置、项目指令、MCP、权限请求、Plan Mode 和追问交互；无需重复填写
+  API Key、再次登录或重新配置模型与 MCP。
+</p>
+<h3>原生 Agent 能力</h3>
+<ul>
+  <li>实时展示回复、推理状态、命令执行、文件修改、MCP 调用和子 Agent 活动。</li>
+  <li>恢复原生 CLI 会话，并按项目保存和继续历史对话。</li>
+  <li>选择 Agent、模型、思考强度、Plan Mode 和执行权限。</li>
+  <li>在 IDEA 内检测、配置、安装、更新和重启本机 Agent CLI。</li>
+</ul>
+<h3>不自动发送的语音输入</h3>
+<p>
+  点击输入框麦克风开始录音，停止后将识别文字插入原光标位置，不会自动发送消息。可使用腾讯云、
+  硅基流动或兼容的自定义语音服务；填写自己的凭据后，各供应商凭据分别保存在 IDEA 密码保险箱。
+</p>
+<ul>
+  <li>把选中代码、当前文件或项目树中的文件加入输入框，不会自动发送。</li>
+  <li>在 IDEA 中打开回复引用的项目文件，并查看 Codex 单轮修改的文件。</li>
+  <li>跟随 IDEA 深色/浅色主题，界面支持简体中文和英文。</li>
+</ul>
+<p>
+  <b>本机优先：</b>插件内置服务仅监听随机的 <code>127.0.0.1</code> 端口；会话和插件设置保存在本机。
+  Agent CLI 发出的请求遵循该 CLI 自身的配置与服务条款。可选语音输入只会把录音直接发送给用户选择的
+  语音供应商。
+</p>
+<p>
+  <b>运行要求：</b>IntelliJ IDEA 2024.1 或更高版本并带有 JCEF；至少安装、配置并登录一个受支持的
+  Agent CLI。支持 Windows x64/ARM64 和 macOS Apple Silicon/Intel。
+</p>
+<p>
+  <b>相关链接：</b>
+  <a href="https://github.com/zhuxian89/idea-ai-agent">使用文档与源代码</a> ·
+  <a href="https://github.com/zhuxian89/idea-ai-agent/issues">提交问题</a> ·
+  <a href="https://github.com/zhuxian89/idea-ai-agent/blob/main/PRIVACY.md">隐私政策</a>
+</p>

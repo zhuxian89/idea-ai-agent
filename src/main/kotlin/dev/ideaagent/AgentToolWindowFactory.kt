@@ -7,7 +7,6 @@ import com.intellij.ide.ui.LafManagerListener
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
@@ -218,7 +217,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                         ApplicationManager.getApplication().invokeLater {
                             if (!project.isDisposed) DumbService.getInstance(project).runWhenSmart {
                                 if (project.isDisposed) return@runWhenSmart
-                                val file = ReadAction.compute<com.intellij.openapi.vfs.VirtualFile?, RuntimeException> {
+                                val file = ApplicationManager.getApplication().runReadAction<com.intellij.openapi.vfs.VirtualFile?> {
                                     findIdeaProjectFile(project, projectRoot, reference)
                                 }
                                 file?.let {
@@ -228,6 +227,26 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                         }
                     }
                     "voiceStart" -> voice.start(request.get("id").asString)
+                    "compareGitFile" -> {
+                        require(request.get("rootId")?.asString == ready.rootId) { "Different project" }
+                        TurnDiffViewer.compareGitWorktree(
+                            project,
+                            ready,
+                            request.get("path").asString,
+                            request.get("repo_path")?.takeUnless { it.isJsonNull }?.asString,
+                            request.get("repo_kind")?.takeUnless { it.isJsonNull }?.asString,
+                        )
+                    }
+                    "compareTurnDiff" -> {
+                        require(request.get("rootId")?.asString == ready.rootId) { "Different project" }
+                        TurnDiffViewer.compare(
+                            project,
+                            ready,
+                            request.get("sessionKey").asString,
+                            request.get("snapshotId").asString,
+                            request.get("path").asString,
+                        )
+                    }
                     "voiceStop" -> voice.stop(request.get("id").asString)
                     "voiceCancel" -> voice.cancel(request.get("id").asString)
                     "voiceConfigure" -> ApplicationManager.getApplication().invokeLater {

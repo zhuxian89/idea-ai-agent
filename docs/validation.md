@@ -1,5 +1,98 @@
 # 验证记录
 
+## 0.1.23 正式发布（2026-09-18）
+
+- 发布焦点：跨 Agent 共用每轮文件变更追踪、文件清单与 `+/-` 统计、inline diff、IDEA 原生左右 Diff、关联文件 `HEAD` 对比、Windows 路径/行号导航修复，以及会话标题栏用户消息摘要入口。Agent 原生会话、工具、提示词、权限和协议保持不变。
+- Go 相关包、TypeScript、178 项前端回归（另有 3 个直接导入 `.ts` 的测试在系统 Node v22.22.3 下单独复跑通过；全量命令在 nvm Node v22.14.0 下出现仅限直接 `.ts` 导入的环境性失败）、Gradle 测试/配置校验和完整 runtime 冒烟通过。
+- 最终发布审查后收紧本地鉴权：`IDE_AGENT_TOKEN` 头部仅允许 IDEA 原生 Diff 弹窗使用的本轮 artifact 和关联文件 Git compare 两个只读 GET 接口，普通 API 仍必须使用 JCEF 私有 cookie；错误 token、嵌套路径和普通 API 带 token 均拒绝。补齐 Git compare 的本地路径白名单，并重新执行相关 Go 测试、完整 runtime 冒烟、Gradle 测试/Verifier 和正式产物构建。
+- Plugin Verifier 覆盖 IC/IU 2024.1、2024.2、2024.3 与 IU 2026.3 EAP 共 7 个目标，全部 `Compatible`，无 deprecated/internal API 提示；日志 `build/reports/release-0.1.23-hardening-final-gradle.log`。
+- 最终产物在 `build/releases/0.1.23/`：四个平台 ZIP 各 177 个条目、Marketplace 通用 ZIP 180 个条目，均无重复、完整性通过；macOS arm64/amd64 runtime 为 Mach-O `arm64`/`x86_64`、最低 macOS 12.0 且 ZIP 可执行位 `0755`；平台包各含一个预期 runtime，通用包含四个 runtime；版本 `0.1.23`、`since-build="241"`、无 `until-build`。包核验为 `build/reports/release-0.1.23-hardening-package.json`。
+- SHA-256 见 `build/releases/0.1.23/SHA256SUMS.txt`：Windows amd64 `6cf0caf2b494662107f9cbe641c27fabe44c7d066b5940ebc9aef7a3918a2c9c`，Windows arm64 `d2a6c92df7168e55ab8016f6fef3014b4b08860c6469ad955bfc47f844081226`，macOS arm64 `d363896994d31216bbe000f6f2736258cc93f0c9079afbead928abea30283235`，macOS amd64 `74eeede5a85be962d2342d154fc112d1867706aaa99835fd57ca6f97e1ff1d06`，Marketplace 通用包 `d3551b1d6b50bc0d548d833ba90e0458d6d708ba9619083b36fb95c141ee9ffc`。
+
+## 0.1.22-local.22 会话标题栏与摘要入口（2026-09-18）
+
+- 移除输入区上方的“周限 / 重置”指示，Plan Mode 状态保留，composer 不再为悬浮状态指示预留额外空间。
+- “四横线”用户消息摘要按钮移动到 IDEA 会话标题栏右上角；点击后在标题栏右下方弹出摘要列表，选择条目滚动定位到对应用户消息。该按钮不再与文件行 `+/-` 统计或底部操作重叠。
+- TypeScript、真实 Chromium 本轮差异测试、IDE Chrome/语音/关联文件对比回归、Gradle `test verifyPluginProjectConfiguration --offline` 与 Impeccable UI detector 均通过。浏览器测试覆盖中英双语、420px/900px、摘要弹出与跳转、文件行统计不被打开/对比按钮遮挡。
+- 交付 `build/local-packages/idea-ai-agent-0.1.22-local.22-windows-amd64.zip`，SHA-256 为 `d662f1529c104cc562ec229dc129ef28f719ca614dacf16f7665aa5f63d0648b`。ZIP 完整、177 个条目、无重复、仅一个 Windows AMD64 runtime，版本 `0.1.22-local.22`，最低 build 241。未 commit、push、创建 Release 或上传 Marketplace。
+
+## 0.1.22-local.21 原生 Diff 直达与鉴权修复（2026-09-18）
+
+- “本轮修改”文件行直接显示打开与原生对比两个图标；`+/-` 统计固定在按钮左侧且不收缩，文件名负责截断，不会被图标遮挡。文件名点击仍展开 inline diff。
+- 修复 IDEA 原生弹窗 401：本地 access 中间层和 turn-diff/Git compare API 均接受插件启动时生成的私有 runtime token；浏览器会话仍继续使用一次性 bootstrap cookie。`IDE_AGENT_TOKEN` 仅由 IDEA 随机生成并传给子进程，用户零配置。
+- Go 相关包、TypeScript、两个真实 Chromium 交互测试、Gradle 测试与配置校验、Impeccable detector、完整 runtime 冒烟均通过。冒烟用真实本地服务验证原生 dialog 请求不再返回 401，并覆盖页面 Diff、打开文件、历史恢复和关闭。
+- 交付 `build/local-packages/idea-ai-agent-0.1.22-local.21-windows-amd64.zip`，SHA-256 为 `f8eb8665cecb6b3c2655219a68b08e0d08bf4cea81bc8dd3c29e7604c422672f`。ZIP 完整、177 个条目、无重复、仅一个 PE32+ x86-64 runtime，版本 `0.1.22-local.21`，最低 build 241。未 commit、push、创建 Release 或上传 Marketplace。
+
+## 0.1.22-local.20 Diff 操作审查修复（2026-09-18）
+
+- 审查发现关联文件 `HEAD` 对比把 `git cat-file -e` 的任意失败都当作“HEAD 中不存在”，Git 故障可能被误判为新增文件。改为 `git ls-tree HEAD -- <path>`，仅空输出表示文件不在 HEAD，其他 Git 错误正常返回；补充重命名文件使用旧路径作为 HEAD 侧的回归。
+- “本轮修改”文件行右侧的直接原生对比图标 tooltip 从“展开差异”修正为“在 IDEA 中对比”，与实际行为一致；文件名点击仍展开 inline diff。
+- Go 相关包、TypeScript、两个真实 Chromium 交互测试、Gradle `test verifyPluginProjectConfiguration --offline` 与 Impeccable UI detector 均通过。最终 Windows AMD64 包重新构建并核验 ZIP 完整、177 个条目、无重复、仅一个 PE32+ x86-64 runtime、版本 `0.1.22-local.20`、最低 build 241。
+- 交付 `build/local-packages/idea-ai-agent-0.1.22-local.20-windows-amd64.zip`，SHA-256 为 `5ab9275d63f72e9f3973bc5a4ebd9b1fa576c393ac2afdef098aad5a5266a254`。未 commit、push、创建 Release 或上传 Marketplace。
+
+## 0.1.22-local.19 本轮 Diff 原生按钮直达（2026-09-18）
+
+- “本轮修改了 X 个文件”卡片的每个文件行右侧新增直接可见的原生对比图标按钮；点击立即发送 `compareTurnDiff` 并打开 IDEA 原生左右 Diff 弹窗，不需要先展开文件详情。文件名点击仍展开 inline diff，两个操作互不影响；详情里的原按钮保留。
+- TypeScript、真实 Chromium 本轮差异交互测试和 Gradle `test --offline` 通过；Impeccable UI detector 返回空结果。测试覆盖按钮在展开前可见、点击只触发原生对比、展开操作和打开文件行为。
+- 交付 `build/local-packages/idea-ai-agent-0.1.22-local.19-windows-amd64.zip`，SHA-256 为 `eff094b7079bb67719205d4dc8a003ef126bc2c1d9688afa992e83e6191c19ea`。ZIP 完整、177 个条目、无重复，仅包含一个 PE32+ x86-64 runtime；插件版本 `0.1.22-local.19`，最低 build 241。未 commit、push、创建 Release 或上传 Marketplace。
+
+## 0.1.22-local.18 关联文件 HEAD 对比（2026-09-18）
+
+- 会话底部“关联文件”保持文件名点击后在 IDEA 打开；仅 IDEA 运行时且当前文件存在 Git worktree 变更时，在右侧新增“与 HEAD 对比”按钮。按钮通过只读本地 token 接口读取 `HEAD` 与当前工作区内容，并用 IDEA 公共 `DiffManager` 打开原生左右对比弹窗；支持修改、新增、删除和二进制标记，单侧大小上限 2 MiB。历史 commit range 统计不显示该按钮，浏览器模式不显示。
+- Agent 适配器、协议、原生工具、提示词和权限未修改。Git 读取复用 root/repo/task worktree 路径解析；工作区读取使用 `os.OpenRoot`，API 仅接受本地 runtime token。新增修改/新增/删除/二进制、task worktree、路径解析和 HTTP token 回归；前端测试验证 compare 按钮只发送 `compareGitFile`，文件名点击仍走打开文件。
+- `go test ./server/internal/gitview ./server/internal/api/usecase ./server/internal/api`、TypeScript、真实 Chromium 关联文件交互测试、Gradle `test verifyPluginProjectConfiguration --offline` 均通过；Impeccable UI detector 返回空结果。构建日志包含在 Gradle 本地输出中。
+- 交付 `build/local-packages/idea-ai-agent-0.1.22-local.18-windows-amd64.zip`，SHA-256 为 `eef1b9fb06bae18f386fce2c09c271df45e70f79b29ca68ae081d8381eb36dff`。ZIP 完整、177 个条目、无重复，仅包含一个 PE32+ x86-64 runtime；插件版本 `0.1.22-local.18`，最低 build 241。包核验记录为 `build/reports/related-file-git-compare-package.json`。未 commit、push、创建 Release 或上传 Marketplace；Windows IDEA 原生 Git 左右 Diff 弹窗等待用户实测。
+
+## 0.1.22-local.17 Turn Diff 审查修复与 Verifier 清零（2026-09-17）
+
+- 修复审查发现的 7 项问题：artifact 读取使用 `os.OpenRoot` 并强制十六进制 blob 名和大小/manifest 上限；Finish 阶段增加 64 MiB 累计预算并正确回写 Partial；轮前 dirty 文件恢复到索引版本不再漏报；补丁与 artifact 复用同一份前后内容；新增/删除文本文件提供 IDEA 原生对比入口；左右视图正确解析空白行和 `++` 开头代码；2026.3 语音凭据改用真实四参数 `CredentialAttributes` 构造器并保留 2024.1 五参数回退。Agent 适配器、工具、提示词、权限和原生请求结构未修改。
+- 新增路径越界、dirty 恢复、Partial、新增/删除 artifact 入口和 Diff 前缀回归。`go test ./server/internal/turndiff ./server/internal/api/usecase -count=1`、TypeScript、Diff 模型测试和真实 Chromium 本轮差异页面测试通过；Gradle 58 项测试与构建通过。Verifier 覆盖 IC/IU 2024.1、2024.2、2024.3 与 IU 2026.3 EAP 共 7 个目标，全部 Compatible 且无 deprecated/internal API 提示，日志 `build/reports/turn-diff-verifier-local17.log`。
+- 交付 `build/local-packages/idea-ai-agent-0.1.22-local.17-windows-amd64.zip`，SHA-256 为 `b809135cf028551a94e97516ecc970fa027ecf3cc6306ccb011825fd931744b0`。ZIP 完整性检查通过，仅包含一个 PE32+ x86-64 runtime，插件版本 `0.1.22-local.17`、最低 build 241。未 commit、push、创建 Release 或上传 Marketplace；Windows IDEA 原生左右 Diff 弹窗等待用户实测。
+
+## 0.1.22-local.14 Windows 本轮差异采集修复（2026-09-17）
+
+- local.13 的前端完成同步和文件点击已生效，但 Windows 大项目仍缺少本轮差异卡片。服务端原快照每回合前后全量读取项目文件且各 3 秒超时，失败后静默降级；`Z:` 等目录还可能触发 Git 所有权检查。本轮改为干净已跟踪文件记录 Git 索引对象，仅回合前 dirty/untracked 文件读取内容，结束时只比较候选变更文件；单阶段预算提高到 10 秒，并为当前观察目录显式启用只读 `safe.directory`。
+- 保持公共会话旁路观察，不修改 Agent 适配器、原生工具、提示词、权限或协议。`turndiff` 和 `api/usecase` 回归通过，覆盖已有 dirty/staged、未跟踪、新增、删除、重命名、二进制、CRLF、回合中提交、工作树隔离、Codex 命令修改和 Claude/ACP 公共路径；新增 Capture 只保存 dirty/untracked 字节的断言。所有权场景按观察目录传递 slash 格式 `safe.directory`，待 Windows 实机验证。
+- Gradle `test verifyPluginProjectConfiguration buildPlugin --offline` 通过并交叉构建 Windows amd64，日志为 `build/reports/turn-diff-windows-local14-build.log`。最终 ZIP 177 个条目、无重复、完整性检查通过，仅包含一个 PE AMD64 运行程序，报告为 `build/reports/turn-diff-local14-package.json`。
+- 交付 `build/local-packages/idea-ai-agent-0.1.22-local.14-windows-amd64.zip`，SHA-256 为 `a5df643ab760ad318e92388bf8af7c2c6cf5015061cf6705a3aae26af4b17fd6`。用户已在 Windows IDEA 实测确认 `README.md` 本轮卡片显示 1 个文件、`+53` 统计和展开 diff。未 commit、push、打标签、创建 Release 或上传 Marketplace。
+
+## 0.1.22-local.13 Windows 回复文件链接导航修复（2026-09-17）
+
+- 复现 `Z:/.../README.md` 被 Markdown 的 URL 过滤器当作不支持的协议清空，旧组件渲染 `href=""`，点击导致页面重新加载。无 session 参数时表现为进入新会话，从历史重新进入后则刷新当前会话；并非 Agent 主动创建了新会话。旧代码复现日志为 `build/reports/markdown-windows-link-red.log`。
+- 公共 Markdown 组件在过滤前保留可识别的盘符路径、file URI 和文件行号引用，兼容正反斜杠及 Markdown 编码的反斜杠。空链接不再触发页面导航；文件点击使用既有 IDEA 打开桥接，保留原来的 HTML sanitizer 和协议过滤。没有改动 Agent 适配器、工具、Prompt、权限或协议。
+- TypeScript、Vite 生产构建及 12 项相关前端测试通过。完整生产 App 覆盖 Codex 原生 diff、Codex 命令修改兜底、Claude 公共兜底；在有／无 session 参数时各连续点击两次 README 链接，均只有预期打开文件消息、地址不变且无导航。diff 卡片展开、原有打开按钮、下一轮迟到响应保护、重载和 replay 回归通过。日志为 `build/reports/markdown-windows-link-{regressions,web-build,live}.log`，截图为 `build/reports/turn-diff-live-*.png`。
+- Gradle `test verifyPluginProjectConfiguration buildPlugin --offline` 通过，58 项 JUnit 测试零失败，版本为 `0.1.22-local.13`，默认正式版本仍为 `0.1.22`。最终 ZIP 完整且无重复条目，仅含 Windows AMD64 程序，最低 IDEA build 241、无最高版本限制；160 个前端文件与最终构建一致，JS 内容散列文件名与完整页面验证时一致。运行程序和 81 个插件 class 均与 local.12 逐字节相同。核验见 `build/reports/markdown-windows-link-package.json`，构建日志为 `markdown-windows-link-windows-build.log`。
+- 交付 `build/local-packages/idea-ai-agent-0.1.22-local.13-windows-amd64.zip`。验证在 macOS Chromium／模拟会话传输完成，Windows IDEA 实机文件打开待用户测试；沿用前文已记录的 Claude 既有 race 边界。仅本地打包，未 commit、push、打标签或发布 Release／Marketplace。
+
+## 0.1.22-local.12 本轮 diff 实时页面同步（2026-09-17）
+
+- 修复公共页面完成事件漏接：`App` 原先收到 `session.done` 仅更新 pending 和会话列表元信息，不读取后端完成落盘的 `exchange_aux`；实时分支也不消费 `turn_diff`，导致正常流式回复后看不到本轮 diff。结束时现通过既有历史接口读取最终记录，不注入或改写 Agent 原生事件。
+- 本轮 diff 卡片属于聊天时间线，位于对应回复下方，与原“关联文件”区域独立。无需恢复文件列表区域。延迟返回的完成读取有回合版本和 pending 检查，不能覆盖下一轮正在生成的回复；重放的完成通知不触发循环读取，开始前已有的历史请求不能替代完成后读取。
+- 使用实际构建的完整 App、HTTP 会话数据及 WebSocket 事件复现：修复前结束后 README 卡片数量为 0（`build/reports/turn-diff-live-red.log`），修复后显示卡片和 diff。此前仅用落盘数据直接挂载 `SessionViewer` 的测试未覆盖此实时同步环节。
+- TypeScript 检查与 11 项相关前端回归通过；完整页面覆盖 Codex 命令修改兜底／原生 diff、Claude 公共兜底、连续回合迟到响应、IDEA 打开文件桥接、重载及 replay 不循环。证据为 `build/reports/turn-diff-live-{regression,final}.log` 和 `turn-diff-live-*.png`。另用临时 Go overlay 验证“还原本轮前已修改的 README”仍产生本轮差异，日志为 `turn-diff-restore-probe.log`。
+- Gradle `test verifyPluginProjectConfiguration buildPlugin --offline` 构建 Windows amd64、版本 `0.1.22-local.12` 通过；默认正式版本仍是 `0.1.22`。本轮仅追加页面同步修复和测试，所有 Agent 适配器均未修改。macOS 上的浏览器／模拟传输验证不等同于 Windows IDEA 实机验证；沿用 local.11 已记录的 Claude 既有 race 限制。
+- 最终包 `build/local-packages/idea-ai-agent-0.1.22-local.12-windows-amd64.zip` 完整性、无重复条目、版本及 PE AMD64 检查通过，仅含一个平台程序，160 个前端文件与最终构建一致。Windows 服务程序和 81 个插件 class 均与 local.11 逐字节一致，确认这次交付只改变前端和版本元信息。核验记录为 `build/reports/turn-diff-live-package.json`。
+- 仅交付 Windows x64 本地 ZIP；未 commit、push 或发布 Release／Marketplace，用户实机验收待完成。
+
+## 0.1.22-local.11 本轮 diff 跨 Agent 共用（2026-09-17）
+
+- 移除公共 `SendMessage` 中只对 `codex` 采集工作区基线的限制，所有走该会话流程的 Agent 共用文件比较、差异合并、持久化及现有前端展示。Codex、Claude 和 ACP 适配器未修改，原生请求、工具及事件保持原样；采集范围和限额沿用 local.10。
+- 新增真实 SDK／传输层加模拟进程的 Claude、任意名称 ACP Agent 回归：修复前两者均缺失 diff，修复后均能从重新创建的会话管理器读取本轮差异，第二轮不重复显示旧差异；非 Git 项目仍正常返回原生回复，不伪造原生 diff 事件。测试不调用模型 API。
+- `turndiff`、`api/usecase`、`agent/codex`、`agent/claude`、`agent/acp` 相关 Go 包全部通过，日志为 `build/reports/turn-diff-shared-go.log`；首次复现日志为 `build/reports/turn-diff-shared-red.log`。本次未改动前端，复用 local.10 已通过的浏览器验证。
+- 额外 `-race` 检查未通过：Claude 连续回合会在 `SendMessage` 与结果消费之间并发重置 `sawMessageText`。通过 Go overlay 使用 HEAD 的原始公共会话文件（完全不含本次 diff 采集），在非 Git 项目仍复现相同竞态，确认不是本次新增。原生适配器保持未修改，另记为 `.codestable/issues/2026-09-17-claude-turn-state-race/claude-turn-state-race-report.md`；两次日志分别为 `turn-diff-shared-race.log`、`turn-diff-shared-baseline-race.log`，不能表述为全部并发检查通过。
+- Gradle `test verifyPluginProjectConfiguration buildPlugin --offline` 通过。`build/local-packages/idea-ai-agent-0.1.22-local.11-windows-amd64.zip` 完整性、无重复条目及版本检查通过，仅有一个 Windows AMD64（PE `0x8664`）程序；程序和 160 个前端文件与最终构建逐字节一致。包核验记录为 `build/reports/turn-diff-shared-package.json`。
+- 仅生成 `0.1.22-local.11` Windows amd64 本地测试包，正式默认版本仍为 `0.1.22`；未 commit、push 或更新 Release／Marketplace。Windows 实机验收待用户完成。
+
+## 0.1.22-local.10 本轮 diff 命令修改兜底（2026-09-17）
+
+- 修复 Codex 通过 `exec_command` 调用补丁执行器时仅产生 `commandExecution`、没有原生 `turn/diff/updated` 导致文件列表缺失的问题。插件在发送前读取工作区基线，结束后比较文件内容并保存到该轮辅助记录；不改动 Agent 工具列表、Prompt、权限、原生协议或运行参数，也不修改真实 Git index/HEAD。
+- 原生事件流保持不变。最终展示使用已完整观察到的文件前后差异，保留未覆盖文件的原生 diff；同一文件混合原生补丁和命令修改时只展示一项。界面注明可能包含同期手动修改。新基线只对安装后在插件中执行的回合生效，不能追溯还原历史回合的缺失基线。
+- 采集范围为当前 Git 项目／工作树中已跟踪及未被忽略的未跟踪常规文件，排除 `.mindfs`、`.git` 和符号链接；需要可调用的 Git。单文件上限 2 MiB、单次快照内容 32 MiB、枚举文件 20,000 个、diff 输出 4 MiB，单阶段预算 3 秒（不代表阻塞文件系统调用有硬截止时间）。跳过文件时标记范围不完整；采集失败保留原生结果，不阻止原生对话。
+- Go 相关包 `turndiff`、`api/usecase`、`session`、`agent/codex` 回归通过；覆盖已有 dirty/staged 内容、新增/删除/重命名、中文和空格路径、CRLF、二进制、回合中提交、跨轮隔离、工作树路径、采集上限、失败降级及混合修改去重。命令回合端到端测试走实际 SDK 和会话持久化，模拟 App Server 只返回命令事件，并核对模型、思考强度、权限参数；相关 race 检查通过。
+- TypeScript 检查通过。5 项 diff 前端测试通过，真实 Chromium 使用 Go 端到端测试落盘的结果检查文件列表、展开 `-1/+1` diff、IDEA 打开文件桥接及重新加载，覆盖 420px 中文深色／900px 英文浅色；截图和日志在 `build/reports/turn-diff/`、`build/reports/turn-diff-*.log`。
+- Gradle `test verifyPluginProjectConfiguration buildPlugin --offline` 通过。交付包 `build/local-packages/idea-ai-agent-0.1.22-local.10-windows-amd64.zip` 完整性及无重复条目检查通过，仅包含一个 Windows AMD64（PE `0x8664`）运行程序；程序与 160 个前端文件均与最终构建逐字节一致。包内版本为 `0.1.22-local.10`、最低 IDEA build 为 241，无最高版本限制。包核验记录在 `build/reports/turn-diff-package.json`。
+- 仅交付 Windows amd64 本地测试 ZIP，版本 `0.1.22-local.10`；Gradle 默认正式版本仍为 `0.1.22`。Windows 程序由 macOS 交叉编译，实机安装与实际 Codex/PowerShell 回合等待用户验证；本次未推送源码或更新 GitHub Release／Marketplace。
+
 ## 0.1.22 语音输入与文件变更（2026-09-16）
 
 - 2026-09-17 在功能验收完成后保持版本号 0.1.22 重新生成最终包；功能代码和四个平台运行程序未变，只更新插件 JAR 中的中英双语 Marketplace 描述、源码/问题反馈/隐私政策链接，以及适合 40px Marketplace 展示和 16px IDEA 工具窗口侧边栏的同款机器人矢量图标。侧边栏版本取消容易在小尺寸下糊成同心圆的内框，改用放大的头部轮廓、天线和实心眼睛，并分别适配浅色、深色主题。四个单平台包和一个通用包均重新计算 SHA-256。

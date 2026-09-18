@@ -13,6 +13,7 @@ import { smokeNativeChrome } from './smoke-native-chrome.mjs';
 import { smokeSessionModel } from './smoke-session-model.mjs';
 import { smokeQuestionChoice } from './smoke-question-choice.mjs';
 import { smokeAgentDiscovery } from './smoke-agent-discovery.mjs';
+import { smokeTurnDiff } from './smoke-turn-diff.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const toolsDir = path.join(root, '.tools');
@@ -31,7 +32,7 @@ const os = ({win32: 'windows', darwin: 'darwin', linux: 'linux'})[process.platfo
 const arch = ({x64: 'amd64', arm64: 'arm64'})[process.arch];
 const binary = `idea-agent-${os}-${arch}${os === 'windows' ? '.exe' : ''}`;
 const executable = path.join(work, binary);
-cpSync(path.join(root, 'build/local-runtime', binary), executable);
+cpSync(process.env.IDE_AGENT_SMOKE_EXECUTABLE || path.join(root, 'build/local-runtime', binary), executable);
 cpSync(path.join(root, 'runtime/task_template.json'), path.join(work, 'task_template.json'));
 
 let remoteRequests = 0;
@@ -73,6 +74,11 @@ try {
   const dirs = await (await fetch(`${ready.url}/api/dirs`, {headers})).json();
   assert.equal(dirs.length, 1);
   assert.equal(dirs[0].root_path, project);
+  const nativeDialogHeaders = {'X-MindFS-Local-CLI-Token': token};
+  const turnDiffResponse = await fetch(`${ready.url}/api/sessions/unused/turn-diffs/unused?root=${encodeURIComponent(ready.rootId)}&path=README.md`, {headers: nativeDialogHeaders});
+  assert.notEqual(turnDiffResponse.status, 401, 'IDE native diff dialogs must use the runtime access token');
+  const gitCompareResponse = await fetch(`${ready.url}/api/git/related-file/compare?root=${encodeURIComponent(ready.rootId)}&path=README.md`, {headers: nativeDialogHeaders});
+  assert.notEqual(gitCompareResponse.status, 401, 'IDE native Git diff dialogs must use the runtime access token');
   for (const route of ['/api/tasks', '/api/tasks/unused/input']) {
     const response = await fetch(`${ready.url}${route}`, {method: 'POST', headers: {...headers, 'Content-Type': 'application/json'}, body: JSON.stringify({root_id: ready.rootId, create_worktree: true})});
     assert.notEqual(response.status, 403, 'IDE task worktree must reach normal request validation');
@@ -96,6 +102,9 @@ try {
     browser = await chromium.launch({headless: true, ...(chrome ? {executablePath: chrome} : {channel: 'chrome'})});
     const reports = path.join(root, 'build/reports');
     mkdirSync(reports, {recursive: true});
+    if (process.argv.includes('--turn-diff-only')) {
+      await smokeTurnDiff(browser, bootstrapURL, ready.rootId, reports);
+    } else {
     await smokeAgentDiscovery(browser, bootstrapURL, reports);
     await smokeQuestionChoice(browser, bootstrapURL, ready.rootId, reports);
     await smokeSessionModel(browser, bootstrapURL, ready.rootId, reports);
@@ -126,6 +135,7 @@ try {
     await smokeMessageDelivery(page, reports);
     assert.deepEqual(errors, []);
     console.log('PASS: browser render, editor context draft, theme synchronization, narrow sidebar; no uncaught page errors.');
+    }
   }
   assert.equal(remoteRequests, 0, 'IDE runtime contacted the remote configuration/relay service');
   child.stdin.end('shutdown\n');

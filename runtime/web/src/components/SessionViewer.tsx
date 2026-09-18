@@ -12,6 +12,7 @@ import { fetchProofProtectedBlob } from "../services/file";
 import type { ExchangeAux, RelatedFile, ToolCall } from "../services/session";
 import { savePrompt } from "../services/prompts";
 import { reportError } from "../services/error";
+import { compareGitFileInIdea, isIdeaRuntime } from "../services/ideaBridge";
 import { rootBadgeButtonStyle } from "./rootBadgeStyle";
 import { copyText } from "../services/clipboard";
 import type { AgentStatus } from "../services/agents";
@@ -20,6 +21,7 @@ import { formatSessionDuration } from "../services/sessionDuration";
 import { SessionActivity } from "./SessionActivity";
 import { ActivityTimeline } from "./stream/ActivityTimeline";
 import { TurnDiffSummary } from "./TurnDiffSummary";
+import { RelatedFileCompareButton } from "./RelatedFileCompareButton";
 import {
   relatedFileStatKey,
   useRelatedFileStats,
@@ -101,7 +103,6 @@ type SessionViewerProps = {
   onForkAgentMessage?: (seq: number) => void | Promise<void>;
   targetSeqRequestKey?: string | number;
   agents?: AgentStatus[];
-  composerOverlayInset?: number;
 };
 
 type AskUserQuestionOption = {
@@ -919,29 +920,6 @@ function shouldDefaultCollapseRelatedFiles(
   return relatedFileCount > 5;
 }
 
-const USER_MESSAGE_SUMMARY_LENGTH = 48;
-
-function normalizeUserMessageSummary(content: string, emptyLabel: string): string {
-  const text = stripUploadAttachmentTokens(content || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!text) {
-    return emptyLabel;
-  }
-  return text.length > USER_MESSAGE_SUMMARY_LENGTH
-    ? `${text.slice(0, USER_MESSAGE_SUMMARY_LENGTH)}...`
-    : text;
-}
-
-function UserMessageListIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M0 0h32v32H0z" fill="none" />
-      <path fill="currentColor" d="M4.082 4.083v3h22.835v-3zm0 16.223h22.835v-3H4.082zm0-6.612h22.835v-3H4.082zm0 13.223h22.835v-3H4.082z" />
-    </svg>
-  );
-}
-
 function SessionViewerInner({
   session,
   connected = true,
@@ -960,7 +938,6 @@ function SessionViewerInner({
   onEditUserMessage,
   onForkAgentMessage,
   agents,
-  composerOverlayInset = 0,
 }: SessionViewerProps) {
   const { locale, t } = useI18n();
   const [relatedFilesCollapsed, setRelatedFilesCollapsed] = useState(false);
@@ -981,8 +958,6 @@ function SessionViewerInner({
   const onFileClickRef = useRef(onFileClick);
   const copyResetTimersRef = useRef<Record<string, number>>({});
   const relatedFilesDefaultStateRef = useRef<string>("");
-  const userSummaryRootRef = useRef<HTMLDivElement | null>(null);
-  const userSummaryListRef = useRef<HTMLDivElement | null>(null);
   const sessionKey = session?.key || session?.session_key || null;
   const exchanges = Array.isArray(session?.exchanges) ? session.exchanges : [];
   const isAwaiting = !!(session as any)?.pending;
@@ -1006,9 +981,6 @@ function SessionViewerInner({
     shouldStickToBottomRef.current = false;
     setShowJumpToLatest(true);
   };
-  const [userSummaryHoverOpen, setUserSummaryHoverOpen] = useState(false);
-  const [userSummaryPinnedOpen, setUserSummaryPinnedOpen] = useState(false);
-  const [currentUserMessageIndex, setCurrentUserMessageIndex] = useState(0);
   const viewportStickFrameRef = useRef<number | null>(null);
 
   const cancelTargetSeqScroll = () => {
@@ -1051,147 +1023,12 @@ function SessionViewerInner({
   useEffect(() => {
     setSavedPromptKeys({});
     setCopiedMessageKeys({});
-    setUserSummaryHoverOpen(false);
-    setUserSummaryPinnedOpen(false);
-    setCurrentUserMessageIndex(0);
     relatedFilesDefaultStateRef.current = "";
     Object.values(copyResetTimersRef.current).forEach((timer) =>
       window.clearTimeout(timer),
     );
     copyResetTimersRef.current = {};
   }, [sessionKey]);
-
-  const userMessageSummaries = useMemo(
-    () =>
-      timeline
-        .filter((item): item is TimelineItem & { type: "user_text"; id: string; content: string } => item.type === "user_text")
-        .map((item, index) => ({
-          id: item.id || `user-${index}`,
-          index: index + 1,
-          summary: normalizeUserMessageSummary(item.content || "", t("session.emptyMessage")),
-        })),
-    [timeline, t],
-  );
-  const userSummaryOpen = userSummaryHoverOpen || userSummaryPinnedOpen;
-
-  const readCurrentUserMessageIndex = useCallback(() => {
-    const container = scrollRef.current;
-    if (!container) {
-      return 0;
-    }
-    const nodes = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-user-message-index]"),
-    );
-    if (nodes.length === 0) {
-      return 0;
-    }
-    const containerRect = container.getBoundingClientRect();
-    const viewportTop = containerRect.top;
-    const viewportBottom = containerRect.bottom;
-    let firstVisible = 0;
-    let firstFullyEntered = 0;
-    let lastBeforeViewport = 0;
-    for (const node of nodes) {
-      const index = Number(node.dataset.userMessageIndex || 0);
-      if (!index) {
-        continue;
-      }
-      const rect = node.getBoundingClientRect();
-      if (rect.bottom < viewportTop) {
-        lastBeforeViewport = index;
-        continue;
-      }
-      if (rect.top > viewportBottom) {
-        break;
-      }
-      const isVisible = rect.bottom >= viewportTop && rect.top <= viewportBottom;
-      if (isVisible && !firstVisible) {
-        firstVisible = index;
-      }
-      if (rect.top >= viewportTop && !firstFullyEntered) {
-        firstFullyEntered = index;
-      }
-    }
-    return (
-      firstFullyEntered ||
-      firstVisible ||
-      lastBeforeViewport ||
-      Number(nodes[0]?.dataset.userMessageIndex || 0)
-    );
-  }, []);
-
-  const refreshCurrentUserMessageIndex = useCallback(() => {
-    setCurrentUserMessageIndex(readCurrentUserMessageIndex());
-  }, [readCurrentUserMessageIndex]);
-
-  const scrollToUserMessageSummary = (index: number) => {
-    const container = scrollRef.current;
-    if (!container) {
-      return;
-    }
-    const node = container.querySelector<HTMLElement>(
-      `[data-user-message-index="${index}"]`,
-    );
-    if (!node) {
-      return;
-    }
-    shouldStickToBottomRef.current = false;
-    cancelTargetSeqScroll();
-    const containerRect = container.getBoundingClientRect();
-    const nodeRect = node.getBoundingClientRect();
-    const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
-    const nextTop = Math.max(
-      0,
-      Math.min(
-        maxTop,
-        container.scrollTop +
-          nodeRect.top -
-          containerRect.top -
-          container.clientHeight / 2 +
-          nodeRect.height / 2,
-      ),
-    );
-    container.scrollTop = nextTop;
-    setShowJumpToLatest(nextTop < maxTop - 40);
-    setUserSummaryPinnedOpen(false);
-    setUserSummaryHoverOpen(false);
-    setCurrentUserMessageIndex(index);
-  };
-
-  useEffect(() => {
-    if (!userSummaryOpen) {
-      return;
-    }
-    const nextIndex = readCurrentUserMessageIndex();
-    setCurrentUserMessageIndex(nextIndex);
-    if (!nextIndex) {
-      return;
-    }
-    const frame = window.requestAnimationFrame(() => {
-      const list = userSummaryListRef.current;
-      const item = list?.querySelector<HTMLElement>(
-        `[data-user-summary-index="${nextIndex}"]`,
-      );
-      item?.scrollIntoView({ block: "center" });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [readCurrentUserMessageIndex, userSummaryOpen, userMessageSummaries.length]);
-
-  useEffect(() => {
-    if (!userSummaryOpen) {
-      return;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const root = userSummaryRootRef.current;
-      if (!root || root.contains(event.target as Node)) {
-        return;
-      }
-      setUserSummaryPinnedOpen(false);
-      setUserSummaryHoverOpen(false);
-    };
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
-  }, [userSummaryOpen]);
 
   useEffect(() => {
     return () => {
@@ -1293,7 +1130,6 @@ function SessionViewerInner({
         shouldStickToBottomRef.current = true;
       }
       setShowJumpToLatest(!shouldStickToBottomRef.current);
-      refreshCurrentUserMessageIndex();
       lastScrollTop = el.scrollTop;
     };
     updateStickiness();
@@ -1301,7 +1137,7 @@ function SessionViewerInner({
     return () => {
       el.removeEventListener("scroll", updateStickiness);
     };
-  }, [refreshCurrentUserMessageIndex, sessionKey]);
+  }, [sessionKey]);
 
   useEffect(() => {
     if (!targetSeq) {
@@ -1640,7 +1476,7 @@ function SessionViewerInner({
     if (item.type === "turn_diff") {
       return (
         <div key={timelineItemKey} style={{ marginTop: spacing, width: "100%", minWidth: 0 }}>
-          <TurnDiffSummary update={item.turnDiff} rootId={rootId} />
+          <TurnDiffSummary update={item.turnDiff} rootId={rootId} sessionKey={sessionKey} />
         </div>
       );
     }
@@ -2339,6 +2175,7 @@ function SessionViewerInner({
             boxSizing: "border-box",
             zIndex: 10,
             flexShrink: 0,
+            position: "relative",
           }}
         >
           <h1
@@ -2673,6 +2510,18 @@ function SessionViewerInner({
                                 </div>
                               ) : null}
                             </div>
+                            {isIdeaRuntime && stats && file.repo_kind !== "plain" && stats.source !== "commit_range" ? (
+                              <RelatedFileCompareButton
+                                onClick={() =>
+                                  compareGitFileInIdea({
+                                    rootId: file.root_id || rootId || "",
+                                    path: file.path,
+                                    repoPath: file.repo_path || undefined,
+                                    repoKind: file.repo_kind || undefined,
+                                  })
+                                }
+                              />
+                            ) : null}
                             <button
                               type="button"
                               aria-label={t("session.removeRelatedFile", { name: file.name || file.path })}
@@ -2713,20 +2562,19 @@ function SessionViewerInner({
           </div>
           </div>
         </div>
-        {userMessageSummaries.length > 0 || showJumpToLatest ? (
+        {showJumpToLatest ? (
           <div
             style={{
               position: "absolute",
               right: "16px",
-              bottom: `${16 + composerOverlayInset}px`,
+              bottom: "16px",
               zIndex: 4,
               display: "flex",
               alignItems: "center",
               gap: "6px",
             }}
           >
-            {showJumpToLatest ? (
-              <button
+            <button
                 type="button"
                 onClick={() => {
                   cancelTargetSeqScroll();
@@ -2757,167 +2605,7 @@ function SessionViewerInner({
                 }}
               >
                 <span>{t("session.jumpBottom")}</span>
-              </button>
-            ) : null}
-            {userMessageSummaries.length > 0 ? (
-              <div
-                ref={userSummaryRootRef}
-                onMouseEnter={() => {
-                  refreshCurrentUserMessageIndex();
-                  setUserSummaryHoverOpen(true);
-                }}
-                onMouseLeave={() => setUserSummaryHoverOpen(false)}
-                style={{
-                  position: "relative",
-                  display: "inline-flex",
-                }}
-              >
-                {userSummaryOpen ? (
-                  <>
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        position: "absolute",
-                        right: 0,
-                        bottom: "100%",
-                        width: "min(320px, calc(100vw - 72px))",
-                        height: "8px",
-                      }}
-                    />
-                    <div
-                      role="dialog"
-                      aria-label={t("session.userSummary")}
-                      style={{
-                        position: "absolute",
-                        right: 0,
-                        bottom: "calc(100% + 8px)",
-                        width: "min(320px, calc(100vw - 72px))",
-                        maxHeight: "260px",
-                        overflowY: "auto",
-                        padding: "6px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--menu-border)",
-                        background: "var(--menu-bg)",
-                        boxShadow: "0 16px 34px rgba(15, 23, 42, 0.18)",
-                        color: "var(--text-primary)",
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      <div
-                        ref={userSummaryListRef}
-                        style={{ display: "flex", flexDirection: "column", gap: "2px" }}
-                      >
-                        {userMessageSummaries.map((item) => {
-                          const isCurrent = item.index === currentUserMessageIndex;
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              data-user-summary-index={item.index}
-                              onClick={() => scrollToUserMessageSummary(item.index)}
-                              style={{
-                                width: "100%",
-                                border: "none",
-                                background: isCurrent
-                                  ? "rgba(148, 163, 184, 0.22)"
-                                  : "transparent",
-                                display: "block",
-                                padding: "6px 8px",
-                                borderRadius: "6px",
-                                cursor: "pointer",
-                                textAlign: "left",
-                                color: "var(--text-primary)",
-                              }}
-                              onMouseEnter={(event) => {
-                                event.currentTarget.style.background = "var(--menu-active-bg)";
-                              }}
-                              onMouseLeave={(event) => {
-                                event.currentTarget.style.background = isCurrent
-                                  ? "rgba(148, 163, 184, 0.22)"
-                                  : "transparent";
-                              }}
-                            >
-                              <span
-                                title={item.summary}
-                                style={{
-                                  display: "block",
-                                  minWidth: 0,
-                                  fontSize: "12px",
-                                  lineHeight: "18px",
-                                  color: "var(--text-primary)",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {item.summary}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    refreshCurrentUserMessageIndex();
-                    setUserSummaryPinnedOpen((open) => {
-                      const nextOpen = !open;
-                      if (!nextOpen) {
-                        setUserSummaryHoverOpen(false);
-                      }
-                      return nextOpen;
-                    });
-                  }}
-                  aria-label={userSummaryOpen ? t("session.hideUserSummary") : t("session.showUserSummary")}
-                  title={userSummaryOpen ? t("session.hideUserSummary") : t("session.showUserSummary")}
-                  style={{
-                    position: "relative",
-                    width: "34px",
-                    height: "34px",
-                    border: "none",
-                    borderRadius: "8px",
-                    background: userSummaryOpen ? "var(--accent-color)" : "var(--menu-bg)",
-                    color: userSummaryOpen ? "#ffffff" : "var(--text-secondary)",
-                    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.16)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    fontSize: "18px",
-                  }}
-                >
-                  <UserMessageListIcon />
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      position: "absolute",
-                      top: "-7px",
-                      right: "-7px",
-                      minWidth: "18px",
-                      height: "18px",
-                      padding: "0 5px",
-                      borderRadius: "999px",
-                      background: "#2563eb",
-                      color: "#ffffff",
-                      border: "2px solid var(--menu-bg)",
-                      fontSize: "10px",
-                      fontWeight: 800,
-                      lineHeight: "14px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxSizing: "border-box",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {userMessageSummaries.length > 99 ? "99+" : userMessageSummaries.length}
-                  </span>
-                </button>
-              </div>
-            ) : null}
+            </button>
           </div>
         ) : null}
       </div>
@@ -2949,7 +2637,6 @@ export const SessionViewer = memo(
     prev.interactionMode === next.interactionMode &&
     prev.targetSeq === next.targetSeq &&
     prev.targetSeqRequestKey === next.targetSeqRequestKey &&
-    prev.composerOverlayInset === next.composerOverlayInset &&
     prev.gitFileStatsByPath === next.gitFileStatsByPath &&
     prev.onRootClick === next.onRootClick,
 );

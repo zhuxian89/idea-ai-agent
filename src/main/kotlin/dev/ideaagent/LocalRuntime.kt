@@ -1,11 +1,10 @@
 package dev.ideaagent
 
 import com.google.gson.Gson
-import com.intellij.ide.plugins.PluginManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.PathManager
+import com.intellij.openapi.application.PluginPathManager
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
 import com.intellij.util.concurrency.AppExecutorUtil
 import java.net.URI
@@ -48,8 +47,7 @@ class LocalRuntime(private val project: Project) : Disposable {
     private fun launch(result: CompletableFuture<Connection>) {
         try {
             val projectPath = Path.of(requireNotNull(project.basePath) { "Open a project directory first" }).toRealPath()
-            val descriptor = requireNotNull(PluginManager.getInstance().findEnabledPlugin(PluginId.getId("dev.ideaagent.local")))
-            val bundledRuntime = descriptor.pluginPath.resolve("runtime")
+            val bundledRuntime = requireNotNull(PluginPathManager.getPluginResource(LocalRuntime::class.java, "runtime")).toPath()
             val os = System.getProperty("os.name").lowercase().let {
                 when { it.contains("win") -> "windows"; it.contains("mac") -> "darwin"; else -> "linux" }
             }

@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "dev.ideaagent"
-version = "0.1.22"
+version = providers.gradleProperty("pluginVersion").getOrElse("0.1.23")
 
 repositories {
     mavenCentral()
@@ -71,6 +71,7 @@ intellijPlatform {
             create(IntelliJPlatformType.IntellijIdeaUltimate, "2024.1")
             create(IntelliJPlatformType.IntellijIdeaUltimate, "2024.2")
             create(IntelliJPlatformType.IntellijIdeaUltimate, "2024.3")
+            create(IntelliJPlatformType.IntellijIdeaUltimate, "263.4732.28")
         }
     }
 }

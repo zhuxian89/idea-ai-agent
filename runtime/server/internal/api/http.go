@@ -41,10 +41,11 @@ import (
 
 // HTTPHandler provides REST endpoints for health, tree, file, and action.
 type HTTPHandler struct {
-	AppContext    *AppContext
-	StaticDir     string
-	Version       string
-	LocalCLIToken string
+	AppContext       *AppContext
+	StaticDir        string
+	Version          string
+	LocalCLIToken    string
+	LocalAccessToken string
 }
 
 type protectedResponseWriter struct {
@@ -215,8 +216,8 @@ func (h *HTTPHandler) protectedEndpoint(next http.HandlerFunc) http.HandlerFunc 
 }
 
 func (h *HTTPHandler) isLocalCLIRequest(r *http.Request) bool {
-	token := strings.TrimSpace(h.LocalCLIToken)
-	if token == "" || subtle.ConstantTimeCompare([]byte(strings.TrimSpace(r.Header.Get(localCLIHeaderName))), []byte(token)) != 1 {
+	candidate := strings.TrimSpace(r.Header.Get(localCLIHeaderName))
+	if !constantTimeTokenEqual(candidate, h.LocalCLIToken) && !constantTimeTokenEqual(candidate, h.LocalAccessToken) {
 		return false
 	}
 	if !isLocalCLIPath(r) {
@@ -230,6 +231,11 @@ func (h *HTTPHandler) isLocalCLIRequest(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+func constantTimeTokenEqual(candidate, expected string) bool {
+	expected = strings.TrimSpace(expected)
+	return expected != "" && subtle.ConstantTimeCompare([]byte(candidate), []byte(expected)) == 1
+}
+
 func isLocalCLIPath(r *http.Request) bool {
 	if r == nil || r.URL == nil {
 		return false
@@ -240,10 +246,21 @@ func isLocalCLIPath(r *http.Request) bool {
 	case http.MethodDelete:
 		return r.URL.Path == "/api/dirs"
 	case http.MethodGet:
-		return isLocalCLITaskPath(r.URL.Path)
+		return isLocalCLITaskPath(r.URL.Path) || isLocalTurnDiffPath(r.URL.Path) ||
+			r.URL.Path == "/api/git/related-file/compare"
 	default:
 		return false
 	}
+}
+
+func isLocalTurnDiffPath(path string) bool {
+	const prefix = "/api/sessions/"
+	const suffix = "/turn-diffs/"
+	start := strings.Index(path, suffix)
+	if !strings.HasPrefix(path, prefix) || start <= len(prefix) || start+len(suffix) >= len(path) {
+		return false
+	}
+	return !strings.Contains(path[start+len(suffix):], "/")
 }
 
 func isLocalCLITaskPath(path string) bool {
@@ -288,6 +305,7 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Get("/api/git/commit/files", h.protectedEndpoint(h.handleGitCommitFiles))
 	r.Get("/api/git/commit/diff", h.protectedEndpoint(h.handleGitCommitDiff))
 	r.Get("/api/git/related-file/diff", h.protectedEndpoint(h.handleGitRelatedFileDiff))
+	r.Get("/api/git/related-file/compare", h.handleGitFileCompare)
 	r.Get("/api/git/branches", h.protectedEndpoint(h.handleGitBranches))
 	r.Get("/api/git/worktrees", h.protectedEndpoint(h.handleGitWorktreeList))
 	r.Post("/api/git/checkout", h.protectedEndpoint(h.handleGitCheckout))
@@ -318,6 +336,7 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Post("/api/sessions/import/batch", h.protectedEndpoint(h.handleExternalSessionImportBatch))
 	r.Post("/api/sessions/fork", h.protectedEndpoint(h.handleSessionFork))
 	r.Get("/api/sessions/{key}/toolcalls/{callID}", h.protectedEndpoint(h.handleSessionToolCallGet))
+	r.Get("/api/sessions/{key}/turn-diffs/{snapshotID}", h.handleTurnDiffArtifact)
 	r.Post("/api/sessions/{key}/sync", h.protectedEndpoint(h.handleSessionSync))
 	r.Get("/api/sessions/{key}", h.protectedEndpoint(h.handleSessionGet))
 	r.Get("/api/sessions/{key}/related-files", h.protectedEndpoint(h.handleSessionRelatedFilesGet))

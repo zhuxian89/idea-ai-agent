@@ -45,12 +45,29 @@ class VoiceSettings : PersistentStateComponent<VoiceSettings.Settings> {
     }
     @Volatile private var settings = Settings()
     private val configuring = java.util.concurrent.atomic.AtomicBoolean(false)
-    private val customCredentials = CredentialAttributes("Local AI Agent: Voice transcription", null, null, false, true)
-    private val tencentCredentials = CredentialAttributes("Local AI Agent: Tencent voice transcription", null, null, false, true)
-    private val siliconCredentials = CredentialAttributes("Local AI Agent: SiliconFlow voice transcription", null, null, false, true)
+    private val customCredentials = credentialAttributes("Local AI Agent: Voice transcription")
+    private val tencentCredentials = credentialAttributes("Local AI Agent: Tencent voice transcription")
+    private val siliconCredentials = credentialAttributes("Local AI Agent: SiliconFlow voice transcription")
     override fun getState(): Settings = settings
     override fun loadState(state: Settings) {
         settings = state.copy(provider = if (state.provider.isNotBlank() || state.endpoint.isNotBlank()) state.selectedProvider().id else "")
+    }
+
+    private fun credentialAttributes(serviceName: String): CredentialAttributes {
+        // 2026.3 removed the requestor field. Reflection keeps this binary
+        // compatible with both the 2024.1 and 2026.3 public constructors.
+        val legacy = arrayOf(String::class.java, String::class.java, Class::class.java, java.lang.Boolean.TYPE, java.lang.Boolean.TYPE)
+        val modern = arrayOf(String::class.java, String::class.java, java.lang.Boolean.TYPE, java.lang.Boolean.TYPE)
+        val legacyConstructor = CredentialAttributes::class.java.constructors.firstOrNull { constructor ->
+            constructor.parameterCount == 5 && constructor.parameterTypes.contentEquals(legacy)
+        }
+        val modernConstructor = CredentialAttributes::class.java.constructors.firstOrNull { constructor ->
+            constructor.parameterCount == 4 && constructor.parameterTypes.contentEquals(modern)
+        }
+        val attributes = modernConstructor?.newInstance(serviceName, null, false, true)
+            ?: legacyConstructor?.newInstance(serviceName, null, VoiceSettings::class.java, false, true)
+        return attributes as? CredentialAttributes
+            ?: error("CredentialAttributes constructor unavailable")
     }
 
     internal fun config(): VoiceServiceConfig? {

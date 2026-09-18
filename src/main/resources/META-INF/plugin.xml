@@ -3,7 +3,7 @@
     <name>Local AI Agent</name>
     <vendor url="https://github.com/zhuxian89/idea-ai-agent">Local AI Agent</vendor>
     <description><![CDATA[
-        <p><b>Native Agent workflows in IntelliJ IDEA, with zero reconfiguration when your CLI already works.</b></p>
+        <p><b>Native Codex CLI and Claude Code workflows in IntelliJ IDEA, with zero reconfiguration when your CLI already works.</b></p>
         <p>
             Local AI Agent connects the current IDEA project directly to locally installed
             coding agents, including Codex CLI and Claude Code. It preserves the Agent's
@@ -11,14 +11,23 @@
             MCP servers, permission prompts, planning, and follow-up questions inside IDEA.
             There is no second API key, login, model, or MCP setup to recreate.
         </p>
+        <h3>Native Agent capabilities</h3>
         <ul>
             <li>Stream replies, reasoning status, commands, file edits, MCP calls, and subagent activity.</li>
             <li>Resume native CLI sessions and project-scoped conversation history.</li>
-            <li>Add selected code, the current file, or a project-tree file without sending automatically.</li>
             <li>Choose the Agent, model, reasoning effort, Plan Mode, and execution permission level.</li>
             <li>Detect, configure, install, update, and restart supported local Agent CLIs from IDEA.</li>
-            <li>Dictate drafts with optional Tencent Cloud, SiliconFlow, or a custom speech service; configure and test it from plugin settings.</li>
-            <li>Inspect Codex turn diffs and open referenced project files in IDEA.</li>
+        </ul>
+        <h3>Voice input that stays in your draft</h3>
+        <p>
+            Click the microphone in the composer, speak, then stop recording to insert the recognized
+            text at the draft cursor. Recording never sends a message automatically. Configure Tencent
+            Cloud, SiliconFlow, or a compatible custom speech service with your own credentials; each
+            provider's credentials are stored separately in the IDE Password Safe.
+        </p>
+        <ul>
+            <li>Add selected code, the current file, or a project-tree file to the draft without sending it.</li>
+            <li>Inspect turn diffs and open referenced project files in IDEA.</li>
             <li>Follow the IDEA light or dark theme and switch between English and Chinese.</li>
         </ul>
         <p>
@@ -42,21 +51,28 @@
 
         <hr>
         <h2>中文</h2>
-        <p><b>在 IntelliJ IDEA 中尽可能完整地还原原生 Agent 能力；本机 CLI 已可用时，安装后零配置接入。</b></p>
+        <p><b>在 IntelliJ IDEA 中尽可能完整地还原 Codex CLI 和 Claude Code 的原生能力；本机 CLI 已可用时，安装后零配置接入。</b></p>
         <p>
             Local AI Agent 将当前 IDEA 项目直接连接到本机安装的 Coding Agent，包括
             Codex CLI 和 Claude Code。插件保留 Agent 原生的会话、工具循环、登录状态、
             模型配置、项目指令、MCP、权限请求、Plan Mode 和追问交互，无需重复填写 API Key、
             再次登录或重新配置模型与 MCP。
         </p>
+        <h3>原生 Agent 能力</h3>
         <ul>
             <li>实时展示回复、推理状态、命令执行、文件修改、MCP 调用和子 Agent 活动。</li>
             <li>恢复原生 CLI 会话，并按项目保存和继续历史对话。</li>
-            <li>把选中代码、当前文件或项目树中的文件加入输入框，不会自动发送。</li>
             <li>选择 Agent、模型、思考强度、Plan Mode 和执行权限。</li>
             <li>在 IDEA 内检测、配置、安装、更新和重启本机 Agent CLI。</li>
-            <li>可选接入腾讯云、硅基流动或自定义语音服务，将录音识别结果插入草稿。</li>
-            <li>查看 Codex 每轮文件差异，并在 IDEA 中直接打开回复引用的项目文件。</li>
+        </ul>
+        <h3>不自动发送的语音输入</h3>
+        <p>
+            点击输入框麦克风开始录音，停止后将识别文字插入原光标位置，不会自动发送消息。可使用腾讯云、
+            硅基流动或兼容的自定义语音服务；填写自己的凭据后，各供应商凭据分别保存在 IDEA 密码保险箱。
+        </p>
+        <ul>
+            <li>把选中代码、当前文件或项目树中的文件加入输入框，不会自动发送。</li>
+            <li>查看每轮文件差异，并在 IDEA 中直接打开回复引用的项目文件。</li>
             <li>跟随 IDEA 深色/浅色主题，界面支持简体中文和英文。</li>
         </ul>
         <p>
@@ -76,13 +92,13 @@
         </p>
     ]]></description>
     <change-notes><![CDATA[
-        <p><b>0.1.22</b></p>
+        <p><b>0.1.23</b></p>
         <ul>
-            <li>Adds microphone recording and speech-to-text insertion at the draft cursor, without automatically sending a message.</li>
-            <li>Supports Tencent Cloud, SiliconFlow, and custom speech services with separate credentials stored in the IDE Password Safe.</li>
-            <li>Provides persistent voice configuration and recording tests, and shows the active provider in settings and the recording popover.</li>
-            <li>Shows expandable Codex turn diffs and opens referenced project files at their line in IDEA.</li>
-            <li>Includes Windows x64/ARM64 and macOS Apple Silicon/Intel runtimes; supports IDEA 2024.1 and later.</li>
+            <li>Shows files changed during each turn with add/delete counts, an expandable diff, and direct open/compare actions in IDEA.</li>
+            <li>Opens IDEA's native side-by-side diff for turn snapshots and related Git files, including files modified through command execution.</li>
+            <li>Tracks turn changes for Codex CLI, Claude Code, and compatible ACP agents without changing their native tools, prompts, permissions, or sessions.</li>
+            <li>Moves the user-message summary control to the conversation header and removes the composer's weekly-limit indicators.</li>
+            <li>Keeps IDEA 2024.1+ compatibility and adds Plugin Verifier coverage for IDEA 2026.3 EAP.</li>
         </ul>
     ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>

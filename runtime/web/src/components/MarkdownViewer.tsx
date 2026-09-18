@@ -9,6 +9,7 @@ import Prism from "prismjs";
 import { copyText } from "../services/clipboard";
 import { fetchProofProtectedBlob } from "../services/file";
 import { openExternalURL } from "../services/platformNavigation";
+import { openIdeaFile } from "../services/ideaBridge";
 import { useI18n } from "../i18n";
 import { buildDiffCodeRows, type DiffCodeRow } from "./gitDiffModel";
 import "prismjs/themes/prism.css";
@@ -437,16 +438,50 @@ function dirnamePosix(input: string): string {
 }
 
 function resolveMarkdownHref(currentPath: string, href: string): string {
-  const trimmed = href.trim();
+  let trimmed = href.trim();
   if (!trimmed) return "";
-  if (trimmed.startsWith("file://")) {
-    return decodeURIComponent(trimmed.slice("file://".length));
-  }
+  try { trimmed = decodeURIComponent(trimmed); } catch { /* A literal % is valid in file names. */ }
+  // Local Windows targets have a leading slash while passing through the
+  // Markdown URL filters; the native bridge needs the original drive path.
+  if (/^\/?[a-z]:[\\/]/i.test(trimmed)) return trimmed.replace(/^\//, "").replace(/\\/g, "/");
   if (trimmed.startsWith("/")) {
-    return decodeURIComponent(trimmed);
+    return trimmed;
   }
   const baseDir = currentPath ? dirnamePosix(currentPath) : ".";
-  return decodeURIComponent(normalizePosixPath(`${baseDir}/${trimmed}`));
+  return normalizePosixPath(`${baseDir}/${trimmed}`);
+}
+
+type MarkdownLinkNode = {
+  tagName?: string;
+  properties?: Record<string, unknown>;
+  children?: MarkdownLinkNode[];
+};
+
+// Preserve only recognizable file references before both HTML sanitization and
+// react-markdown's URL filter. A drive letter or filename:line otherwise looks
+// like an unsupported protocol and becomes href="", which reloads the chat.
+// Keep the existing sanitizer and protocol allowlist for all other URLs.
+function rehypeLocalFileLinks() {
+  return (tree: MarkdownLinkNode) => {
+    const visit = (node: MarkdownLinkNode) => {
+      if (node.tagName === "a" && typeof node.properties?.href === "string") {
+        let href = node.properties.href;
+        if (/^file:\/\//i.test(href)) {
+          href = href.replace(/^file:\/\/(?:localhost(?=\/))?/i, "");
+          if (href && !href.startsWith("/") && !/^[a-z]:(?:[\\/]|%5c|%2f)/i.test(href)) href = `//${href}`;
+        }
+        if (/^\/?[a-z]:(?:[\\/]|%5c|%2f)/i.test(href)) {
+          // Markdown percent-encodes backslashes before reaching this plugin.
+          href = `/${href.replace(/^\//, "").replace(/\\|%5c|%2f/gi, "/")}`;
+        } else if (/^[^/:\\?#]+\.[^/:\\?#]+:\d+(?::\d+)?$/.test(href)) {
+          href = `./${href}`;
+        }
+        node.properties.href = href;
+      }
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
 }
 
 function isExternalHref(href: string): boolean {
@@ -665,7 +700,7 @@ function MarkdownViewerInner({
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         remarkRehypeOptions={{ allowDangerousHtml: true }}
-        rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeKatex]}
+        rehypePlugins={[rehypeRaw, rehypeLocalFileLinks, [rehypeSanitize, markdownSanitizeSchema], rehypeKatex]}
         components={{
           h1: ({ node, ...props }: any) => (
             <h1 style={{ fontSize: "24px", marginTop: 0 }} {...getSourceLineProps(node)} {...props} />
@@ -700,12 +735,12 @@ function MarkdownViewerInner({
           ),
           a: ({ href = "", children, ...props }) => {
             const symbolTarget = anchorSourceSymbol(href, children);
-            if ((!href || href.startsWith("#")) && !symbolTarget || isExternalHref(href) || !onFileClick) {
+            if ((!href || href.startsWith("#")) && !symbolTarget || isExternalHref(href) || (!onFileClick && !root)) {
               const shouldOpenExternally = isExternalHref(href);
               return (
                 <a
                   {...props}
-                  href={href}
+                  href={shouldOpenExternally || href.startsWith("#") ? href : undefined}
                   style={{ color: "var(--accent-color)", cursor: shouldOpenExternally ? "pointer" : undefined }}
                   onClick={
                     shouldOpenExternally
@@ -724,15 +759,17 @@ function MarkdownViewerInner({
             const resolvedPath = symbolTarget || resolveMarkdownHref(currentPath, href);
             return (
               <a
+                {...props}
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
+                  e.stopPropagation();
                   if (resolvedPath) {
-                    onFileClickRef.current?.(resolvedPath);
+                    if (onFileClickRef.current) onFileClickRef.current(resolvedPath);
+                    else if (root) openIdeaFile(root, resolvedPath);
                   }
                 }}
                 style={{ color: "var(--accent-color)", cursor: "pointer" }}
-                {...props}
               >
                 {children}
               </a>

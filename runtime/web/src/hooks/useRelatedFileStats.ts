@@ -5,6 +5,7 @@ export type RelatedFileStat = {
   status: string;
   additions: number;
   deletions: number;
+  source?: "worktree" | "commit_range";
 };
 
 export type RelatedFileStatTarget = {
@@ -70,6 +71,7 @@ export function useRelatedFileStats(
               status: diff.status,
               additions: diff.additions,
               deletions: diff.deletions,
+              source: diff.source === "commit_range" ? "commit_range" : "worktree",
             },
           ] as const;
         } catch {

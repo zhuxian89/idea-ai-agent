@@ -3,6 +3,7 @@ package usecase
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"os/exec"
@@ -66,6 +67,42 @@ func TestSaveUploadedFilesDefaultsToAttachmentDirAndRenamesConflicts(t *testing.
 
 	assertFileContent(t, filepath.Join(rootDir, filepath.FromSlash(wantFirst)), "first file")
 	assertFileContent(t, filepath.Join(rootDir, filepath.FromSlash(wantSecond)), "second file")
+}
+
+func TestGetGitFileCompareResolvesTaskWorktreePath(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found")
+	}
+	rootDir := t.TempDir()
+	runUsecaseGit(t, rootDir, "init")
+	runUsecaseGit(t, rootDir, "config", "user.email", "test@example.com")
+	runUsecaseGit(t, rootDir, "config", "user.name", "Test User")
+	mustWriteFile(t, filepath.Join(rootDir, "note.txt"), "base\n")
+	runUsecaseGit(t, rootDir, "add", "note.txt")
+	runUsecaseGit(t, rootDir, "commit", "-m", "initial")
+	runUsecaseGit(t, rootDir, "checkout", "-b", "task-1")
+	runUsecaseGit(t, rootDir, "checkout", "-")
+	worktreeRoot := filepath.Join(rootDir, ".worktree", "task-1")
+	runUsecaseGit(t, rootDir, "worktree", "add", worktreeRoot, "task-1")
+	mustWriteFile(t, filepath.Join(rootDir, "note.txt"), "main-only\n")
+	mustWriteFile(t, filepath.Join(worktreeRoot, "note.txt"), "worktree-only\n")
+
+	root := rootfs.NewRootInfo("mindfs", "mindfs", rootDir)
+	service := Service{Registry: uploadTestRegistry{root: root}}
+	out, err := service.GetGitFileCompare(context.Background(), GitRelatedFileDiffInput{
+		RootID:   root.ID,
+		RepoKind: "git",
+		Path:     ".worktree/task-1/note.txt",
+	})
+	if err != nil {
+		t.Fatalf("GetGitFileCompare returned error: %v", err)
+	}
+	if decoded, err := base64.StdEncoding.DecodeString(out.Head.Data); err != nil || string(decoded) != "base\n" {
+		t.Fatalf("head = %q, err = %v", out.Head.Data, err)
+	}
+	if decoded, err := base64.StdEncoding.DecodeString(out.Worktree.Data); err != nil || string(decoded) != "worktree-only\n" {
+		t.Fatalf("worktree = %q, err = %v", out.Worktree.Data, err)
+	}
 }
 
 func TestGetGitRelatedFileDiffResolvesTaskWorktreePath(t *testing.T) {

@@ -97,6 +97,10 @@ export type ExchangeAux = {
 export type TurnDiffUpdate = {
   turnId?: string;
   diff: string;
+  snapshotId?: string;
+  comparePaths?: string[];
+  workspace?: boolean;
+  partial?: boolean;
 };
 
 export type Session = {

@@ -92,6 +92,24 @@ export function openIdeaFile(rootId: string, path: string): void {
   postToHost({ action: "openFile", rootId, path });
 }
 
+export function compareTurnDiffInIdea(input: {
+  rootId: string;
+  sessionKey: string;
+  snapshotId: string;
+  path: string;
+}): void {
+  postToHost({ action: "compareTurnDiff", ...input });
+}
+
+export function compareGitFileInIdea(input: {
+  rootId: string;
+  path: string;
+  repoPath?: string;
+  repoKind?: string;
+}): void {
+  postToHost({ action: "compareGitFile", ...input });
+}
+
 export function refreshIdeaFiles(): void {
   window.ideaAgent?.postMessage({ action: "refresh" });
 }

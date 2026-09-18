@@ -52,14 +52,14 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 
 ### 安装
 
-当前版本：**0.1.22** · [查看发布说明](docs/releases/v0.1.22.md)
+当前版本：**0.1.23** · [查看发布说明](docs/releases/v0.1.23.md)
 
 | 系统 / 架构 | 下载 |
 | --- | --- |
-| Windows x64 | [idea-ai-agent-0.1.22-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-windows-amd64.zip) |
-| Windows ARM64 | [idea-ai-agent-0.1.22-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-windows-arm64.zip) |
-| macOS Apple 芯片（M 系列） | [idea-ai-agent-0.1.22-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-macos-arm64.zip) |
-| macOS Intel | [idea-ai-agent-0.1.22-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-macos-amd64.zip) |
+| Windows x64 | [idea-ai-agent-0.1.23-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.23/idea-ai-agent-0.1.23-windows-amd64.zip) |
+| Windows ARM64 | [idea-ai-agent-0.1.23-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.23/idea-ai-agent-0.1.23-windows-arm64.zip) |
+| macOS Apple 芯片（M 系列） | [idea-ai-agent-0.1.23-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.23/idea-ai-agent-0.1.23-macos-arm64.zip) |
+| macOS Intel | [idea-ai-agent-0.1.23-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.23/idea-ai-agent-0.1.23-macos-amd64.zip) |
 
 1. 下载与你的操作系统和 CPU 对应的 ZIP，不要解压。
 2. 在 IDEA 中打开 **Settings → Plugins → 齿轮 → Install Plugin from Disk**，选择 ZIP 并重启 IDEA。
@@ -166,14 +166,14 @@ The plugin starts a bundled service for the lifetime of the project. It listens 
 
 ### Installation
 
-Current version: **0.1.22** · [Release notes](docs/releases/v0.1.22.md)
+Current version: **0.1.23** · [Release notes](docs/releases/v0.1.23.md)
 
 | OS / architecture | Download |
 | --- | --- |
-| Windows x64 | [idea-ai-agent-0.1.22-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-windows-amd64.zip) |
-| Windows ARM64 | [idea-ai-agent-0.1.22-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-windows-arm64.zip) |
-| macOS Apple Silicon | [idea-ai-agent-0.1.22-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-macos-arm64.zip) |
-| macOS Intel | [idea-ai-agent-0.1.22-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.22/idea-ai-agent-0.1.22-macos-amd64.zip) |
+| Windows x64 | [idea-ai-agent-0.1.23-windows-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.23/idea-ai-agent-0.1.23-windows-amd64.zip) |
+| Windows ARM64 | [idea-ai-agent-0.1.23-windows-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.23/idea-ai-agent-0.1.23-windows-arm64.zip) |
+| macOS Apple Silicon | [idea-ai-agent-0.1.23-macos-arm64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.23/idea-ai-agent-0.1.23-macos-arm64.zip) |
+| macOS Intel | [idea-ai-agent-0.1.23-macos-amd64.zip](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.23/idea-ai-agent-0.1.23-macos-amd64.zip) |
 
 1. Download the ZIP for your operating system and CPU. Do not extract it.
 2. In IDEA, open **Settings → Plugins → gear icon → Install Plugin from Disk**, select the ZIP, and restart IDEA.

@@ -22,7 +22,6 @@ import { renderToolIcon } from "./stream/ToolCallCard";
 import { useI18n, type MessageKey } from "../i18n";
 import { VoiceRecordingPopover } from "./VoiceRecordingPopover";
 import { CompactUploadProgress } from "./CompactUploadProgress";
-import { CodexRateLimitIndicator } from "./CodexRateLimitIndicator";
 import { deletePrompt, savePrompt } from "../services/prompts";
 
 type SessionInfo = {
@@ -76,7 +75,6 @@ type ActionBarProps = {
   compactWorkbench?: boolean;
   status?: WSStatus;
   agentsVersion?: number;
-  codexRateLimitsRefreshToken?: number;
   currentRootId?: string | null;
   currentSession?: SessionInfo | null;
   pendingPlanMode?: boolean;
@@ -390,7 +388,6 @@ export function ActionBar({
   compactWorkbench = false,
   status = "disconnected",
   agentsVersion = 0,
-  codexRateLimitsRefreshToken = 0,
   currentRootId,
   currentSession,
   pendingPlanMode = false,
@@ -1250,7 +1247,7 @@ export function ActionBar({
   return (
     <div data-onboarding="action-bar" style={{ width: "100%", minWidth: 0, padding: isMobile ? "0 0 var(--mindfs-actionbar-bottom-padding, calc(env(safe-area-inset-bottom, 0px) + 2px))" : "0 16px 12px", display: "flex", justifyContent: "center", boxSizing: "border-box", background: "var(--content-bg)" }}>
       <div style={{ position: "relative", width: "100%", minWidth: 0, display: "flex", flexDirection: "column", gap: 0 }}>
-        {planModeActive || (mode !== "command" && agent === "codex") ? (
+        {planModeActive ? (
           <div
             style={{
               position: "absolute",
@@ -1283,9 +1280,6 @@ export function ActionBar({
                   </button>
                 </div>
               ) : null}
-            </div>
-            <div style={{ pointerEvents: "auto" }}>
-              <CodexRateLimitIndicator agent={agent} refreshToken={codexRateLimitsRefreshToken} />
             </div>
           </div>
         ) : null}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -444,7 +445,7 @@ func TestManagerPersistsTurnDiffAux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(aux[2]) != 1 || aux[2][0].TurnDiff == nil || *aux[2][0].TurnDiff != want {
+	if len(aux[2]) != 1 || aux[2][0].TurnDiff == nil || !reflect.DeepEqual(*aux[2][0].TurnDiff, want) {
 		t.Fatalf("turn diff aux = %#v", aux[2])
 	}
 }

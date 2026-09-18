@@ -21,6 +21,7 @@ import (
 	"mindfs/server/internal/commandexec"
 	"mindfs/server/internal/fs"
 	"mindfs/server/internal/session"
+	"mindfs/server/internal/turndiff"
 )
 
 type ClientContext struct {
@@ -2389,6 +2390,13 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		defer finishUse()
 		return runtime.SendMessage(turnCtx, content)
 	}
+	// Observe every agent in the shared turn flow, outside its native runtime.
+	// A failed snapshot must never prevent the agent from running or change
+	// its prompt, permissions or event stream.
+	workspaceBefore, err := turndiff.Capture(turnCtx, rootAbs)
+	if err != nil {
+		log.Printf("[session/diff] capture.unavailable session=%s err=%v", current.Key, err)
+	}
 	sendErr := sendWithAttachedUpdates(sess, prompt)
 	if sendErr != nil && !isCanceledTurnError(sendErr) {
 		if isNonRecoverableAgentError(sendErr) {
@@ -2429,6 +2437,9 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		}
 	}
 	flushThought()
+	latestTurnDiff = finishWorkspaceTurnDiff(workspaceBefore, latestTurnDiff, root, current.Key, func(path string) string {
+		return normalizeToolPath(root, filepath.Join(rootAbs, filepath.FromSlash(path)))
+	})
 	if latestTurnDiff != nil && strings.TrimSpace(latestTurnDiff.Diff) != "" {
 		turnDiffCopy := *latestTurnDiff
 		auxBuffer = append(auxBuffer, session.ExchangeAux{

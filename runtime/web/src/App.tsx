@@ -1,4 +1,4 @@
-import { isIdeaRuntime, openIdeaFile, refreshIdeaFiles } from "./services/ideaBridge";
+import { compareGitFileInIdea, isIdeaRuntime, openIdeaFile, refreshIdeaFiles } from "./services/ideaBridge";
 import { mergeActivityFacts, mergeToolStatus } from "./services/activityFacts";
 import React, {
   useCallback,
@@ -89,6 +89,7 @@ import {
   relatedFileStatKey,
   useRelatedFileStats,
 } from "./hooks/useRelatedFileStats";
+import { RelatedFileCompareButton } from "./components/RelatedFileCompareButton";
 import {
   DEFAULT_DIRECTORY_SORT_MODE,
   type DirectorySortMode,
@@ -110,6 +111,7 @@ import {
 } from "./plugins/trust";
 import { appPath, appURL, isRelayNodePage } from "./services/base";
 import { useRefreshSpin } from "./hooks";
+import { buildBaseTimeline } from "./hooks/useSessionStream";
 import { copyText } from "./services/clipboard";
 import { triggerUpdate, type UpdateState } from "./services/update";
 import {
@@ -1679,7 +1681,6 @@ export function App({ onGoHome }: AppProps) {
     "main",
   );
   const [agentsVersion, setAgentsVersion] = useState(0);
-  const [codexRateLimitsRefreshToken, setCodexRateLimitsRefreshToken] = useState(0);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { isMobile, isTablet } = useResponsive();
   const [mobileEnterKeySends, setMobileEnterKeySends] = useState(loadMobileEnterKeySends);
@@ -3466,6 +3467,7 @@ export function App({ onGoHome }: AppProps) {
     async (
       rootID: string | null | undefined,
       sessionKey: string | null | undefined,
+      canApply: () => boolean = () => true,
     ): Promise<Session | null> => {
       const resolvedRoot = String(rootID || "");
       const resolvedKey = String(sessionKey || "");
@@ -3488,6 +3490,7 @@ export function App({ onGoHome }: AppProps) {
         loadingSessionRef.current[cacheKey] = request;
       }
       const syncResult = await request;
+      if (!canApply()) return null;
       let fullSession = syncResult?.session;
       if (!fullSession) {
         return null;
@@ -8963,15 +8966,32 @@ export function App({ onGoHome }: AppProps) {
   useEffect(() => {
     if (!currentRootId) return;
     let cancelled = false;
+    const completedTurnVersions = new Map<string, number>();
+    const advanceTurnVersion = (rootID: string, sessionKey: string) => {
+      const key = rootSessionKey(rootID, sessionKey);
+      const version = (completedTurnVersions.get(key) || 0) + 1;
+      completedTurnVersions.set(key, version);
+      return version;
+    };
     const reloadSessionForReplay = async (
       rootID: string,
       sessionKey: string,
+      completedVersion?: number,
     ) => {
       if (!rootID || !sessionKey) return;
-      const restored = await restoreActiveSession(rootID, sessionKey);
-      if (cancelled) return;
-      if (!restored) return;
       const cacheKey = rootSessionKey(rootID, sessionKey);
+      const canApply = () => !cancelled && (completedVersion === undefined || (
+        completedTurnVersions.get(cacheKey) === completedVersion &&
+        !(sessionCacheRef.current[cacheKey] as Session & { pending?: boolean })?.pending
+      ));
+      if (completedVersion !== undefined) {
+        // A read started before completion cannot contain the final turn aux.
+        // Wait for it before requesting the newly persisted result.
+        await loadingSessionRef.current[cacheKey]?.catch(() => {});
+      }
+      if (!canApply()) return;
+      const restored = await restoreActiveSession(rootID, sessionKey, canApply);
+      if (!canApply() || !restored) return;
       loadedSessionRef.current[cacheKey] = true;
       clearSessionStale(rootID, sessionKey);
       if (
@@ -9350,7 +9370,6 @@ export function App({ onGoHome }: AppProps) {
             event.data?.contextWindow,
           );
           tokenStationRefreshRef.current?.();
-          setCodexRateLimitsRefreshToken((value) => value + 1);
           break;
         case "error":
           reportError(
@@ -9998,6 +10017,15 @@ export function App({ onGoHome }: AppProps) {
             }
             setMultiProjectSessionPending(rootID, sessionKey, false);
             handleSessionStreamDone(rootID, sessionKey);
+            if (payload?.replay !== true) {
+              const version = advanceTurnVersion(rootID, sessionKey);
+              // Workspace diffs are saved after native message_done. Read the
+              // final history only after the host's session.done, without
+              // injecting or rewriting any native Agent event.
+              void reloadSessionForReplay(rootID, sessionKey, version).catch(() => {
+                if (!cancelled) markSessionStale(rootID, sessionKey);
+              });
+            }
             const newest = sessionsRef.current[0]?.updated_at || "";
             void loadSessionsForRoot(
               rootID,
@@ -10026,6 +10054,7 @@ export function App({ onGoHome }: AppProps) {
           ) {
             const rootID = payload.root_id;
             const sessionKey = payload.session_key;
+            advanceTurnVersion(rootID, sessionKey);
             setMultiProjectSessionPending(rootID, sessionKey, true);
             const exchange = payload.exchange;
             const sessionMeta = payload.session;
@@ -11106,6 +11135,28 @@ export function App({ onGoHome }: AppProps) {
     [currentSession, currentRootId, getSessionSnapshot],
   );
 
+  const ideaUserMessageSummaries = useMemo(() => {
+    const source = selectedSessionSnapshot || drawerSessionSnapshot;
+    const items = buildBaseTimeline(source?.exchanges || [], source?.exchange_aux || {});
+    return items.flatMap((item, index): {
+      id: string;
+      seq: number;
+      summary: string;
+    }[] => {
+      if (item.type !== "user_text") return [];
+      const text = item.content
+        .replace(/\[(?:read file|file):\s*[^\]]+\]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 48);
+      return [{
+        id: item.id || `idea-user-${index}`,
+        seq: Number(item.seq || index + 1),
+        summary: text || t("session.emptyMessage"),
+      }];
+    });
+  }, [selectedSessionSnapshot, drawerSessionSnapshot, t]);
+
   const rootSessionIndicators = useMemo(() => {
     const next: Record<string, { bound?: boolean; pending?: boolean }> = {};
     for (const root of managedRootIds) {
@@ -11429,12 +11480,6 @@ export function App({ onGoHome }: AppProps) {
     );
   };
   const currentRootSlashCommandResult = slashCommandResultForSession(currentRootId, null);
-  const sessionViewerComposerOverlayInset =
-    String((actionBarSession as any)?.agent || "").toLowerCase() === "codex" ||
-    (actionBarSession as any)?.plan_mode ||
-    pendingPlanMode
-      ? 20
-      : 0;
   const sessionView = (
     <SessionViewer
       connected={status === "connected"}
@@ -11446,7 +11491,6 @@ export function App({ onGoHome }: AppProps) {
       )}
       targetSeq={selectedSession?.search_seq}
       targetSeqRequestKey={selectedSession?.search_target_id}
-      composerOverlayInset={sessionViewerComposerOverlayInset}
       loading={selectedSessionLoading}
       rootId={selectedSession?.root_id || currentRootId}
       rootPath={
@@ -12179,6 +12223,18 @@ export function App({ onGoHome }: AppProps) {
                   </span>
                 ) : null}
               </button>
+              {isIdeaRuntime && stats && file.repo_kind !== "plain" && stats.source !== "commit_range" ? (
+                <RelatedFileCompareButton
+                  onClick={() =>
+                    compareGitFileInIdea({
+                      rootId: root,
+                      path: file.path,
+                      repoPath: file.repo_path || undefined,
+                      repoKind: file.repo_kind || undefined,
+                    })
+                  }
+                />
+              ) : null}
               <button
                 type="button"
                 aria-label={t("session.removeRelatedFile", { name: file.name || file.path })}
@@ -14313,6 +14369,7 @@ export function App({ onGoHome }: AppProps) {
           projectName: basenameOfPath(managedRootByIdRef.current[currentRootId || ""]?.root_path || currentRootId || ""),
           sessionName: selectedSession?.name || currentSession?.name,
           onNewSession: handleNewSession,
+          userMessageSummaries: ideaUserMessageSummaries,
         } : undefined}
         leftOpen={isLeftOpen}
         rightOpen={isRightOpen}
@@ -14380,7 +14437,6 @@ export function App({ onGoHome }: AppProps) {
             agentConfigSwitchRequest={agentConfigSwitchRequest}
             onAgentConfigSwitched={(agentName) => {
               if (agentName.trim().toLowerCase() === "codex") {
-                setCodexRateLimitsRefreshToken((value) => value + 1);
               }
             }}
             onProjectTreeTabChange={setProjectTreeTab}
@@ -14492,7 +14548,6 @@ export function App({ onGoHome }: AppProps) {
               compactWorkbench={isIdeaRuntime}
               status={status}
               agentsVersion={agentsVersion}
-              codexRateLimitsRefreshToken={codexRateLimitsRefreshToken}
               currentRootId={currentRootId}
               currentSession={actionBarSession}
               pendingPlanMode={pendingPlanMode}
@@ -14568,7 +14623,6 @@ export function App({ onGoHome }: AppProps) {
                 )}
                 targetSeq={currentSession?.search_seq}
                 targetSeqRequestKey={currentSession?.search_target_id}
-                composerOverlayInset={sessionViewerComposerOverlayInset}
                 loading={
                   drawerLoadingSessionByRoot[currentRootId || ""] ===
                   (drawerSessionSnapshot.key || drawerSessionSnapshot.session_key)

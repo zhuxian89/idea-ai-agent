@@ -31,7 +31,17 @@ export type DiffCodeRow = {
 
 export function buildDiffLines(content: string): DiffLine[] {
   const source = String(content || "").split("\n");
-  const filtered = source.filter((line) => !/^(diff --git|index |--- |\+\+\+ )/.test(line));
+  let inDiffBody = false;
+  const filtered = source.filter((line) => {
+    if (/^diff --git /.test(line)) {
+      inDiffBody = false;
+      return false;
+    }
+    if (!inDiffBody && (/^--- /.test(line) || /^\+\+\+ /.test(line))) return false;
+    if (/^index /.test(line)) return false;
+    if (/^@@ /.test(line)) inDiffBody = true;
+    return true;
+  });
   const lines: DiffLine[] = [];
   let oldLine = 0;
   let newLine = 0;
@@ -44,12 +54,12 @@ export function buildDiffLines(content: string): DiffLine[] {
       lines.push({ kind: "hunk", text: line });
       return;
     }
-    if (/^\+[^+]/.test(line)) {
+    if (line.startsWith("+")) {
       lines.push({ kind: "add", text: line.slice(1), newLine });
       newLine += 1;
       return;
     }
-    if (/^-[^-]/.test(line)) {
+    if (line.startsWith("-")) {
       lines.push({ kind: "del", text: line.slice(1), oldLine });
       oldLine += 1;
       return;
@@ -149,9 +159,19 @@ export function buildUnifiedRows(lines: DiffLine[]): UnifiedDiffRow[] {
 }
 
 export function buildDiffCodeRows(content: string): DiffCodeRow[] {
+  let inDiffBody = false;
   const metaRows = String(content || "")
     .split("\n")
-    .filter((line) => /^(diff --git|index |--- |\+\+\+ )/.test(line))
+    .filter((line) => {
+      if (/^diff --git /.test(line)) {
+        inDiffBody = false;
+        return true;
+      }
+      if (!inDiffBody && (/^--- /.test(line) || /^\+\+\+ /.test(line))) return true;
+      if (/^index /.test(line)) return true;
+      if (/^@@ /.test(line)) inDiffBody = true;
+      return false;
+    })
     .map((line): DiffCodeRow => ({ kind: "meta", text: line }));
 
   const diffRows = buildUnifiedRows(buildDiffLines(content)).map((row): DiffCodeRow => {

@@ -369,8 +369,14 @@ type CompactNotice struct {
 // Codex may emit several snapshots while a turn is running; callers should
 // retain only the last one.
 type TurnDiffUpdate struct {
-	TurnID string `json:"turnId,omitempty"`
-	Diff   string `json:"diff"`
+	TurnID       string   `json:"turnId,omitempty"`
+	Diff         string   `json:"diff"`
+	SnapshotID   string   `json:"snapshotId,omitempty"`
+	ComparePaths []string `json:"comparePaths,omitempty"`
+	// Workspace indicates read-only before/after observation, which may also
+	// include concurrent manual edits. Partial means some files were skipped.
+	Workspace bool `json:"workspace,omitempty"`
+	Partial   bool `json:"partial,omitempty"`
 }
 
 type LoginNotice struct {

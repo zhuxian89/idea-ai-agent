@@ -211,6 +211,7 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		return err
 	}
 	httpHandler.LocalCLIToken = localCLIToken
+	httpHandler.LocalAccessToken = opts.AccessToken
 
 	relayMgr, err := relay.NewManager(addr, opts.NoRelayer, relayBaseURL, opts.UseTLS)
 	if err != nil {
