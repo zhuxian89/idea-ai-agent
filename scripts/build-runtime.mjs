@@ -16,10 +16,15 @@ function run(command, args, cwd, env = process.env) {
   if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
 }
 
-if (!existsSync(path.join(runtime, 'web/node_modules/vite/bin/vite.js'))) {
-  throw new Error('Install frontend dependencies first: cd runtime/web && pnpm install --reporter=append-only');
+const skipWebBuild = process.env.IDEA_AGENT_SKIP_WEB_BUILD === '1';
+if (!skipWebBuild) {
+  if (!existsSync(path.join(runtime, 'web/node_modules/vite/bin/vite.js'))) {
+    throw new Error('Install frontend dependencies first: cd runtime/web && pnpm install --reporter=append-only');
+  }
+  run(process.execPath, ['node_modules/vite/bin/vite.js', 'build'], path.join(runtime, 'web'));
+} else if (!existsSync(path.join(runtime, 'web/dist/index.html'))) {
+  throw new Error('IDEA_AGENT_SKIP_WEB_BUILD=1 requires a prebuilt runtime/web/dist directory');
 }
-run(process.execPath, ['node_modules/vite/bin/vite.js', 'build'], path.join(runtime, 'web'));
 // This directory is generated and owned by this task; stale assets or binaries
 // must not survive a rebuild for another platform.
 if (path.relative(root, path.resolve(output)) !== path.join('build', 'local-runtime')) throw new Error('Invalid runtime output path');

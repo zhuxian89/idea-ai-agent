@@ -31,6 +31,14 @@ export type AgentStatus = {
   commands_error?: string;
   install_commands?: string[];
   update_commands?: string[];
+  update_check_supported?: boolean;
+};
+
+export type AgentUpdateCheck = {
+  agent: string;
+  current_version: string;
+  latest_version: string;
+  has_update: boolean;
 };
 
 export type AgentLastConfigSelection = {
@@ -221,6 +229,22 @@ export async function fetchAgentCatalog(force = false, options: { throwOnError?:
 
 export async function restartAgent(agent: string): Promise<{ restarting: boolean; agent: string }> {
   return protectedJSON<{ restarting: boolean; agent: string }>(appPath("/api/agents/restart"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent }),
+  });
+}
+
+export async function probeAgent(agent: string): Promise<{ probing: boolean; agent: string }> {
+  return protectedJSON<{ probing: boolean; agent: string }>(appPath("/api/agents/probe"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent }),
+  });
+}
+
+export async function checkAgentUpdate(agent: string): Promise<AgentUpdateCheck> {
+  return protectedJSON<AgentUpdateCheck>(appPath("/api/agents/check-update"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ agent }),

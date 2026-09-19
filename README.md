@@ -112,6 +112,14 @@ cd ../..
 node scripts/test-runtime.mjs
 ```
 
+常用本地包和正式五包可用统一脚本生成；脚本会自动选择 JDK 21、构建并校验产物：
+
+```bash
+node scripts/package-plugin.mjs local mac
+node scripts/package-plugin.mjs local win
+node scripts/package-plugin.mjs release
+```
+
 项目复用 [MindFS](https://github.com/a9gent/mindfs) 的本地 Agent 与会话实现，并按 GNU AGPL v3 分发。第三方来源和修改范围见 [NOTICE.md](NOTICE.md)，许可证见 [LICENSE](LICENSE)，隐私说明见 [PRIVACY.md](PRIVACY.md)。
 
 ---
@@ -225,6 +233,14 @@ pnpm run typecheck
 node --test --test-concurrency=1 tests/*.test.mjs
 cd ../..
 node scripts/test-runtime.mjs
+```
+
+Use the packaging script for local test packages or all five release artifacts. It selects JDK 21 and validates the generated ZIP files automatically:
+
+```bash
+node scripts/package-plugin.mjs local mac
+node scripts/package-plugin.mjs local win
+node scripts/package-plugin.mjs release
 ```
 
 This project reuses the local Agent and session implementation from [MindFS](https://github.com/a9gent/mindfs) and is distributed under GNU AGPL v3. See [NOTICE.md](NOTICE.md) for third-party sources and modifications, [LICENSE](LICENSE) for license terms, and [PRIVACY.md](PRIVACY.md) for privacy details.

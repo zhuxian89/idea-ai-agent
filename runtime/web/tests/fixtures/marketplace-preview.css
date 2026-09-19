@@ -1,0 +1,31 @@
+/* Marketing composition only. Product component styles remain unchanged. */
+html,body,#root{margin:0;width:100%;height:100%;overflow:hidden}
+#artboard{width:1280px;height:800px;position:relative;background:#ecebe7;color:#25282c;font-family:'Helvetica Neue',Arial,'PingFang SC',sans-serif;overflow:hidden}
+.media-brand{position:absolute;left:48px;top:32px;display:flex;align-items:center;gap:12px;font-size:17px}
+.media-brand>span:last-child{margin-left:12px;font-size:13px;color:#65676b}
+.media-mark,.media-mark svg{display:block;width:32px;height:32px}
+.media-copy{position:absolute;left:48px;top:121px;width:484px}
+.media-copy h1{font-size:53px;font-weight:650;letter-spacing:-2px;line-height:1.09;margin:0;white-space:pre-line}
+html[lang=zh-CN] .media-copy h1{font-size:57px;letter-spacing:-1.5px;line-height:1.22}
+.media-deck{font-size:18px;line-height:1.6;color:#595d63;margin:27px 0 0;white-space:pre-line;max-width:450px}
+.media-features{margin-top:47px;width:414px}
+.media-features p{border-top:1px solid #cfceca;padding:17px 0;margin:0}
+.media-features b{display:block;font-size:17px;font-weight:600;line-height:1.5}
+.media-features span{display:block;font-size:14px;color:#606369;line-height:1.6;margin-top:4px}
+.media-product{position:absolute;top:94px;left:562px;width:670px;height:646px;background:#1e1f22;color:#dfe1e5;border-radius:10px;overflow:hidden;box-shadow:0 16px 34px #24262b29;display:flex;flex-direction:column}
+.media-window{height:38px;flex-shrink:0;background:#2b2d30;display:flex;align-items:center;justify-content:space-between;padding:0 17px;font-size:12px;color:#b9bcc5;border-bottom:1px solid #43454a}
+.media-window strong{font-size:13px;color:#e2e4e9}
+.media-product>.idea-workbench{flex:1;height:0;min-height:0}
+.media-chat{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
+.media-empty{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#b6bac4;gap:10px}
+.media-empty p{font-size:21px;margin:0;color:#dfe1e5}
+.media-empty span{font-size:14px}
+.media-steps{list-style:none;display:grid;gap:19px;margin:48px 0 0;padding:0;font-size:16px;color:#71757a}
+.media-steps li{display:flex;align-items:center;gap:14px}
+.media-steps li>span{width:25px;height:25px;border:1px solid #b8b9b8;border-radius:50%;display:grid;place-items:center;font-size:12px;font-variant-numeric:tabular-nums}
+.media-steps li[data-current=true]{color:#254db4;font-weight:600}
+.media-steps li[data-current=true]>span{background:#254db4;color:#fff;border-color:#254db4}
+.media-capture-note{font-size:12px;line-height:1.6;color:#666b73;margin-top:24px;white-space:pre-line}
+.media-footer{position:absolute;bottom:24px;left:48px;right:48px;display:flex;justify-content:space-between;color:#65696e;font-size:11px}
+.media-footer>span:first-child{font-weight:600;font-size:12px}
+#artboard[data-scene='5'] [data-turn-diff] button[title='Compare in IDEA'],#artboard[data-scene='5'] [data-turn-diff] button[title='在 IDEA 中对比']{outline:2px solid #a0baff;outline-offset:-2px}

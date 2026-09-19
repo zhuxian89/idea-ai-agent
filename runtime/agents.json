@@ -63,6 +63,11 @@
       "updateCommands": [
         { "os": ["darwin", "linux", "windows"], "command": "npm install -g @google/gemini-cli@latest" }
       ],
+      "versionArgs": ["--version"],
+      "updateCheck": {
+        "url": "https://registry.npmjs.org/@google%2Fgemini-cli/latest",
+        "jsonField": "version"
+      },
       "command": "gemini",
       "protocol": "acp",
       "args": [
@@ -91,6 +96,11 @@
         { "os": ["darwin", "linux"], "command": "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh" },
         { "os": "windows", "command": "irm https://chatgpt.com/codex/install.ps1 | iex" }
       ],
+      "versionArgs": ["--version"],
+      "updateCheck": {
+        "url": "https://api.github.com/repos/openai/codex/releases/latest",
+        "jsonField": "tag_name"
+      },
       "command": "codex",
       "protocol": "codex-sdk",
       "configBackup": {
@@ -111,6 +121,10 @@
         { "os": ["darwin", "linux"], "command": "curl -fsSL https://claude.ai/install.sh | bash" },
         { "os": "windows", "command": "irm https://claude.ai/install.ps1 | iex" }
       ],
+      "versionArgs": ["--version"],
+      "updateCheck": {
+        "url": "https://downloads.claude.ai/claude-code-releases/latest"
+      },
       "command": "claude",
       "protocol": "claude-sdk",
       "configBackup": {

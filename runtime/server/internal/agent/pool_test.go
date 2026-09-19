@@ -359,6 +359,8 @@ func TestMergeConfigsKeepsBundledAgentsAndAppliesUserOverrides(t *testing.T) {
 				Protocol:        ProtocolCodexSDK,
 				InstallCommands: LifecycleCommands{"install codex"},
 				UpdateCommands:  LifecycleCommands{"update codex"},
+				VersionArgs:     []string{"--version"},
+				UpdateCheck:     UpdateCheckDefinition{URL: "https://example.com/latest", JSONField: "version"},
 				ConfigBackup:    ConfigBackupDefaults{FileSources: []string{"~/.codex/auth.json"}, EnvKeys: []string{"CODEX_HOME"}},
 			},
 			{Name: "new-agent", Command: "new-agent", Protocol: ProtocolACP},
@@ -403,6 +405,9 @@ func TestMergeConfigsKeepsBundledAgentsAndAppliesUserOverrides(t *testing.T) {
 	}
 	if !reflect.DeepEqual(codex.UpdateCommands, LifecycleCommands{"update codex"}) {
 		t.Fatalf("codex update commands = %#v", codex.UpdateCommands)
+	}
+	if !reflect.DeepEqual(codex.VersionArgs, []string{"--version"}) || codex.UpdateCheck.URL != "https://example.com/latest" || codex.UpdateCheck.JSONField != "version" {
+		t.Fatalf("codex update check metadata = %+v %+v", codex.VersionArgs, codex.UpdateCheck)
 	}
 	if !reflect.DeepEqual(codex.ConfigBackup.FileSources, []string{"~/.codex/auth.json"}) {
 		t.Fatalf("codex config backup file sources = %#v", codex.ConfigBackup.FileSources)

@@ -6,7 +6,10 @@ import { AgentSelector } from "./AgentSelector";
 import { PermissionSelector } from "./PermissionSelector";
 import { getAgentDefaults } from "../services/agentDefaults";
 import { nativePermissionChoices } from "../services/nativePermissions";
-import { fetchAgents, fetchShells, restartAgent, type AgentStatus, type ShellStatus } from "../services/agents";
+import { fetchAgents, fetchShells, probeAgent, type AgentStatus, type ShellStatus } from "../services/agents";
+import { fetchAgentCatalog } from "../services/agents";
+import { agentsForPicker } from "../services/agentSetup";
+import { AGENT_INSTALLATION_CHANGED } from "../services/agentInstallation";
 import { fetchCandidates, type CandidateItem } from "../services/candidates";
 import { reportError } from "../services/error";
 import { isUploadAbortError, uploadFiles, type UploadProgress } from "../services/upload";
@@ -538,13 +541,16 @@ export function ActionBar({
   }, [currentSession?.key, currentSession?.session_key, currentSession?.pending]);
 
   useEffect(() => {
-    Promise.all([fetchAgents(true), fetchShells(true)])
+    const load = () => { Promise.all([compactWorkbench ? fetchAgentCatalog(true).then(agentsForPicker) : fetchAgents(true), fetchShells(true)])
       .then(([nextAgents, nextShells]) => {
         setAgents(nextAgents);
         setShells(nextShells);
       })
-      .catch((err) => console.error("Failed to fetch agents:", err));
-  }, [agentsVersion]);
+      .catch((err) => console.error("Failed to fetch agents:", err)); };
+    load();
+    window.addEventListener(AGENT_INSTALLATION_CHANGED, load);
+    return () => window.removeEventListener(AGENT_INSTALLATION_CHANGED, load);
+  }, [agentsVersion, compactWorkbench]);
 
   useEffect(() => {
     if (mode !== "command" || shells.length === 0) {
@@ -905,6 +911,7 @@ export function ActionBar({
 
   const handleSend = useCallback(async () => {
     if (voiceBusy) return;
+    if (compactWorkbench && mode !== "command" && selectedAgent?.installed === false) return;
     const messageText = serializedInput.trim();
     if ((!messageText && pendingAttachments.length === 0) || !isConnected || sending || (mode !== "command" && !agent)) return;
     const planCommand = pendingAttachments.length === 0 ? parsePlanCommand(messageText) : null;
@@ -996,7 +1003,7 @@ export function ActionBar({
         requestAnimationFrame(() => editorRef.current?.focus());
       }
     }
-  }, [voiceBusy, serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t]);
+  }, [voiceBusy, serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t, compactWorkbench, selectedAgent?.installed]);
 
   const handleCancel = useCallback(async () => {
     const sessionKey = currentSession?.key;
@@ -1186,7 +1193,7 @@ export function ActionBar({
   }, [isDragging, handleDragEnd]);
 
   const isSelectedAgentUnavailable = agents.length > 0 ? agents.find((a) => a.name === agent)?.available === false : false;
-  const canSend = (!!serializedInput.trim() || pendingAttachments.length > 0) && isConnected && !sending && !voiceBusy && (mode === "command" || !!agent);
+  const canSend = (!!serializedInput.trim() || pendingAttachments.length > 0) && isConnected && !sending && !voiceBusy && (mode === "command" || (!!agent && !(compactWorkbench && selectedAgent?.installed === false)));
   const hasBoundSession = !!currentSession;
   const hasDraft = !!serializedInput.trim() || pendingAttachments.length > 0;
   const showCancel = !!currentSession?.pending && !!currentSession?.key && !hasDraft;
@@ -1213,7 +1220,7 @@ export function ActionBar({
       ? t(blurPlaceholderKey)
       : t(modePlaceholderKeys[mode]);
   const editorRightInset = compactWorkbench || isMultiLine ? 14 : mode === "command" ? (isMobile ? 92 : 116) : isMobile ? 124 : 148;
-  const editorBottomInset = compactWorkbench || isMultiLine ? 44 : 12;
+  const editorBottomInset = compactWorkbench ? 76 : isMultiLine ? 44 : 12;
   const editorMinHeight = compactWorkbench ? 104 : 44;
   const mobileFileSidebarButton = isMobile && !compactWorkbench ? (
     <button
@@ -1483,7 +1490,7 @@ export function ActionBar({
 	              disabled={sending || voiceBusy}
 	              isDark={isDark}
 	              rightInset={editorRightInset}
-	              topInset={0}
+	              topInset={compactWorkbench ? 4 : 0}
 	              bottomInset={editorBottomInset}
               onChange={handleEditorChange}
               onFocusChange={(focused) => {
@@ -1755,7 +1762,7 @@ export function ActionBar({
               }}
             />
 
-            <div data-onboarding="input-controls" style={{ position: "absolute", right: isMobile ? "4px" : "8px", bottom: isMultiLine ? "6px" : "50%", transform: isMultiLine ? "none" : "translateY(50%)", display: "flex", alignItems: "center", gap: isMobile ? "0px" : "2px", zIndex: 5, transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+            <div className={compactWorkbench ? "idea-input-controls" : undefined} data-onboarding="input-controls" style={{ position: "absolute", right: isMobile ? "4px" : "8px", bottom: isMultiLine ? "6px" : "50%", transform: isMultiLine ? "none" : "translateY(50%)", display: "flex", alignItems: "center", gap: isMobile ? "0px" : "2px", zIndex: 5, transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
               <div
                 data-onboarding="session-ring"
                 onMouseDown={handleDragStart}
@@ -1834,10 +1841,10 @@ export function ActionBar({
                 ) : null}
               </div>
 
-              <>
+              <div className="idea-input-primary-controls" style={{ display: compactWorkbench ? undefined : "contents" }}>
                 <ModeSelector mode={mode} onModeChange={setMode} compact={true} disabled={isModeLocked} onboardingId="mode-selector" />
                 {mode !== "command" ? (
-                  <div>
+                  <>
                     <AgentSelector
                     agent={agent}
                     model={model}
@@ -1858,8 +1865,10 @@ export function ActionBar({
                     fastService={fastService}
                     onFastServiceChange={(nextFastService) => setFastService(nextFastService || "")}
                     onAgentRestart={async (targetAgent) => {
-                      await restartAgent(targetAgent);
-                      const items = await fetchAgents(true);
+                      await probeAgent(targetAgent);
+                      const items = compactWorkbench
+                        ? agentsForPicker(await fetchAgentCatalog(true, { throwOnError: true }))
+                        : await fetchAgents(true, { throwOnError: true });
                       setAgents(items);
                     }}
                     compact={true}
@@ -1873,15 +1882,7 @@ export function ActionBar({
                     defaultExpandOptions
                     onboardingId="agent-selector"
                     />
-                    {permissionChoices.length > 0 ? <PermissionSelector
-                      value={effectiveAgentMode}
-                      choices={permissionChoices.map((choice) => ({ id: choice.id, label: t(choice.label) }))}
-                      label={t("permission.label")}
-                      description={t("permission.description")}
-                      disabled={sending}
-                      onChange={setAgentMode}
-                    /> : null}
-                  </div>
+                  </>
                 ) : (
                   <ShellSelector
                     shell={shell}
@@ -1890,9 +1891,18 @@ export function ActionBar({
                     compact={true}
                   />
                 )}
-              </>
+              </div>
 
-              <>
+              <div className="idea-input-secondary-controls" style={{ display: compactWorkbench ? undefined : "contents" }}>
+                {mode !== "command" && permissionChoices.length > 0 ? <PermissionSelector
+                  value={effectiveAgentMode}
+                  choices={permissionChoices.map((choice) => ({ id: choice.id, label: t(choice.label) }))}
+                  label={t("permission.label")}
+                  description={t("permission.description")}
+                  disabled={sending}
+                  onChange={setAgentMode}
+                /> : null}
+                <div className="idea-input-action-controls" style={{ display: compactWorkbench ? undefined : "contents" }}>
                 <button
                 data-onboarding="attachment-action"
                 type="button"
@@ -1944,20 +1954,21 @@ export function ActionBar({
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                 )}
                 </button>
-              </>
-              <input
-                ref={attachmentInputRef}
-                type="file"
-                multiple
-                style={{ display: "none" }}
-                onChange={(event) => {
-                  const selectedFiles = Array.from(event.target.files || []);
-                  if (selectedFiles.length > 0) {
-                    appendPendingAttachments(selectedFiles);
-                  }
-                  event.currentTarget.value = "";
-                }}
-              />
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(event) => {
+                    const selectedFiles = Array.from(event.target.files || []);
+                    if (selectedFiles.length > 0) {
+                      appendPendingAttachments(selectedFiles);
+                    }
+                    event.currentTarget.value = "";
+                  }}
+                />
+                </div>
+              </div>
             </div>
           </div>
           </div>

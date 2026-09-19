@@ -1455,8 +1455,8 @@ func (a *AppServerExec) buildTurnParams(threadID string, args CodexExecArgs) (ma
 	if sandbox := buildSandboxPolicy(args); sandbox != nil {
 		turnParams["sandboxPolicy"] = sandbox
 	}
-	if approval := mapApprovalPolicy(args.ApprovalPolicy); approval != "" {
-		turnParams["approvalPolicy"] = approval
+	if args.ApprovalPolicy != "" {
+		turnParams["approvalPolicy"] = args.ApprovalPolicy
 	}
 	if args.CollaborationMode != nil {
 		turnParams["collaborationMode"] = buildCollaborationMode(
@@ -2135,11 +2135,7 @@ func buildSandboxPolicy(args CodexExecArgs) map[string]interface{} {
 	if len(policy) == 0 {
 		return nil
 	}
-	networkAccess := "disabled"
-	if args.NetworkAccessEnabled {
-		networkAccess = "enabled"
-	}
-	policy["networkAccess"] = networkAccess
+	policy["networkAccess"] = args.NetworkAccessEnabled
 	if args.WorkingDirectory != "" || len(args.AdditionalDirectories) > 0 {
 		roots := []string{}
 		if args.WorkingDirectory != "" {
@@ -2154,19 +2150,6 @@ func buildSandboxPolicy(args CodexExecArgs) map[string]interface{} {
 		policy["writableRoots"] = roots
 	}
 	return policy
-}
-
-func mapApprovalPolicy(policy string) string {
-	switch policy {
-	case "on-request":
-		return "onRequest"
-	case "on-failure":
-		return "onFailure"
-	case "untrusted":
-		return "unlessTrusted"
-	default:
-		return policy
-	}
 }
 
 func loadOutputSchema(path string) (interface{}, bool, error) {

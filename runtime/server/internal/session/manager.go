@@ -424,7 +424,7 @@ func (m *Manager) ListMetas(_ context.Context) ([]*Session, error) {
 
 func (m *Manager) Search(_ context.Context, opts SearchOptions) ([]SearchHit, error) {
 	query := strings.TrimSpace(opts.Query)
-	if query == "" || utf8.RuneCountInString(query) < 2 {
+	if query == "" {
 		return []SearchHit{}, nil
 	}
 	limit := normalizeSearchLimit(opts.Limit)

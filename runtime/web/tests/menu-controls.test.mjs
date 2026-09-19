@@ -122,10 +122,11 @@ async function bundleFixture() {
     },
     bundle: true,
     write: false,
+    loader: { ".css": "empty" },
     platform: "browser",
     format: "iife",
     jsx: "automatic",
-    define: { "process.env.NODE_ENV": '"production"' },
+    define: { "process.env.NODE_ENV": '"production"', "import.meta.env.VITE_NATIVE_PLATFORM": '""' },
     plugins: [{
       name: "isolate-menu-boundaries",
       setup(builder) {

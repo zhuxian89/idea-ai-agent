@@ -102,6 +102,7 @@
         </ul>
     ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="jcef.xml">com.intellij.modules.jcef</depends>
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="IdeaAgent.Context" displayType="BALLOON" isLogByDefault="false"/>
         <toolWindow id="AI Agent" anchor="right" icon="/icons/agent.svg"

@@ -139,6 +139,8 @@ import { GitStatusPanel } from "./components/GitStatusPanel";
 import { SessionViewer } from "./components/SessionViewer";
 import { DefaultListView, type MainContentViewMode } from "./components/DefaultListView";
 import { MultiProjectSessionList, SessionList, type ProjectSessionGroup } from "./components/SessionList";
+import { SessionTabs, type SessionTabItem } from "./components/SessionTabs";
+import { UserMessageSummaryButton } from "./components/UserMessageSummaryButton";
 import { ExternalSessionList } from "./components/ExternalSessionList";
 import { InlineTokenText } from "./components/InlineTokenText";
 import { AgentIcon } from "./components/AgentIcon";
@@ -377,6 +379,11 @@ export type SessionItem = {
   }>;
   pending?: boolean;
 };
+
+type OpenSessionTab = Pick<
+  SessionItem,
+  "key" | "session_key" | "root_id" | "name" | "title" | "agent" | "type" | "pending"
+>;
 
 type MultiProjectSessionGroup = {
   rootId: string;
@@ -1659,6 +1666,9 @@ export function App({ onGoHome }: AppProps) {
   const [selectedSession, setSelectedSession] = useState<SessionItem | null>(
     null,
   );
+  const [openSessionTabsByRoot, setOpenSessionTabsByRoot] = useState<
+    Record<string, OpenSessionTab[]>
+  >({});
   const [selectedSessionLoading, setSelectedSessionLoading] = useState(false);
   const [drawerLoadingSessionByRoot, setDrawerLoadingSessionByRoot] = useState<
     Record<string, string>
@@ -3043,6 +3053,52 @@ export function App({ onGoHome }: AppProps) {
     (rootId: string, sessionKey: string) => `${rootId}::${sessionKey}`,
     [],
   );
+  const openSessionTab = useCallback((rootID: string, session: SessionItem) => {
+    const sessionKey = session?.key || session?.session_key;
+    if (!rootID || !sessionKey) return;
+    const normalized: OpenSessionTab = {
+      key: sessionKey,
+      session_key: sessionKey,
+      root_id: rootID,
+      name: session.name,
+      title: session.title,
+      agent: session.agent,
+      type: session.type,
+      pending: session.pending,
+    };
+    setOpenSessionTabsByRoot((prev) => {
+      const current = prev[rootID] || [];
+      const existingIndex = current.findIndex(
+        (item) => (item.key || item.session_key) === sessionKey,
+      );
+      if (existingIndex < 0) {
+        return { ...prev, [rootID]: [...current, normalized] };
+      }
+      const next = [...current];
+      const existing = next[existingIndex];
+      next[existingIndex] = {
+        ...existing,
+        ...normalized,
+        name: normalized.name || existing.name,
+        title: normalized.title || existing.title,
+      };
+      return { ...prev, [rootID]: next };
+    });
+  }, []);
+  const removeSessionTabs = useCallback((rootID: string, keys: Set<string>) => {
+    if (!rootID || keys.size === 0) return;
+    setOpenSessionTabsByRoot((prev) => {
+      const current = prev[rootID] || [];
+      const nextTabs = current.filter(
+        (item) => !keys.has(item.key || item.session_key || ""),
+      );
+      if (nextTabs.length === current.length) return prev;
+      const next = { ...prev };
+      if (nextTabs.length > 0) next[rootID] = nextTabs;
+      else delete next[rootID];
+      return next;
+    });
+  }, []);
   const bumpCacheVersion = useCallback(() => setCacheVersion((v) => v + 1), []);
   const clearRootScopedClientState = useCallback((rootID: string, options?: { removeLastRoot?: boolean }) => {
     const root = String(rootID || "").trim();
@@ -3076,6 +3132,12 @@ export function App({ onGoHome }: AppProps) {
     delete pluginsLoadedByRootRef.current[root];
     delete pluginsLoadingByRootRef.current[root];
     delete pluginsTrustPendingByRootRef.current[root];
+    setOpenSessionTabsByRoot((prev) => {
+      if (!(root in prev)) return prev;
+      const next = { ...prev };
+      delete next[root];
+      return next;
+    });
 
     deleteSessionRecordKeys(sessionCacheRef.current);
     deleteSessionRecordKeys(loadedSessionRef.current);
@@ -3884,6 +3946,46 @@ export function App({ onGoHome }: AppProps) {
       if (selectedSessionByRootRef.current[rootID] === pendingKey) {
         selectedSessionByRootRef.current[rootID] = sessionKey;
       }
+      setOpenSessionTabsByRoot((prev) => {
+        const current = prev[rootID] || [];
+        if (!current.some((item) => (item.key || item.session_key) === pendingKey)) {
+          return prev;
+        }
+        const seen = new Set<string>();
+        const promoted = current
+          .map((item) => {
+            const itemKey = item.key || item.session_key;
+            if (itemKey !== pendingKey) return item;
+            return {
+              ...item,
+              key: sessionKey,
+              session_key: sessionKey,
+              root_id: rootID,
+              name:
+                (typeof (latestReal as any)?.name === "string" &&
+                (latestReal as any).name
+                  ? (latestReal as any).name
+                  : "") || pendingName,
+              title:
+                typeof (latestReal as any)?.title === "string"
+                  ? (latestReal as any).title
+                  : item.title,
+              agent:
+                typeof (latestReal as any)?.agent === "string"
+                  ? (latestReal as any).agent
+                  : item.agent,
+              type: (latestReal as any)?.type || item.type,
+              pending: true,
+            } as OpenSessionTab;
+          })
+          .filter((item) => {
+            const itemKey = item.key || item.session_key;
+            if (!itemKey || seen.has(itemKey)) return false;
+            seen.add(itemKey);
+            return true;
+          });
+        return { ...prev, [rootID]: promoted };
+      });
       if (drawer?.key === pendingKey) {
         setDrawerSessionForRoot(rootID, {
           ...(drawer as any),
@@ -4985,23 +5087,32 @@ export function App({ onGoHome }: AppProps) {
     void loadMultiProjectSessionGroups();
   }, [loadMultiProjectSessionGroups, multiProjectSessionsEnabled, refreshMultiProjectReplyingSessions]);
 
-  const executeSessionSearch = useCallback(() => {
-    const trimmed = sessionSearchQuery.trim();
-    if (trimmed.length < 2) {
+  useEffect(() => {
+    if (sessionListMode !== "local") {
       return;
     }
-    setSessionSearchResultsMode(true);
-    setSessionSearchAppliedQuery(trimmed);
-  }, [sessionSearchQuery]);
+    const trimmed = sessionSearchQuery.trim();
+    if (!trimmed) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setSessionSearchAppliedQuery(trimmed);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [sessionListMode, sessionSearchQuery]);
 
   useEffect(() => {
+    const currentQuery = sessionSearchQuery.trim();
     if (
       sessionListMode !== "local" ||
       !sessionSearchOpen ||
       !currentRootId ||
-      !sessionSearchAppliedQuery
+      !sessionSearchAppliedQuery ||
+      sessionSearchAppliedQuery !== currentQuery
     ) {
-      setSessionSearchLoading(false);
+      if (!currentQuery || sessionListMode !== "local" || !sessionSearchOpen || !currentRootId) {
+        setSessionSearchLoading(false);
+      }
       return;
     }
 
@@ -5047,7 +5158,7 @@ export function App({ onGoHome }: AppProps) {
     return () => {
       cancelled = true;
     };
-  }, [currentRootId, multiProjectSessionsEnabled, sessionListMode, sessionSearchAppliedQuery, sessionSearchOpen]);
+  }, [currentRootId, multiProjectSessionsEnabled, sessionListMode, sessionSearchAppliedQuery, sessionSearchOpen, sessionSearchQuery]);
 
   const openGitDiff = useCallback(
     async (rootID: string, item: GitStatusItem, options?: { preserveRelatedSelection?: boolean; repoPath?: string }) => {
@@ -5326,6 +5437,7 @@ export function App({ onGoHome }: AppProps) {
       const targetRoot =
         (session?.root_id as string | undefined) || currentRootIdRef.current;
       if (!targetRoot || !key) return;
+      openSessionTab(targetRoot, session as SessionItem);
       if (!options?.preserveTaskSelection) {
         setSelectedKanbanTaskId("");
       }
@@ -5453,6 +5565,7 @@ export function App({ onGoHome }: AppProps) {
     },
     [
       isMobile,
+      openSessionTab,
       rootSessionKey,
       bumpCacheVersion,
       clearSessionStale,
@@ -5570,6 +5683,7 @@ export function App({ onGoHome }: AppProps) {
       setSessions((prev) =>
         prev.filter((item) => !deletedKeys.has(item.key || item.session_key || "")),
       );
+      removeSessionTabs(rootID, deletedKeys);
 
       for (const deletedKey of deletedKeys) {
         const cacheKey = rootSessionKey(rootID, deletedKey);
@@ -5636,6 +5750,7 @@ export function App({ onGoHome }: AppProps) {
       pluginQuery,
       replaceURLState,
       rootSessionKey,
+      removeSessionTabs,
       setBoundSessionForRoot,
       setDrawerOpenForRoot,
       setDrawerSessionForRoot,
@@ -5676,6 +5791,20 @@ export function App({ onGoHome }: AppProps) {
             : item,
         ),
       );
+      setOpenSessionTabsByRoot((prev) => {
+        const current = prev[rootID] || [];
+        if (!current.some((item) => (item.key || item.session_key) === sessionKey)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [rootID]: current.map((item) =>
+            (item.key || item.session_key) === sessionKey
+              ? { ...item, name: renamed.name, updated_at: renamed.updated_at }
+              : item,
+          ),
+        };
+      });
 
       const cacheKey = rootSessionKey(rootID, sessionKey);
       const cached = sessionCacheRef.current[cacheKey];
@@ -6178,6 +6307,7 @@ export function App({ onGoHome }: AppProps) {
           ? selectedKey
           : currentBoundSessionKey;
       let session: Session | null = null;
+      let createdDraftItem: SessionItem | null = null;
       if (sendSessionKey) {
         session =
           sessionCacheRef.current[rootSessionKey(activeRoot, sendSessionKey)];
@@ -6545,15 +6675,31 @@ export function App({ onGoHome }: AppProps) {
           });
           if (draftItem) {
             setSessions((prev) => mergeSessionItems(prev, [draftItem]));
+            createdDraftItem = draftItem;
+            openSessionTab(activeRoot, draftItem);
+            selectedSessionByRootRef.current[activeRoot] = tempSessionKey;
+            setSelectedSession(draftItem);
+            setSelectedSessionLoading(false);
+            setMainViewPreferenceForRoot(activeRoot, "session");
+            setInteractionMode("main");
+            setDrawerOpenForRoot(activeRoot, false);
+            replaceURLState({
+              root: activeRoot,
+              file: "",
+              session: tempSessionKey,
+              cursor: 0,
+              pluginQuery: {},
+            });
           }
           bumpCacheVersion();
         }
         session = draftSession;
       }
       const isBoundInMain =
-        !!selectedSessionRef.current &&
-        selectedSessionRef.current.key === sendSessionKey &&
-        interactionModeRef.current !== "drawer";
+        !!createdDraftItem ||
+        (!!selectedSessionRef.current &&
+          selectedSessionRef.current.key === sendSessionKey &&
+          interactionModeRef.current !== "drawer");
       if (!isBoundInMain) {
         setInteractionMode("drawer");
         setDrawerOpenForRoot(activeRoot, true);
@@ -6651,6 +6797,7 @@ export function App({ onGoHome }: AppProps) {
       }
       if (!sent && !sendSessionKey && tempKey) {
         setMultiProjectSessionPending(activeRoot, tempKey, false);
+        removeSessionTabs(activeRoot, new Set([tempKey]));
         setSessions((prev) =>
           prev.filter((item) => (item.key || item.session_key) !== tempKey),
         );
@@ -6665,12 +6812,25 @@ export function App({ onGoHome }: AppProps) {
             pending: false,
           } as Session);
         }
+        if (createdDraftItem) {
+          selectedSessionByRootRef.current[activeRoot] = null;
+          setSelectedSession(null);
+          replaceURLState({
+            root: activeRoot,
+            file: "",
+            session: "",
+            cursor: 0,
+            pluginQuery: {},
+          });
+        }
       }
     },
     [
       attachedFileContext,
       rootSessionKey,
       mergeSessionItems,
+      openSessionTab,
+      removeSessionTabs,
       setSelectedPendingByKey,
       bumpCacheVersion,
       clearSlashCommandResultForSession,
@@ -6681,6 +6841,8 @@ export function App({ onGoHome }: AppProps) {
       setMultiProjectSessionPending,
       updateSessionAgentForKey,
       pendingPlanMode,
+      replaceURLState,
+      setMainViewPreferenceForRoot,
     ],
   );
 
@@ -6889,6 +7051,53 @@ export function App({ onGoHome }: AppProps) {
     setDrawerSessionForRoot,
     setMainViewPreferenceForRoot,
   ]);
+
+  const handleSelectSessionTab = useCallback(
+    (rootID: string, sessionKey: string) => {
+      const tab = (openSessionTabsByRoot[rootID] || []).find(
+        (item) => (item.key || item.session_key) === sessionKey,
+      );
+      if (!tab) return;
+      const latest = sessionsRef.current.find(
+        (item) =>
+          (item.key || item.session_key) === sessionKey &&
+          ((item.root_id as string | undefined) || rootID) === rootID,
+      );
+      void handleSelectSession({ ...tab, ...latest, root_id: rootID });
+    },
+    [handleSelectSession, openSessionTabsByRoot],
+  );
+
+  const handleCloseSessionTab = useCallback(
+    (rootID: string, sessionKey: string) => {
+      const tabs = openSessionTabsByRoot[rootID] || [];
+      const closedIndex = tabs.findIndex(
+        (item) => (item.key || item.session_key) === sessionKey,
+      );
+      if (closedIndex < 0) return;
+      removeSessionTabs(rootID, new Set([sessionKey]));
+
+      const selected = selectedSessionRef.current;
+      const selectedKey = selected?.key || selected?.session_key || "";
+      const selectedRoot =
+        (selected?.root_id as string | undefined) || currentRootIdRef.current;
+      if (selectedKey !== sessionKey || selectedRoot !== rootID) return;
+
+      const nextTab = tabs[closedIndex + 1] || tabs[closedIndex - 1];
+      if (nextTab) {
+        const nextKey = nextTab.key || nextTab.session_key;
+        handleSelectSessionTab(rootID, nextKey);
+      } else {
+        handleNewSession();
+      }
+    },
+    [
+      handleNewSession,
+      handleSelectSessionTab,
+      openSessionTabsByRoot,
+      removeSessionTabs,
+    ],
+  );
 
   const currentSelectionSource = useMemo(() => {
     if (file?.path) {
@@ -7557,6 +7766,15 @@ export function App({ onGoHome }: AppProps) {
         delete selectedSessionByRootRef.current[rootID];
       }
     });
+    setOpenSessionTabsByRoot((prev) => {
+      let changed = false;
+      const next: Record<string, OpenSessionTab[]> = {};
+      for (const [rootID, tabs] of Object.entries(prev)) {
+        if (nextRootIds.includes(rootID)) next[rootID] = tabs;
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
 
     if (nextRootIds.length === 0) {
       setCurrentRootId(null);
@@ -7570,6 +7788,7 @@ export function App({ onGoHome }: AppProps) {
       setCurrentSession(null);
       setActiveBoundSessionKey(null);
       selectedSessionByRootRef.current = {};
+      setOpenSessionTabsByRoot({});
       setInteractionMode("main");
       setIsDrawerOpen(false);
       replaceURLState({
@@ -7655,6 +7874,7 @@ export function App({ onGoHome }: AppProps) {
       setGitStatusExpandedByRoot((prev) => moveStateRecord(prev));
       setGitHistoryExpandedByRoot((prev) => moveStateRecord(prev));
       setMainContentViewByRoot((prev) => moveStateRecord(prev));
+      setOpenSessionTabsByRoot((prev) => moveStateRecord(prev));
 
       const moveCacheRecord = <T,>(record: Record<string, T>) => {
         if (oldID === nextID) {
@@ -14114,6 +14334,7 @@ export function App({ onGoHome }: AppProps) {
         }
         selectedKey={selectedSession?.key}
         headerAction={sessionImportMenu}
+        persistentSearch={isIdeaRuntime}
         searchOpen={sessionSearchOpen}
         searchResultsMode={sessionSearchResultsMode}
         searchQuery={sessionSearchQuery}
@@ -14121,9 +14342,9 @@ export function App({ onGoHome }: AppProps) {
         syncingSessionKeys={syncingSessionKeys}
         emptyText={
           sessionSearchResultsMode
-            ? t("externalImport.noSearchMatch")
-            : sessionSearchOpen
-              ? ""
+            ? sessionSearchLoading
+              ? t("sessionList.searching")
+              : t("externalImport.noSearchMatch")
             : (
               <span>
                 {t("externalImport.emptyHintPrefix")}
@@ -14148,13 +14369,20 @@ export function App({ onGoHome }: AppProps) {
         }}
         onSearchQueryChange={(value) => {
           setSessionSearchQuery(value);
-          if (!value.trim() && !sessionSearchResultsMode) {
+          setSessionSearchAppliedQuery("");
+          if (!value.trim()) {
+            setSessionSearchOpen(isIdeaRuntime);
+            setSessionSearchResultsMode(false);
             setSessionSearchAppliedQuery("");
             setSessionSearchResults([]);
             setSessionSearchLoading(false);
+            return;
           }
+          setSessionSearchOpen(true);
+          setSessionSearchResultsMode(true);
+          setSessionSearchResults([]);
+          setSessionSearchLoading(true);
         }}
-        onSearchSubmit={executeSessionSearch}
         onSearchBlur={() => {
           setSessionSearchOpen(false);
           setSessionSearchResultsMode(false);
@@ -14201,6 +14429,38 @@ export function App({ onGoHome }: AppProps) {
         }
       />
     );
+  const currentOpenSessionTabs: SessionTabItem[] = currentRootId
+    ? (openSessionTabsByRoot[currentRootId] || []).map((tab) => {
+        const key = tab.key || tab.session_key;
+        const selectedKey = selectedSession?.key || selectedSession?.session_key;
+        const selectedRoot =
+          (selectedSession?.root_id as string | undefined) || currentRootId;
+        const selected =
+          selectedKey === key && selectedRoot === currentRootId
+            ? selectedSession
+            : null;
+        const latest = selected || sessionByKey[key] || tab;
+        return {
+          key,
+          label:
+            String(latest?.name || latest?.title || "").trim() ||
+            (key.startsWith("pending-")
+              ? t("session.new")
+              : `Session ${key.slice(0, 8)}`),
+          pending: resolvePendingForSession(
+            currentRootId,
+            key,
+            !!latest?.pending,
+          ),
+        };
+      })
+    : [];
+  const activeSessionTabKey =
+    selectedSession &&
+    ((selectedSession.root_id as string | undefined) || currentRootId) ===
+      currentRootId
+      ? selectedSession.key || selectedSession.session_key
+      : "";
   const tokenStationBalanceText = tokenStationLoading
     ? t("tokenStation.reading")
     : formatTokenStationBalance(tokenStationInfo);
@@ -14367,9 +14627,13 @@ export function App({ onGoHome }: AppProps) {
       <AppShell
         ideaWorkbench={isIdeaRuntime ? {
           projectName: basenameOfPath(managedRootByIdRef.current[currentRootId || ""]?.root_path || currentRootId || ""),
-          sessionName: selectedSession?.name || currentSession?.name,
           onNewSession: handleNewSession,
-          userMessageSummaries: ideaUserMessageSummaries,
+          composerAction: ideaUserMessageSummaries.length ? (
+            <UserMessageSummaryButton
+              key={activeSessionTabKey}
+              summaries={ideaUserMessageSummaries}
+            />
+          ) : null,
         } : undefined}
         leftOpen={isLeftOpen}
         rightOpen={isRightOpen}
@@ -14488,6 +14752,20 @@ export function App({ onGoHome }: AppProps) {
             }}
           >
 
+            {isIdeaRuntime && currentRootId ? (
+              <SessionTabs
+                tabs={currentOpenSessionTabs}
+                activeKey={activeSessionTabKey}
+                ariaLabel={t("sessionTabs.label")}
+                previousLabel={t("sessionTabs.previous")}
+                nextLabel={t("sessionTabs.next")}
+                closeLabel={(name) => t("sessionTabs.close", { name })}
+                runningLabel={t("sessionList.replying")}
+                onSelect={(key) => handleSelectSessionTab(currentRootId, key)}
+                onClose={(key) => handleCloseSessionTab(currentRootId, key)}
+              />
+            ) : null}
+
             <div
               style={{
                 flex: 1,
@@ -14499,6 +14777,8 @@ export function App({ onGoHome }: AppProps) {
               }}
             >
               <div
+                id="idea-active-session-panel"
+                role="tabpanel"
                 style={{
                   display: selectedSession ? "flex" : "none",
                   flex: 1,

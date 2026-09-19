@@ -25,6 +25,8 @@ test('command-only turn displays persisted file list, expandable diff and IDEA f
     import { I18nProvider } from './src/i18n';
     import { IdeaWorkbench } from './src/layout/IdeaWorkbench';
     import { SessionViewer } from './src/components/SessionViewer';
+    import { SessionTabs } from './src/components/SessionTabs';
+    import { UserMessageSummaryButton } from './src/components/UserMessageSummaryButton';
     const session = {key:'turn-diff', name:'Turn diff', agent:'codex', pending:false,
       exchanges:[
         {seq:1, role:'user', content:'去掉多余的继承。'},
@@ -35,13 +37,25 @@ test('command-only turn displays persisted file list, expandable diff and IDEA f
     createRoot(document.getElementById('root')).render(<I18nProvider>
       <IdeaWorkbench
         projectName="project"
-        sessionName="Turn diff"
         onNewSession={() => {}}
-        userMessageSummaries={[
+        chat={<div style={{display:'flex', flexDirection:'column', flex:1, minHeight:0, minWidth:0}}>
+          <SessionTabs
+            tabs={[{key:'turn-diff', label:'Turn diff'}]}
+            activeKey="turn-diff"
+            ariaLabel="Open sessions"
+            previousLabel="Previous session"
+            nextLabel="Next session"
+            closeLabel={label => 'Close ' + label}
+            runningLabel="Replying"
+            onSelect={() => {}}
+            onClose={() => {}}
+          />
+          <div style={{display:'flex', flex:1, minHeight:0, minWidth:0}}><SessionViewer rootId="project" session={session} connected={false} loading={false}/></div>
+        </div>}
+        composerAction={<UserMessageSummaryButton summaries={[
           { id: 'user-1', seq: 1, summary: '去掉多余的继承。' },
           { id: 'user-3', seq: 3, summary: '第二个用户问题' },
-        ]}
-        chat={<SessionViewer rootId="project" session={session} connected={false} loading={false}/>}
+        ]}/>}
         history={<div />}
         settings={<div />}
         footer={<div />}
@@ -67,7 +81,7 @@ test('command-only turn displays persisted file list, expandable diff and IDEA f
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     const mount = async () => {
-      await page.goto('http://turn-diff.test');
+      await page.goto('http://turn-diff.test/?ide_chrome=1');
       await page.evaluate(({ update, locale }) => {
         localStorage.setItem('mindfs-locale', locale);
         window.update = update;
@@ -79,12 +93,33 @@ test('command-only turn displays persisted file list, expandable diff and IDEA f
     await mount();
     const summaryButton = page.getByRole('button', { name: locale === 'zh-CN' ? '显示用户消息摘要' : 'Show user message summary' });
     await expect(summaryButton).toBeVisible();
+    await expect(summaryButton).toHaveText(locale === 'zh-CN' ? '消息 2' : 'Messages 2');
+    await expect(page.locator('.idea-session-tabs-shell').getByRole('button', { name: locale === 'zh-CN' ? '显示用户消息摘要' : 'Show user message summary' })).toHaveCount(0);
+    const composerActions = page.locator('.idea-file-context-actions');
+    await expect(composerActions.getByRole('button', { name: locale === 'zh-CN' ? '加入当前文件' : 'Add current file', exact: true })).toBeVisible();
+    const actionLayout = await composerActions.evaluate((node) => {
+      const file = node.querySelector('.idea-file-context-button').getBoundingClientRect();
+      const summary = node.querySelector('.idea-user-summary-button').getBoundingClientRect();
+      return { file: { top: file.top, right: file.right }, summary: { top: summary.top, left: summary.left } };
+    });
+    assert.ok(Math.abs(actionLayout.file.top - actionLayout.summary.top) <= 1);
+    assert.ok(actionLayout.summary.left > actionLayout.file.right);
+    const summaryButtonBox = await summaryButton.boundingBox();
     await summaryButton.click();
-    await expect(page.getByRole('dialog', { name: locale === 'zh-CN' ? '用户消息摘要' : 'User message summary' })).toContainText('第二个用户问题');
+    const summaryDialog = page.getByRole('dialog', { name: locale === 'zh-CN' ? '用户消息摘要' : 'User message summary' });
+    await expect(summaryDialog).toContainText('第二个用户问题');
+    const summaryDialogBox = await summaryDialog.boundingBox();
+    assert.ok(summaryButtonBox && summaryDialogBox && summaryDialogBox.y + summaryDialogBox.height < summaryButtonBox.y);
+    if (theme === 'dark') await page.screenshot({ path: path.join(reports, 'composer-summary-dark.png'), fullPage: true });
     const card = page.locator('[data-turn-diff]');
     await expect(card).toContainText(locale === 'zh-CN' ? '本轮修改了 1 个文件' : 'Changed 1 files this turn');
     await expect(card).toContainText(locale === 'zh-CN' ? '可能包含同期手动修改' : 'concurrent manual edits');
     const file = page.locator('[data-turn-diff-file="RuoYiApplication.java"]');
+    const toggle = card.getByRole('button', { name: /本轮修改了|Changed .* files this turn/ });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(file).toHaveCount(0);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await expect(file).toHaveCount(1);
     const nativeCompare = page.getByRole('button', { name: locale === 'zh-CN' ? '在 IDEA 中对比' : 'Compare in IDEA' }).first();
     await expect(nativeCompare).toBeVisible();
@@ -117,7 +152,12 @@ test('command-only turn displays persisted file list, expandable diff and IDEA f
     await page.screenshot({ path: path.join(reports, `workspace-diff-${theme}.png`), fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await mount();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(file).toHaveCount(0);
+    await toggle.click();
     await expect(file).toHaveCount(1);
+    await toggle.click();
+    await expect(file).toHaveCount(0);
     assert.deepEqual(errors, []);
   }
 });

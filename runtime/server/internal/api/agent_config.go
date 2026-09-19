@@ -170,6 +170,55 @@ func (h *HTTPHandler) handleAgentRestart(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (h *HTTPHandler) handleAgentProbe(w http.ResponseWriter, r *http.Request) {
+	var req agentRestartRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxUploadRequestBytes)).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid request body"))
+		return
+	}
+	if err := probeAgent(req.Agent, h.AppContext); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+	respondJSON(w, http.StatusAccepted, map[string]any{
+		"probing": true,
+		"agent":   strings.TrimSpace(req.Agent),
+	})
+}
+
+func (h *HTTPHandler) handleAgentUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	var req agentRestartRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxUploadRequestBytes)).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid request body"))
+		return
+	}
+	agentName := strings.TrimSpace(req.Agent)
+	if agentName == "" {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("agent required"))
+		return
+	}
+	if h.AppContext == nil || h.AppContext.GetAgentPool() == nil || h.AppContext.GetProber() == nil {
+		respondError(w, http.StatusServiceUnavailable, errors.New("agent runtime not configured"))
+		return
+	}
+	def, ok := h.AppContext.GetAgentPool().Config().GetAgent(agentName)
+	if !ok {
+		respondError(w, http.StatusNotFound, errInvalidRequest("agent not configured"))
+		return
+	}
+	status, ok := h.AppContext.GetProber().GetStatus(agentName)
+	if !ok || !status.Installed {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("agent not installed"))
+		return
+	}
+	result, err := agent.CheckUpdate(r.Context(), def, status.Version, nil)
+	if err != nil {
+		respondError(w, http.StatusBadGateway, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, result)
+}
+
 var errAgentConfigConflict = errors.New("backup already exists")
 
 func createAgentConfigBackup(req agentConfigBackupRequest) (agentConfigManifestEntry, error) {
@@ -420,7 +469,35 @@ func restartAgent(agentName string, app *AppContext) error {
 		return fmt.Errorf("agent not configured: %s", agentName)
 	}
 	app.GetAgentPool().KillAgentProcess(agentName, 0)
+	if app.GetProber() != nil {
+		app.GetProber().MarkRestartPending(agentName)
+	}
 	triggerAgentConfigSwitchProbe(app, agentName)
+	return nil
+}
+
+func probeAgent(agentName string, app *AppContext) error {
+	agentName = strings.TrimSpace(agentName)
+	if agentName == "" {
+		return errors.New("agent required")
+	}
+	if app == nil || app.GetAgentPool() == nil || app.GetProber() == nil {
+		return errors.New("agent runtime not configured")
+	}
+	if _, ok := app.GetAgentPool().Config().GetAgent(agentName); !ok {
+		return fmt.Errorf("agent not configured: %s", agentName)
+	}
+	app.GetProber().MarkProbePending(agentName)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		status := app.GetProber().ProbeOne(ctx, agentName)
+		if status.Error != "" {
+			log.Printf("[agent] probe.completed agent=%s available=%t err=%q", agentName, status.Available, status.Error)
+			return
+		}
+		log.Printf("[agent] probe.completed agent=%s available=%t", agentName, status.Available)
+	}()
 	return nil
 }
 

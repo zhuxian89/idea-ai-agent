@@ -13,7 +13,7 @@ const reports = path.resolve(webDir, '../../build/reports/agent-discovery');
 
 test('selector shows discovery, receives models while open, and retains real errors', async t => {
   const bundle = await build({ entryPoints: [path.join(webDir, 'tests/fixtures/agent-discovery.tsx')],
-    bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic',
+    bundle: true, write: false, outdir: '/tmp/agent-discovery-fixture', platform: 'browser', format: 'iife', jsx: 'automatic',
     define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env.VITE_NATIVE_PLATFORM': '""' } });
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   t.after(() => browser.close());
@@ -30,51 +30,53 @@ test('selector shows discovery, receives models while open, and retains real err
   await page.goto('http://agent-discovery.test');
   const styles = ['src/index.css', 'src/ide.css'].map(file => readFileSync(path.join(webDir, file), 'utf8').replace(/^@(?:import|source)\s[^\n]*$/gm, '')).join('\n');
   await page.addStyleTag({ content: styles });
-  await page.addScriptTag({ content: bundle.outputFiles[0].text });
+  for (const file of bundle.outputFiles.filter(file => file.path.endsWith('.css'))) await page.addStyleTag({ content: file.text });
+  await page.addScriptTag({ content: bundle.outputFiles.find(file => file.path.endsWith('.js')).text });
   await page.waitForFunction(() => document.querySelector('button') || document.querySelector('#root')?.textContent);
   const trigger = page.getByRole('button').filter({ has: page.locator('.idea-agent-selector-label') });
   await expect(trigger).not.toContainText('!');
   await trigger.click();
   const menu = page.locator('[data-agent-menu]');
-  await expect(menu.getByRole('status')).toHaveAccessibleName('正在识别 codex 的模型和运行选项…');
+  await expect(menu.getByRole('status', { name: '正在识别 codex 的模型和运行选项…' })).toBeVisible();
   await expect(menu).not.toContainText('probe pending');
   await expect(menu.getByRole('button', { name: '查看详情：codex' })).toHaveCount(0);
   const claudeRow = menu.locator('[data-agent-row="claude"]');
   await expect(claudeRow).toContainText('需要登录');
-  await expect(claudeRow.locator('[data-agent-error-summary]')).toHaveText('Sign in required');
-  await expect(claudeRow.getByRole('button', { name: '查看详情：claude' })).toHaveText('查看详情');
-  await expect(menu.getByRole('status')).toHaveText('正在识别模型…');
+  await expect(claudeRow).not.toContainText('Sign in required');
+  await expect(claudeRow.getByRole('button')).toHaveText('Claude Code需要登录');
   mkdirSync(reports, { recursive: true });
   await page.screenshot({ path: path.join(reports, 'pending.png') });
   await page.evaluate(() => window.setAgents([
     { name: 'codex', installed: true, available: true, models: [{ id: 'native', name: 'Native model' }] },
     { name: 'claude', installed: true, available: false, error: 'Sign in required' },
   ]));
-  await expect(menu.getByRole('status')).toHaveCount(0);
+  await expect(menu).toContainText('已检测到 Agent');
   await menu.getByRole('button', { name: /展开 codex/ }).click();
   await expect(menu.getByRole('button', { name: 'Native model', exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(reports, 'ready.png') });
   assert.equal(await page.evaluate(() => (window.restarts || []).length), 0, 'automatic discovery must not require restart');
-  const detailsButton = menu.getByRole('button', { name: '查看详情：claude' });
+  const detailsButton = claudeRow.getByRole('button');
   await detailsButton.focus();
   await page.keyboard.press('Enter');
   await expect(menu.locator('[data-agent-error-details="claude"]')).toContainText('Sign in required');
   await expect(detailsButton).toHaveAttribute('aria-expanded', 'true');
+  await menu.getByText('错误详情', { exact: true }).click();
+  await expect(menu.locator('[data-agent-error-details="claude"] pre')).toHaveText('Sign in required');
   await page.keyboard.press('Escape');
   await page.evaluate(() => window.setAgent('claude'));
   await expect(trigger).toContainText('需要登录');
   await trigger.click();
   await expect(menu.locator('[data-agent-error-details="claude"]')).toContainText('Sign in required');
-  const restart = menu.getByRole('button', { name: '重启 Agent：claude' });
-  await expect(restart).toHaveText('重启 Agent');
+  const restart = menu.getByRole('button', { name: '重新检测', exact: true });
   await restart.click();
-  await expect(menu.getByRole('button', { name: '正在重启…' })).toBeDisabled();
+  await expect(menu.getByRole('button', { name: '正在检测…' })).toBeDisabled();
   assert.deepEqual(await page.evaluate(() => window.restarts), ['claude']);
   await page.evaluate(() => {
     window.finishRestart();
     window.setAgents([{ name: 'claude', installed: true, available: true, models: [{ id: 'recovered', name: 'Recovered model' }] }]);
   });
   await expect(menu.locator('[data-agent-error-details]')).toHaveCount(0);
+  await menu.getByRole('button', { name: '选择模型', exact: true }).click();
   await expect(menu.getByRole('button', { name: 'Recovered model', exact: true })).toBeVisible();
   const bounds = await menu.boundingBox();
   assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 375);
@@ -95,7 +97,8 @@ test('selector shows discovery, receives models while open, and retains real err
     }, { theme, locale });
     await trigger.click();
     const row = menu.locator('[data-agent-row="codex"]');
-    await expect(row.locator('[data-agent-error-summary]')).toContainText('Agent startup timed out.');
+    await expect(row).not.toContainText('Agent startup timed out.');
+    await menu.locator('[data-agent-error-details="codex"] summary').click();
     await expect(menu.locator('[data-agent-error-details="codex"]')).toContainText('Initialization deadline exceeded');
     for (const control of await menu.locator('[data-agent-row="codex"] button, [data-agent-error-details] button').all()) {
       const rect = await control.boundingBox();
@@ -104,5 +107,37 @@ test('selector shows discovery, receives models while open, and retains real err
     assert.equal(await menu.evaluate(el => el.scrollWidth > el.clientWidth), false);
     await page.screenshot({ path: path.join(reports, `visible-errors-${locale}-${width}.png`) });
   }
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    window.ideaAgent = { locale: 'zh-CN' };
+    window.dispatchEvent(new Event('ideaAgentReady'));
+    window.setAgents([
+      { name: 'codex', installed: true, available: true, models: [{ id: 'native', name: 'Native model' }] },
+      { name: 'claude', installed: false, available: false },
+    ]);
+    window.setAgent('codex');
+  });
+  await trigger.click();
+  await menu.locator('[data-agent-row="claude"] button').click();
+  await expect(trigger).toContainText('Codex');
+  const setup = menu.locator('[data-agent-setup="claude"]');
+  await expect(setup.getByRole('link', { name: '官方安装说明' })).toHaveAttribute('href', 'https://code.claude.com/docs/en/setup');
+  await expect(setup.getByRole('link', { name: '下载 CC Switch' })).toHaveAttribute('href', 'https://github.com/farion1231/cc-switch/releases/latest');
+  await expect(setup.getByRole('button', { name: '测试连接' })).toHaveCount(0);
+  await setup.getByRole('button', { name: '我已安装，重新检测' }).click();
+  await expect(setup.getByRole('button', { name: '正在检测…' })).toBeDisabled();
+  await page.evaluate(() => {
+    window.finishRestart();
+    window.setAgents([
+      { name: 'codex', installed: true, available: true },
+      { name: 'claude', installed: true, available: true, models: [{ id: 'new', name: 'New model' }] },
+    ]);
+  });
+  await expect(setup).toContainText('已检测到 Agent');
+  await expect(setup.getByRole('button', { name: '测试连接' })).toBeVisible();
+  await expect(trigger).toContainText('Codex');
+  await setup.getByRole('button', { name: '选择模型' }).click();
+  await menu.getByRole('button', { name: 'New model', exact: true }).click();
+  await expect(trigger).toContainText('Claude Code');
   assert.deepEqual(errors, []);
 });

@@ -53,11 +53,13 @@ This is an independent open-source project. It is not affiliated with JetBrains,
 
 ## Media
 
+The next media direction is available locally in [the preview gallery](marketplace/index.html): native Agents, voice and attachments, fixed turn snapshots, and IDEA native Diff. The bilingual copy in [description-draft.html](marketplace/description-draft.html) is a draft for the next approved release, not the currently published description. Preview media uses real components with scripted data; replace the voice/agent sequence and native Diff handoff with an installed-build recording before publishing. See [production notes](marketplace/README.md).
+
 Use screenshots with the default IDEA theme, no personal data, and a consistent 1280×800 canvas. Recommended feature order:
 
-1. Conversation with streaming reply and tool activity.
-2. Agent, model, reasoning effort, and execution permission controls.
-3. Conversation history and Agent configuration.
+1. Native Codex CLI / Claude Code in IDEA, with existing CLI configuration.
+2. Voice to editable draft and attachments as context.
+3. Fixed turn snapshots and IDEA native side-by-side Diff.
 
 The existing screenshots under `build/reports/` are test evidence and include fixture labels. Capture final Marketplace screenshots from an installed release build before submission.
 

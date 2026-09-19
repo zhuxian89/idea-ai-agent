@@ -89,6 +89,8 @@ export async function smokeTurnDiff(browser, bootstrapURL, rootId, reports) {
       persist(session, 2, answer, 'README.md', session.native);
       const readsBeforeDone = historyReads;
       emit('session.done', session);
+      await expect(chat.locator('[data-turn-diff] > button')).toHaveAttribute('aria-expanded', 'false');
+      await chat.locator('[data-turn-diff] > button').click();
       await expect(chat.locator('[data-turn-diff-file="README.md"]')).toHaveCount(1);
       await expect(chat.getByText('README restored.', {exact: false})).toHaveCount(1);
       await expect(chat.locator('[data-session-activity]')).toHaveCount(0);
@@ -157,6 +159,8 @@ export async function smokeTurnDiff(browser, bootstrapURL, rootId, reports) {
     persist(session, 6, 'Third answer in progress.', 'third.txt');
     stream(session, 'message_done', {});
     emit('session.done', session);
+    await expect(chat.locator('[data-turn-diff]')).toHaveCount(3);
+    for (const toggle of await chat.locator('[data-turn-diff] > button[aria-expanded="false"]').all()) await toggle.click();
     await expect(chat.locator('[data-turn-diff-file="third.txt"]')).toHaveCount(1);
     await expect(chat.locator('[data-turn-diff-file="second.txt"]')).toHaveCount(1);
     await expect(chat.locator('[data-turn-diff-file="README.md"]')).toHaveCount(1);
@@ -167,6 +171,9 @@ export async function smokeTurnDiff(browser, bootstrapURL, rootId, reports) {
     await page.waitForLoadState('networkidle');
     assert.equal(historyReads, readsAfterFinish, 'replayed done must not cause a history-fetch loop');
     await page.reload();
+    await expect(chat.locator('[data-turn-diff] > button[aria-expanded="false"]')).toHaveCount(3);
+    await expect(chat.locator('[data-turn-diff-file]')).toHaveCount(0);
+    for (const toggle of await chat.locator('[data-turn-diff] > button').all()) await toggle.click();
     await expect(chat.locator('[data-turn-diff-file="third.txt"]')).toHaveCount(1);
     await expect(chat.locator('[data-turn-diff-file="README.md"]')).toHaveCount(1);
     assert.deepEqual(errors, []);

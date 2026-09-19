@@ -223,6 +223,24 @@ test('detail lifecycle in real shared cards and SessionViewer', async t => {
     await expect.poll(() => page.evaluate(() => window.outerScroll.scrollHeight - window.outerScroll.clientHeight - window.outerScroll.scrollTop)).toBeLessThan(40);
   });
 
+  await t.test('SessionViewer exits reading mode after manually scrolling to the latest message', async t => {
+    const page = await open(t, 720);
+    await page.evaluate(() => window.set({ viewer: true }));
+    await page.locator('[data-activity-reading] button[aria-expanded]').click();
+    const jumpToLatest = page.getByRole('button', { name: '回到底部最新消息' });
+    await expect(jumpToLatest).toBeVisible();
+    await page.evaluate(() => {
+      let el = document.querySelector('[data-activity-reading]');
+      while (el && !(getComputedStyle(el).overflowY === 'auto' && el.scrollHeight > el.clientHeight)) el = el.parentElement;
+      window.outerScroll = el;
+      el.scrollTop = el.scrollHeight;
+      el.dispatchEvent(new Event('scroll'));
+    });
+    await expect(jumpToLatest).toHaveCount(0);
+    await page.evaluate(() => window.append('手动到底后的新进展'));
+    await expect.poll(() => page.evaluate(() => window.outerScroll.scrollHeight - window.outerScroll.clientHeight - window.outerScroll.scrollTop)).toBeLessThan(40);
+  });
+
   await t.test('light/dark 320/375/720 layouts keep feedback, logs and keyboard controls within the sidebar', async t => {
     mkdirSync(reportDir, { recursive: true });
     for (const theme of ['light', 'dark']) for (const width of [320, 375, 720]) {

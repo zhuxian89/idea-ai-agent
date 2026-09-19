@@ -1,0 +1,29 @@
+.agent-setup-guide { min-width: 0; font-size: 12px; line-height: 1.6; color: var(--text-primary); overflow-wrap: anywhere; white-space: normal; }
+.agent-setup-guide h3 { margin: 0 0 12px; font-size: 13px; font-weight: 600; }
+.agent-setup-guide p { margin: 0 0 10px; }
+.agent-setup-guide a { color: var(--accent-color); text-decoration: underline; text-underline-offset: 3px; }
+.agent-setup-switch { margin: 12px 0; }
+.agent-setup-switch button { padding: 4px 8px; min-height: 28px; border: 1px solid var(--menu-border); border-radius: 4px; background: var(--sidebar-bg); color: var(--text-primary); font: inherit; cursor: pointer; }
+.agent-setup-switch button:disabled { opacity: .6; cursor: default; }
+.agent-setup-guide .agent-setup-primary { background: var(--selection-bg); color: var(--accent-color); border-color: var(--accent-color); margin-bottom: 12px; }
+.agent-setup-install-output pre { background: var(--sidebar-bg); padding: 8px; }
+.agent-setup-guide > a { display: inline-block; margin-bottom: 12px; }
+.agent-setup-guide .agent-setup-secondary { color: var(--text-secondary); }
+.agent-setup-guide details { margin: 8px 0 12px; }
+.agent-setup-guide summary { cursor: pointer; color: var(--text-secondary); }
+.agent-setup-guide pre { margin: 8px 0 0; font: 11px/1.5 var(--font-mono, monospace); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow-y: auto; }
+.agent-setup-guide [role="alert"] { color: var(--error-color, var(--text-primary)); }
+.agent-setup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.agent-setup-actions button { min-height: 28px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--menu-border); border-radius: 4px; background: var(--sidebar-bg); color: var(--text-primary); font: inherit; white-space: normal; cursor: pointer; }
+.agent-setup-actions button:hover:not(:disabled) { background: var(--menu-active-bg); }
+.agent-setup-actions button:disabled { opacity: .6; cursor: default; }
+.agent-setup-guide :is(a, button, summary):focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.agent-selector-row { display: flex; align-items: center; min-width: 0; }
+.agent-selector-row[data-active="true"] { background: var(--menu-active-bg); }
+.agent-selector-row > button { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 8px 10px 12px; border: 0; background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
+.agent-selector-row > button:first-child { flex: 1; }
+.agent-selector-row > button:hover { background: var(--menu-active-bg); }
+.agent-selector-row > button:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; }
+.agent-selector-row .agent-selector-row-text { display: flex; flex-direction: column; min-width: 0; }
+.agent-selector-row .agent-selector-row-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-selector-row .agent-selector-row-status { font-size: 11px; line-height: 1.5; color: var(--text-secondary); }

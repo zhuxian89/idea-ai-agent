@@ -11,3 +11,5 @@ runtime/web/dist/
 runtime/build/
 runtime/*.exe
 runtime/.mindfs/
+.playwright-cli/
+output/

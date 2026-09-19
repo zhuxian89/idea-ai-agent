@@ -1120,10 +1120,11 @@ function SessionViewerInner({
       const isNearBottom = distanceFromBottom < 40;
       const movedUp = el.scrollTop < lastScrollTop;
       const movedDown = el.scrollTop > lastScrollTop;
-      if (readingActivityRef.current) {
-        shouldStickToBottomRef.current = false;
-      } else if (isNearBottom) {
+      if (isNearBottom) {
+        readingActivityRef.current = false;
         shouldStickToBottomRef.current = true;
+      } else if (readingActivityRef.current) {
+        shouldStickToBottomRef.current = false;
       } else if (movedUp) {
         shouldStickToBottomRef.current = false;
       } else if (movedDown && distanceFromBottom < 200) {

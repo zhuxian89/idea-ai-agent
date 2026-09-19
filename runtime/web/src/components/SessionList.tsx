@@ -33,6 +33,7 @@ type SessionListProps = {
   sessions: SessionItem[];
   selectedKey?: string;
   headerAction?: React.ReactNode;
+  persistentSearch?: boolean;
   searchOpen?: boolean;
   searchResultsMode?: boolean;
   searchQuery?: string;
@@ -41,7 +42,6 @@ type SessionListProps = {
   onSearchToggle?: () => void;
   onSearchBack?: () => void;
   onSearchQueryChange?: (query: string) => void;
-  onSearchSubmit?: () => void;
   onSearchBlur?: () => void;
   syncingSessionKeys?: Set<string>;
   onSelect?: (session: SessionItem) => void;
@@ -295,6 +295,7 @@ export function SessionList({
   sessions,
   selectedKey = "",
   headerAction,
+  persistentSearch = false,
   searchOpen = false,
   searchResultsMode = false,
   searchQuery = "",
@@ -303,7 +304,6 @@ export function SessionList({
   onSearchToggle,
   onSearchBack,
   onSearchQueryChange,
-  onSearchSubmit,
   onSearchBlur,
   syncingSessionKeys,
   onSelect,
@@ -403,10 +403,10 @@ export function SessionList({
   }, [sessions]);
 
   useEffect(() => {
-    if (!searchOpen) return;
+    if (!searchOpen || persistentSearch) return;
     searchInputRef.current?.focus();
     searchInputRef.current?.select();
-  }, [searchOpen]);
+  }, [persistentSearch, searchOpen]);
 
   useEffect(() => {
     return () => {
@@ -458,71 +458,77 @@ export function SessionList({
         background: "transparent",
       }}
     >
-      {/* 统一的 Header 边栏 */}
-      <div
-        data-onboarding="session-actions"
-        style={{
-          height: "36px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: searchResultsMode ? "0 10px 0 4px" : "0 10px 0 2px",
-          borderBottom: "1px solid var(--border-color)",
-          background: "var(--mindfs-topbar-bg, transparent)",
-          flexShrink: 0,
-          boxSizing: "border-box",
-        }}
-      >
-        {searchResultsMode ? (
-          <button
-            type="button"
-            onClick={onSearchBack}
-            aria-label={t("sessionList.back")}
-            style={iconButtonStyle(false)}
-          >
-            <ChevronLeftIcon />
-          </button>
-        ) : (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-            {onSearchToggle ? (
-              <button
-                type="button"
-                aria-label={searchOpen ? t("sessionList.closeSearch") : t("sessionList.search")}
-                title={searchOpen ? t("sessionList.closeSearch") : t("sessionList.search")}
-                onClick={onSearchToggle}
-                style={{
-                  width: "34px",
-                  height: "34px",
-                  minWidth: "34px",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: 0,
-                  background: "transparent",
-                  color: searchOpen ? "var(--accent-color)" : "var(--text-secondary)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5A6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5S14 7.01 14 9.5S11.99 14 9.5 14" />
-                </svg>
-              </button>
-            ) : null}
-          </div>
-        )}
-        {headerAction ? (
-          <div style={{ display: "inline-flex", alignItems: "center" }}>
-            {headerAction}
-          </div>
-        ) : null}
-      </div>
-
-      {searchOpen ? (
+      {!persistentSearch ? (
         <div
+          data-onboarding="session-actions"
           style={{
+            height: "36px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: searchResultsMode ? "0 10px 0 4px" : "0 10px 0 2px",
+            borderBottom: "1px solid var(--border-color)",
+            background: "var(--mindfs-topbar-bg, transparent)",
+            flexShrink: 0,
+            boxSizing: "border-box",
+          }}
+        >
+          {searchResultsMode ? (
+            <button
+              type="button"
+              onClick={onSearchBack}
+              aria-label={t("sessionList.back")}
+              style={iconButtonStyle(false)}
+            >
+              <ChevronLeftIcon />
+            </button>
+          ) : (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              {onSearchToggle ? (
+                <button
+                  type="button"
+                  aria-label={searchOpen ? t("sessionList.closeSearch") : t("sessionList.search")}
+                  title={searchOpen ? t("sessionList.closeSearch") : t("sessionList.search")}
+                  onClick={onSearchToggle}
+                  style={{
+                    width: "34px",
+                    height: "34px",
+                    minWidth: "34px",
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: 0,
+                    background: "transparent",
+                    color: searchOpen ? "var(--accent-color)" : "var(--text-secondary)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5A6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5S14 7.01 14 9.5S11.99 14 9.5 14" />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
+          )}
+          {headerAction ? (
+            <div style={{ display: "inline-flex", alignItems: "center" }}>
+              {headerAction}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {persistentSearch || searchOpen ? (
+        <div
+          data-onboarding={persistentSearch ? "session-actions" : undefined}
+          role="search"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
             padding: "10px 12px",
             borderBottom: "1px solid var(--border-color)",
             flexShrink: 0,
@@ -530,19 +536,25 @@ export function SessionList({
           }}
         >
           <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            border: "1px solid rgba(148,163,184,0.22)",
-            borderRadius: "10px",
-            padding: "0 10px",
-            height: "34px",
-            background: "transparent",
-          }}
-        >
+            className="mindfs-session-search-field"
+            aria-busy={searchLoading}
+            style={{
+              display: "flex",
+              flex: 1,
+              minWidth: 0,
+              alignItems: "center",
+              gap: "9px",
+              border: "1px solid var(--border-color)",
+              borderRadius: "7px",
+              padding: "0 10px",
+              height: "40px",
+              boxSizing: "border-box",
+              background: "var(--content-bg)",
+            }}
+          >
             {searchLoading ? (
               <span
+                role="status"
                 aria-label={t("sessionList.searching")}
                 style={{
                   width: "14px",
@@ -556,17 +568,23 @@ export function SessionList({
                 }}
               />
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
                 <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5A6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5S14 7.01 14 9.5S11.99 14 9.5 14" />
               </svg>
             )}
             <input
               ref={searchInputRef}
-              type="text"
+              type="search"
               value={searchQuery}
+              aria-label={t("sessionList.search")}
               placeholder={t("sessionList.searchPlaceholder")}
+              autoComplete="off"
+              spellCheck={false}
               onChange={(e) => onSearchQueryChange?.(e.target.value)}
               onBlur={() => {
+                if (persistentSearch) {
+                  return;
+                }
                 if (searchResultsMode) {
                   return;
                 }
@@ -577,12 +595,6 @@ export function SessionList({
                   onSearchBlur?.();
                 }, 120);
               }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  onSearchSubmit?.();
-                }
-              }}
               style={{
                 flex: 1,
                 minWidth: 0,
@@ -590,7 +602,9 @@ export function SessionList({
                 outline: "none",
                 background: "transparent",
                 color: "var(--text-primary)",
-                fontSize: "13px",
+                fontSize: "14px",
+                lineHeight: 1.4,
+                WebkitAppearance: "none",
               }}
             />
             {searchQuery ? (
@@ -600,8 +614,8 @@ export function SessionList({
                 onMouseDown={(e) => e.preventDefault()}
                 aria-label={t("sessionList.clearSearch")}
                 style={{
-                  width: "18px",
-                  height: "18px",
+                  width: "24px",
+                  height: "24px",
                   border: "none",
                   borderRadius: "999px",
                   padding: 0,
@@ -621,6 +635,11 @@ export function SessionList({
               </button>
             ) : null}
           </div>
+          {persistentSearch && headerAction ? (
+            <div style={{ display: "inline-flex", flex: "0 0 auto", alignItems: "center" }}>
+              {headerAction}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -725,6 +744,16 @@ export function SessionList({
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        .mindfs-session-search-field:focus-within {
+          border-color: var(--accent-color) !important;
+          box-shadow: none;
+        }
+        .idea-workbench .mindfs-session-search-field input:focus-visible {
+          outline: none !important;
+        }
+        .mindfs-session-search-field input[type="search"]::-webkit-search-cancel-button {
+          display: none;
         }
       `}</style>
     </div>

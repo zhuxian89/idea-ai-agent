@@ -88,11 +88,22 @@ type Definition struct {
 	// UpdateCommands are shell commands used to update this agent.
 	UpdateCommands LifecycleCommands `json:"updateCommands,omitempty"`
 
+	// VersionArgs are appended to Command to read the locally installed version.
+	VersionArgs []string `json:"versionArgs,omitempty"`
+
+	// UpdateCheck describes a read-only official source for the latest version.
+	UpdateCheck UpdateCheckDefinition `json:"updateCheck,omitempty"`
+
 	// CwdTemplate is the working directory template ({root} is replaced).
 	CwdTemplate string `json:"cwdTemplate,omitempty"`
 
 	// ProbeArgs are arguments for availability check.
 	ProbeArgs []string `json:"probeArgs,omitempty"`
+}
+
+type UpdateCheckDefinition struct {
+	URL       string `json:"url,omitempty"`
+	JSONField string `json:"jsonField,omitempty"`
 }
 
 type ConfigBackupDefaults struct {
@@ -238,6 +249,8 @@ func normalizeConfig(cfg Config) (Config, error) {
 		}
 		cfg.Agents[i].InstallCommands = normalizeCommandList(cfg.Agents[i].InstallCommands)
 		cfg.Agents[i].UpdateCommands = normalizeCommandList(cfg.Agents[i].UpdateCommands)
+		cfg.Agents[i].UpdateCheck.URL = strings.TrimSpace(cfg.Agents[i].UpdateCheck.URL)
+		cfg.Agents[i].UpdateCheck.JSONField = strings.TrimSpace(cfg.Agents[i].UpdateCheck.JSONField)
 	}
 	return cfg, nil
 }
@@ -297,6 +310,12 @@ func mergeAgentDefinition(base Definition, override Definition) Definition {
 	}
 	if len(merged.UpdateCommands) == 0 {
 		merged.UpdateCommands = append(LifecycleCommands(nil), base.UpdateCommands...)
+	}
+	if len(merged.VersionArgs) == 0 {
+		merged.VersionArgs = append([]string(nil), base.VersionArgs...)
+	}
+	if merged.UpdateCheck.URL == "" {
+		merged.UpdateCheck = base.UpdateCheck
 	}
 	if len(merged.ConfigBackup.FileSources) == 0 {
 		merged.ConfigBackup.FileSources = append([]string(nil), base.ConfigBackup.FileSources...)

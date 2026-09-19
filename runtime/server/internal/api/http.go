@@ -392,6 +392,13 @@ func (h *HTTPHandler) Routes() http.Handler {
 
 	// Agent status API
 	r.Get("/api/agents", h.protectedEndpoint(h.handleAgentsList))
+	r.Post("/api/agents/check-update", h.protectedEndpoint(h.handleAgentUpdateCheck))
+	r.Get("/api/agents/test-models", h.protectedEndpoint(h.handleAgentConnectionModels))
+	r.Post("/api/agents/test-connection", h.protectedEndpoint(h.handleAgentConnectionTest))
+	r.Post("/api/agents/probe", h.protectedEndpoint(h.handleAgentProbe))
+	r.Post("/api/agents/install", h.protectedEndpoint(h.handleAgentInstall))
+	r.Get("/api/desktop/cc-switch", h.protectedEndpoint(h.handleCCSwitchStatus))
+	r.Post("/api/desktop/cc-switch/open", h.protectedEndpoint(h.handleCCSwitchOpen))
 	r.Post("/api/agents/restart", h.protectedEndpoint(h.handleAgentRestart))
 	r.Get("/api/agents/codex/rate-limits", h.protectedEndpoint(h.handleCodexRateLimitsGet))
 	r.Post("/api/agents/codex/rate-limit-reset", h.protectedEndpoint(h.handleCodexRateLimitReset))

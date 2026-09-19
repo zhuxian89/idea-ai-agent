@@ -54,3 +54,40 @@ func TestRefreshInstallationsFindsNewCLIWithoutStartingIt(t *testing.T) {
 		t.Fatal("removed executable must no longer be reported as installed")
 	}
 }
+
+func TestRefreshInstallationsRefreshesKnownVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is Unix-only")
+	}
+	bin := t.TempDir()
+	command := "versioned-test-agent"
+	executable := filepath.Join(bin, command)
+	writeVersion := func(version string) {
+		t.Helper()
+		if err := os.WriteFile(executable, []byte("#!/bin/sh\necho "+version+"\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeVersion("1.0.0")
+	t.Setenv("PATH", bin)
+	prober := &Prober{
+		cfg: &Config{Agents: []Definition{{
+			Name:        "test-agent",
+			Command:     command,
+			VersionArgs: []string{"--version"},
+		}}},
+		statuses: make(map[string]Status),
+	}
+	prober.RefreshInstallations()
+	initial, _ := prober.GetStatus("test-agent")
+	if initial.Version != "1.0.0" {
+		t.Fatalf("initial version = %q", initial.Version)
+	}
+
+	writeVersion("1.1.0")
+	prober.RefreshInstallations()
+	updated, _ := prober.GetStatus("test-agent")
+	if updated.Version != "1.1.0" {
+		t.Fatalf("updated version = %q", updated.Version)
+	}
+}

@@ -24,7 +24,7 @@ function TurnDiffSummaryInner({
 }) {
   const { t } = useI18n();
   const summary = useMemo(() => parseTurnDiff(update.diff), [update.diff]);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [sideBySide, setSideBySide] = useState(true);
   const selected = summary.files.find((file) => file.path === selectedPath) || null;

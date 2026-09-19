@@ -17,11 +17,11 @@ test("IDE language and appearance survive fresh webviews, port changes, and host
       import { IdeaAgentSettings } from "./src/components/IdeaAgentSettings";
       import "./src/services/ideaBridge";
       createRoot(document.getElementById("root")).render(<I18nProvider><IdeaAgentSettings
-        agents={[]} busy={false} projectReady notice="" restartingAgent="" error="" configuration={null}
-        onRefresh={() => {}} onConfigure={() => {}} onRestart={() => {}} onRun={() => {}}
+        agents={[]} busy={false} projectReady notice="" probingAgent="" error=""
+        onProbe={() => {}} onRun={() => {}}
       /></I18nProvider>);
     ` },
-    bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
+    bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "empty" },
     define: { "process.env.NODE_ENV": '"production"', "import.meta.env.VITE_NATIVE_PLATFORM": '""' },
   });
   const browser = await chromium.launch({ headless: true, channel: "chrome" });

@@ -1,5 +1,6 @@
 import React from "react";
 import { IdeaAgentSettings } from "./IdeaAgentSettings";
+import { AGENT_INSTALLATION_CHANGED } from "../services/agentInstallation";
 import { rootBadgeStyle } from "./rootBadgeStyle";
 import { openExternalURL } from "../services/platformNavigation";
 import { isNativeShellRuntime, shouldEnablePWAInstall } from "../services/runtime";
@@ -25,7 +26,7 @@ import { AgentIcon } from "./AgentIcon";
 import { AgentSelector } from "./AgentSelector";
 import { SymlinkBadge } from "./SymlinkBadge";
 import { RelayLocalServicesDialog } from "./RelayLocalServicesDialog";
-import { fetchAgentCatalog, fetchAgents, type AgentStatus } from "../services/agents";
+import { fetchAgentCatalog, fetchAgents, probeAgent as requestAgentProbe, type AgentStatus } from "../services/agents";
 import {
   createAgentAPIProvider,
   createAgentConfigBackup,
@@ -632,6 +633,7 @@ function AgentConfigPopover({
   confirmMessage,
   busy,
   restartingAgent,
+  restartResult,
   error,
   onChooseAgent,
   onAddTabChange,
@@ -671,6 +673,7 @@ function AgentConfigPopover({
   confirmMessage: string;
   busy: boolean;
   restartingAgent: string;
+  restartResult: null | boolean;
   error: string;
   onChooseAgent: (name: string) => void;
   onAddTabChange: (tab: AgentConfigAddTab) => void;
@@ -1477,6 +1480,10 @@ export function FileTree({
   const [agentLifecycleRunningAgent, setAgentLifecycleRunningAgent] = React.useState("");
   const [agentLifecycleError, setAgentLifecycleError] = React.useState("");
   const [agentLifecycleNotice, setAgentLifecycleNotice] = React.useState("");
+  const [agentRestartResultAgent, setAgentRestartResultAgent] = React.useState("");
+  const [agentRestartResult, setAgentRestartResult] = React.useState(false);
+  const [agentProbingAgent, setAgentProbingAgent] = React.useState("");
+  const [agentProbeAcceptedAgent, setAgentProbeAcceptedAgent] = React.useState("");
   const [dismissedRelayTipIds, setDismissedRelayTipIds] = React.useState<string[]>(() => {
     if (typeof window === "undefined") {
       return [];
@@ -2182,7 +2189,10 @@ export function FileTree({
   }, [loadAgentLifecycleCatalog]);
 
   React.useEffect(() => {
-    if (agentSettingsOnly && protectedAPIReady) loadAgentLifecycleCatalog();
+    if (!agentSettingsOnly || !protectedAPIReady) return;
+    loadAgentLifecycleCatalog();
+    window.addEventListener(AGENT_INSTALLATION_CHANGED, loadAgentLifecycleCatalog);
+    return () => window.removeEventListener(AGENT_INSTALLATION_CHANGED, loadAgentLifecycleCatalog);
   }, [agentSettingsOnly, agentSettingsActive, agentsVersion, protectedAPIReady, loadAgentLifecycleCatalog]);
 
   const closeAgentLifecycleFlow = React.useCallback(() => {
@@ -2190,6 +2200,14 @@ export function FileTree({
     setAgentLifecycleError("");
     setAgentLifecycleRunningAgent("");
   }, []);
+
+  React.useEffect(() => {
+    if (!agentRestartResultAgent || agentConfigRestartingAgent === agentRestartResultAgent) return;
+    const status = agentLifecycleAgents.find((item) => item.name === agentRestartResultAgent);
+    if (!status || status.probe_pending) return;
+    setAgentRestartResult(!!status.available);
+    setAgentRestartResultAgent("");
+  }, [agentConfigRestartingAgent, agentLifecycleAgents, agentRestartResultAgent, t]);
 
   React.useEffect(() => {
     if (agentSettingsOnly || !agentConfigFlow || agentConfigStep !== "agent") {
@@ -2263,17 +2281,48 @@ export function FileTree({
       return;
     }
     setAgentConfigRestartingAgent(agentName);
+    setAgentRestartResultAgent(agentName);
+    setAgentRestartResult(false);
     setAgentConfigError("");
-    setAgentLifecycleNotice("");
     try {
       await onRestartAgent(agentName);
-      if (agentSettingsOnly) setAgentLifecycleNotice(t("idea.restartAccepted"));
     } catch (error) {
+      setAgentRestartResultAgent("");
       setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.restartFailed"));
     } finally {
       setAgentConfigRestartingAgent("");
     }
   }, [agentConfigRestartingAgent, agentSettingsOnly, onRestartAgent, t]);
+
+  const probeAgentFromSettings = React.useCallback(async (agentName: string) => {
+    if (!agentName || agentProbingAgent) {
+      return;
+    }
+    setAgentProbingAgent(agentName);
+    setAgentProbeAcceptedAgent("");
+    setAgentLifecycleError("");
+    try {
+      await requestAgentProbe(agentName);
+      const items = await fetchAgentCatalog(true, { throwOnError: true });
+      setAgentLifecycleAgents(items);
+      setAgentProbeAcceptedAgent(agentName);
+    } catch (error) {
+      setAgentProbingAgent("");
+      setAgentLifecycleError(error instanceof Error ? error.message : t("agentConfig.probeFailed"));
+    }
+  }, [agentProbingAgent, t]);
+
+  React.useEffect(() => {
+    if (!agentProbingAgent || agentProbeAcceptedAgent !== agentProbingAgent) {
+      return;
+    }
+    const status = agentLifecycleAgents.find((item) => item.name === agentProbingAgent);
+    if (!status || status.probe_pending) {
+      return;
+    }
+    setAgentProbingAgent("");
+    setAgentProbeAcceptedAgent("");
+  }, [agentLifecycleAgents, agentProbeAcceptedAgent, agentProbingAgent]);
 
 
   const saveAgentConfigBackup = React.useCallback(async (overwrite = false) => {
@@ -2733,6 +2782,7 @@ export function FileTree({
               busy={agentConfigBusy}
               restartingAgent={agentConfigRestartingAgent}
               error={agentConfigError}
+              restartResult={agentRestartResult}
               onChooseAgent={(name) => {
                 void chooseAgentForConfig(name);
               }}
@@ -2778,9 +2828,9 @@ export function FileTree({
   if (agentSettingsOnly) {
     return <IdeaAgentSettings agents={agentLifecycleAgents} busy={agentLifecycleBusy || agentConfigBusy}
       projectReady={!!rootId} notice={agentLifecycleNotice}
-      restartingAgent={agentConfigRestartingAgent} error={agentLifecycleError || agentConfigError}
-      configuration={agentConfiguration} onConfigure={openAgentConfigFlow} onRefresh={openAgentLifecycleFlow}
-      onRestart={restartAgentFromConfigList} onRun={runAgentLifecycleCommand} />;
+      probingAgent={agentProbingAgent}
+      error={agentLifecycleError || agentConfigError}
+      onProbe={probeAgentFromSettings} onRun={runAgentLifecycleCommand} />;
   }
 
   return (

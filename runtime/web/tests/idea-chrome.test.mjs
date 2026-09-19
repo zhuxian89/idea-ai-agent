@@ -75,7 +75,6 @@ async function bundleFixture() {
           const historyRef = useRef(false);
           return <IdeaWorkbench
             projectName="demo"
-            sessionName="Fix session"
             onNewSession={() => events.push("new")}
             onOpenHistory={() => { if (!historyRef.current) { historyRef.current = true; events.push("open-history"); } setHistoryOpen(true); }}
             onCloseHistory={() => { if (historyRef.current) { historyRef.current = false; events.push("close-history"); } setHistoryOpen(false); }}
@@ -85,7 +84,7 @@ async function bundleFixture() {
             historyOpen={historyOpen}
             chat={<div data-testid="chat-view">chat body</div>}
             history={<div data-testid="history-view">history body</div>}
-            settings={<div data-testid="settings-view"><IdeaAgentSettings agents={[]} busy={false} projectReady={true} notice="" restartingAgent="" error="" configuration={null} onRefresh={() => {}} onConfigure={() => {}} onRestart={() => {}} onRun={() => {}} /></div>}
+            settings={<div data-testid="settings-view"><IdeaAgentSettings agents={[{ name:"codex", installed:true, available:true, version:"1.0.0", update_check_supported:true, update_commands:["update codex"] }]} busy={false} projectReady={true} notice="" probingAgent="" error="" onProbe={() => {}} onRun={(agent, action) => events.push(action + ":" + agent.name)} /></div>}
             footer={<ActionBar compactWorkbench status="connecting" currentSession={{ key: sessionKey, name: "fixture", type: "chat", agent: "codex" }} />}
             drawer={null}
           />;
@@ -123,9 +122,12 @@ async function bundleFixture() {
         builder.onLoad({ filter: /^tool-icon$/, namespace: "fixture" }, () => ({ contents: "export const renderToolIcon = () => null; export const ToolCallCard = () => null;" }));
         builder.onResolve({ filter: /\/services\/agents$/ }, () => ({ path: "agents", namespace: "fixture" }));
         builder.onLoad({ filter: /^agents$/, namespace: "fixture" }, () => ({ contents: `
-          export async function fetchAgents() { return [{name:"codex", protocol:"codex-sdk", available:true, current_model_id:"gpt-test", default_effort:"high", models:[{id:"gpt-test",name:"GPT Test",supportEffort:true,efforts:["low","medium","high","xhigh"]}], modes:[], efforts:["low","medium","high","xhigh"]}]; }
+          export async function fetchAgents() { return [{name:"codex", installed:true, protocol:"codex-sdk", available:true, current_model_id:"gpt-test", default_effort:"high", models:[{id:"gpt-test",name:"GPT Test",supportEffort:true,efforts:["low","medium","high","xhigh"]}], modes:[], efforts:["low","medium","high","xhigh"]}]; }
+          export const fetchAgentCatalog = fetchAgents;
           export async function fetchShells() { return []; }
           export async function restartAgent() { return {}; }
+          export async function probeAgent() { return {}; }
+          export async function checkAgentUpdate() { return { agent:"codex", current_version:"1.0.0", latest_version:"1.1.0", has_update:true }; }
         ` }));
         // Keep IDE services and asset path formatting out of the fixture.
         builder.onResolve({ filter: /^\.\.\/services\/base$/ }, () => ({ path: "asset-path", namespace: "fixture" }));
@@ -187,12 +189,12 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
   t.after(() => browser.close());
   const bundle = await bundleFixture();
 
-  await t.test("the chrome host drops the embedded toolbar but keeps meaningful headings", async () => {
+  await t.test("the chrome host drops the embedded toolbar and duplicate chat heading", async () => {
     const page = await openFixture(browser, bundle, t, "?ide_token=t&ide_theme=dark&ide_chrome=1");
     await expect(page.locator(".idea-toolbar")).toHaveCount(0);
     await expect(view(page)).toHaveAttribute("data-idea-chrome", "true");
     await expect(page.getByText("AI Agent", { exact: true })).toHaveCount(0);
-    await expect(heading(page)).toHaveText("Fix session");
+    await expect(page.locator(".idea-view-heading")).toHaveCount(0);
     await expect(voiceButton(page)).toHaveCount(1);
   });
 
@@ -205,14 +207,32 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     await expect(page.getByTestId("history-view")).toBeVisible();
     await command(page, "history");
     await expect(view(page)).toHaveAttribute("data-idea-view", "chat");
-    await expect(heading(page)).toHaveText("Fix session");
+    await expect(page.locator(".idea-view-heading")).toHaveCount(0);
     await command(page, "settings");
     await expect(view(page)).toHaveAttribute("data-idea-view", "settings");
-    await expect(heading(page)).toHaveText("Agent configuration and installation");
+    await expect(heading(page)).toHaveText("Agent settings");
     await expect(page.getByTestId("settings-view")).toBeVisible();
     await command(page, "settings");
     await expect(view(page)).toHaveAttribute("data-idea-view", "chat");
     assert.deepEqual(await events(page), ["new", "open-history", "close-history", "open-settings", "close-settings"]);
+  });
+
+  await t.test("Agent settings check first and reveal update only after a newer version is found", async () => {
+    const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
+    await command(page, "settings");
+    await expect(page.getByRole("button", { name: "Configure", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Add Agent config", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Restart", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Update to v1.1.0", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Check for updates", exact: true }).click();
+    await expect(page.getByText("Version v1.1.0 is available", { exact: true })).toBeVisible();
+    if (process.env.AGENT_SETTINGS_CAPTURE_SCREENSHOTS === "1") {
+      const reports = path.join(webDir, "../../build/reports/agent-settings");
+      mkdirSync(reports, { recursive: true });
+      await page.screenshot({ path: path.join(reports, "update-available.png"), fullPage: true });
+    }
+    await page.getByRole("button", { name: "Update to v1.1.0", exact: true }).click();
+    assert.deepEqual(await events(page), ["open-settings", "update:codex"]);
   });
 
   await t.test("native commands clicked before the view mounts are replayed, not lost", async () => {
@@ -427,7 +447,7 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     });
     await expect(input).toContainText("Please review this file");
     await expect(input).toContainText("文件：/project/src/第8个 file.kt");
-    await expect(heading(page)).toHaveText("Fix session");
+    await expect(page.locator(".idea-view-heading")).toHaveCount(0);
     assert.deepEqual(await events(page), []);
     assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), [{ action: "addFileContext" }]);
     await page.evaluate(() => window.ideaAgentReceiveContext("int selected = 1;"));
@@ -437,7 +457,7 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
       await command(page, "chat");
       await expect(view(page)).toHaveAttribute("data-idea-view", "chat");
       await expect(input).toContainText("文件：/project/src/第8个 file.kt");
-      await expect(heading(page)).toHaveText("Fix session");
+      await expect(page.locator(".idea-view-heading")).toHaveCount(0);
     }
     assert.equal((await events(page)).includes("new"), false);
   });
@@ -454,7 +474,7 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     assert.deepEqual(await page.evaluate(() => window.__ideaHostMessages), []);
   });
 
-  for (const width of [320, 400, 375, 812]) {
+  for (const width of [320, 375, 400, 441, 812]) {
     await t.test(`native composer controls remain usable at ${width}px with permissions loaded`, async () => {
       const locale = width === 375 || width === 812 ? "zh-CN" : "en-US";
       const page = await openFixture(browser, bundle, t, `?ide_chrome=1&locale=${locale}`, true, width);
@@ -472,6 +492,20 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
           const rect = node.getBoundingClientRect();
           return node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
         }), true, "composer controls must not cover one another");
+      }
+      assert.ok(await page.getByRole("button", { name: locale === "zh-CN" ? "添加附件" : "Add attachment" }).isVisible());
+      assert.ok(await page.getByRole("button", { name: locale === "zh-CN" ? "语音输入" : "Voice input" }).isVisible());
+      assert.ok(await page.locator('[data-onboarding="send-action"]').isVisible());
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, "composer must not overflow the viewport");
+      if (width <= 480) {
+        const [primaryBox, secondaryBox, placeholderBox] = await Promise.all([
+          page.locator(".idea-input-primary-controls").boundingBox(),
+          page.locator(".idea-input-secondary-controls").boundingBox(),
+          page.getByText(locale === "zh-CN" ? "给 agent 发消息..." : "Message the agent...", { exact: true }).boundingBox(),
+        ]);
+        assert.ok(primaryBox && secondaryBox && placeholderBox);
+        assert.ok(primaryBox.y + primaryBox.height <= secondaryBox.y + 1, "compact composer controls must use two distinct rows");
+        assert.ok(placeholderBox.y + placeholderBox.height <= primaryBox.y + 1, "placeholder must stay above compact composer controls");
       }
       const fileButton = page.getByRole("button", { name: locale === "zh-CN" ? "加入当前文件" : "Add current file", exact: true });
       const fileBox = await fileButton.boundingBox();
@@ -530,9 +564,9 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     await expect(view(page)).toHaveAttribute("data-idea-view", "history");
     await page.getByRole("button", { name: "Chat history" }).click();
     await expect(view(page)).toHaveAttribute("data-idea-view", "chat");
-    await page.getByRole("button", { name: "Agent configuration and installation" }).click();
+    await page.getByRole("button", { name: "Agent settings" }).click();
     await expect(view(page)).toHaveAttribute("data-idea-view", "settings");
-    await page.getByRole("button", { name: "Agent configuration and installation" }).click();
+    await page.getByRole("button", { name: "Agent settings" }).click();
     await expect(view(page)).toHaveAttribute("data-idea-view", "chat");
     assert.deepEqual(await events(page), ["new", "open-history", "close-history", "open-settings", "close-settings"]);
   });

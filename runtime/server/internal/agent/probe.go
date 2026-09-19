@@ -48,6 +48,7 @@ type Status struct {
 	Brief                         string                   `json:"brief,omitempty"`
 	InstallCommands               []string                 `json:"install_commands,omitempty"`
 	UpdateCommands                []string                 `json:"update_commands,omitempty"`
+	UpdateCheckSupported          bool                     `json:"update_check_supported"`
 }
 
 const (
@@ -383,6 +384,38 @@ func (p *Prober) ClearProbeSession(agentName string) error {
 	return clearProbeSessionBinding(p.probeSessions, agentName)
 }
 
+// MarkProbePending hides a stale runtime status while a requested probe is in
+// progress. The subsequent ProbeOne call publishes the final state.
+func (p *Prober) MarkProbePending(agentName string) {
+	if p == nil {
+		return
+	}
+	agentName = strings.TrimSpace(agentName)
+	if agentName == "" {
+		return
+	}
+	status, ok := p.GetStatus(agentName)
+	if !ok {
+		def, configured := p.configuredDefinition(agentName)
+		if !configured {
+			return
+		}
+		status = probeInstallStatus(agentName, def, time.Now().UTC())
+	}
+	status.Available = false
+	status.ProbePending = true
+	status.Error = ""
+	status.RuntimeError = ""
+	status.ProbeError = ""
+	status.LastProbe = time.Now().UTC()
+	p.setStatus(status)
+}
+
+// MarkRestartPending is retained for restart/config-switch callers.
+func (p *Prober) MarkRestartPending(agentName string) {
+	p.MarkProbePending(agentName)
+}
+
 // ReportRuntimeFailure marks an agent as unavailable due to a real user-facing runtime failure.
 func (p *Prober) ReportRuntimeFailure(name string, err error) {
 	msg := "unknown failure"
@@ -490,6 +523,13 @@ func (p *Prober) RefreshInstallations() {
 		previous, ok := p.GetStatus(def.Name)
 		if !ok || previous.Installed != next.Installed {
 			p.setStatus(next)
+			continue
+		}
+		if next.Installed && next.Version != "" && previous.Version != next.Version {
+			previous.Version = next.Version
+			previous.UpdateCheckSupported = next.UpdateCheckSupported
+			previous.LastProbe = next.LastProbe
+			p.setStatus(previous)
 		}
 	}
 }
@@ -722,6 +762,9 @@ func statusChanged(prev Status, next Status) bool {
 			return true
 		}
 	}
+	if prev.UpdateCheckSupported != next.UpdateCheckSupported {
+		return true
+	}
 	if len(prev.Models) != len(next.Models) {
 		return true
 	}
@@ -789,6 +832,7 @@ func probeInstallStatus(name string, def Definition, ts time.Time) Status {
 	status.Brief = strings.TrimSpace(def.Brief)
 	status.InstallCommands = append([]string(nil), def.InstallCommands...)
 	status.UpdateCommands = append([]string(nil), def.UpdateCommands...)
+	status.UpdateCheckSupported = strings.TrimSpace(def.UpdateCheck.URL) != "" && len(def.VersionArgs) > 0
 	if def.Command == "" {
 		status.ProbeError = "command required"
 		return status
@@ -798,6 +842,7 @@ func probeInstallStatus(name string, def Definition, ts time.Time) Status {
 		return status
 	}
 	status.Installed = true
+	status.Version = detectDefinitionVersion(def)
 	status.ProbePending = true
 	return status
 }
@@ -899,7 +944,7 @@ func normalizeStatus(status Status) Status {
 	default:
 		status.Error = strings.TrimSpace(status.Error)
 	}
-	if status.Available || status.Error != "" || !status.Installed {
+	if status.Available || !status.Installed {
 		status.ProbePending = false
 	}
 	return status
@@ -947,6 +992,9 @@ func preserveKnownCapabilities(prev Status, next Status) Status {
 	}
 	if len(next.UpdateCommands) == 0 {
 		next.UpdateCommands = prev.UpdateCommands
+	}
+	if !next.UpdateCheckSupported {
+		next.UpdateCheckSupported = prev.UpdateCheckSupported
 	}
 	return next
 }

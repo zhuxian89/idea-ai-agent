@@ -36,6 +36,57 @@ func TestManagerUsesSessionDBLink(t *testing.T) {
 	}
 }
 
+func TestManagerSearchMatchesSingleChineseCharacter(t *testing.T) {
+	root := rootfs.NewRootInfo("mindfs", "mindfs", t.TempDir())
+	manager := NewManager(root)
+
+	titleSession, err := manager.Create(context.Background(), CreateInput{
+		Type: TypeChat,
+		Name: "你好会话",
+	})
+	if err != nil {
+		t.Fatalf("create title session: %v", err)
+	}
+	contentSession, err := manager.Create(context.Background(), CreateInput{
+		Type: TypeChat,
+		Name: "Project discussion",
+	})
+	if err != nil {
+		t.Fatalf("create content session: %v", err)
+	}
+	if err := manager.AddExchangeForAgent(
+		context.Background(),
+		contentSession,
+		"user",
+		"你觉得这个项目怎么样",
+		"codex",
+		"",
+		"",
+		"",
+	); err != nil {
+		t.Fatalf("add content exchange: %v", err)
+	}
+
+	hits, err := manager.Search(context.Background(), SearchOptions{Query: "你", Limit: 20})
+	if err != nil {
+		t.Fatalf("search single Chinese character: %v", err)
+	}
+	hitsByKey := make(map[string]SearchHit, len(hits))
+	for _, hit := range hits {
+		hitsByKey[hit.Key] = hit
+	}
+	if hit, ok := hitsByKey[titleSession.Key]; !ok {
+		t.Fatalf("title session %q missing from hits: %#v", titleSession.Key, hits)
+	} else if hit.MatchType != "name" {
+		t.Fatalf("title match type = %q, want name", hit.MatchType)
+	}
+	if hit, ok := hitsByKey[contentSession.Key]; !ok {
+		t.Fatalf("content session %q missing from hits: %#v", contentSession.Key, hits)
+	} else if hit.MatchType != "user" {
+		t.Fatalf("content match type = %q, want user", hit.MatchType)
+	}
+}
+
 func TestManagerExternalCursorSurvivesAgentStateUpdate(t *testing.T) {
 	root := rootfs.NewRootInfo("mindfs", "mindfs", t.TempDir())
 	manager := NewManager(root)
