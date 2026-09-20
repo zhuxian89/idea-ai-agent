@@ -122,6 +122,10 @@ node scripts/package-plugin.mjs release
 
 项目复用 [MindFS](https://github.com/a9gent/mindfs) 的本地 Agent 与会话实现，并按 GNU AGPL v3 分发。第三方来源和修改范围见 [NOTICE.md](NOTICE.md)，许可证见 [LICENSE](LICENSE)，隐私说明见 [PRIVACY.md](PRIVACY.md)。
 
+### 社区
+
+本项目认可并支持 [LINUX DO](https://linux.do/) 社区。
+
 ---
 
 ## English
@@ -244,3 +248,7 @@ node scripts/package-plugin.mjs release
 ```
 
 This project reuses the local Agent and session implementation from [MindFS](https://github.com/a9gent/mindfs) and is distributed under GNU AGPL v3. See [NOTICE.md](NOTICE.md) for third-party sources and modifications, [LICENSE](LICENSE) for license terms, and [PRIVACY.md](PRIVACY.md) for privacy details.
+
+### Community
+
+This project recognizes and supports the [LINUX DO](https://linux.do/) community.
