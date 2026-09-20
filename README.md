@@ -24,7 +24,7 @@
 | 上下文 | 展示每轮真实 Context 占用，并保留历史回复的上下文快照 |
 | 项目规则 | 继续使用 CLI 自己的项目指令、配置、登录状态和 MCP 配置 |
 
-Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协议运行；其他 MindFS Agent 可通过 ACP 接入。已核对的原生行为和验证边界见[原生能力清单](docs/native-agent-compatibility.md)。
+Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协议运行；其他 Agent 可通过 ACP 接入。已核对的原生行为和验证边界见[原生能力清单](docs/native-agent-compatibility.md)。
 
 #### 零配置接入
 
@@ -85,7 +85,7 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 ### 支持范围
 
 - 原生重点支持 Codex CLI 和 Claude Code。
-- 支持 MindFS 已配置的 ACP Agent；实际能力取决于各 Agent 暴露的协议功能。
+- 支持已配置的 ACP Agent；实际能力取决于各 Agent 暴露的协议功能。
 - 插件最低平台 build 为 `241`，不设置 `until-build`，因此 IDEA 2024.1 及更高版本均可安装。
 - IDEA 社区版和旗舰版 2024.1、2024.2、2024.3 已通过 JetBrains Plugin Verifier。这些是回归检查目标，不是最高可安装版本。
 - GitHub Release 提供体积更小的单平台安装包；Marketplace 使用一个包含四种运行程序的通用 ZIP，插件会自动选择当前系统和 CPU 对应的程序。
@@ -120,7 +120,7 @@ node scripts/package-plugin.mjs local win
 node scripts/package-plugin.mjs release
 ```
 
-项目复用 [MindFS](https://github.com/a9gent/mindfs) 的本地 Agent 与会话实现，并按 GNU AGPL v3 分发。第三方来源和修改范围见 [NOTICE.md](NOTICE.md)，许可证见 [LICENSE](LICENSE)，隐私说明见 [PRIVACY.md](PRIVACY.md)。
+本项目按 GNU AGPL v3 分发。第三方来源和修改范围见 [NOTICE.md](NOTICE.md)，许可证见 [LICENSE](LICENSE)，隐私说明见 [PRIVACY.md](PRIVACY.md)。
 
 ### 社区
 
@@ -150,7 +150,7 @@ The plugin does not reimplement the model's tool loop. Reading and editing code,
 | Context | Shows real context usage for each reply and retains historical context snapshots |
 | Project rules | Uses the CLI's existing project instructions, configuration, authentication, and MCP setup |
 
-Codex runs through its native `app-server` protocol, while Claude Code runs through its native streaming protocol. Other Agents supported by MindFS can connect through ACP. See the [native capability notes](docs/native-agent-compatibility.md) for verified behavior and test boundaries.
+Codex runs through its native `app-server` protocol, while Claude Code runs through its native streaming protocol. Other Agents can connect through ACP. See the [native capability notes](docs/native-agent-compatibility.md) for verified behavior and test boundaries.
 
 #### Zero-configuration setup
 
@@ -212,7 +212,7 @@ Tencent Cloud allows up to 60 seconds per recording; other services allow up to 
 ### Support matrix
 
 - Codex CLI and Claude Code receive the deepest native integration.
-- MindFS-configured ACP Agents are supported according to the capabilities exposed by each Agent.
+- Configured ACP Agents are supported according to the capabilities exposed by each Agent.
 - The minimum platform build is `241`; no `until-build` is set, so IntelliJ IDEA 2024.1 and later can install the plugin.
 - IntelliJ IDEA Community and Ultimate 2024.1, 2024.2, and 2024.3 pass JetBrains Plugin Verifier. These are regression targets, not an installation ceiling.
 - GitHub Releases provide smaller platform-specific packages. Marketplace uses one universal ZIP containing all four runtimes, and the plugin selects the matching operating system and CPU automatically.
@@ -247,7 +247,7 @@ node scripts/package-plugin.mjs local win
 node scripts/package-plugin.mjs release
 ```
 
-This project reuses the local Agent and session implementation from [MindFS](https://github.com/a9gent/mindfs) and is distributed under GNU AGPL v3. See [NOTICE.md](NOTICE.md) for third-party sources and modifications, [LICENSE](LICENSE) for license terms, and [PRIVACY.md](PRIVACY.md) for privacy details.
+This project is distributed under GNU AGPL v3. See [NOTICE.md](NOTICE.md) for third-party sources and modifications, [LICENSE](LICENSE) for license terms, and [PRIVACY.md](PRIVACY.md) for privacy details.
 
 ### Community
 
