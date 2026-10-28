@@ -14,6 +14,7 @@ export type ErrorCode =
   | "session.sync_failed"
   | "session.slash_command_failed"
   | "app.init_failed"
+  | "task.load_failed"
   // Root/project errors
   | "root.create_failed"
   | "root.delete_failed"
@@ -244,6 +245,11 @@ class ErrorService {
         messageKey: "error.file.notFound",
         severity: "error",
         recoverable: false,
+      },
+      "task.load_failed": {
+        messageKey: "task.loadFailed",
+        severity: "error",
+        recoverable: true,
       },
       "file.read_failed": {
         messageKey: "error.file.readFailed",

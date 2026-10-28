@@ -92,13 +92,13 @@
         </p>
     ]]></description>
     <change-notes><![CDATA[
-        <p><b>0.1.23</b></p>
+        <p><b>0.1.24</b></p>
         <ul>
-            <li>Shows files changed during each turn with add/delete counts, an expandable diff, and direct open/compare actions in IDEA.</li>
-            <li>Opens IDEA's native side-by-side diff for turn snapshots and related Git files, including files modified through command execution.</li>
-            <li>Tracks turn changes for Codex CLI, Claude Code, and compatible ACP agents without changing their native tools, prompts, permissions, or sessions.</li>
-            <li>Moves the user-message summary control to the conversation header and removes the composer's weekly-limit indicators.</li>
-            <li>Keeps IDEA 2024.1+ compatibility and adds Plugin Verifier coverage for IDEA 2026.3 EAP.</li>
+            <li>Shows native Agent activity details in a quiet two-line status area with independent elapsed and last-update timers.</li>
+            <li>Adds Run/Debug console selection actions for analysis in the current or a new session, preserving drafts without automatically sending.</li>
+            <li>Adds manual Agent/model discovery refresh without restarting IDEA.</li>
+            <li>Fixes desktop Enter/IME sending, stale waiting-for-answer status, and connection-loss feedback with manual recovery actions.</li>
+            <li>Migrates older task databases without losing existing data, including the missing template_snapshot_json column.</li>
         </ul>
     ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>
@@ -109,6 +109,14 @@
                     factoryClass="dev.ideaagent.AgentToolWindowFactory"/>
     </extensions>
     <actions>
+        <action id="IdeaAgent.AnalyzeConsoleCurrent" class="dev.ideaagent.AnalyzeConsoleCurrentAction"
+                text="交给当前会话分析" description="将选中的控制台输出加入当前会话草稿，不自动发送">
+            <add-to-group group-id="ConsoleEditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="IdeaAgent.AnalyzeConsoleNew" class="dev.ideaagent.AnalyzeConsoleNewAction"
+                text="在新会话中分析" description="在新会话草稿中分析选中的控制台输出，不自动发送">
+            <add-to-group group-id="ConsoleEditorPopupMenu" anchor="last"/>
+        </action>
         <action id="IdeaAgent.AddFileContext" class="dev.ideaagent.AddFileContextAction"
                 text="加入 AI Agent 对话" description="将此文件的路径加入当前 AI Agent 对话草稿，不自动发送">
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>

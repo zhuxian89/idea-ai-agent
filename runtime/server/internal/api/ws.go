@@ -522,6 +522,7 @@ func (h *WSHandler) handleSessionAnswerQuestion(ctx context.Context, conn *webso
 		h.sendWSError(conn, clientID, req.ID, "session.answer_question_failed", err.Error())
 		return
 	}
+	h.broadcastAnsweredQuestion(ctx, rootID, key, toolUseID)
 	if manager, err := h.AppContext.GetSessionManager(rootID); err == nil {
 		if sess, getErr := manager.Get(ctx, key, 0); getErr == nil && sess != nil && strings.TrimSpace(sess.TaskID) != "" {
 			if svc, svcErr := h.AppContext.GetKanbanService(); svcErr == nil {
@@ -536,6 +537,28 @@ func (h *WSHandler) handleSessionAnswerQuestion(ctx context.Context, conn *webso
 		ID:      req.ID,
 		Type:    "session.answer_question.accepted",
 		Payload: map[string]any{"root_id": rootID, "session_key": key, "tool_use_id": toolUseID},
+	})
+}
+
+func (h *WSHandler) broadcastAnsweredQuestion(ctx context.Context, rootID, sessionKey, toolUseID string) {
+	if h == nil || h.AppContext == nil {
+		return
+	}
+	manager, err := h.AppContext.GetSessionManager(rootID)
+	if err != nil {
+		log.Printf("[session] ask_user.answered.broadcast.manager_error root=%s session=%s call=%s err=%v", rootID, sessionKey, toolUseID, err)
+		return
+	}
+	toolCall, err := manager.GetFullToolCall(ctx, sessionKey, toolUseID)
+	if err != nil {
+		log.Printf("[session] ask_user.answered.broadcast.load_error root=%s session=%s call=%s err=%v", rootID, sessionKey, toolUseID, err)
+		return
+	}
+	// This synchronizes an existing question; it is not evidence of a new or
+	// still-running turn. The agent may already have finished after admission.
+	h.AppContext.GetSessionStreamHub().BroadcastSessionStream(rootID, sessionKey, &StreamEvent{
+		Type: "question_answered",
+		Data: *toolCall,
 	})
 }
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { useNetworkOnline } from "../hooks/useNetworkOnline";
 import { isIdeaChromeHost, requestIdeaFileContext, subscribeIdeaNativeCommand } from "../services/ideaBridge";
 
 export type IdeaWorkbenchOptions = {
@@ -60,6 +61,21 @@ function ToolbarButton({ label, kind, pressed, onClick }: {
 
 export function IdeaWorkbench(props: Props) {
   const { t } = useI18n();
+  const networkOnline = useNetworkOnline();
+  const wasOffline = useRef(!networkOnline);
+  const [networkRestored, setNetworkRestored] = useState(false);
+  useEffect(() => {
+    if (!networkOnline) {
+      wasOffline.current = true;
+      setNetworkRestored(false);
+      return;
+    }
+    if (!wasOffline.current) return;
+    wasOffline.current = false;
+    setNetworkRestored(true);
+    const timer = window.setTimeout(() => setNetworkRestored(false), 8000);
+    return () => window.clearTimeout(timer);
+  }, [networkOnline]);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const chatRef = useRef<HTMLElement>(null);
   // Only the IDE host loads the page with ide_chrome=1; its native tool window
@@ -95,6 +111,7 @@ export function IdeaWorkbench(props: Props) {
   }, [view]);
   return (
     <div className="idea-workbench" data-onboarding="shell" data-idea-view={view} data-idea-chrome={chrome ? "true" : undefined}>
+      {!networkOnline || networkRestored ? <div className="idea-network-notice" role="status">{t(networkOnline ? "session.networkRestoredNotice" : "session.networkOfflineNotice")}</div> : null}
       {!chrome ? <header className="idea-toolbar">
         <strong>AI Agent</strong>
         <ToolbarButton kind="new" label={t("session.new")} onClick={newSession} />

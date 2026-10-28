@@ -21,6 +21,7 @@ export type ToolActivityView = {
   operation: ActivityOperation;
   state: ActivityState;
   summary: string;
+  summaryIsSpecific?: boolean;
   preview?: string;
   durationMs?: number;
   source: "agent" | "user_shell" | "unknown";
@@ -46,7 +47,7 @@ export function buildToolActivityView(call: ToolCall, context: ActivityContext):
     : ["edit", "delete", "move"].includes(kind) ? "file_change"
     : ["execute", "read", "list", "search", "web_search", "fetch", "file_change", "mcp", "task"].includes(kind) ? kind as ActivityOperation : "other");
   const state = facts?.outcome || toolActivityState(call.status);
-  const { summary, preview } = buildActivitySummary(call, facts, { operation, state, locale: context.locale, rootPath: context.rootPath });
+  const { summary, summaryIsSpecific, preview } = buildActivitySummary(call, facts, { operation, state, locale: context.locale, rootPath: context.rootPath });
   const ref = context.rootId && context.sessionKey && call.callId
     ? { rootId: context.rootId, sessionKey: context.sessionKey, callId: call.callId }
     : undefined;
@@ -57,6 +58,7 @@ export function buildToolActivityView(call: ToolCall, context: ActivityContext):
     operation,
     state,
     summary,
+    summaryIsSpecific,
     preview,
     source: facts?.source || (call.meta?.source === "userShell" ? "user_shell" : "unknown"),
     durationMs: facts?.durationMs,

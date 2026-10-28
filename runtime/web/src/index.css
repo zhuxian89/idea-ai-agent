@@ -4,10 +4,17 @@
 
 .session-activity { margin-top: 16px; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .session-activity-label { display: flex; align-items: baseline; gap: 8px; }
-.session-activity-tool-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-activity-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--accent-color); }
-.session-activity-time { margin-top: 3px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.session-activity-note { margin-top: 6px; }
+.session-activity-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-activity-text:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; border-radius: 2px; }
+.session-activity-emoji { flex: 0 0 20px; width: 20px; text-align: center; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; font-size: 15px; }
+.session-activity-time { margin-top: 3px; color: var(--text-secondary); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-recovery { margin-top: 12px; color: var(--text-primary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.session-recovery p { margin: 0 0 8px; }
+.session-recovery-button { min-height: 32px; padding: 4px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--panel-bg); color: var(--text-primary); cursor: pointer; font: inherit; }
+.session-recovery-button:hover:not(:disabled) { background: var(--selection-bg); }
+.session-recovery-button:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.session-recovery-button:disabled { opacity: .55; cursor: not-allowed; }
+.idea-network-notice { flex: 0 0 auto; padding: 8px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-primary); background: var(--panel-bg); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 
 :root {
   color-scheme: light;

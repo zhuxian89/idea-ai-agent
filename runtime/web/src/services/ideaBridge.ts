@@ -2,8 +2,9 @@ import { restoreIdeaAppearance, setIdeaTheme } from "./appearance";
 export { persistIdeaLocale } from "./ideaPreferences";
 
 export const isIdeaRuntime = true;
-const pendingContexts: string[] = [];
-let receiveContext: ((text: string) => void) | undefined;
+export type IdeaContextTarget = "current" | "new";
+const pendingContexts: { text: string; target: IdeaContextTarget }[] = [];
+let receiveContext: ((text: string, target: IdeaContextTarget) => void) | undefined;
 
 // Native title-bar clicks and early editor-capture requests can arrive before
 // this page has subscribed or before the IDE injects window.ideaAgent. Keep
@@ -17,22 +18,23 @@ let nativeCommandHandler: ((command: string) => void) | undefined;
 
 declare global {
   interface Window {
-    ideaAgentReceiveContext?: (text: string) => void;
+    ideaAgentReceiveContext?: (text: string, target?: IdeaContextTarget) => void;
     ideaAgentSetTheme?: (theme: "dark" | "light") => void;
     ideaAgentNativeCommand?: (command: string) => void;
   }
 }
 
-window.ideaAgentReceiveContext = (text) => {
+window.ideaAgentReceiveContext = (text, target = "current") => {
   if (typeof text !== "string" || !text.trim()) return;
-  if (receiveContext) receiveContext(text);
-  else pendingContexts.push(text);
+  if (target !== "current" && target !== "new") return;
+  if (receiveContext) receiveContext(text, target);
+  else pendingContexts.push({ text, target });
 };
 window.ideaAgentSetTheme = (theme) => setIdeaTheme(theme);
 
-export function subscribeIdeaContext(receive: (text: string) => void): () => void {
+export function subscribeIdeaContext(receive: (text: string, target: IdeaContextTarget) => void): () => void {
   receiveContext = receive;
-  pendingContexts.splice(0).forEach(receive);
+  pendingContexts.splice(0).forEach(({ text, target }) => receive(text, target));
   return () => { if (receiveContext === receive) receiveContext = undefined; };
 }
 

@@ -21,7 +21,7 @@ test("activity durations cross minute and hour boundaries in both languages", as
       </I18nProvider>);
     ` },
     bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
-    define: { "process.env.NODE_ENV": '"production"' },
+    define: { "process.env.NODE_ENV": '"production"', "import.meta.env.VITE_NATIVE_PLATFORM": '""' },
   });
   const browser = await chromium.launch({ headless: true, channel: "chrome" });
   t.after(() => browser.close());
@@ -52,8 +52,7 @@ test("activity durations cross minute and hour boundaries in both languages", as
           ? `已等待 ${duration} · 最近更新于 ${duration}前`
           : `Elapsed ${duration} · Last update ${duration} ago`);
         const note = page.locator(".session-activity-note");
-        if (seconds < 60) await expect(note).toHaveCount(0);
-        else await expect(note).toContainText(duration);
+        await expect(note).toHaveCount(0);
       }
       assert.deepEqual(errors, []);
     });

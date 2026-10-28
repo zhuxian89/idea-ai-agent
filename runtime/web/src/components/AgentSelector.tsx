@@ -13,6 +13,7 @@ import { useI18n } from "../i18n";
 import { AgentSetupGuide } from "./AgentSetupGuide";
 import { AgentSelectorRow } from "./AgentSelectorRow";
 import { AgentConnectionTest } from "./AgentConnectionTest";
+import { AgentModelRefresh } from "./AgentModelRefresh";
 import { agentSetupState, agentSetupStatusKey } from "../services/agentSetup";
 
 type AgentSelectorProps = {
@@ -27,6 +28,7 @@ type AgentSelectorProps = {
   onEffortChange?: (effort?: string) => void;
   onFastServiceChange?: (fastService?: "" | "on" | "off") => void;
   onAgentRestart?: (agent: string) => void | Promise<void>;
+  onModelsRefresh?: (agent: string) => Promise<void>;
   compact?: boolean;
   warnUnavailable?: boolean;
   menuPlacement?: "top" | "bottom";
@@ -64,7 +66,8 @@ function AgentMenuPortal({
 function hasAgentOptions(agent?: AgentStatus): boolean {
   return !!(
     agent &&
-    ((agent.models?.length ?? 0) > 0 ||
+    (agent.available ||
+      (agent.models?.length ?? 0) > 0 ||
       (agent.modes?.length ?? 0) > 0 ||
       (agent.efforts?.length ?? 0) > 0 ||
       agent.supports_fast_service)
@@ -83,6 +86,7 @@ export function AgentSelector({
   onEffortChange,
   onFastServiceChange,
   onAgentRestart,
+  onModelsRefresh,
   compact = false,
   warnUnavailable = false,
   menuPlacement = "top",
@@ -678,6 +682,8 @@ export function AgentSelector({
               </div>
             ) : submenuAgentStatus ? (
               <>
+                {onModelsRefresh ? <AgentModelRefresh key={submenuAgentStatus.name}
+                  agent={submenuAgentStatus.name} onRefresh={onModelsRefresh} /> : null}
                 <SectionHeader
                   title={t("agent.model")}
                   expanded={modelSectionExpanded}
@@ -685,7 +691,7 @@ export function AgentSelector({
                   value={
                     allowDefaultModel && submenuAgentStatus.name === agent && !model
                       ? t("agent.defaultModel")
-                      : submenuSelectedModel?.id || undefined
+                      : (submenuAgentStatus.name === agent ? model : "") || submenuSelectedModel?.id || undefined
                   }
                 />
                 {modelSectionExpanded ? (

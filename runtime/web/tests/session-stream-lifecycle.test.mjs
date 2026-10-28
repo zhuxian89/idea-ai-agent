@@ -103,3 +103,26 @@ test("active turns still replay buffered events, finish live, and accept another
   send("session.done");
   assert.equal(nextViewer.streaming, false);
 });
+
+test("answered questions synchronize without starting streams, replay or progress clocks", () => {
+  const { service, send, stream } = createService();
+  const answer = { event: { type: "question_answered", data: { callId: "ask", kind: "ask_user", status: "complete" } } };
+  const delivered = [];
+  service.subscribeEvents(event => delivered.push(event));
+  stream("thought_chunk", "Thinking");
+  const activity = service.getSessionActivity("session");
+  send("session.stream", answer);
+  assert.equal(service.isSessionStreaming("session"), true);
+  assert.equal(service.getSessionActivity("session"), activity);
+  send("session.done");
+  send("session.stream", answer);
+  assert.equal(service.isSessionStreaming("session"), false);
+  assert.equal(service.getSessionActivity("session"), undefined);
+  assert.deepEqual(observe(service).events, []);
+  assert.equal(delivered.at(-1).payload.event.type, "question_answered", "history still receives the correction");
+  send("session.user_message", { exchange: { timestamp: "2026-10-23T10:00:00Z" } });
+  const nextActivity = service.getSessionActivity("session");
+  send("session.stream", answer);
+  assert.equal(service.isSessionStreaming("session"), false);
+  assert.equal(service.getSessionActivity("session"), nextActivity);
+});

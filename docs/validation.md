@@ -1,5 +1,15 @@
 # 验证记录
 
+## 0.1.24 五包构建（2026-10-29）
+
+- 用户确认 `0.1.23-local.22` 持续试用无问题，授权生成各平台包并 push。版本升级为 `0.1.24`，原有本地包与 `0.1.23` 正式包保留。
+- 前端 236 项测试全部通过，无跳过；TypeScript、Vite 构建、64 项 Kotlin/插件测试与 `verifyPluginProjectConfiguration` 通过。
+- 打包前 `go test ./server/internal/kanban -count=1` 和 `go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1` 通过，覆盖旧库补列与已有数据保留。
+- 后端全量验证：`env -u MINDFS_RELAY_BASE_URL node scripts/test-runtime.mjs` 通过。最初继承宿主 relay 环境变量的执行导致 4 个 relay 用例失败；仅在测试子进程去除该变量后通过，没有修改业务代码或用户配置。
+- `node scripts/package-plugin.mjs release` 生成 `build/releases/0.1.24/` 内四平台 ZIP、通用 ZIP 和 `SHA256SUMS.txt`；脚本验证平台二进制架构、版本、可执行权限和无重复条目。另以 `unzip -t` 验证五包完整性，核对包内入口 JS/CSS 与最新 `runtime/web/dist` 的散列，SHA-256 清单全部匹配。
+- 额外执行 `verifyPlugin -x buildRuntime --offline` 时，因缺少 Plugin Verifier/目标 IDEA 的缓存（首先报缺 `ideaIC:2024.2`）未能完成，不能视为本版多 IDE 兼容验证通过。五包构建和自动测试不等于所有平台实机验收。
+- 本次只构建安装包和推送源码，不自动发布 GitHub Release 或上传 Marketplace。简短功能收尾记录见 `.codestable/features/2026-10-29-agent-workbench-details/agent-workbench-details-ff-note.md`。
+
 ## 0.1.23 正式发布（2026-09-18）
 
 - 发布焦点：跨 Agent 共用每轮文件变更追踪、文件清单与 `+/-` 统计、inline diff、IDEA 原生左右 Diff、关联文件 `HEAD` 对比、Windows 路径/行号导航修复，以及会话标题栏用户消息摘要入口。Agent 原生会话、工具、提示词、权限和协议保持不变。

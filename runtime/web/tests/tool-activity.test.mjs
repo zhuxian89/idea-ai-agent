@@ -293,25 +293,25 @@ test("compact tool activity preserves details, interaction and the session clock
       };
       await emit(page, call);
       await expect(header(page, "semantic").locator(".tool-activity-summary")).toHaveText("读取 src/app.ts");
-      await expect(page.locator(".session-activity-label")).toHaveText("正在执行工具：读取 src/app.ts");
+      await expect(page.locator(".session-activity-tool-summary")).toHaveText("读取 src/app.ts");
       await header(page, "semantic").click();
       await expect(row(page, "semantic")).toContainText("original source");
       await page.clock.fastForward(10_000);
       await page.evaluate(() => window.changeFixtureLocale("en-US"));
       await expect(header(page, "semantic").locator(".tool-activity-summary")).toHaveText("Read src/app.ts");
       await expect(header(page, "semantic")).toHaveAttribute("aria-expanded", "true");
-      await expect(page.locator(".session-activity-label")).toHaveText("Running tool: Read src/app.ts");
+      await expect(page.locator(".session-activity-tool-summary")).toHaveText("Read src/app.ts");
       await expect(page.locator(".session-activity-time")).toHaveText("Elapsed 10s · Last update 10s ago");
       await emit(page, { ...call, content: [{ type: "text", text: "updated original source" }] }, true);
       await page.clock.fastForward(5_000);
       await expect(page.locator(".session-activity-time")).toHaveText("Elapsed 15s · Last update 5s ago");
       await emit(page, { ...call, status: "complete" }, true);
       await emit(page, { callId: "next", kind: "search", status: "running", meta: { query: "activity", path: "/project/src" } });
-      await expect(page.locator(".session-activity-label")).toHaveText("Running tool: Search for activity in src");
+      await expect(page.locator(".session-activity-tool-summary")).toHaveText("Search for activity in src");
       await page.clock.fastForward(5_000);
       await page.evaluate(() => { window.refreshFixture(); window.changeFixtureLocale("zh-CN"); });
       await expect(page.locator(".session-activity-time")).toHaveText("已等待 20 秒 · 最近更新于 5 秒前");
-      await expect(page.locator(".session-activity-label")).toHaveText("正在执行工具：在 src 中搜索 activity");
+      await expect(page.locator(".session-activity-tool-summary")).toHaveText("在 src 中搜索 activity");
     }
   });
 
@@ -325,11 +325,11 @@ test("compact tool activity preserves details, interaction and the session clock
       [{ timeline: [user, tool, question], connected: true, recoveryText: "恢复提示" }, "等待你的回答"],
       [{ timeline: [user, tool], connected: true, recoveryText: "恢复提示" }, "正在发送，等待确认"],
       [{ timeline: [{ ...user, pendingAck: false }, tool], connected: true, recoveryText: "恢复提示" }, "恢复提示"],
-      [{ timeline: [{ ...user, pendingAck: false }, tool], connected: true, recoveryText: "" }, "正在执行工具：运行 npm test"],
+      [{ timeline: [{ ...user, pendingAck: false }, tool], connected: true, recoveryText: "" }, "运行 npm test"],
     ];
     for (const [scenario, label] of scenarios) {
       await page.evaluate(scenario => window.setActivityOverride(scenario), scenario);
-      await expect(page.locator(".session-activity-label")).toHaveText(label);
+      await expect(page.locator(".session-activity-label > span:last-child")).toHaveText(label);
       await expect(page.locator(".session-activity-time")).toBeVisible();
     }
   });

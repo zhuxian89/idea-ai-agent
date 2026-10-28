@@ -87,7 +87,7 @@ test("session activity survives viewer lifecycle with the real hook and service"
     await expect(timer(page)).toHaveText("已等待 10 秒 · 最近更新于 0 秒前");
     await page.clock.fastForward(15000);
     await show(page, "B");
-    await expect(timer(page)).toHaveText("已等待 25 秒");
+    await expect(timer(page)).toHaveText("已等待 25 秒 · 尚未收到进展更新");
     assert.ok((await page.evaluate(() => window.activityFrames.filter(frame => frame.key === "B")))
       .every(frame => frame.lastEventAt === 0), "even the first render must not borrow the previous session's timestamp");
     await page.clock.fastForward(5000);
@@ -96,7 +96,7 @@ test("session activity survives viewer lifecycle with the real hook and service"
     await page.evaluate(() => { window.activityFrames = []; });
     await show(page, "A");
     await expect(timer(page)).toHaveText("已等待 1 分钟 10 秒 · 最近更新于 1 分钟 0 秒前");
-    await expect(page.locator(".session-activity-note")).toContainText("1 分钟 0 秒");
+    await expect(page.locator(".session-activity-note")).toHaveCount(0);
     assert.ok((await page.evaluate(() => window.activityFrames.filter(frame => frame.key === "A")))
       .every(frame => frame.lastEventAt === Date.parse("2026-09-14T01:00:10Z")), "returning must restore the timestamp from the first render");
     await show(page, "A", false);
@@ -115,7 +115,7 @@ test("session activity survives viewer lifecycle with the real hook and service"
     await page.clock.fastForward(30000);
     await show(page, "A");
     await expect(timer(page)).toHaveText("已等待 40 秒 · 最近更新于 30 秒前");
-    await expect(page.locator(".session-activity-label")).toHaveText("正在恢复会话");
+    await expect(page.locator(".session-activity-label")).toContainText("正在恢复会话");
     await show(page, "B");
     await expect(page.locator(".session-activity-label")).not.toContainText("正在恢复会话");
     await page.clock.fastForward(10000);
@@ -139,7 +139,7 @@ test("session activity survives viewer lifecycle with the real hook and service"
     await page.clock.fastForward(10000);
     const exchange = { role: "user", content: "Next turn", timestamp: "2026-09-14T01:00:10Z" };
     await emit(page, "session.user_message", "A", { exchange });
-    await expect(timer(page)).toHaveText("已等待 0 秒");
+    await expect(timer(page)).toHaveText("已等待 0 秒 · 尚未收到进展更新");
     await expect(page.locator(".session-activity-label")).not.toContainText("正在恢复会话");
     await page.clock.fastForward(5000);
     await stream(page, "A", "thought_chunk", "3:1");
@@ -156,8 +156,8 @@ test("session activity survives viewer lifecycle with the real hook and service"
     await show(page, "B");
     await page.clock.fastForward(65000);
     await show(page, "A");
-    await expect(timer(page)).toHaveText("已等待 1 分钟 5 秒");
-    await expect(page.locator(".session-activity-note")).toContainText("1 分钟 5 秒");
+    await expect(timer(page)).toHaveText("已等待 1 分钟 5 秒 · 尚未收到进展更新");
+    await expect(page.locator(".session-activity-note")).toHaveCount(0);
   });
 
   for (const terminal of ["session.done", "session.error", "stream.error"]) {

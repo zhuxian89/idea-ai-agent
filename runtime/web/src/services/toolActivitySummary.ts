@@ -60,13 +60,14 @@ const genericLabels: Record<ActivityOperation, MessageKey> = {
 
 export function buildActivitySummary(call: ToolCall, facts: ActivityFactsV1 | undefined, context: {
   operation: ActivityOperation; state: ActivityState; locale: Locale; rootPath?: string;
-}): { summary: string; preview?: string } {
+}): { summary: string; summaryIsSpecific: boolean; preview?: string } {
   const { operation, state, locale, rootPath } = context;
   const t = (key: MessageKey, params?: MessageParams) => translateWithLocale(locale, key, params);
   const meta = call.meta || {};
   const args = inputRecord(meta.input);
   const command = operation === "execute" ? commandInfo(text(meta.command) || text(args.command)) : undefined;
-  const result = (summary: string) => ({ summary: compactActivityText(summary), preview: command?.preview });
+  // Classify at the source, not by matching localized display text later.
+  const result = (summary: string, summaryIsSpecific = true) => ({ summary: compactActivityText(summary), summaryIsSpecific, preview: command?.preview });
   const description = text(facts?.displayLabel?.text) || text(meta.description) ||
     (["execute", "task"].includes(operation) ? text(args.description) : "");
   if (description) return result(description);
@@ -84,11 +85,11 @@ export function buildActivitySummary(call: ToolCall, facts: ActivityFactsV1 | un
     const path = displayPath(text(action.path), rootPath);
     if (action.type === "read") {
       const target = path || text(action.name);
-      return result(target ? t("toolActivity.readTarget", { target }) : t("toolActivity.read"));
+      return result(target ? t("toolActivity.readTarget", { target }) : t("toolActivity.read"), !!target);
     }
-    if (action.type === "list") return result(path ? t("toolActivity.listTarget", { target: path }) : t("toolActivity.list"));
+    if (action.type === "list") return result(path ? t("toolActivity.listTarget", { target: path }) : t("toolActivity.list"), !!path);
     const query = text(action.query);
-    return result(query ? t(path ? "toolActivity.searchIn" : "toolActivity.searchQuery", { query, path }) : t("toolActivity.search"));
+    return result(query ? t(path ? "toolActivity.searchIn" : "toolActivity.searchQuery", { query, path }) : t("toolActivity.search"), !!query);
   }
 
   if (operation === "mcp") {
@@ -97,15 +98,15 @@ export function buildActivitySummary(call: ToolCall, facts: ActivityFactsV1 | un
     const title = text(call.title);
     const tool = text(facts?.tool?.name) || text(meta.tool) || legacy?.[2] || (title === "mcp_tool" ? "" : title);
     const server = text(facts?.tool?.server) || text(meta.server) || legacy?.[1] || "";
-    return result(name || (server && tool ? t("toolActivity.mcpName", { server, tool }) : tool || server || t("toolActivity.integration")));
+    return result(name || (server && tool ? t("toolActivity.mcpName", { server, tool }) : tool || server || t("toolActivity.integration")), !!(name || tool || server));
   }
   if (operation === "execute") {
     const completed = state === "completed";
-    if (command?.kind === "script") return result(t(completed ? "toolActivity.scriptCompleted" : "toolActivity.script"));
+    if (command?.kind === "script") return result(t(completed ? "toolActivity.scriptCompleted" : "toolActivity.script"), false);
     if (command?.kind === "simple" && command.preview) {
       return result(t(completed ? "toolActivity.commandTargetCompleted" : "toolActivity.commandTarget", { command: command.preview }));
     }
-    return result(t(completed ? "toolActivity.commandCompleted" : "toolActivity.command"));
+    return result(t(completed ? "toolActivity.commandCompleted" : "toolActivity.command"), false);
   }
 
   const path = displayPath(text(meta.filePath) || text(meta.path) || text(args.file_path) || text(args.path) || text(call.locations?.[0]?.path), rootPath);
@@ -129,7 +130,7 @@ export function buildActivitySummary(call: ToolCall, facts: ActivityFactsV1 | un
       spawn_agent: "toolActivity.taskStart", wait: "toolActivity.taskWait",
       send_input: "toolActivity.taskInput", close_agent: "toolActivity.taskClose", resume_agent: "toolActivity.taskResume",
     };
-    if (Object.prototype.hasOwnProperty.call(taskLabels, tool)) return result(t(taskLabels[tool]));
+    if (Object.prototype.hasOwnProperty.call(taskLabels, tool)) return result(t(taskLabels[tool]), false);
     const subject = text(meta.subject) || text(args.subject);
     if (subject) return result(t("toolActivity.taskTarget", { target: subject }));
   }
@@ -137,5 +138,5 @@ export function buildActivitySummary(call: ToolCall, facts: ActivityFactsV1 | un
   // a formatted title or scrape a large result to manufacture a better label.
   const title = text(call.title);
   const genericTitle = /^(?:read|read file|读取文件|list|list files|grep|glob|search|search files|web search|webfetch|fetch|edit|write|file_change|task|agent|tool)$/i.test(title);
-  return result(title && !genericTitle ? title : t(genericLabels[operation]));
+  return result(title && !genericTitle ? title : t(genericLabels[operation]), !!title && !genericTitle);
 }

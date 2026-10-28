@@ -72,6 +72,8 @@ test('completed activity groups in the real SessionViewer', async t => {
     await page.clock.runFor(5000);
     await expect(page.locator('.session-activity-time')).toHaveText('已等待 20 秒 · 最近更新于 20 秒前');
     await page.evaluate(() => window.finish());
+    await expect(page.locator('.session-activity-emoji')).toHaveText('👍');
+    await page.clock.fastForward(1500);
     await expect(page.locator('[data-session-activity]')).toHaveCount(0);
   });
 

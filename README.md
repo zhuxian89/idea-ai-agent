@@ -65,6 +65,7 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 顶部的新建会话、历史和设置按钮用于切换主要视图。发送消息前可以选择 Agent、模型、思考强度和执行权限；未显式选择时继续使用 CLI 默认配置。
 
 - **加入当前代码**：编辑器右键“发送到 AI Agent”或按 `Ctrl+Alt+A`。选中的代码会完整加入输入框，并保留未保存内容。
+- **分析控制台报错**：在 Run/Debug 控制台选中文字，右键选择“交给当前会话分析”或“在新会话中分析”。只填写草稿，不自动发送、不打断 Agent；切回原会话可继续原草稿和附件。草稿仅保留在当前工具窗口生命周期内。只收集选区，长内容保留首尾并标记省略，常见凭证会遮盖，发送前仍需检查敏感信息。
 - **加入当前文件**：输入区按钮只加入当前激活文件的绝对路径，让 Agent 按需读取磁盘内容。
 - **语音输入**：输入区麦克风按钮打开录音浮层，标题下显示本次使用的语音供应商（不显示模型），同时显示音量波形和时长；点击“停止并转为文字”后将识别文字插入原光标位置，不自动发送。Esc 或“取消”丢弃本次录音，切换会话或离开聊天页也会取消。
 
@@ -184,6 +185,7 @@ The minimum supported version is IntelliJ IDEA 2024.1, with no upper version lim
 Use the New Conversation, History, and Settings buttons at the top to switch views. Before sending a message, you can select the Agent, model, reasoning effort, and execution permission. Leaving them at their defaults preserves the CLI configuration.
 
 - **Add current code:** choose “Send to AI Agent” from the editor context menu or press `Ctrl+Alt+A`. The plugin includes the complete selection and preserves unsaved editor content.
+- **Analyze console errors:** select output in the Run/Debug console and choose “Analyze in Current Agent Session” or “Analyze in New Agent Session”. Both fill a draft without sending or interrupting the Agent. Returning to the original session restores its draft and attachments within the current tool-window lifetime. Only selected text is captured; long selections retain the beginning and end with an omission marker. Common credentials are redacted, but review sensitive information before sending.
 - **Add current file:** the composer action adds the active file's absolute path so the Agent can read it when needed.
 - **Add a specific file:** choose “Add to AI Agent conversation” from the project tree or editor-tab context menu. Nothing is sent automatically.
 - **Resume a conversation:** restore its native thread, reply metadata, and saved context snapshots from History.

@@ -1,5 +1,7 @@
 import { compareGitFileInIdea, isIdeaRuntime, openIdeaFile, refreshIdeaFiles } from "./services/ideaBridge";
 import { mergeActivityFacts, mergeToolStatus } from "./services/activityFacts";
+import { applyAnsweredQuestion } from "./services/answeredQuestion";
+import { promoteComposerDraft } from "./services/composerDrafts";
 import React, {
   useCallback,
   useEffect,
@@ -1419,7 +1421,6 @@ type AppProps = {
   onGoHome?: () => void;
 };
 
-const MOBILE_ENTER_KEY_SEND_STORAGE_KEY = "mindfs-mobile-enter-key-sends";
 const SIDEBARS_SWAPPED_STORAGE_KEY = "mindfs-sidebars-swapped";
 const GIT_DIFF_SIDE_BY_SIDE_STORAGE_KEY = "mindfs-git-diff-side-by-side";
 const TASK_CREATE_WORKTREE_PREF_STORAGE_KEY = "mindfs-task-create-worktree-pref";
@@ -1444,17 +1445,6 @@ function loadMainContentViewByRoot(): Record<string, MainContentViewMode> {
     ) as Record<string, MainContentViewMode>;
   } catch {
     return {};
-  }
-}
-
-function loadMobileEnterKeySends(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  try {
-    return window.localStorage.getItem(MOBILE_ENTER_KEY_SEND_STORAGE_KEY) === "1";
-  } catch {
-    return false;
   }
 }
 
@@ -1693,7 +1683,6 @@ export function App({ onGoHome }: AppProps) {
   const [agentsVersion, setAgentsVersion] = useState(0);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { isMobile, isTablet } = useResponsive();
-  const [mobileEnterKeySends, setMobileEnterKeySends] = useState(loadMobileEnterKeySends);
   const [sidebarsSwapped, setSidebarsSwapped] = useState(loadSidebarsSwapped);
   const [gitDiffSideBySide, setGitDiffSideBySide] = useState(loadGitDiffSideBySide);
   const [isLeftOpen, setIsLeftOpen] = useState(() => !isIdeaRuntime && window.innerWidth >= 768);
@@ -1963,7 +1952,7 @@ export function App({ onGoHome }: AppProps) {
         applyTaskDetails(targetRoot, recent);
       }
     } catch (err) {
-      reportError("file.write_failed", String((err as Error)?.message || t("task.loadFailed")));
+      reportError("task.load_failed", String((err as Error)?.message || t("task.loadFailed")));
     } finally {
       setKanbanTasksLoading(false);
     }
@@ -2337,17 +2326,6 @@ export function App({ onGoHome }: AppProps) {
     void saveTaskInlineEdit();
     return true;
   }, [applyTaskInlineCandidate, saveTaskInlineEdit, taskInlineCandidates, taskInlineCandidateIndex]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        MOBILE_ENTER_KEY_SEND_STORAGE_KEY,
-        mobileEnterKeySends ? "1" : "0",
-      );
-    } catch {
-      // Ignore storage failures; the setting can still apply for this session.
-    }
-  }, [mobileEnterKeySends]);
 
   useEffect(() => {
     return () => {
@@ -3885,6 +3863,7 @@ export function App({ onGoHome }: AppProps) {
       }
 
       const pendingCacheKey = rootSessionKey(rootID, pendingKey);
+      promoteComposerDraft(rootID, pendingKey, sessionKey);
       const realCacheKey = rootSessionKey(rootID, sessionKey);
       const pendingCached = sessionCacheRef.current[pendingCacheKey];
       const realCached = sessionCacheRef.current[realCacheKey];
@@ -6416,6 +6395,7 @@ export function App({ onGoHome }: AppProps) {
         } else {
           sendSessionKey = undefined;
           const tempKey = `pending-${Date.now()}`;
+          promoteComposerDraft(activeRoot, "", tempKey);
           session = {
             key: tempKey,
             type: mode,
@@ -9395,6 +9375,18 @@ export function App({ onGoHome }: AppProps) {
           : resolveRootForSessionKey(streamKey) || currentRootIdRef.current;
       if (!streamKey || !activeRoot) return;
       const ck = rootSessionKey(activeRoot, streamKey);
+      if (payload.event?.type === "question_answered") {
+        const cached = sessionCacheRef.current[ck];
+        if (cached) {
+          sessionCacheRef.current[ck] = applyAnsweredQuestion(cached, payload.event.data);
+          bumpCacheVersion();
+        }
+        const drawer = drawerSessionByRootRef.current[activeRoot];
+        if (drawer && drawer.key === streamKey) {
+          setDrawerSessionForRoot(activeRoot, applyAnsweredQuestion(drawer, payload.event.data));
+        }
+        return;
+      }
       let pending = pendingBySessionRef.current[ck];
       if (!pending) {
         const draft = pendingDraftRef.current;
@@ -14720,9 +14712,6 @@ export function App({ onGoHome }: AppProps) {
               void handleStartUpdate();
             }}
             footerTopContent={isIdeaRuntime ? null : tokenStationCard}
-            showEnterKeySendOption={isMobile}
-            enterKeySends={mobileEnterKeySends}
-            onEnterKeySendsChange={setMobileEnterKeySends}
             sidebarsSwapped={sidebarsSwapped}
             onSidebarsSwappedChange={setSidebarsSwapped}
             gitDiffSideBySide={gitDiffSideBySide}
@@ -14844,7 +14833,6 @@ export function App({ onGoHome }: AppProps) {
               onRemoveQueuedMessage={handleRemoveQueuedMessage}
               onUpdateQueuedMessage={handleUpdateQueuedMessage}
               onSendQueuedMessageNow={handleSendQueuedMessageNow}
-              mobileEnterKeySends={mobileEnterKeySends}
               onNewSession={handleNewSession}
               onRequestFileContext={handleRequestFileContext}
               onClearFileContext={handleClearFileContext}

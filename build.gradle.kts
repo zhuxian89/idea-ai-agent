@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "dev.ideaagent"
-version = providers.gradleProperty("pluginVersion").getOrElse("0.1.23")
+version = providers.gradleProperty("pluginVersion").getOrElse("0.1.24")
 
 repositories {
     mavenCentral()

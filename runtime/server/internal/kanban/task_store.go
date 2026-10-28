@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 	root_id TEXT NOT NULL,
 	task_template_id TEXT NOT NULL,
 	task_template_name TEXT NOT NULL,
-	template_snapshot_json TEXT NOT NULL,
+	template_snapshot_json TEXT NOT NULL DEFAULT '',
 	create_worktree INTEGER NOT NULL DEFAULT 0,
 	worktree_branch_mode TEXT NOT NULL DEFAULT '',
 	worktree_branch TEXT NOT NULL DEFAULT '',
@@ -117,6 +117,11 @@ CREATE INDEX IF NOT EXISTS idx_stage_runs_task_stage ON stage_runs(task_id, stag
 CREATE INDEX IF NOT EXISTS idx_task_events_task_created ON task_events(task_id, created_at);
 `)
 	if err != nil {
+		return err
+	}
+	// Older databases predate this selected column. Match the empty snapshot
+	// written by insertTask without rebuilding the table or changing old data.
+	if _, err := s.db.Exec(`ALTER TABLE tasks ADD COLUMN template_snapshot_json TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 		return err
 	}
 	if _, err := s.db.Exec(`ALTER TABLE tasks ADD COLUMN create_worktree INTEGER NOT NULL DEFAULT 0`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {

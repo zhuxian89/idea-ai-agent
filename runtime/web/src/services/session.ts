@@ -235,6 +235,7 @@ export type StreamEvent = { event_cursor?: string } & (
   | { type: "thought_chunk"; data: { id?: string; content: string } }
   | { type: "tool_call"; data: ToolCall }
   | { type: "tool_call_update"; data: ToolCall }
+  | { type: "question_answered"; data: ToolCall }
   | { type: "todo_update"; data: TodoUpdate }
   | { type: "plan_update"; data: PlanUpdate }
   | { type: "compact_notice"; data: CompactNotice }
@@ -319,6 +320,7 @@ class SessionService {
   private pendingStreams = new Map<string, StreamEvent[]>();
   private activeStreams = new Set<string>();
   private sessionActivity = new Map<string, SessionActivityState>();
+  private failedSessions = new Map<string, { sending: boolean; requestId?: string }>();
   private eventCursors = new Map<string, string>();
   private pendingMessages = new Map<string, PendingMessage>();
   private pendingAnswers = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -572,6 +574,10 @@ class SessionService {
       Date.now() - this.connectingStartedAt > this.connectTimeoutMs
     ) {
       this.reconnectNow();
+      return;
+    }
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.probeConnection();
     }
   }
 
@@ -684,7 +690,7 @@ class SessionService {
       this.emit({ type, payload });
       return;
     }
-    const sessionKey = payload.session_key as string;
+    let sessionKey = payload.session_key as string;
     if (type === "session.accepted") {
       const requestId =
         typeof payload.request_id === "string"
@@ -696,6 +702,15 @@ class SessionService {
         this.pendingMessages.delete(requestId);
       }
     } else if (type === "session.error" && typeof msg.id === "string") {
+      // Request rejection envelopes have no session metadata. Recover it before
+      // removing the pending message so manual continuations can unlock safely.
+      const pending = this.pendingMessages.get(msg.id);
+      const target = pending?.message.payload as { root_id?: string; session_key?: string } | undefined;
+      if (target && this.getSessionFailure(target.root_id || "", target.session_key || "")?.requestId === msg.id) {
+        payload.root_id ||= target.root_id;
+        payload.session_key ||= target.session_key;
+        sessionKey = payload.session_key as string;
+      }
       this.pendingMessages.delete(msg.id);
       payload.request_id = msg.id;
     }
@@ -712,6 +727,18 @@ class SessionService {
     if (sessionKey) {
       this.updateActiveStreamState(type, sessionKey, nextPayload);
       this.updateSessionActivity(type, sessionKey, nextPayload);
+      const rootId = typeof nextPayload.root_id === "string" ? nextPayload.root_id : "";
+      const key = this.eventCursorKey(rootId, sessionKey);
+      const event = nextPayload.event as StreamEvent | undefined;
+      if (key && (type === "session.error" || (type === "session.stream" && event?.type === "error"))) {
+        this.failedSessions.set(key, { sending: false });
+      } else if (key && type === "session.user_message") {
+        this.failedSessions.delete(key);
+      } else if (key && type === "session.done" && this.failedSessions.get(key)?.requestId
+        && this.failedSessions.get(key)?.requestId === nextPayload.request_id) {
+        // Reconnecting may replay only completion, without another user message.
+        this.failedSessions.delete(key);
+      }
     }
     this.emit({ type, sessionKey, payload: nextPayload });
 
@@ -732,7 +759,7 @@ class SessionService {
     const handlers = this.handlers.get(sessionKey);
     if ((!handlers || handlers.size === 0) && type === "session.stream") {
       const event = nextPayload.event as StreamEvent;
-      if (event) {
+      if (event && event.type !== "question_answered") {
         const queued = this.pendingStreams.get(sessionKey) || [];
         queued.push(event);
         this.pendingStreams.set(sessionKey, queued);
@@ -822,6 +849,7 @@ class SessionService {
     if (type !== "session.stream") return;
     const event = payload.event as StreamEvent | undefined;
     if (!event) return;
+    if (event.type === "question_answered") return;
     if (event.type === "error") {
       this.activeStreams.delete(sessionKey);
       return;
@@ -833,6 +861,37 @@ class SessionService {
 
   isSessionStreaming(sessionKey: string) {
     return this.activeStreams.has(sessionKey);
+  }
+
+  getSessionFailure(rootId: string, sessionKey: string) {
+    return this.failedSessions.get(this.eventCursorKey(rootId, sessionKey));
+  }
+
+  // Explicit continuation, not replay of a potentially side-effectful request.
+  // Keep the lock through acceptance until the authoritative user-message event.
+  async continueFailedSession(rootId: string, session: Partial<Pick<Session, "key" | "session_key" | "agent" | "model" | "mode" | "effort" | "fast_service">> & { type?: string; pending?: boolean }, content: string): Promise<boolean> {
+    const sessionKey = session.key || session.session_key || "";
+    const key = this.eventCursorKey(rootId, sessionKey);
+    const failure = this.failedSessions.get(key);
+    if (!failure || failure.sending || this.isSessionStreaming(sessionKey)
+      || session.pending || (session.type && session.type !== "chat" && session.type !== "plugin")
+      || !session.agent || !content.trim() || (typeof navigator !== "undefined" && !navigator.onLine)
+      || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    const requestId = this.createRequestId("continue");
+    this.failedSessions.set(key, { sending: true, requestId });
+    this.emit({ type: "session.recovery_changed", sessionKey, payload: { root_id: rootId } });
+    try {
+      const sent = await this.sendMessage(rootId, sessionKey, content, session.type === "plugin" ? "plugin" : "chat",
+        session.agent, session.model, session.mode, session.effort, session.fast_service,
+        undefined, undefined, requestId);
+      if (sent) return true;
+    } catch {
+      // A failed dispatch must leave a usable manual action, never an auto retry.
+    }
+    this.pendingMessages.delete(requestId);
+    this.failedSessions.set(key, { sending: false });
+    this.emit({ type: "session.recovery_changed", sessionKey, payload: { root_id: rootId } });
+    return false;
   }
 
   private updateSessionActivity(
@@ -858,6 +917,7 @@ class SessionService {
     if (type !== "session.stream") return;
     const event = payload.event as StreamEvent | undefined;
     if (!event) return;
+    if (event.type === "question_answered") return;
     // Replay cursors may be cleared when the timeline is reloaded. Keep our
     // activity cursor separately so already observed events do not look fresh.
     const cursor = event.event_cursor?.match(/^(\d+):(\d+)$/);

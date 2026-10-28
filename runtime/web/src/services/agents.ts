@@ -235,11 +235,12 @@ export async function restartAgent(agent: string): Promise<{ restarting: boolean
   });
 }
 
-export async function probeAgent(agent: string): Promise<{ probing: boolean; agent: string }> {
+export async function probeAgent(agent: string, signal?: AbortSignal): Promise<{ probing: boolean; agent: string }> {
   return protectedJSON<{ probing: boolean; agent: string }>(appPath("/api/agents/probe"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ agent }),
+    signal,
   });
 }
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { isIdeaChromeHost, subscribeIdeaContext } from "../services/ideaBridge";
+import { isIdeaChromeHost } from "../services/ideaBridge";
+import { useIdeaComposerContext } from "../hooks/useIdeaComposerContext";
 import { type SessionMode } from "./ModeSelector";
 import { ModeSelector } from "./ModeSelector";
 import { AgentSelector } from "./AgentSelector";
@@ -7,6 +8,7 @@ import { PermissionSelector } from "./PermissionSelector";
 import { getAgentDefaults } from "../services/agentDefaults";
 import { nativePermissionChoices } from "../services/nativePermissions";
 import { fetchAgents, fetchShells, probeAgent, type AgentStatus, type ShellStatus } from "../services/agents";
+import { refreshAgentModels } from "../services/agentModelRefresh";
 import { fetchAgentCatalog } from "../services/agents";
 import { agentsForPicker } from "../services/agentSetup";
 import { AGENT_INSTALLATION_CHANGED } from "../services/agentInstallation";
@@ -91,7 +93,6 @@ type ActionBarProps = {
   } | null;
   queuedMessages?: QueuedMessageInfo[];
   inputHistory?: string[];
-  mobileEnterKeySends?: boolean;
   onSendMessage?: (
     message: string,
     mode: SessionMode,
@@ -166,7 +167,6 @@ const chatBlurPlaceholderKeys: MessageKey[] = [
 ];
 
 const MOBILE_BREAKPOINT = 768;
-const IME_ENTER_GUARD_MS = 120;
 const CANDIDATE_FETCH_DEBOUNCE_MS = 512;
 
 function buildPendingAttachment(file: File): PendingAttachment {
@@ -413,7 +413,6 @@ export function ActionBar({
   onSessionClick,
   onToggleLeftSidebar,
   onToggleRightSidebar,
-  mobileEnterKeySends = false,
   sidebarsSwapped = false,
 }: ActionBarProps) {
   const { t } = useI18n();
@@ -427,8 +426,6 @@ export function ActionBar({
   const [shells, setShells] = useState<ShellStatus[]>([]);
   const [shell, setShell] = useState("");
   const [serializedInput, setSerializedInput] = useState("");
-  const ideaInputRef = useRef("");
-  ideaInputRef.current = serializedInput;
   const [inputHistoryIndex, setInputHistoryIndex] = useState<number | null>(null);
   const [activeToken, setActiveToken] = useState<{ type: "file" | "slash" | "prompt" | "command"; query: string } | null>(null);
   const [dragX, setDragX] = useState(0);
@@ -457,20 +454,29 @@ export function ActionBar({
   const dragStartRef = useRef(0);
   const syncedSessionSignatureRef = useRef<string>("");
   const editorRef = useRef<TokenEditorHandle>(null);
-  useEffect(() => subscribeIdeaContext((text) => {
-    const next = [ideaInputRef.current.trimEnd(), text].filter(Boolean).join("\n\n");
-    ideaInputRef.current = next;
-    editorRef.current?.setText(next);
-    setSerializedInput(next);
-    setMode("chat");
-  }), []);
+  useIdeaComposerContext({
+    rootId: currentRootId || "",
+    sessionKey: currentSession?.key || currentSession?.session_key || "",
+    busy: sending || voiceBusy,
+    draft: { text: serializedInput, attachments: pendingAttachments },
+    newSession: onNewSession,
+    write: (draft, { contextAdded, resetHistory }) => {
+      editorRef.current?.setText(draft.text, resetHistory);
+      setSerializedInput(draft.text);
+      setPendingAttachments(draft.attachments);
+      setInputHistoryIndex(null);
+      setActiveToken(null);
+      setCandidates([]);
+      setActiveCandidateIndex(0);
+      if (contextAdded) setMode("chat");
+    },
+  });
   const candidateAbortRef = useRef<AbortController | null>(null);
   const candidateItemRefs = useRef<Array<HTMLDivElement | null>>([]);
   const suppressedCommandCandidateTextRef = useRef("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
   const isComposingRef = useRef(false);
-  const compositionGuardUntilRef = useRef(0);
   const inputHistoryDraftRef = useRef("");
   const applyingInputHistoryRef = useRef(false);
   const { isMobile } = useResponsive();
@@ -578,19 +584,8 @@ export function ActionBar({
     setFastService(defaults.fastService);
   }, [agent, agents, currentSession]);
 
-  useEffect(() => {
-    if (!agent || !model) {
-      return;
-    }
-    const selectedAgent = agents.find((item) => item.name === agent);
-    if (!selectedAgent) {
-      return;
-    }
-    const hasModel = (selectedAgent.models ?? []).some((item) => item.id === model);
-    if (!hasModel) {
-      setModel("");
-    }
-  }, [agent, model, agents]);
+  // Discovery can omit custom or session-bound models. Refreshing a catalog
+  // must never silently replace the user's current model with the default.
 
   const selectedAgent = agents.find((item) => item.name === agent);
   const permissionChoices = compactWorkbench ? nativePermissionChoices(selectedAgent) : [];
@@ -656,16 +651,6 @@ export function ActionBar({
       setActiveCandidateIndex(0);
     }
   }, [mode, isFocused]);
-
-  useEffect(() => {
-    return () => {
-      pendingAttachments.forEach((attachment) => {
-        if (attachment.previewUrl) {
-          URL.revokeObjectURL(attachment.previewUrl);
-        }
-      });
-    };
-  }, []);
 
   useEffect(() => {
     if (!activeToken || !currentRootId || (activeToken.type === "slash" && mode !== "command" && !agent)) {
@@ -1045,7 +1030,6 @@ export function ActionBar({
   const isCompositionActive = useCallback((event?: KeyboardEvent | null) => {
     const nativeEvent = event as (KeyboardEvent & { isComposing?: boolean; keyCode?: number }) | null | undefined;
     return isComposingRef.current
-      || performance.now() < compositionGuardUntilRef.current
       || !!nativeEvent?.isComposing
       || nativeEvent?.keyCode === 229;
   }, []);
@@ -1116,14 +1100,11 @@ export function ActionBar({
         return true;
       }
     }
-    if (!isMobile || (mobileEnterKeySends && mode === "chat")) {
-      event?.preventDefault();
-      event?.stopPropagation();
-      void handleSend();
-      return true;
-    }
-    return false;
-  }, [candidates, activeCandidateIndex, applyCandidate, handleSend, isCompositionActive, isMobile, mobileEnterKeySends, mode]);
+    event?.preventDefault();
+    event?.stopPropagation();
+    void handleSend();
+    return true;
+  }, [candidates, activeCandidateIndex, applyCandidate, handleSend, isCompositionActive, mode]);
 
   const handleEditorPaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     if (sending || !currentRootId) {
@@ -1511,14 +1492,12 @@ export function ActionBar({
               onKeyDown={handleKeyDown}
               onPaste={handleEditorPaste}
               onEnter={handleEditorEnter}
-              enterKeyHint={isMobile && mobileEnterKeySends && mode === "chat" ? "send" : undefined}
+              enterKeyHint="send"
               onCompositionStart={() => {
                 isComposingRef.current = true;
-                compositionGuardUntilRef.current = 0;
               }}
               onCompositionEnd={() => {
                 isComposingRef.current = false;
-                compositionGuardUntilRef.current = performance.now() + IME_ENTER_GUARD_MS;
               }}
             />
 
@@ -1866,6 +1845,13 @@ export function ActionBar({
                     onFastServiceChange={(nextFastService) => setFastService(nextFastService || "")}
                     onAgentRestart={async (targetAgent) => {
                       await probeAgent(targetAgent);
+                      const items = compactWorkbench
+                        ? agentsForPicker(await fetchAgentCatalog(true, { throwOnError: true }))
+                        : await fetchAgents(true, { throwOnError: true });
+                      setAgents(items);
+                    }}
+                    onModelsRefresh={async (targetAgent) => {
+                      await refreshAgentModels(targetAgent);
                       const items = compactWorkbench
                         ? agentsForPicker(await fetchAgentCatalog(true, { throwOnError: true }))
                         : await fetchAgents(true, { throwOnError: true });

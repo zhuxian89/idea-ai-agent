@@ -29,7 +29,9 @@ test("resolved approval stops waiting for an answer while the real command keeps
   assert.match(renderActivity(question("approval-bash", "running"), bash), /等待你的回答/);
   const resolved = renderActivity(question("approval-bash", "complete"), bash);
   assert.doesNotMatch(resolved, /等待你的回答/);
-  assert.match(resolved, /正在执行工具：运行命令/);
+  assert.match(resolved, /🔥/);
+  assert.match(resolved, /class="session-activity-text session-activity-tool-summary" title="运行命令" tabindex="0">运行命令/);
+  assert.doesNotMatch(resolved, /正在运行命令或脚本…/);
 });
 
 test("failed or canceled approvals do not leave the activity stuck waiting", () => {

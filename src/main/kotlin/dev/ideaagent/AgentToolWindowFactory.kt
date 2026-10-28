@@ -124,7 +124,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
     private var connection: LocalRuntime.Connection? = null
     private var loaded = false
     private var closed = false
-    private val pendingContexts = mutableListOf<String>()
+    private val pendingContexts = mutableListOf<IdeaContextRequest>()
     private val queuedCommands = WebviewCommandQueue()
     private val gson = Gson()
     private val voice = VoiceInputController(
@@ -317,11 +317,13 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         if (url.startsWith("https://") || url.startsWith("http://")) BrowserUtil.browse(url)
     }
 
-    fun addContext(text: String) {
+    fun addContext(text: String) = addContext(IdeaContextRequest(text))
+
+    internal fun addContext(context: IdeaContextRequest) {
         if (closed) return
-        if (!loaded) { pendingContexts.add(text); return }
+        if (!loaded) { pendingContexts.add(context); return }
         sendNativeCommand("chat")
-        execute("window.ideaAgentReceiveContext?.(${gson.toJson(text)});")
+        execute("window.ideaAgentReceiveContext?.(${gson.toJson(context.text)}, ${gson.toJson(context.target)});")
     }
 
     fun openVoiceSettings() {

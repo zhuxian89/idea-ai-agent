@@ -178,9 +178,6 @@ type FileTreeProps = {
   updateActionBusy?: boolean;
   updateActionSummary?: string | null;
   onUpdateAction?: () => void;
-  showEnterKeySendOption?: boolean;
-  enterKeySends?: boolean;
-  onEnterKeySendsChange?: (enabled: boolean) => void;
   sidebarsSwapped?: boolean;
   onSidebarsSwappedChange?: (enabled: boolean) => void;
   gitDiffSideBySide?: boolean;
@@ -1383,9 +1380,6 @@ export function FileTree({
   updateActionBusy = false,
   updateActionSummary = null,
   onUpdateAction,
-  showEnterKeySendOption = false,
-  enterKeySends = false,
-  onEnterKeySendsChange,
   sidebarsSwapped = false,
   onSidebarsSwappedChange,
   gitDiffSideBySide = false,
@@ -3467,33 +3461,6 @@ export function FileTree({
                 <span>{t("fileTree.sideBySideDiff")}</span>
                 <span style={{ fontSize: "11px", opacity: gitDiffSideBySide ? 1 : 0 }}>✓</span>
               </button>
-              {showEnterKeySendOption ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onEnterKeySendsChange?.(!enterKeySends);
-                    setIsAppearanceMenuOpen(false);
-                    setIsSortMenuOpen(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    background: enterKeySends ? "var(--selection-bg)" : "transparent",
-                    color: enterKeySends ? "var(--accent-color)" : "var(--text-primary)",
-                    borderRadius: "8px",
-                    padding: "8px 10px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                  }}
-                >
-                  <span>{t("fileTree.enterKeySend")}</span>
-                  <span style={{ fontSize: "11px", opacity: enterKeySends ? 1 : 0 }}>✓</span>
-                </button>
-              ) : null}
             </div>
           ) : null}
           {projectAddOverlay ? (

@@ -19,6 +19,7 @@ import type { AgentStatus } from "../services/agents";
 import { useI18n, type Locale } from "../i18n";
 import { formatSessionDuration } from "../services/sessionDuration";
 import { SessionActivity } from "./SessionActivity";
+import { SessionRecovery } from "./SessionRecovery";
 import { ActivityTimeline } from "./stream/ActivityTimeline";
 import { TurnDiffSummary } from "./TurnDiffSummary";
 import { RelatedFileCompareButton } from "./RelatedFileCompareButton";
@@ -2265,10 +2266,10 @@ function SessionViewerInner({
               rootPath={rootPath || undefined} tailClosed={Boolean(slashCommandResult) || (!loading && !isAwaiting && !isStreaming)}
               renderItem={renderTimelineItem} itemSpacing={timelineItemSpacing} />
             {renderSlashCommandResult()}
-            {(isAwaiting || isStreaming) && (
-              <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText}
-                rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined} />
-            )}
+            <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText}
+              active={isAwaiting || isStreaming} rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined} />
+            {session && rootId ? <SessionRecovery key={`${rootId}:${sessionKey}`} session={session} rootId={rootId}
+              connected={connected} active={loading || isAwaiting || isStreaming} /> : null}
 
             {relatedFiles.length > 0 && (
               <div
@@ -2632,6 +2633,7 @@ export const SessionViewer = memo(
   SessionViewerInner,
   (prev, next) =>
     prev.session === next.session &&
+    prev.connected === next.connected &&
     prev.loading === next.loading &&
     prev.rootId === next.rootId &&
     prev.rootPath === next.rootPath &&

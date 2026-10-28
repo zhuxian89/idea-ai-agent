@@ -66,7 +66,7 @@ async function bundleFixture() {
         window.__ideaFixture = { events };
         function Fixture() {
           const [sessionKey, setSessionKey] = useState("first");
-          window.__switchVoiceSession = () => setSessionKey("second");
+          window.__switchVoiceSession = (key = "second") => setSessionKey(key);
           const [settingsOpen, setSettingsOpen] = useState(false);
           const [historyOpen, setHistoryOpen] = useState(false);
           // Record only real transitions: back-to-chat closes both views and
@@ -85,7 +85,7 @@ async function bundleFixture() {
             chat={<div data-testid="chat-view">chat body</div>}
             history={<div data-testid="history-view">history body</div>}
             settings={<div data-testid="settings-view"><IdeaAgentSettings agents={[{ name:"codex", installed:true, available:true, version:"1.0.0", update_check_supported:true, update_commands:["update codex"] }]} busy={false} projectReady={true} notice="" probingAgent="" error="" onProbe={() => {}} onRun={(agent, action) => events.push(action + ":" + agent.name)} /></div>}
-            footer={<ActionBar compactWorkbench status="connecting" currentSession={{ key: sessionKey, name: "fixture", type: "chat", agent: "codex" }} />}
+            footer={<ActionBar compactWorkbench status="connected" currentRootId="demo" currentSession={{ key: sessionKey, name: "fixture", type: "chat", agent: "codex" }} onSendMessage={async (message) => events.push("send:" + message)} />}
             drawer={null}
           />;
         }
@@ -198,6 +198,29 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     await expect(voiceButton(page)).toHaveCount(1);
   });
 
+  await t.test("narrow desktop composer sends with Enter and keeps Shift+Enter for newlines", async () => {
+    const page = await openFixture(browser, bundle, t, "?ide_chrome=1", true, 430);
+    const input = page.locator('[contenteditable="true"]');
+    await expect(input).toHaveAttribute("enterkeyhint", "send");
+    await input.fill("first line");
+    await input.press("Shift+Enter");
+    await input.type("second line");
+    await expect(input.locator("br")).toHaveCount(1);
+    await expect(input).toHaveText("first linesecond line");
+    assert.deepEqual(await events(page), []);
+    await input.press("Enter");
+    await expect.poll(() => events(page)).toEqual(["send:first line\nsecond line"]);
+    await expect(input).toHaveText("");
+
+    await input.fill("中文输入");
+    await input.dispatchEvent("compositionstart", { data: "中文输入" });
+    await input.press("Enter");
+    assert.deepEqual(await events(page), ["send:first line\nsecond line"]);
+    await input.dispatchEvent("compositionend", { data: "中文输入" });
+    await input.press("Enter");
+    await expect.poll(() => events(page)).toEqual(["send:first line\nsecond line", "send:中文输入"]);
+  });
+
   await t.test("native commands open and return from history and settings", async () => {
     const page = await openFixture(browser, bundle, t, "?ide_chrome=1");
     await command(page, "new");
@@ -302,6 +325,12 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
       assert.equal(await page.evaluate(() => window.__ideaHostMessages.at(-1).action), "voiceCancel");
       await page.evaluate((id) => window.ideaAgentVoiceEvent({ id, state: "done", text: "must not appear" }), id);
       if (cancel === "history") await command(page, "chat");
+      if (cancel === "session") {
+        await expect(page.locator('[contenteditable="true"]')).toHaveText("");
+        await page.locator('[contenteditable="true"]').press("ControlOrMeta+z");
+        await expect(page.locator('[contenteditable="true"]')).toHaveText("");
+        await page.evaluate(() => window.__switchVoiceSession("first"));
+      }
       await expect(page.locator('[contenteditable="true"]')).toHaveText("keep draft");
     }
   });

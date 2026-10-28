@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"mindfs/server/internal/agent"
 	agenttypes "mindfs/server/internal/agent/types"
 	"mindfs/server/internal/e2ee"
+	"mindfs/server/internal/fs"
 	"mindfs/server/internal/session"
 )
 
@@ -39,6 +41,88 @@ func TestParseClientContext(t *testing.T) {
 	got = parseClientContext(map[string]any{}, "fallback-root")
 	if got.CurrentRoot != "fallback-root" {
 		t.Fatalf("expected fallback root, got %q", got.CurrentRoot)
+	}
+}
+
+func TestBroadcastAnsweredQuestionPublishesTerminalToolUpdate(t *testing.T) {
+	ctx := context.Background()
+	registry := fs.NewRegistry(filepath.Join(t.TempDir(), "registry.json"))
+	root, err := registry.Upsert(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &AppContext{Dirs: registry}
+	manager, err := app.GetSessionManager(root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Shutdown() })
+	sess, err := manager.Create(ctx, session.CreateInput{Type: session.TypeChat, Agent: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := agenttypes.ToolCall{
+		CallID: "ask-1",
+		Kind:   agenttypes.ToolKindAskUser,
+		Status: "running",
+		Meta: map[string]any{
+			"questions": []agenttypes.AskUserQuestionItem{{Question: "Choose"}},
+		},
+	}
+	if err := manager.UpsertPendingExchangeAux(ctx, sess.Key, session.ExchangeAux{ToolCall: &call}); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.MarkPendingAskUserAnswered(ctx, sess.Key, call.CallID, map[string]string{"q_0": "A"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	hub := app.GetSessionStreamHub()
+	hub.SetPendingReply(root.ID, sess.Key, "Question")
+	hub.AppendReplyEvent(sess.Key, StreamEvent{Type: "tool_call", Data: call})
+	before := hub.PendingSessionSnapshot(sess.Key)
+
+	handler := &WSHandler{AppContext: app}
+	handler.broadcastAnsweredQuestion(ctx, root.ID, sess.Key, call.CallID)
+
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+	state := hub.pendingSessions[sess.Key]
+	if state == nil || len(state.ReplyingList) != 2 {
+		t.Fatalf("replying events = %#v, want original question and its correction", state)
+	}
+	if !state.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Fatal("answer acknowledgement must not fabricate agent progress")
+	}
+	event := state.ReplyingList[1]
+	toolCall, ok := event.Data.(agenttypes.ToolCall)
+	if !ok {
+		t.Fatalf("event data = %#v, want tool call", event.Data)
+	}
+	if event.Type != "question_answered" || toolCall.Status != "complete" {
+		t.Fatalf("event = %#v, want completed tool update", event)
+	}
+	answers, _ := toolCall.Meta["answers"].(map[string]string)
+	if answers["q_0"] != "A" {
+		t.Fatalf("answers = %#v, want persisted answer", toolCall.Meta["answers"])
+	}
+}
+
+func TestLateAnsweredQuestionDoesNotReviveOrPolluteTurns(t *testing.T) {
+	hub := NewStreamHub(nil)
+	answer := StreamEvent{Type: "question_answered", Data: agenttypes.ToolCall{
+		CallID: "old-question", Kind: agenttypes.ToolKindAskUser, Status: "complete",
+	}}
+	hub.BroadcastSessionDone("root", "session", "request")
+	hub.BroadcastSessionStream("root", "session", &answer)
+	if hub.pendingSessions["session"] != nil || hub.completed["session"] == nil {
+		t.Fatal("late answer must preserve completed state without creating pending replay")
+	}
+	hub.SetPendingReply("root", "session", "Next turn")
+	hub.AppendReplyEvent("session", StreamEvent{Type: "tool_call", Data: agenttypes.ToolCall{
+		CallID: "new-question", Kind: agenttypes.ToolKindAskUser, Status: "running",
+	}})
+	hub.BroadcastSessionStream("root", "session", &answer)
+	if len(hub.pendingSessions["session"].ReplyingList) != 1 {
+		t.Fatal("old answer must not be appended to another turn's replay")
 	}
 }
 

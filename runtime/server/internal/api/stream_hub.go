@@ -622,6 +622,26 @@ func (h *StreamHub) PendingSessionSnapshot(sessionKey string) PendingSessionSnap
 func (h *StreamHub) AppendReplyEvent(sessionKey string, event StreamEvent) StreamEvent {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if event.Type == "question_answered" {
+		// Retain the correction for replay only when this pending turn contains
+		// the question. A late correction must not create a pending turn or
+		// attach an old question to the next turn.
+		state := h.pendingSessions[sessionKey]
+		call, ok := event.Data.(agenttypes.ToolCall)
+		if state == nil || !ok {
+			return event
+		}
+		for _, previous := range state.ReplyingList {
+			question, ok := previous.Data.(agenttypes.ToolCall)
+			if ok && question.CallID == call.CallID && question.Kind == agenttypes.ToolKindAskUser {
+				state.NextEventSeq++
+				event.EventCursor = formatEventCursor(state.BaseExchangeSeq, state.NextEventSeq)
+				state.ReplyingList = append(state.ReplyingList, cloneEvent(event))
+				return event
+			}
+		}
+		return event
+	}
 	state := h.ensurePendingSessionLocked(sessionKey)
 	state.NextEventSeq++
 	event.EventCursor = formatEventCursor(state.BaseExchangeSeq, state.NextEventSeq)

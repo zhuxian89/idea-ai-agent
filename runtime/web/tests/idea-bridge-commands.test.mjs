@@ -154,6 +154,24 @@ test("IDE code contexts still queue until the composer subscribes", () => {
   unsubscribe();
 });
 
+test("console analysis preserves current/new targets across startup and ignores invalid targets", () => {
+  const bridge = loadBridge();
+  bridge.window.ideaAgentReceiveContext("original editor context");
+  bridge.window.ideaAgentReceiveContext("new-session error", "new");
+  bridge.window.ideaAgentReceiveContext("invalid", "send");
+  const seen = [];
+  const stop = bridge.exports.subscribeIdeaContext((text, target) => seen.push({ text, target }));
+  assert.deepEqual(seen, [
+    { text: "original editor context", target: "current" },
+    { text: "new-session error", target: "new" },
+  ]);
+  stop();
+  bridge.window.ideaAgentReceiveContext("wait during send", "new");
+  bridge.exports.subscribeIdeaContext((text, target) => seen.push({ text, target }));
+  assert.deepEqual(seen.at(-1), { text: "wait during send", target: "new" });
+  assert.deepEqual(bridge.posts, [], "capturing context must not send anything to the runtime");
+});
+
 test("language changes are sent to native preferences and update the current host value", () => {
   const bridge = loadBridge({ ready: true });
   bridge.exports.persistIdeaLocale("zh-CN");

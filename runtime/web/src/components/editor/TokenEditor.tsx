@@ -16,6 +16,7 @@ import {
   $isTextNode,
   $setCompositionKey,
   COMMAND_PRIORITY_HIGH,
+  CLEAR_HISTORY_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
   EditorConfig,
@@ -42,7 +43,7 @@ export type TokenEditorHandle = {
   blur: () => void;
   getHeight: () => number;
   clear: () => void;
-  setText: (value: string) => void;
+  setText: (value: string, resetHistory?: boolean) => void;
   prepareVoiceInsertion: () => (text: string) => void;
   insertCandidate: (type: CandidateType, value: string) => void;
 };
@@ -686,10 +687,11 @@ const TokenEditor = forwardRef<TokenEditorHandle, TokenEditorProps>(function Tok
         $replaceWithPlainText("");
       });
     },
-    setText(value: string) {
-      editorRef.current?.update(() => {
+    setText(value: string, resetHistory = false) {
+      const editor = editorRef.current;
+      editor?.update(() => {
         $replaceWithSerializedText(value);
-      });
+      }, resetHistory ? { onUpdate: () => editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined) } : undefined);
       rootRef.current?.focus({ preventScroll: true });
     },
     prepareVoiceInsertion() {
