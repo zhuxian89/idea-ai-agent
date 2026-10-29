@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -32,12 +33,14 @@ const relayDeviceIDHeader = "X-MindFS-Device-ID"
 const relayNodeNameHeader = "X-MindFS-Relay-Node-Name"
 
 type Service struct {
-	localAddr string
-	localURL  string
-	store     *CredentialsStore
-	services  *ServiceStore
-	client    *http.Client
-	useTLS    bool
+	localAddr       string
+	localURL        string
+	store           *CredentialsStore
+	services        *ServiceStore
+	client          *http.Client
+	useTLS          bool
+	connected       atomic.Bool
+	connectionError atomic.Pointer[string]
 }
 
 type credentialResponse struct {
@@ -155,6 +158,10 @@ func (s *Service) Run(ctx context.Context) error {
 		err := s.runSession(ctx, creds.Relay)
 		if ctx.Err() != nil {
 			return nil
+		}
+		if err != nil {
+			message := err.Error()
+			s.connectionError.Store(&message)
 		}
 		if isPermanentRelayError(err) {
 			return err
@@ -352,6 +359,9 @@ func (s *Service) runSession(ctx context.Context, creds RelayCredentials) error 
 		return err
 	}
 	defer muxSession.Close()
+	s.connected.Store(true)
+	s.connectionError.Store(nil)
+	defer s.connected.Store(false)
 
 	errCh := make(chan error, 1)
 	go func() {

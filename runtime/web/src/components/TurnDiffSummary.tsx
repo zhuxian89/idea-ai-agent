@@ -1,6 +1,6 @@
 import React, { memo, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
-import { compareTurnDiffInIdea, openIdeaFile } from "../services/ideaBridge";
+import { compareTurnDiffInIdea, openIdeaFile, isIdeaRuntime } from "../services/ideaBridge";
 import { IdeaIconButton } from "./RelatedFileCompareButton";
 import type { TurnDiffUpdate } from "../services/session";
 import { DiffCodeTable } from "./DiffCodeTable";
@@ -138,12 +138,12 @@ function TurnDiffSummaryInner({
                 )}
                 {rootId ? (
                   <IdeaIconButton
-                    label={t("session.openInIdea")}
+                    label={t(isIdeaRuntime ? "session.openInIdea" : "remote.openFile")}
                     icon="open"
                     onClick={() => openIdeaFile(rootId, file.path)}
                   />
                 ) : null}
-                {canCompareFile ? (
+                {canCompareFile && isIdeaRuntime ? (
                   <IdeaIconButton
                     label={t("session.compareTurnDiffInIdea")}
                     icon="compare"
@@ -172,7 +172,7 @@ function TurnDiffSummaryInner({
                 >
                   {t("fileTree.sideBySideDiff")}
                 </button>
-                {canCompare ? (
+                {canCompare && isIdeaRuntime ? (
                   <button
                     type="button"
                     onClick={() => compareTurnDiffInIdea({
@@ -192,7 +192,7 @@ function TurnDiffSummaryInner({
                     onClick={() => openIdeaFile(rootId, selected.path)}
                     style={{ marginLeft: "auto", border: "1px solid var(--border-color)", borderRadius: "6px", background: "transparent", color: "var(--accent-color)", padding: "3px 7px", cursor: "pointer", font: "inherit", whiteSpace: "nowrap" }}
                   >
-                    {t("session.openInIdea")}
+                    {t(isIdeaRuntime ? "session.openInIdea" : "remote.openFile")}
                   </button>
                 ) : null}
               </div>

@@ -1,5 +1,6 @@
 import { appPath } from "./base";
 import { e2eeService, type E2EEState } from "./e2ee";
+import { consumePairingLink } from "./pairingLink";
 
 export type RelayStatusPayload = {
   relay_bound?: boolean;
@@ -27,6 +28,7 @@ export type BootstrapState = {
 type BootstrapListener = (state: BootstrapState) => void;
 
 class BootstrapService {
+  private pairingSecretFromLink = consumePairingLink();
   private state: BootstrapState = {
     phase: "idle",
     relayStatus: null,
@@ -120,7 +122,7 @@ class BootstrapService {
         e2eeService.clearSession();
       }
       const code = err instanceof Error ? err.message : "e2ee_open_failed";
-      this.setState({ phase: "needs_pairing", error: code });
+      this.setState({ phase: code === "e2ee_proof_invalid" ? "needs_pairing" : "error", error: code });
       throw err;
     }
   }
@@ -142,8 +144,9 @@ class BootstrapService {
               e2eeService.clearSecret();
             } else {
               e2eeService.clearSession();
+              throw err;
             }
-            this.setState({ phase: "needs_pairing", error: "" });
+            this.setState({ phase: "needs_pairing", error: "e2ee_proof_invalid" });
           }
         } else {
           this.setState({ phase: "needs_pairing", error: "" });
@@ -166,6 +169,10 @@ class BootstrapService {
     const nodeId = String(nextStatus?.e2ee_node_id || "").trim();
     const required = nextStatus?.e2ee_required === true;
     e2eeService.configure(required, nodeId);
+    if (required && nodeId && this.pairingSecretFromLink) {
+      e2eeService.setSecret(this.pairingSecretFromLink);
+      this.pairingSecretFromLink = "";
+    }
     this.setState({ relayStatus: nextStatus });
   }
 

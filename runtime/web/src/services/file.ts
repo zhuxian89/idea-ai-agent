@@ -1,9 +1,39 @@
 import { appURL } from "./base";
 import { e2eeService } from "./e2ee";
+// Editor reads always bypass the preview cache and request a bounded, full snapshot.
+export async function fetchEditableFile(rootId: string, path: string): Promise<FilePayload & { revision: string }> {
+  const url = appURL("/api/file", new URLSearchParams({ root: rootId, path, read: "full", edit: "1" }));
+  return requestEditableFile(url, { cache: "no-store" });
+}
+
+export async function saveTextFile(rootId: string, path: string, content: string, revision: string): Promise<FilePayload & { revision: string }> {
+  const url = appURL("/api/file", new URLSearchParams({ root: rootId, path }));
+  const file = await requestEditableFile(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, base_revision: revision }),
+  });
+  invalidateFileCache(rootId, path);
+  return file;
+}
+
+async function requestEditableFile(url: string, init: RequestInit): Promise<FilePayload & { revision: string }> {
+  const response = await e2eeService.protectedFetch(url, init);
+  const payload = await e2eeService.parseProtectedJSONResponse<{ file?: FilePayload & { revision: string }; error?: string }>(response);
+  if (!response.ok) {
+    if (response.status === 409) throw new Error("file_edit_conflict");
+    if (response.status === 413) throw new Error("file_edit_too_large");
+    throw new Error(payload.error || `HTTP ${response.status}`);
+  }
+  if (!payload.file?.revision) throw new Error("file_not_editable");
+  return payload.file;
+}
+
 
 export type ReadMode = "full" | "incremental";
 
 export type FilePayload = {
+  revision?: string;
   name: string;
   path: string;
   content: string;
@@ -70,12 +100,13 @@ type FileResponse = {
   file?: FilePayload | null;
 };
 
-const DB_NAME = "mindfs-file-cache";
+const remoteCacheScope = typeof window !== "undefined" ? /^\/n\/[^/]+/.exec(window.location?.pathname || "")?.[0] || "" : "";
+const DB_NAME = "mindfs-file-cache" + remoteCacheScope;
 const DB_VERSION = 1;
 const STORE_NAME = "files";
 const GIT_DIFF_CACHE_VERSION = "v2";
 const MAX_CACHE_ENTRIES = 200;
-const LS_RECORD_PREFIX = "mindfs-file-cache-record:";
+const LS_RECORD_PREFIX = "mindfs-file-cache-record:" + (remoteCacheScope ? remoteCacheScope + ":" : "");
 const LS_MAX_RECORD_BYTES = 256 * 1024;
 const LS_MAX_RECORDS = 50;
 

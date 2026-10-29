@@ -71,21 +71,24 @@ class AgentToolWindowFactory : ToolWindowFactory, DumbAware {
 }
 
 internal object NativeAgentCommands {
-    val all = listOf("new", "history", "settings")
+    val all = listOf("new", "history", "settings", "remote")
 
     fun title(command: String): String = when (command) {
+        "remote" -> "远程访问"
         "new" -> "新会话"
         "history" -> "聊天历史"
         else -> "Agent 配置"
     }
 
     fun description(command: String): String = when (command) {
+        "remote" -> "绑定 Relay，在浏览器中继续当前项目的会话"
         "new" -> "开始一个新的 Agent 会话"
         "history" -> "打开或返回聊天历史"
         else -> "打开或返回 Agent 配置与安装"
     }
 
     fun icon(command: String): Icon = when (command) {
+        "remote" -> AllIcons.General.Web
         "new" -> AllIcons.General.Add
         "history" -> AllIcons.Vcs.History
         else -> AllIcons.General.Settings

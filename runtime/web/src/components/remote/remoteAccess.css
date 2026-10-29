@@ -1,0 +1,14 @@
+.remote-access-dialog { width: min(440px, calc(100vw - 40px)); max-height: calc(100dvh - 40px); overflow: auto; box-sizing: border-box; padding: 20px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-bg); color: var(--text-primary); font: inherit; }
+.remote-access-dialog::backdrop { background: rgb(0 0 0 / 40%); }
+.remote-access-dialog header, .remote-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.remote-access-dialog header { justify-content: space-between; }
+.remote-access-dialog h2 { margin: 0; font-size: 17px; }
+.remote-access-dialog button, .remote-access-dialog input { font: inherit; color: inherit; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 7px 10px; }
+.remote-access-dialog button { cursor: pointer; }
+.remote-access-dialog button:disabled { opacity: .5; cursor: default; }
+.remote-access-dialog input { width: 100%; box-sizing: border-box; margin: 8px 0; }
+.remote-access-dialog a { color: var(--accent-color); }
+.remote-actions { margin: 12px 0; }
+.remote-qr { display: block; width: 192px; height: 192px; margin: 12px auto; }
+.remote-note { color: var(--text-secondary); font-size: 12px; }
+.remote-access-dialog [role=alert] { color: #dc2626; overflow-wrap: anywhere; }

@@ -905,8 +905,11 @@ func (s *AppContext) BroadcastSessionDone(rootID, sessionKey, requestID string) 
 	hub := s.GetSessionStreamHub()
 	pending := hub.PendingSessionSnapshot(sessionKey)
 	s.notifySessionDone(rootID, sessionKey, requestID, pending)
-	hub.ClearSessionPending(sessionKey)
+	// Keep the current turn reserved until its completion reaches the clients.
+	// Otherwise another endpoint can start a turn before this done is delivered.
+	hub.waitForReplayClients(sessionKey)
 	hub.BroadcastSessionDone(rootID, sessionKey, requestID)
+	hub.ClearSessionPending(sessionKey)
 }
 
 func (s *AppContext) BroadcastScheduledTaskDone(rootID, taskID, taskName, sessionKey, summary string) {

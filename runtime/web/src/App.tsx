@@ -1,4 +1,4 @@
-import { compareGitFileInIdea, isIdeaRuntime, openIdeaFile, refreshIdeaFiles } from "./services/ideaBridge";
+import { compareGitFileInIdea, isIdeaRuntime, isIDEManagedProject, openIdeaFile, refreshIdeaFiles } from "./services/ideaBridge";
 import { mergeActivityFacts, mergeToolStatus } from "./services/activityFacts";
 import { applyAnsweredQuestion } from "./services/answeredQuestion";
 import { promoteComposerDraft } from "./services/composerDrafts";
@@ -135,6 +135,11 @@ import {
   type ProjectTreeTab,
 } from "./components/FileTree";
 import { FileViewer } from "./components/FileViewer";
+import { RemoteFileViewer } from "./components/remote/RemoteFileViewer";
+import { ConnectionErrorDialog } from "./components/remote/ConnectionErrorDialog";
+import { FileEditStore } from "./services/fileEditing";
+import { fetchEditableFile, saveTextFile } from "./services/file";
+const WorkspaceFileViewer = isIdeaRuntime ? FileViewer : RemoteFileViewer;
 import { GitDiffViewer } from "./components/GitDiffViewer";
 import { GitHistoryPanel } from "./components/GitHistoryPanel";
 import { GitStatusPanel } from "./components/GitStatusPanel";
@@ -1501,6 +1506,12 @@ function saveTaskCreateWorktreePreference(rootId: string, pref: TaskCreateWorktr
 }
 
 export function App({ onGoHome }: AppProps) {
+  const [fileEditStore] = useState(() => new FileEditStore({ load: fetchEditableFile, save: saveTextFile }));
+  useEffect(() => {
+    const guard = (event: BeforeUnloadEvent) => { if (fileEditStore.hasDirty()) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [fileEditStore]);
   const { t } = useI18n();
   const pluginManagerRef = useRef<PluginManager>(new PluginManager());
   const completionAudioContextRef = useRef<AudioContext | null>(null);
@@ -2422,7 +2433,7 @@ export function App({ onGoHome }: AppProps) {
   useEffect(() => {
     if (
       isMobile ||
-      isIdeaRuntime || onboardingAutoStartRef.current ||
+      isIDEManagedProject || onboardingAutoStartRef.current ||
       !currentRootId ||
       bootstrapState.phase !== "ready" ||
       (e2eeState.required && !e2eeState.unlocked)
@@ -5096,7 +5107,7 @@ export function App({ onGoHome }: AppProps) {
     }
 
     let cancelled = false;
-    const searchAcrossRoots = !isIdeaRuntime && multiProjectSessionsEnabled;
+    const searchAcrossRoots = !isIDEManagedProject && multiProjectSessionsEnabled;
     setSessionSearchLoading(true);
     void sessionService
       .searchSessions(currentRootId, sessionSearchAppliedQuery, 20, {
@@ -10745,7 +10756,7 @@ export function App({ onGoHome }: AppProps) {
   }, [loadingOlderSessions]);
 
   useEffect(() => {
-    if (didInitRef.current) {
+    if (didInitRef.current || bootstrapState.phase === "error") {
       return;
     }
     didInitRef.current = true;
@@ -11318,6 +11329,16 @@ export function App({ onGoHome }: AppProps) {
     restoreActiveSession,
     setDrawerSessionForRoot,
   ]);
+
+  useEffect(() => {
+    if (isIdeaRuntime) return;
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<{root: string; path: string}>).detail;
+      actionHandlers.open(detail);
+    };
+    window.addEventListener("ideaRemoteOpenFile", open);
+    return () => window.removeEventListener("ideaRemoteOpenFile", open);
+  }, [actionHandlers]);
 
   const handleSelectedSessionFileClick = useCallback(
     (target: string | RelatedFileClickTarget) => {
@@ -13818,8 +13839,11 @@ export function App({ onGoHome }: AppProps) {
               </button>
             </div>
           ) : null}
-          <FileViewer
+          <WorkspaceFileViewer
             file={file}
+            store={fileEditStore}
+            onUpdated={(next) => { if (fileRef.current?.root === next.root && fileRef.current?.path === next.path) setFile(next); }}
+            onSaved={(next) => { if (fileRef.current?.root === next.root && fileRef.current?.path === next.path) setFile(next); if (next.root) void refreshGitStatus(next.root); }}
             isVisible={!selectedSession}
             onSelectionChange={handleViewerSelectionChange}
             initialScrollTop={
@@ -13876,14 +13900,14 @@ export function App({ onGoHome }: AppProps) {
           });
         }}
         onUploadFiles={handleTreeUpload}
-        onRenameRoot={isIdeaRuntime ? undefined : handleRenameCurrentRoot}
-        onRemoveRoot={isIdeaRuntime ? undefined : handleRemoveCurrentRoot}
+        onRenameRoot={isIDEManagedProject ? undefined : handleRenameCurrentRoot}
+        onRemoveRoot={isIDEManagedProject ? undefined : handleRemoveCurrentRoot}
         isGitRepo={managedRootByIdRef.current[currentRootId || ""]?.is_git_repo === true}
         isGitWorktree={managedRootByIdRef.current[currentRootId || ""]?.is_git_worktree === true}
         enableGitHistoryToggle={false}
-        onCreateWorktree={isIdeaRuntime ? undefined : handleOpenWorktreeLocation}
-        onSwitchWorktree={isIdeaRuntime ? undefined : handleSwitchWorktreeStart}
-        onRemoveWorktree={isIdeaRuntime ? undefined : handleRemoveCurrentWorktree}
+        onCreateWorktree={isIDEManagedProject ? undefined : handleOpenWorktreeLocation}
+        onSwitchWorktree={isIDEManagedProject ? undefined : handleSwitchWorktreeStart}
+        onRemoveWorktree={isIDEManagedProject ? undefined : handleRemoveCurrentWorktree}
         onOpenScheduledAgentTasks={() => setScheduledAgentDialogOpen(true)}
         menuOverlay={
           projectAddMode === "worktree_location"
@@ -14009,7 +14033,7 @@ export function App({ onGoHome }: AppProps) {
   }, [currentRootId, startRelayBinding, relayStatus]);
 
   const refreshTokenStationInfo = useCallback(async () => {
-    if (isIdeaRuntime) return;
+    if (isIDEManagedProject) return;
     setTokenStationLoading(true);
     setTokenStationErrorOpen(false);
     try {
@@ -14146,7 +14170,7 @@ export function App({ onGoHome }: AppProps) {
     !currentRootId ||
     (!relayStatus?.relay_bound &&
       !relayStatus?.relay_base_url);
-  const showUpdateButton = !isIdeaRuntime && shouldShowUpdateButton(updateState);
+  const showUpdateButton = !isIDEManagedProject && shouldShowUpdateButton(updateState);
   const updateBusy =
     updateSubmitting ||
     ["downloading", "installing", "restarting"].includes(
@@ -14280,7 +14304,7 @@ export function App({ onGoHome }: AppProps) {
           void handleLoadOlderExternalSessions();
         }}
       />
-    ) : !isIdeaRuntime && multiProjectSessionsEnabled && !sessionSearchOpen && !sessionSearchResultsMode ? (
+    ) : !isIDEManagedProject && multiProjectSessionsEnabled && !sessionSearchOpen && !sessionSearchResultsMode ? (
       <MultiProjectSessionList
         groups={multiProjectSessionGroups}
         selectedKey={selectedSession?.key}
@@ -14655,9 +14679,9 @@ export function App({ onGoHome }: AppProps) {
               creatingRootKind === "worktree" ? null : creatingRootName
             }
             creatingRootBusy={creatingRootBusy}
-            onOpenProjectAdd={isIdeaRuntime ? undefined : handleOpenProjectAdd}
-            onStartOnboarding={isMobile ? undefined : () => setOnboardingOpen(true)}
-            onCreateRootStart={isIdeaRuntime ? undefined : handleCreateRootStart}
+            onOpenProjectAdd={isIDEManagedProject ? undefined : handleOpenProjectAdd}
+            onStartOnboarding={isMobile || isIDEManagedProject ? undefined : () => setOnboardingOpen(true)}
+            onCreateRootStart={isIDEManagedProject ? undefined : handleCreateRootStart}
             onCreateRootNameChange={setCreatingRootName}
             onCreateRootSubmit={() => {
               void handleCreateRootSubmit();
@@ -14702,7 +14726,7 @@ export function App({ onGoHome }: AppProps) {
             onRelayAction={handleRelayAction}
             relayNodeId={relayStatus?.node_id || ""}
             relayBaseURL={relayStatus?.relay_base_url || ""}
-            relayNoRelayer={isIdeaRuntime || relayStatus?.no_relayer === true}
+            relayNoRelayer={isIDEManagedProject || relayStatus?.no_relayer === true}
             updateActionLabel={showUpdateButton ? updateLabel : null}
             updateActionDisabled={updateBusy}
             updateActionHelp={showUpdateButton ? updateHelp : ""}
@@ -14711,7 +14735,7 @@ export function App({ onGoHome }: AppProps) {
             onUpdateAction={() => {
               void handleStartUpdate();
             }}
-            footerTopContent={isIdeaRuntime ? null : tokenStationCard}
+            footerTopContent={isIDEManagedProject ? null : tokenStationCard}
             sidebarsSwapped={sidebarsSwapped}
             onSidebarsSwappedChange={setSidebarsSwapped}
             gitDiffSideBySide={gitDiffSideBySide}
@@ -14961,6 +14985,10 @@ export function App({ onGoHome }: AppProps) {
           }
         }}
       /> : null}
+      {bootstrapState.phase === "error" ? <ConnectionErrorDialog error={bootstrapState.error} onRetry={() => {
+        didInitRef.current = false;
+        void bootstrapService.start();
+      }} /> : null}
       {bootstrapState.phase === "needs_pairing" &&
         e2eeState.required &&
         !e2eeState.unlocked ? (

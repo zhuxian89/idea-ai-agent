@@ -88,10 +88,7 @@ func localAccessMiddleware(token, rootID string, next http.Handler) http.Handler
 		// Project opening, renaming and worktree selection belong to the IDE.
 		// Preserve Git operations inside the selected project, but never register
 		// or remove another managed root through the embedded standalone UI.
-		readOnly := r.Method == http.MethodGet || r.Method == http.MethodHead
-		if ((r.URL.Path == "/api/dirs" || strings.HasPrefix(r.URL.Path, "/api/dirs/")) && !readOnly) ||
-			r.URL.Path == "/api/local_dirs" || strings.HasPrefix(r.URL.Path, "/api/imports/github") ||
-			(r.URL.Path == "/api/git/worktrees" && !readOnly) {
+		if isIDEProjectMutation(r) {
 			http.Error(w, "open or manage projects in IDEA", http.StatusForbidden)
 			return
 		}

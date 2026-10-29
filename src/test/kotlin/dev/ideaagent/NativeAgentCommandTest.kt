@@ -13,7 +13,7 @@ class NativeAgentCommandTest {
     private val bridgeSource = Files.readString(Path.of("runtime/web/src/services/ideaBridge.ts"))
 
     @Test fun toolWindowCommandsMatchTheWebviewBridge() {
-        assertEquals(listOf("new", "history", "settings"), NativeAgentCommands.all)
+        assertEquals(listOf("new", "history", "settings", "remote"), NativeAgentCommands.all)
         for (command in NativeAgentCommands.all) {
             assertTrue("webview bridge must accept native command $command", bridgeSource.contains("\"$command\""))
         }
@@ -31,7 +31,7 @@ class NativeAgentCommandTest {
             assertTrue(DumbService.isDumbAware(action))
             action.fire()
         }
-        assertEquals(listOf("new", "history", "settings"), seen)
+        assertEquals(listOf("new", "history", "settings", "remote"), seen)
     }
 
     @Test fun commandsQueuedBeforeTheWebviewLoadsFlushExactlyOnce() {

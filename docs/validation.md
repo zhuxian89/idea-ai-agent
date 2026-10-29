@@ -1,5 +1,17 @@
 # 验证记录
 
+## 0.1.25 远程访问发布（2026-10-29）
+
+- 用户授权重新打包、更新插件描述并上传 Marketplace。市场上传前核实上一正式版为 0.1.24，发布版本统一更新为 0.1.25。
+- 本次打包前重新执行 kanban `-count=1` 和 `-race -run TestTaskStoreSnapshotMigration -count=1`，全部通过。测试使用隔离配置和临时数据库，旧库迁移未删除。
+- 修复后的前端 250 项、Kotlin 66 项及后端全量测试通过，app/api/relay/fs/kanban race 检查通过；包含慢连接轮次交接、完成状态回放、扫码握手失败及真实 App 的重试恢复回归。
+- `package-plugin.mjs release` 完成 TypeScript、Vite、Gradle 测试/配置检查和五包构建。产物位于 `build/releases/0.1.25/`；旧正式包和本地测试包保留。
+- 独立核验五包 CRC、无重复条目、SHA256SUMS、每个前端文件与 dist 的内容一致；版本 0.1.25，since-build 241，无 until-build。四平台包各含一个目标运行程序，通用包包含四个；自动启动类和新的中英文描述已进入所有包。
+- 通用包 SHA256：`1cb4ecee8fd72b9268755ecac3ff3b48acd7ea6f2cee94d3fc9264b5512e040b`，31.8 MiB。完整核验记录：`build/reports/release-0.1.25-packages.json`。
+- 额外 `verifyPlugin -x buildRuntime --offline` 未完成：缺少 Plugin Verifier/IDE 缓存，首个无法解析目标为 IDEA IC 2024.2。不得宣称全部 IDE 版本兼容检查通过。自动测试与交叉编译不替代全部平台实机验收。
+- 中英文 plugin.xml 描述、版本说明、README、PRIVACY、Marketplace 描述及入门文案同步更新。未上传带有模拟数据的媒体预览。
+- Marketplace 默认频道上传返回 HTTP 201；认证回读确认版本 0.1.25、更新 ID `1205662`、通用包文件名与新版 change notes 一致。上传时 `approve=false`、`listed=false`，即等待 JetBrains 审核，尚未公开上架。更新地址：https://plugins.jetbrains.com/plugin/34276-local-ai-agent/versions/stable/1205662 。上传与回读回执保存在忽略的 `build/reports/marketplace-0.1.25-*.json`，不含鉴权 token。
+
 ## 0.1.24 五包构建（2026-10-29）
 
 - 用户确认 `0.1.23-local.22` 持续试用无问题，授权生成各平台包并 push。版本升级为 `0.1.24`，原有本地包与 `0.1.23` 正式包保留。

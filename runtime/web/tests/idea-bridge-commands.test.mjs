@@ -14,12 +14,12 @@ const compiledPreferences = ts.transpileModule(fs.readFileSync("src/services/ide
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 
-function loadBridge({ ready = false, search = "" } = {}) {
+function loadBridge({ ready = false, search = "", pathname = "/" } = {}) {
   const listeners = {};
   const posts = [];
   const inject = () => { window.ideaAgent = { postMessage: (payload) => posts.push(payload) }; };
   const window = {
-    location: { search },
+    location: { search, pathname },
     addEventListener: (name, handler) => { (listeners[name] ||= []).push(handler); },
     dispatchEvent: (event) => { for (const handler of listeners[event.type] || []) handler(event); },
   };
@@ -29,6 +29,7 @@ function loadBridge({ ready = false, search = "" } = {}) {
   const sandbox = {
     window,
     URLSearchParams,
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
     exports: {},
     require: (name) => {
       if (name === "./ideaPreferences") return preferences.exports;
@@ -61,6 +62,21 @@ test("native commands clicked before the view subscribes replay in order", () =>
   const seenAgain = [];
   bridge.exports.subscribeIdeaNativeCommand((command) => seenAgain.push(command));
   assert.deepEqual(seenAgain, ["new"], "unsubscribed commands stay queued");
+});
+
+test("remote browser opens files through its web viewer and keeps native commands local", () => {
+  const bridge = loadBridge({ pathname: "/n/project-node/" });
+  assert.equal(bridge.exports.isIdeaRuntime, false);
+  const files = [];
+  bridge.window.addEventListener("ideaRemoteOpenFile", event => files.push(event.detail));
+  bridge.exports.openIdeaFile("project", "src/main.ts");
+  assert.deepEqual(JSON.parse(JSON.stringify(files)), [{ root: "project", path: "src/main.ts" }]);
+  assert.equal(bridge.posts.length, 0);
+  const local = loadBridge();
+  const commands = [];
+  local.window.ideaAgentNativeCommand("remote");
+  local.exports.subscribeIdeaNativeCommand(command => commands.push(command));
+  assert.deepEqual(commands, ["remote"]);
 });
 
 test("unknown native commands never reach the view", () => {

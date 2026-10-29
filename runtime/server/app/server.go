@@ -86,6 +86,11 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		}
 		opts.NoRelayer = true
 		opts.WebPushEnabled = false
+		ensured, err := EnsureE2EEConfig(true)
+		if err != nil {
+			return err
+		}
+		opts.E2EEConfig = ensured.Config
 	}
 	registry, err := fs.NewDefaultRegistry()
 	if err != nil {
@@ -193,7 +198,7 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 
 	var handler http.Handler = api.LoggingMiddleware(api.CORSMiddleware(mux))
 	if opts.LocalOnly {
-		handler = localAccessMiddleware(opts.AccessToken, rootID, api.LoggingMiddleware(mux))
+		handler = localAccessMiddleware(opts.AccessToken, rootID, api.LocalIDEAccess(api.LoggingMiddleware(mux)))
 	}
 
 	server := &http.Server{
@@ -213,14 +218,42 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 	httpHandler.LocalCLIToken = localCLIToken
 	httpHandler.LocalAccessToken = opts.AccessToken
 
-	relayMgr, err := relay.NewManager(addr, opts.NoRelayer, relayBaseURL, opts.UseTLS)
+	relayAddr := listener.Addr().String()
+	var remoteListener net.Listener
+	if opts.LocalOnly {
+		remoteListener, err = net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return err
+		}
+		defer remoteListener.Close()
+		relayAddr = remoteListener.Addr().String()
+	}
+	relayMgr, err := relay.NewManager(relayAddr, opts.NoRelayer, relayBaseURL, opts.UseTLS && !opts.LocalOnly)
 	if err != nil {
 		return err
 	}
 	services.Relay = relayMgr
 	services.RelayTips = relay.NewTipsService(relayMgr)
+	if remoteListener != nil {
+		remoteServer := &http.Server{Handler: remoteAccessMiddleware(relayMgr, mux), ReadHeaderTimeout: 5 * time.Second}
+		defer remoteServer.Close()
+		go func() {
+			if err := remoteServer.Serve(remoteListener); err != nil && err != http.ErrServerClosed {
+				log.Printf("[remote] listener stopped: %v", err)
+			}
+		}()
+	}
 	if err := relayMgr.Start(ctx); err != nil {
 		return err
+	}
+	if opts.LocalOnly {
+		control, err := newRemoteAccessControl(relayMgr, services)
+		if err != nil {
+			return err
+		}
+		mux.Handle("/api/idea/remote", control)
+		mux.Handle("/api/idea/remote/", control)
+		defer services.GetSessionStreamHub().CloseRemoteClients()
 	}
 	services.RelayTips.Start(ctx)
 	for _, root := range services.ListRoots() {

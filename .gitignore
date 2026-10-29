@@ -13,3 +13,4 @@ runtime/*.exe
 runtime/.mindfs/
 .playwright-cli/
 output/
+.secrets/

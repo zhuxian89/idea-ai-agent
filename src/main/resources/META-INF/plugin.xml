@@ -3,7 +3,7 @@
     <name>Local AI Agent</name>
     <vendor url="https://github.com/zhuxian89/idea-ai-agent">Local AI Agent</vendor>
     <description><![CDATA[
-        <p><b>Native Codex CLI and Claude Code workflows in IntelliJ IDEA, with zero reconfiguration when your CLI already works.</b></p>
+        <p><b>Native Codex CLI and Claude Code in IntelliJ IDEA. Continue the same project from a browser or phone.</b></p>
         <p>
             Local AI Agent connects the current IDEA project directly to locally installed
             coding agents, including Codex CLI and Claude Code. It preserves the Agent's
@@ -17,7 +17,21 @@
             <li>Resume native CLI sessions and project-scoped conversation history.</li>
             <li>Choose the Agent, model, reasoning effort, Plan Mode, and execution permission level.</li>
             <li>Detect, configure, install, update, and restart supported local Agent CLIs from IDEA.</li>
+            <li>See factual Agent activity in a quiet two-line status area and refresh available models without restarting IDEA.</li>
         </ul>
+        <h3>One project across IDEA, a browser and your phone</h3>
+        <p>Link the project to Relay from the Remote access toolbar button. Computer browsers and phones
+            share the IDEA project's sessions and live updates without a separate MindFS installation.
+            Phone QR scanning pairs automatically; ordinary links require a pairing key on first use.
+            Enabled projects connect when opened in IDEA. Keep IDEA and the project running.</p>
+        <ul>
+            <li>Messages and execution progress stay synchronized across connected clients in the same session.</li>
+            <li>Send instructions, answer questions and respond to approval requests remotely using the same Agent backend.</li>
+            <li>Browse project files, inspect changes and edit text files in the browser with revision-conflict detection.</li>
+            <li>Retry a failed connection without re-entering a valid pairing key. Turn remote access off while continuing locally.</li>
+        </ul>
+        <p>Remote business traffic is encrypted through Relay; connection metadata remains visible to Relay.
+            Browsers retain pairing credentials and file/session caches. See the privacy policy for details.</p>
         <h3>Voice input that stays in your draft</h3>
         <p>
             Click the microphone in the composer, speak, then stop recording to insert the recognized
@@ -27,6 +41,7 @@
         </p>
         <ul>
             <li>Add selected code, the current file, or a project-tree file to the draft without sending it.</li>
+            <li>Send selected Run/Debug console output to a draft in the current or a new session for analysis.</li>
             <li>Inspect turn diffs and open referenced project files in IDEA.</li>
             <li>Follow the IDEA light or dark theme and switch between English and Chinese.</li>
         </ul>
@@ -51,7 +66,7 @@
 
         <hr>
         <h2>中文</h2>
-        <p><b>在 IntelliJ IDEA 中尽可能完整地还原 Codex CLI 和 Claude Code 的原生能力；本机 CLI 已可用时，安装后零配置接入。</b></p>
+        <p><b>在熟悉的 IntelliJ IDEA 中使用原生 Codex CLI 和 Claude Code，也能通过浏览器和手机继续同一个项目。</b></p>
         <p>
             Local AI Agent 将当前 IDEA 项目直接连接到本机安装的 Coding Agent，包括
             Codex CLI 和 Claude Code。插件保留 Agent 原生的会话、工具循环、登录状态、
@@ -64,7 +79,19 @@
             <li>恢复原生 CLI 会话，并按项目保存和继续历史对话。</li>
             <li>选择 Agent、模型、思考强度、Plan Mode 和执行权限。</li>
             <li>在 IDEA 内检测、配置、安装、更新和重启本机 Agent CLI。</li>
+            <li>用安静的两行状态展示真实 Agent 活动，主动刷新可用模型，无需重启 IDEA。</li>
         </ul>
+        <h3>IDEA、浏览器、手机，共用同一个项目</h3>
+        <p>通过工具栏“远程访问”绑定 Relay，电脑浏览器和手机即可与 IDEA 共用会话和实时进度，无需另装 MindFS。
+            手机扫码自动配对，普通链接首次访问输入配对密钥；已开启远程访问的项目随 IDEA 打开自动连接。
+            使用期间需要保持 IDEA 和对应项目运行。</p>
+        <ul>
+            <li>同一会话的消息和执行进度在三端实时同步。</li>
+            <li>远程发送指令、回答追问和处理审批，沿用同一个 Agent 后台服务。</li>
+            <li>在浏览器查看项目文件和代码差异，编辑文本文件时检测版本冲突。</li>
+            <li>连接失败可重试，保留有效配对信息；关闭远程访问后，本地仍可继续使用。</li>
+        </ul>
+        <p>远程业务流量经 Relay 加密转发，Relay 仍可见连接元数据。浏览器会保存配对凭据与文件/会话缓存，详见隐私说明。</p>
         <h3>不自动发送的语音输入</h3>
         <p>
             点击输入框麦克风开始录音，停止后将识别文字插入原光标位置，不会自动发送消息。可使用腾讯云、
@@ -72,6 +99,7 @@
         </p>
         <ul>
             <li>把选中代码、当前文件或项目树中的文件加入输入框，不会自动发送。</li>
+            <li>将 Run/Debug 控制台选中的报错交给当前会话或新会话分析，先进入草稿，不自动发送。</li>
             <li>查看每轮文件差异，并在 IDEA 中直接打开回复引用的项目文件。</li>
             <li>跟随 IDEA 深色/浅色主题，界面支持简体中文和英文。</li>
         </ul>
@@ -92,6 +120,17 @@
         </p>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>0.1.25 — Remote access / 三端远程访问</b></p>
+        <ul>
+            <li>Adds a Remote access toolbar entry with Relay linking, shared IDEA/browser/phone sessions and live progress.</li>
+            <li>Pairs phones automatically from a QR code and reconnects enabled projects when IDEA opens, without opening the plugin panel.</li>
+            <li>Adds browser text editing with revision-conflict detection and drafts retained while navigating within the page.</li>
+            <li>Preserves valid pairing on connection failures and provides manual retry; fixes completion ordering between turns from multiple clients.</li>
+            <li>新增远程访问入口与 Relay 绑定，IDEA、浏览器、手机共用会话并实时同步。</li>
+            <li>手机扫码自动配对；已开启远程访问的项目随 IDEA 打开自动上线，无需打开插件面板。</li>
+            <li>新增浏览器文件编辑、版本冲突检测与页面内草稿保留。</li>
+            <li>修复网络失败误提示重新输码，提供保留配对信息的重试；修复多端轮次交接及完成状态回放。</li>
+        </ul>
         <p><b>0.1.24</b></p>
         <ul>
             <li>Shows native Agent activity details in a quiet two-line status area with independent elapsed and last-update timers.</li>
@@ -104,6 +143,7 @@
     <depends>com.intellij.modules.platform</depends>
     <depends optional="true" config-file="jcef.xml">com.intellij.modules.jcef</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="dev.ideaagent.RemoteAccessStartup"/>
         <notificationGroup id="IdeaAgent.Context" displayType="BALLOON" isLogByDefault="false"/>
         <toolWindow id="AI Agent" anchor="right" icon="/icons/agent.svg"
                     factoryClass="dev.ideaagent.AgentToolWindowFactory"/>

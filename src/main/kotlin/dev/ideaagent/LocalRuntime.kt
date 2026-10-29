@@ -10,7 +10,6 @@ import com.intellij.util.concurrency.AppExecutorUtil
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
-import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Collections
 import java.util.HexFormat
@@ -59,8 +58,7 @@ class LocalRuntime(private val project: Project) : Disposable {
             val executableName = "idea-agent-$os-$arch" + if (os == "windows") ".exe" else ""
             val executable = materializeRuntime(bundledRuntime, executableName,
                 Path.of(PathManager.getSystemPath(), "idea-ai-agent", "runtime"))
-            val hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(projectPath.toString().toByteArray()))
-            val dataDir = Path.of(PathManager.getConfigPath(), "idea-ai-agent", hash)
+            val dataDir = runtimeDataDir(projectPath, Path.of(PathManager.getConfigPath()))
             Files.createDirectories(dataDir)
             val token = HexFormat.of().formatHex(ByteArray(32).also { SecureRandom().nextBytes(it) })
             val builder = runtimeProcess(executable, projectPath, dataDir, token)

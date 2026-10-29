@@ -47,8 +47,9 @@ function listShellBundleAssets(bundle: Record<string, BundleItem>): string[] {
 }
 
 function buildServiceWorker(precacheUrls: string[], version: string): string {
-  return `const SHELL_CACHE = "mindfs-shell-${version}";
-const RUNTIME_CACHE = "mindfs-runtime-${version}";
+  return `const CACHE_PREFIX = "idea-agent-" + new URL(self.registration.scope).pathname + "-";
+const SHELL_CACHE = CACHE_PREFIX + "shell-${version}";
+const RUNTIME_CACHE = CACHE_PREFIX + "runtime-${version}";
 const OFFLINE_URL = new URL("./offline.html", self.location.href).toString();
 const INDEX_URL = new URL("./index.html", self.location.href).toString();
 const PRECACHE_URLS = ${JSON.stringify(precacheUrls, null, 2)};
@@ -74,7 +75,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const cacheKeys = await caches.keys();
     await Promise.all(cacheKeys
-      .filter((key) => key !== SHELL_CACHE && key !== RUNTIME_CACHE)
+      .filter((key) => key.startsWith(CACHE_PREFIX) && key !== SHELL_CACHE && key !== RUNTIME_CACHE)
       .map((key) => caches.delete(key)));
     await self.clients.claim();
   })());

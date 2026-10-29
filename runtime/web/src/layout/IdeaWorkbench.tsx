@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { useNetworkOnline } from "../hooks/useNetworkOnline";
 import { isIdeaChromeHost, requestIdeaFileContext, subscribeIdeaNativeCommand } from "../services/ideaBridge";
+import { RemoteAccessDialog } from "../components/remote/RemoteAccessDialog";
 
 export type IdeaWorkbenchOptions = {
   projectName: string;
@@ -60,7 +61,8 @@ function ToolbarButton({ label, kind, pressed, onClick }: {
 }
 
 export function IdeaWorkbench(props: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const [remoteOpen, setRemoteOpen] = useState(false);
   const networkOnline = useNetworkOnline();
   const wasOffline = useRef(!networkOnline);
   const [networkRestored, setNetworkRestored] = useState(false);
@@ -92,6 +94,7 @@ export function IdeaWorkbench(props: Props) {
   const toggleSettings = () => { if (commandView.current === "settings") backToChat(); else { commandView.current = "settings"; props.onCloseHistory?.(); props.onOpenSettings?.(); } };
   const commandRef = useRef<(command: string) => void>(() => {});
   commandRef.current = (command) => {
+    if (command === "remote") setRemoteOpen(true);
     if (command === "new") newSession();
     else if (command === "history") toggleHistory();
     else if (command === "settings") toggleSettings();
@@ -111,9 +114,11 @@ export function IdeaWorkbench(props: Props) {
   }, [view]);
   return (
     <div className="idea-workbench" data-onboarding="shell" data-idea-view={view} data-idea-chrome={chrome ? "true" : undefined}>
+      {remoteOpen ? <RemoteAccessDialog onClose={() => setRemoteOpen(false)} /> : null}
       {!networkOnline || networkRestored ? <div className="idea-network-notice" role="status">{t(networkOnline ? "session.networkRestoredNotice" : "session.networkOfflineNotice")}</div> : null}
       {!chrome ? <header className="idea-toolbar">
         <strong>AI Agent</strong>
+        <button type="button" onClick={() => setRemoteOpen(true)}>{locale === "zh-CN" ? "远程访问" : "Remote access"}</button>
         <ToolbarButton kind="new" label={t("session.new")} onClick={newSession} />
         <ToolbarButton kind="history" label={t("idea.history")} pressed={view === "history"} onClick={toggleHistory} />
         <ToolbarButton kind="settings" label={t("idea.settings")} pressed={view === "settings"} onClick={toggleSettings} />

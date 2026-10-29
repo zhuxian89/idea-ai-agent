@@ -76,6 +76,9 @@ func (h *HTTPHandler) service() *usecase.Service {
 }
 
 func (h *HTTPHandler) requireProtectedHTTPSession(r *http.Request) (*e2ee.Session, bool, error) {
+	if isLocalIDEAccess(r) {
+		return nil, false, nil
+	}
 	manager := h.AppContext.GetE2EEManager()
 	if manager == nil || !manager.Enabled() {
 		return nil, false, nil
@@ -95,6 +98,9 @@ func (h *HTTPHandler) requireProtectedHTTPSession(r *http.Request) (*e2ee.Sessio
 }
 
 func (h *HTTPHandler) requireRequestProof(r *http.Request) (*e2ee.Session, error) {
+	if isLocalIDEAccess(r) {
+		return nil, nil
+	}
 	manager := h.AppContext.GetE2EEManager()
 	if manager == nil || !manager.Enabled() {
 		return nil, nil
@@ -299,6 +305,7 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Get("/health", h.handleHealth)
 	r.Get("/api/tree", h.protectedEndpoint(h.handleTree))
 	r.Get("/api/file", h.handleFile)
+	r.Put("/api/file", h.protectedEndpoint(h.handleFileSave))
 	r.Get("/api/git/status", h.protectedEndpoint(h.handleGitStatus))
 	r.Get("/api/git/diff", h.protectedEndpoint(h.handleGitDiff))
 	r.Get("/api/git/history", h.protectedEndpoint(h.handleGitHistory))
@@ -1696,6 +1703,9 @@ func isRelayedRequest(r *http.Request) bool {
 }
 
 func (h *HTTPHandler) shouldRewriteRelayedAssets(r *http.Request) bool {
+	if h.AppContext != nil && h.AppContext.ProjectLocked {
+		return false
+	}
 	return isRelayedRequest(r) && isStandardReleaseVersion(h.Version)
 }
 
@@ -1782,6 +1792,10 @@ func (h *HTTPHandler) handleTree(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPHandler) handleFile(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("edit") == "1" {
+		h.protectedEndpoint(h.handleEditableFile)(w, r)
+		return
+	}
 	rootID := r.URL.Query().Get("root")
 	uc := h.service()
 	path := r.URL.Query().Get("path")
@@ -2519,6 +2533,11 @@ func (h *HTTPHandler) handleRelayStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	status := h.relayStatusWithE2EE(manager.Status())
+	if isLocalIDEAccess(r) {
+		status.E2EERequired = false
+		respondJSON(w, http.StatusOK, status)
+		return
+	}
 	if !status.E2EERequired {
 		respondJSON(w, http.StatusOK, status)
 		return

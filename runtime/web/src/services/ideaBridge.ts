@@ -1,7 +1,8 @@
 import { restoreIdeaAppearance, setIdeaTheme } from "./appearance";
 export { persistIdeaLocale } from "./ideaPreferences";
 
-export const isIdeaRuntime = true;
+export const isIDEManagedProject = true;
+export const isIdeaRuntime = !/^\/n\/[^/]+(?:\/|$)/.test(window.location.pathname || "");
 export type IdeaContextTarget = "current" | "new";
 const pendingContexts: { text: string; target: IdeaContextTarget }[] = [];
 let receiveContext: ((text: string, target: IdeaContextTarget) => void) | undefined;
@@ -11,7 +12,7 @@ let receiveContext: ((text: string, target: IdeaContextTarget) => void) | undefi
 // small bounded queues so no click is lost; the IDE side queues symmetrically
 // until the page reports loaded.
 const bridgeQueueLimit = 20;
-const nativeCommands = ["new", "history", "settings", "chat"];
+const nativeCommands = ["new", "history", "settings", "chat", "remote"];
 const pendingNativeCommands: string[] = [];
 const pendingHostMessages: Record<string, unknown>[] = [];
 let nativeCommandHandler: ((command: string) => void) | undefined;
@@ -91,6 +92,10 @@ export function requestIdeaFileContext(): void {
 }
 
 export function openIdeaFile(rootId: string, path: string): void {
+  if (!isIdeaRuntime) {
+    window.dispatchEvent(new CustomEvent("ideaRemoteOpenFile", { detail: { root: rootId, path } }));
+    return;
+  }
   postToHost({ action: "openFile", rootId, path });
 }
 

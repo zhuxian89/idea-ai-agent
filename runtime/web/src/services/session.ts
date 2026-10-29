@@ -1694,7 +1694,8 @@ type CachedSessionListRecord<T> = {
   payload: T;
 };
 
-const SESSION_CACHE_DB = "mindfs-session-cache";
+const remoteCacheScope = typeof window !== "undefined" ? /^\/n\/[^/]+/.exec(window.location?.pathname || "")?.[0] || "" : "";
+const SESSION_CACHE_DB = "mindfs-session-cache" + remoteCacheScope;
 const SESSION_CACHE_STORE = "sessions";
 const SESSION_LIST_CACHE_STORE = "session-lists";
 export const SESSION_CACHE_VERSION = 4;

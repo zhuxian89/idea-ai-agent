@@ -27,6 +27,7 @@ type Status struct {
 	NodeURL           string `json:"node_url"`
 	LastError         string `json:"last_error,omitempty"`
 	E2EERequired      bool   `json:"e2ee_required"`
+	Connected         bool   `json:"connected"`
 }
 
 type TokenStationStatus struct {
@@ -46,6 +47,8 @@ type Manager struct {
 	mu           sync.Mutex
 	ctx          context.Context
 	cancel       context.CancelFunc
+	runDone      chan struct{}
+	bindCancel   context.CancelFunc
 	started      bool
 	polling      bool
 	pendingCode  string
@@ -202,9 +205,14 @@ func (m *Manager) statusLocked() Status {
 		RelayBaseURL:      m.resolveRelayBaseLocked(),
 		LastError:         m.lastError,
 	}
+	status.Connected = !m.noRelayer && m.service.connected.Load()
+	if !m.noRelayer {
+		if message := m.service.connectionError.Load(); message != nil {
+			status.LastError = *message
+		}
+	}
 	if m.noRelayer {
 		status.PendingCode = ""
-		return status
 	}
 	creds, err := m.service.store.Load()
 	if err == nil && creds.Relay.DeviceToken != "" && creds.Relay.Endpoint != "" {
@@ -247,7 +255,10 @@ func (m *Manager) startLocked(parent context.Context) {
 	runCtx, cancel := context.WithCancel(parent)
 	m.ctx = parent
 	m.cancel = cancel
+	done := make(chan struct{})
+	m.runDone = done
 	go func() {
+		defer close(done)
 		if err := m.service.Run(runCtx); err != nil && runCtx.Err() == nil {
 			if isPermanentRelayError(err) {
 				m.handlePermanentRelayError(err)
@@ -263,7 +274,9 @@ func (m *Manager) startPollingLocked(parent context.Context, pendingCode string)
 		return
 	}
 	m.polling = true
-	go m.pollLoop(parent, pendingCode)
+	bindCtx, cancel := context.WithCancel(parent)
+	m.bindCancel = cancel
+	go m.pollLoop(bindCtx, pendingCode)
 }
 
 func (m *Manager) startTokenStationPollingLocked(parent context.Context, pendingCode string) {
@@ -304,30 +317,33 @@ func (m *Manager) pollLoop(parent context.Context, pendingCode string) {
 
 	m.runBindPollLoop(parent, pendingCode, "",
 		func(result BindPollResult) error {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			if parent.Err() != nil || m.noRelayer || m.pendingCode != pendingCode {
+				return context.Canceled
+			}
 			return m.service.store.Save(Credentials{Relay: result.Credentials})
 		},
 		func(status string) {
 			m.mu.Lock()
+			if parent.Err() != nil || m.noRelayer || m.pendingCode != pendingCode {
+				m.mu.Unlock()
+				return
+			}
 			m.pendingCode = ""
+			m.polling = false
+			m.bindCancel = nil
 			m.lastError = status
-			alreadyStarted := status == "" && m.cancel != nil
-			m.mu.Unlock()
-			if status != "" {
-				return
-			}
-			if alreadyStarted {
-				m.restart()
-				return
-			}
-			m.mu.Lock()
-			if m.ctx != nil {
+			if status == "" && m.cancel == nil && m.ctx != nil {
 				m.startLocked(m.ctx)
 			}
 			m.mu.Unlock()
 		},
 		func(message string) {
 			m.mu.Lock()
-			m.lastError = message
+			if parent.Err() == nil && m.pendingCode == pendingCode {
+				m.lastError = message
+			}
 			m.mu.Unlock()
 		},
 	)
@@ -387,19 +403,46 @@ func (m *Manager) finishPolling(pendingCode string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.polling = false
+	if m.pendingCode == pendingCode || m.pendingCode == "" {
+		m.polling = false
+	}
 }
 
-func (m *Manager) restart() {
+// SetEnabled is called by the serialized local IDEA management endpoint.
+// Disabling waits for the connector to close, including its active streams.
+func (m *Manager) SetEnabled(enabled bool) error {
+	m.mu.Lock()
+	if m.noRelayer == !enabled {
+		m.mu.Unlock()
+		return nil
+	}
+	m.noRelayer = !enabled
+	if m.bindCancel != nil {
+		m.bindCancel()
+		m.bindCancel = nil
+	}
+	m.pendingCode = ""
+	m.polling = false
+	cancel, done := m.cancel, m.runDone
+	m.cancel, m.runDone = nil, nil
+	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
+		<-done
+	}
+	if !enabled {
+		return nil
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.cancel != nil {
-		m.cancel()
-		m.cancel = nil
+	creds, err := m.service.store.Load()
+	if err != nil {
+		return err
 	}
-	if m.ctx != nil {
+	if creds.Relay.DeviceToken != "" && m.ctx != nil {
 		m.startLocked(m.ctx)
 	}
+	return nil
 }
 
 func (m *Manager) handlePermanentRelayError(err error) {
@@ -422,6 +465,7 @@ func (m *Manager) ensurePendingLocked() {
 		return
 	}
 	m.pendingCode = generatePendingCode()
+	m.lastError = ""
 	m.pendingSince = time.Now().UTC()
 }
 

@@ -1,0 +1,60 @@
+feature: 2026-10-29-remote-access
+created: 2026-10-29
+steps:
+  - action: 通路与鉴权骨架：接通 Relay、远程入口与共用后端
+    exit_signal: 两客户端读取同一测试会话，未配对请求被拒，本地无需新增配对
+    status: done
+    evidence: remote_access_integration_test.go 的真实 Connector/yamux/加密 HTTP 通路；idea_access_test.go 双端共享事件
+  - action: 会话编排：统一发送准入、排队、待处理交互与广播
+    exit_signal: 双端同时发送、回答和停止不创建第二个 writer、不重复执行
+    status: done
+    evidence: remote_queue_test.go 并发准入；既有 delivery、question、approval 和取消回归；相关模块 race 通过
+  - action: 入口交互：常驻按钮、绑定提示、面板、链接与二维码
+    exit_signal: 未绑定先提示，绑定成功才显示地址，状态来自后端
+    status: done
+    evidence: NativeAgentCommandTest 与 remote-access.test.mjs 绑定、地址、二维码、隐藏密钥和取消流程
+  - action: 网页能力：复用文件浏览、编辑、Diff 和上下文
+    exit_signal: 浏览器完成发送、补上下文、回答、查看及编辑文件流程
+    status: done
+    evidence: 浏览器编辑、导航草稿、冲突提示通过；沿用网页上下文与 Git Diff，本轮展示保存的 update.diff
+  - action: 持久化与生命周期：恢复、关闭、解绑、断线与项目隔离
+    exit_signal: 重启保留绑定，关闭远程立即断开且不停止本地，多项目互不影响
+    status: done
+    evidence: Connector 开关与偏好恢复、取消绑定迟到响应、双端 WS 关闭隔离、remote-cache 节点缓存隔离测试
+  - action: 双端联调与交付检查
+    exit_signal: 验收场景获得证据，review 和旧库迁移回归通过，真实平台未测项明确列出
+    status: pending
+    evidence: 本地 review、全后端、相关 race、Chrome、构建和迁移检查通过；真实公网、Windows IDEA、手机实机及用户 review 待验收
+checks:
+  - item: 只安装插件，未绑定点击先提示，绑定后支持链接和二维码
+    source: 验收场景
+    status: done
+  - item: 本地与远程独立鉴权，共用 AppContext、会话和 Agent 连接
+    source: 编排骨架
+    status: done
+  - item: 未配对不能读写业务，远程不能管理绑定、项目或更新 runtime
+    source: 流程级约束
+    status: done
+  - item: 并发发送原子排队，问题与审批单次生效，停止同步
+    source: 流程级约束
+    status: done
+  - item: 浏览器文件查看、编辑冲突、Diff 固定快照与上下文均可用
+    source: 验收场景
+    status: done
+  - item: 重连恢复状态不重复执行，浏览器关闭不取消任务
+    source: 验收场景
+    status: done
+  - item: 关闭与解绑终止远程通路，重启保留选择，项目节点和缓存隔离
+    source: 验收场景
+    status: done
+    evidence: 解绑先关闭本地通路，再由用户在已有 Relay 云端节点页删除；真实云端撤销待联调
+  - item: 原生工具栏、管理路由、私有配置、runtime 入口与网页挂接完整
+    source: 挂载点
+    status: done
+  - item: 无独立 MindFS 安装依赖、后台服务、抢锁、自动 fork 或凭据泄露
+    source: 范围守护
+    status: done
+  - item: Windows/macOS 与桌面/手机浏览器验证，旧库与迁移 race 回归
+    source: 验收场景
+    status: pending
+    evidence: Windows amd64/macOS arm64 编译、Chrome 375/900px 和迁移回归已通过；交叉编译及响应式测试不等于真实平台验收

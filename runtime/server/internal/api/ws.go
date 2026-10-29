@@ -171,13 +171,25 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusUnauthorized, err)
 		return
 	}
+	localIDE := isLocalIDEAccess(r)
+	if localIDE {
+		clientID = "idea:" + clientID
+	} else if strings.HasPrefix(clientID, "idea:") {
+		http.Error(w, "reserved client id", http.StatusBadRequest)
+		return
+	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
 	log.Printf("[ws] connected client=%s remote=%s path=%s", clientID, r.RemoteAddr, r.URL.Path)
 	if h.AppContext != nil {
-		h.AppContext.GetSessionStreamHub().RegisterClient(clientID, conn)
+		h.AppContext.GetSessionStreamHub().registerClient(clientID, conn, localIDE)
+		if h.AppContext.ProjectLocked && !localIDE && h.AppContext.Relay != nil && h.AppContext.Relay.NoRelayer() {
+			h.AppContext.GetSessionStreamHub().UnregisterClient(clientID, conn)
+			_ = conn.Close()
+			return
+		}
 		h.pushInitialAppUpdate(clientID)
 		h.pushInitialGitHubImports(clientID)
 	}
@@ -224,7 +236,7 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		if e2eeManager := h.AppContext.GetE2EEManager(); e2eeManager != nil && e2eeManager.Enabled() {
+		if e2eeManager := h.AppContext.GetE2EEManager(); !localIDE && e2eeManager != nil && e2eeManager.Enabled() {
 			sess, err := e2eeManager.SessionForClient(clientID)
 			if err != nil {
 				h.sendE2EEError(conn, "", err.Error())
@@ -251,6 +263,9 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WSHandler) requireWSProof(r *http.Request, clientID string) error {
+	if isLocalIDEAccess(r) {
+		return nil
+	}
 	if h == nil || h.AppContext == nil {
 		return nil
 	}
@@ -737,15 +752,17 @@ func (h *WSHandler) handleSessionMessage(ctx context.Context, conn *websocket.Co
 		ClientCtx:       clientCtx,
 		ExcludeClientID: clientID,
 	}
-	if streamHub.IsSessionReplying(key) && sessionType != session.TypeCommand {
-		queue := streamHub.EnqueueSessionMessage(rootID, key, sessionName, QueuedUserMessage{
+	if sessionType != session.TypeCommand {
+		queue, queued := streamHub.reserveOrQueueSessionMessage(rootID, key, sessionName, QueuedUserMessage{
 			ID:                 requestID,
 			PendingUserMessage: userMessage,
 			ClientCtx:          clientCtx,
 		})
-		streamHub.BroadcastSessionQueueUpdated(rootID, key, queue)
-		log.Printf("[ws] session.queue.enqueue root=%s session=%s request=%s queue=%d", rootID, key, requestID, len(queue))
-		return
+		if queued {
+			streamHub.BroadcastSessionQueueUpdated(rootID, key, queue)
+			h.startNextQueuedSessionMessage(rootID, key)
+			return
+		}
 	}
 	if queue, changed := streamHub.UnfreezeQueuedSessionMessages(key); changed {
 		streamHub.BroadcastSessionQueueUpdated(rootID, key, queue)
@@ -987,7 +1004,7 @@ func (h *WSHandler) startNextQueuedSessionMessage(rootID, key string) {
 		return
 	}
 	streamHub := h.AppContext.GetSessionStreamHub()
-	item, queue, ok := streamHub.PopQueuedSessionMessage(key, "")
+	item, queue, ok := streamHub.reserveNextQueuedSessionMessage(key)
 	if !ok {
 		return
 	}
@@ -1005,6 +1022,7 @@ func (h *WSHandler) startNextQueuedSessionMessage(rootID, key string) {
 	}
 	go h.runSessionMessage(sessionMessageJob{
 		RootID:          rootID,
+		RequestID:       item.ID,
 		RuntimeRootPath: runtimeRootPath,
 		Key:             key,
 		SessionType:     sessionType,

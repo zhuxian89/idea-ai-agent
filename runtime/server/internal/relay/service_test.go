@@ -398,18 +398,21 @@ func TestManagerPollTerminalBindStatusStopsPolling(t *testing.T) {
 	if err := manager.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	if _, err := manager.StartBinding(); err != nil {
+	initial, err := manager.StartBinding()
+	if err != nil {
 		t.Fatalf("StartBinding() error = %v", err)
 	}
-	firstPendingCode := manager.Status().PendingCode
+	firstPendingCode := initial.PendingCode
 	if firstPendingCode == "" {
 		t.Fatal("expected initial pending code")
 	}
 
 	timeout := time.After(5 * time.Second)
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
 	for {
 		select {
-		case <-requests:
+		case <-ticker.C:
 			status := manager.Status()
 			if status.LastError != "expired" {
 				continue

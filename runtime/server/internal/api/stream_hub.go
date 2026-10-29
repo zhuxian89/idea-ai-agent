@@ -25,6 +25,7 @@ type StreamHub struct {
 	e2eeManager       *e2ee.Manager
 	clients           map[string]*websocket.Conn
 	connLocks         map[*websocket.Conn]*sync.Mutex
+	localIDEClients   map[*websocket.Conn]bool
 	sessionClients    map[string]map[string]struct{}
 	pendingSessions   map[string]*SessionPendingState
 	replayStates      map[string]*ClientReplayState
@@ -109,6 +110,7 @@ func NewStreamHub(e2eeManager *e2ee.Manager) *StreamHub {
 		e2eeManager:     e2eeManager,
 		clients:         make(map[string]*websocket.Conn),
 		connLocks:       make(map[*websocket.Conn]*sync.Mutex),
+		localIDEClients: make(map[*websocket.Conn]bool),
 		sessionClients:  make(map[string]map[string]struct{}),
 		pendingSessions: make(map[string]*SessionPendingState),
 		replayStates:    make(map[string]*ClientReplayState),
@@ -263,15 +265,38 @@ func (h *StreamHub) clearReplayStatesForSessionLocked(sessionKey string) {
 }
 
 func (h *StreamHub) RegisterClient(clientID string, conn *websocket.Conn) {
+	h.registerClient(clientID, conn, false)
+}
+
+func (h *StreamHub) CloseRemoteClients() {
+	h.mu.RLock()
+	var connections []*websocket.Conn
+	for _, conn := range h.clients {
+		if !h.localIDEClients[conn] {
+			connections = append(connections, conn)
+		}
+	}
+	h.mu.RUnlock()
+	for _, conn := range connections {
+		_ = conn.Close()
+	}
+}
+
+func (h *StreamHub) registerClient(clientID string, conn *websocket.Conn, localIDE bool) {
 	if blank(clientID) || conn == nil {
 		return
 	}
 	h.mu.Lock()
+	previous := h.clients[clientID]
 	h.clients[clientID] = conn
+	h.localIDEClients[conn] = localIDE
 	if _, ok := h.connLocks[conn]; !ok {
 		h.connLocks[conn] = &sync.Mutex{}
 	}
 	h.mu.Unlock()
+	if previous != nil && previous != conn {
+		_ = previous.Close()
+	}
 }
 
 func (h *StreamHub) UnregisterClient(clientID string, conn *websocket.Conn) {
@@ -281,11 +306,12 @@ func (h *StreamHub) UnregisterClient(clientID string, conn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	existing := h.clients[clientID]
+	delete(h.connLocks, conn)
+	delete(h.localIDEClients, conn)
 	if existing != conn {
 		return
 	}
 	delete(h.clients, clientID)
-	delete(h.connLocks, conn)
 	for sessionKey, clientSet := range h.sessionClients {
 		delete(clientSet, clientID)
 		if len(clientSet) == 0 {
@@ -430,16 +456,35 @@ func (h *StreamHub) queueSnapshot(sessionKey string) (string, []QueuedUserMessag
 }
 
 func (h *StreamHub) EnqueueSessionMessage(rootID, sessionKey, sessionTitle string, item QueuedUserMessage) []QueuedUserMessage {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.enqueueSessionMessageLocked(rootID, sessionKey, sessionTitle, item)
+}
+
+func (h *StreamHub) reserveOrQueueSessionMessage(rootID, key, title string, item QueuedUserMessage) ([]QueuedUserMessage, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	state := h.ensurePendingSessionLocked(key)
+	if state.Active || len(state.Queue) > 0 {
+		if !state.Active {
+			state.QueueFrozen = false
+		}
+		return h.enqueueSessionMessageLocked(rootID, key, title, item), true
+	}
+	delete(h.completed, key)
+	state.RootID, state.SessionTitle, state.Active = rootID, title, true
+	state.UpdatedAt = time.Now().UTC()
+	return nil, false
+}
+
+func (h *StreamHub) enqueueSessionMessageLocked(rootID, sessionKey, sessionTitle string, item QueuedUserMessage) []QueuedUserMessage {
 	if item.ID == "" {
 		item.ID = time.Now().UTC().Format("20060102150405.000000000")
 	}
 	if item.Timestamp.IsZero() {
 		item.Timestamp = time.Now().UTC()
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	state := h.ensurePendingSessionLocked(sessionKey)
-	delete(h.completed, sessionKey)
 	state.RootID = rootID
 	if strings.TrimSpace(sessionTitle) != "" {
 		state.SessionTitle = strings.TrimSpace(sessionTitle)
@@ -524,6 +569,25 @@ func (h *StreamHub) UnfreezeQueuedSessionMessages(sessionKey string) ([]QueuedUs
 func (h *StreamHub) PopQueuedSessionMessage(sessionKey, queueID string) (QueuedUserMessage, []QueuedUserMessage, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	return h.popQueuedSessionMessageLocked(sessionKey, queueID)
+}
+
+func (h *StreamHub) reserveNextQueuedSessionMessage(sessionKey string) (QueuedUserMessage, []QueuedUserMessage, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	state := h.pendingSessions[sessionKey]
+	if state == nil || state.Active {
+		return QueuedUserMessage{}, nil, false
+	}
+	item, queue, ok := h.popQueuedSessionMessageLocked(sessionKey, "")
+	if ok {
+		delete(h.completed, sessionKey)
+		state.Active = true
+	}
+	return item, queue, ok
+}
+
+func (h *StreamHub) popQueuedSessionMessageLocked(sessionKey, queueID string) (QueuedUserMessage, []QueuedUserMessage, bool) {
 	state := h.pendingSessions[sessionKey]
 	if state == nil || len(state.Queue) == 0 {
 		return QueuedUserMessage{}, nil, false
@@ -806,13 +870,17 @@ func (h *StreamHub) HasReplayClients(rootID, sessionKey string) bool {
 	return false
 }
 
+func (h *StreamHub) waitForReplayClients(sessionKey string) {
+	for h.HasReplayClients("", sessionKey) {
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func (h *StreamHub) ClearSessionPending(sessionKey string) {
 	if blank(sessionKey) {
 		return
 	}
-	for h.HasReplayClients("", sessionKey) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	h.waitForReplayClients(sessionKey)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	state := h.pendingSessions[sessionKey]
@@ -958,7 +1026,10 @@ func (h *StreamHub) WriteJSON(clientID string, conn *websocket.Conn, value any) 
 	if err := conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		return err
 	}
-	if h.e2eeManager != nil && h.e2eeManager.Enabled() {
+	h.mu.RLock()
+	localIDE := h.localIDEClients[conn]
+	h.mu.RUnlock()
+	if !localIDE && h.e2eeManager != nil && h.e2eeManager.Enabled() {
 		if resp, ok := value.(WSResponse); ok && resp.Type == "e2ee.error" {
 			return conn.WriteJSON(resp)
 		}
