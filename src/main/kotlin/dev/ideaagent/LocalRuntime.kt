@@ -2,11 +2,14 @@ package dev.ideaagent
 
 import com.google.gson.Gson
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.application.PluginPathManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.util.concurrency.AppExecutorUtil
+import dev.ideaagent.remote.RemoteHostService
+import dev.ideaagent.remote.remoteHostDataDir
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -25,6 +28,7 @@ class LocalRuntime(private val project: Project) : Disposable {
     private val lock = Any()
     private var future: CompletableFuture<Connection>? = null
     private var process: Process? = null
+    private var remoteHostLease: AutoCloseable? = null
     private var disposed = false
 
     init {
@@ -61,9 +65,12 @@ class LocalRuntime(private val project: Project) : Disposable {
             val dataDir = runtimeDataDir(projectPath, Path.of(PathManager.getConfigPath()))
             Files.createDirectories(dataDir)
             val token = HexFormat.of().formatHex(ByteArray(32).also { SecureRandom().nextBytes(it) })
-            val builder = runtimeProcess(executable, projectPath, dataDir, token)
+            val hostDir = remoteHostDataDir()
+            val builder = runtimeProcess(executable, projectPath, dataDir, token, hostDir)
             val child = synchronized(lock) {
                 if (disposed || result.isDone) return
+                remoteHostLease = ApplicationManager.getApplication().getService(RemoteHostService::class.java)
+                    .acquire(executable, hostDir)
                 builder.start().also { process = it }
             }
             // Drain diagnostics without copying agent prompts or credentials into IDEA logs.
@@ -80,7 +87,11 @@ class LocalRuntime(private val project: Project) : Disposable {
             val exitCode = child.waitFor()
             result.completeExceptionally(IllegalStateException("Local Agent service exited ($exitCode). Check CLI installation and project access."))
             synchronized(lock) {
-                if (process === child) process = null
+                if (process === child) {
+                    process = null
+                    remoteHostLease?.close()
+                    remoteHostLease = null
+                }
                 if (future === result) future = null
             }
         } catch (error: Exception) {
@@ -92,6 +103,8 @@ class LocalRuntime(private val project: Project) : Disposable {
         val child = synchronized(lock) {
             if (future !== result) return
             future = null
+            remoteHostLease?.close()
+            remoteHostLease = null
             process.also { process = null }
         }
         child?.let(::shutdownAsync)
@@ -105,6 +118,8 @@ class LocalRuntime(private val project: Project) : Disposable {
             disposed = true
             val active = process
             process = null
+            remoteHostLease?.close()
+            remoteHostLease = null
             future?.cancel(false)
             future = null
             active
@@ -118,6 +133,8 @@ class LocalRuntime(private val project: Project) : Disposable {
             disposed = true
             val active = process
             process = null
+            remoteHostLease?.close()
+            remoteHostLease = null
             future?.cancel(false)
             future = null
             active

@@ -1,4 +1,7 @@
 export const zhCN = {
+  "remote.unsavedFileLeave": "当前项目有未保存的文件修改。确定放弃修改并切换项目？取消可继续编辑。",
+  "remote.unsavedAttachmentsLeave": "当前项目有尚未发送的附件，或草稿无法保存。确定放弃这些内容并切换项目？",
+
   "remote.openFile": "打开文件",
   "remote.connectionFailed": "连接未完成",
   "remote.connectionRetryHint": "请检查网络以及 IDEA 项目是否在线，然后重试。已有配对信息会保留。",

@@ -70,6 +70,7 @@ test("React startup preserves the early IDE theme instead of restoring stale sto
       exports: {},
       require: (name) => {
         if (name === "./services/appearance") return appearance.exports;
+        if (name === "./services/remoteScope") return { remoteNodePrefix: () => "" };
         if (name === "react") return { default: { createElement: () => null } };
         if (name === "react-dom/client") return { createRoot: () => ({ render: () => {} }) };
         return {};

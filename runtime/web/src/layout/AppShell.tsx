@@ -106,7 +106,7 @@ export function AppShell({
 
   const sidebarWidth = isMobile ? "0px" : (isTablet ? "200px" : "260px");
   const rightWidth = isMobile ? "0px" : (rightSidebar ? (isTablet ? "240px" : "280px") : "0px");
-  const mobileHeight = "var(--mindfs-viewport-height, 100dvh)";
+  const mobileHeight = "calc(var(--mindfs-viewport-height, 100dvh) - var(--remote-host-toolbar-height, 0px))";
   const physicalLeftOpen = sidebarsSwapped ? rightOpen : leftOpen;
   const physicalRightOpen = sidebarsSwapped ? leftOpen : rightOpen;
   const physicalLeftWidth = sidebarsSwapped ? rightWidth : sidebarWidth;
@@ -129,8 +129,8 @@ export function AppShell({
     gridTemplateColumns: isMobile ? undefined : `${physicalLeftOpen ? physicalLeftWidth : "0px"} 1fr ${physicalRightOpen ? physicalRightWidth : "0px"}`,
     gridTemplateRows: isMobile ? undefined : "1fr auto",
     gridTemplateAreas: isMobile ? undefined : `"sidebar main right" "sidebar footer right"`,
-    minHeight: isMobile ? mobileHeight : "100vh",
-    height: isMobile ? mobileHeight : "100dvh",
+    minHeight: isMobile ? mobileHeight : "calc(100vh - var(--remote-host-toolbar-height, 0px))",
+    height: isMobile ? mobileHeight : "calc(100dvh - var(--remote-host-toolbar-height, 0px))",
     background: isMobile
       ? "var(--mindfs-topbar-bg, var(--mindfs-system-bar-bg, var(--mobile-overlay-bg, var(--content-bg))))"
       : "var(--bg-gradient-composite, var(--bg-gradient-start, #f3f4f6))",

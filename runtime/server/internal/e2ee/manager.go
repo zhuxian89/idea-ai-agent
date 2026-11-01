@@ -34,13 +34,20 @@ func NewManager(cfg Config) *Manager {
 }
 
 func (m *Manager) Enabled() bool {
-	return m != nil && m.cfg.Enabled && m.cfg.PairingSecret != ""
+	if m == nil {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.cfg.Enabled && m.cfg.PairingSecret != ""
 }
 
 func (m *Manager) NodeID() string {
 	if m == nil {
 		return ""
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.cfg.NodeID
 }
 
@@ -48,11 +55,35 @@ func (m *Manager) PairingSecret() string {
 	if m == nil {
 		return ""
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.cfg.PairingSecret
 }
 
+// ReplaceConfig revokes the legacy browser sessions when a project migrates to
+// the computer entry. The manager pointer stays stable for the shared StreamHub.
+func (m *Manager) ReplaceConfig(cfg Config) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id := range m.sessions {
+		m.removeSessionLocked(id)
+	}
+	m.clientIDs = map[string]string{}
+	m.cfg = cfg
+}
+
 func (m *Manager) OpenSessionForClient(clientID string, key DerivedKey) (*Session, error) {
-	if !m.Enabled() {
+	return m.OpenSessionForNode(clientID, key, "")
+}
+
+// OpenSessionForNode prevents an in-flight old handshake from crossing a rotation.
+func (m *Manager) OpenSessionForNode(clientID string, key DerivedKey, nodeID string) (*Session, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if nodeID != "" && nodeID != m.cfg.NodeID {
+		return nil, errors.New("e2ee_proof_invalid")
+	}
+	if !m.cfg.Enabled || m.cfg.PairingSecret == "" {
 		return nil, errors.New("e2ee disabled")
 	}
 	if clientID == "" {
@@ -70,13 +101,11 @@ func (m *Manager) OpenSessionForClient(clientID string, key DerivedKey) (*Sessio
 		CreatedAt:  now,
 		LastSeenAt: now,
 	}
-	m.mu.Lock()
 	if previousID := m.clientIDs[clientID]; previousID != "" {
 		m.removeSessionLocked(previousID)
 	}
 	m.sessions[sess.ID] = sess
 	m.clientIDs[clientID] = sess.ID
-	m.mu.Unlock()
 	return cloneSession(sess), nil
 }
 

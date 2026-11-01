@@ -34,12 +34,13 @@ func newRemoteAccessControl(manager *relay.Manager, app *api.AppContext) (*remot
 	}
 	if err == nil {
 		var saved struct {
-			Enabled bool `json:"enabled"`
+			Enabled bool   `json:"enabled"`
+			Mode    string `json:"mode"`
 		}
 		if err := json.Unmarshal(data, &saved); err != nil {
 			return nil, err
 		}
-		c.enabled = saved.Enabled
+		c.enabled = saved.Enabled && saved.Mode != "host"
 	}
 	if err := manager.SetEnabled(c.enabled); err != nil {
 		return nil, err
@@ -123,6 +124,12 @@ func remoteAccessMiddleware(manager *relay.Manager, next http.Handler) http.Hand
 			http.Error(w, "remote access disabled", http.StatusServiceUnavailable)
 			return
 		}
+		remoteBusinessMiddleware(next).ServeHTTP(w, r)
+	})
+}
+
+func remoteBusinessMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if strings.HasPrefix(path, "/api/idea/") ||
 			(strings.HasPrefix(path, "/api/relay/") && path != "/api/relay/status") ||

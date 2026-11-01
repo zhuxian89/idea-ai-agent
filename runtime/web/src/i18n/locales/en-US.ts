@@ -1,6 +1,8 @@
 import type { Messages } from "../types";
 
 export const enUS = {
+  "remote.unsavedFileLeave": "This project has unsaved file changes. Discard them and switch projects? Cancel to continue editing.",
+  "remote.unsavedAttachmentsLeave": "This project has unsent attachments or a draft that could not be saved. Discard them and switch projects?",
   "remote.openFile": "Open file",
   "remote.connectionFailed": "Connection could not be completed",
   "remote.connectionRetryHint": "Check your network and that the IDEA project is online, then retry. Saved pairing information is kept.",

@@ -1,5 +1,32 @@
 # 验证记录
 
+## 2026-11-01 自托管 Relay 清理与 macOS 测试包
+
+- 默认远程服务改为 `https://relay.20260310.best`，来源为 `runtime/agents.json`。绑定、登录、充值、原生客户端版本查询和下载地址同步清理；删除插件不使用的上游独立程序更新入口。保留原有许可证和来源项目说明。
+- 当前已跟踪文件及工作区源码扫描没有旧服务标识；新 ZIP 及其嵌套 JAR 解压内容扫描也没有残留。包内 `agents.json` 与源码完全一致，278 个前端文件与最终 dist 逐字节一致。
+- 使用 ZIP 解出的 arm64 程序在临时目录启动，共享 Host 报告的默认地址为上述自托管服务。实际发起绑定后，隔离代理捕获的连接目标仅为 `relay.20260310.best:443`；代理未向生产服务转发，没有创建生产绑定或改动用户真实配置。
+- 后端全量、相关前端 14/14、Kotlin 75/75（无跳过）、TypeScript/Vite、插件配置检查均通过；对 ZIP 解出的真实 HTML 页面验证独立电脑/项目密钥、A/B 切换、返回首页及刷新，通过。
+- 打包前 kanban 全包和 `TestTaskStoreSnapshotMigration` race 均通过，仅使用测试临时数据库。
+- 交付 `build/local-packages/idea-ai-agent-0.1.25-local.6-macos-arm64.zip`，11,824,785 字节。SHA-256：`7eea3d5c27c1ee359ee9e7f898ac192e1b11ae41530ab64c2e8b31a740851560`。校验报告：`build/reports/macos-local6-owned-relay-package.json`。
+- 本地测试包供安装后验证；未提交、推送或发布市场。此前 local.5 不用于本次自托管服务测试。
+
+## 2026-10-29 多项目入口 Windows 本地测试包
+
+- 用户授权复核、直接修复并打 Windows 测试包；完成 [本轮审查](../.codestable/audits/2026-10-29-remote-project-hub-review/index.md)，4 项发现均已修复。
+- 交付 `build/local-packages/idea-ai-agent-0.1.25-local.1-windows-amd64.zip`，12,395,565 字节（约 11.8 MiB）。SHA-256：`59797fe44b6c6179389b538d6ca4bc46b7cc81627a3886e64dac61c8d4e36f7f`。
+- `package-plugin.mjs local win --verify` 通过 TypeScript、Vite、Gradle 测试和配置检查；Kotlin 71/71。ZIP CRC、295 个条目无重复、版本 `0.1.25-local.1`、since-build 241、唯一 Windows x64 PE 程序校验通过；278 个前端文件逐一与最新 dist 比对一致，共享 RemoteHost Kotlin 类已打入 JAR。
+- 后端全量、相关 race、前端 260/260、最新 runtime 完整冒烟均通过；打包前 kanban 全包及 `TestTaskStoreSnapshotMigration` race 通过，仅临时数据库。真实双项目单 Connector 连续 20 次通过。
+- 包核验报告 `build/reports/remote-hub-review-windows-package.json`；构建日志 `/tmp/remote-hub-review-package.log`。未 commit/push/上传市场，正式 0.1.25 包未更改。
+- 用户重点实测：A/B/C 加入后同一节点切换；关闭最先打开的 A 后 B/C 继续收发；关闭当前项目只影响该项目；全局关闭影响全部远程入口；IDEA 重启后节点身份保持。Windows 实机与手机公网路径仍待用户测试。
+
+## 2026-10-29 统一电脑节点 / 多项目入口（未发布）
+
+- 后端全量与相关 race、前端 260 项、Kotlin 71 项、TypeScript/Vite、macOS/Windows 运行程序编译通过。kanban 全包和旧库快照迁移 race 通过。
+- 真实 RemoteHost + 两个项目子进程通过测试 Relay 建立唯一 Connector；关闭 A 后 B 的原 WS 仍能加密收发。单实例竞争、崩溃恢复、旧授权迁移、项目撤销及全局关闭均有自动回归。
+- 最新构建的完整 `smoke-runtime.mjs` 通过，含启动鉴权、模型发现、回答、会话切换、IDE 原生入口、设置探测失败/恢复、安装 API、消息去重、队列清空和后台完成。旧菜单脚本失配已修复。
+- 复核修复项目目录慢网请求重叠和旧响应覆盖；连续 20 次双项目真实子进程测试通过，修正测试 stream 复用和本机 CLI 隔离。Windows/macOS 实际 IDEA 多窗口、手机公网 Relay 和真实付费 Agent 联调待验收。用户已授权本地 Windows 包；未 push 或上传市场，0.1.25 正式产物未变。
+- [实现清单、验证证据与待项](../.codestable/features/2026-10-29-remote-project-hub/remote-project-hub-implementation.md)。
+
 ## 0.1.25 远程访问发布（2026-10-29）
 
 - 用户授权重新打包、更新插件描述并上传 Marketplace。市场上传前核实上一正式版为 0.1.24，发布版本统一更新为 0.1.25。

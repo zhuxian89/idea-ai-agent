@@ -64,7 +64,7 @@ export async function smokeAgentDiscovery(browser, bootstrapURL, reports) {
     const trigger = page.locator('[data-onboarding="agent-selector"] > button');
     await trigger.click();
     const menu = page.locator('[data-agent-menu]');
-    await expect(menu.getByRole('status')).toHaveAccessibleName('Discovering models and options for codex…');
+    await expect(menu.locator('.agent-selector-row-status')).toHaveAccessibleName('Discovering models and options for codex…');
     await expect(menu).not.toContainText('probe pending');
     const initialReads = reads;
     models = [{ id: 'before-connection', name: 'Discovered before connection' }];

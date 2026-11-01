@@ -143,7 +143,7 @@ export async function smokeSessionModel(browser, bootstrapURL, rootId, reports) 
     const idleRequest = await send(idle, 'Start another Codex turn');
     recordUser(idle, idleRequest.payload.content);
     emit('session.stream', idle, {event: {type: 'thought_chunk', data: {content: 'Working with the selected Codex model'}}});
-    await page.locator('.idea-chat:visible').getByText('Thinking', {exact: true}).waitFor();
+    await expect(page.locator('.idea-chat:visible [data-session-activity]')).toContainText('Thinking, lining up the clues…');
     await assertSelection(idle);
     await page.screenshot({path: path.join(reports, 'ide-session-model.png'), animations: 'disabled'});
     assert.deepEqual(errors, []);

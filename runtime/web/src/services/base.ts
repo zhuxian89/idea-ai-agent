@@ -1,11 +1,12 @@
+import { remoteNodePrefix, remoteProjectPrefix } from "./remoteScope";
 import { getApiBaseURL, getWsBaseURL, isBrowserRuntime } from "./runtime";
 
 function relayPrefix(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  const match = /^\/n\/[^/]+/.exec(window.location.pathname);
-  return match ? match[0] : "";
+  return remoteProjectPrefix() || remoteNodePrefix();
+}
+
+export function hostPath(path: string): string {
+  return `${remoteNodePrefix()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export function isRelayNodePage(): boolean {

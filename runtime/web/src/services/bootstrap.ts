@@ -28,7 +28,7 @@ export type BootstrapState = {
 type BootstrapListener = (state: BootstrapState) => void;
 
 class BootstrapService {
-  private pairingSecretFromLink = consumePairingLink();
+  private pairingSecretFromLink = "";
   private state: BootstrapState = {
     phase: "idle",
     relayStatus: null,
@@ -51,6 +51,12 @@ class BootstrapService {
       }
       this.setState(patch);
     });
+  }
+
+  acceptPairingLinkSecret(secret: string) {
+    if (!secret) return;
+    this.pairingSecretFromLink = secret;
+    this.setState({ phase: "idle", error: "" });
   }
 
   subscribe(listener: BootstrapListener) {
@@ -128,9 +134,10 @@ class BootstrapService {
   }
 
   private async runStart(): Promise<BootstrapState> {
+    this.pairingSecretFromLink = consumePairingLink() || this.pairingSecretFromLink;
     this.setState({ phase: "pending", error: "" });
     try {
-      const status = await fetchRelayStatus();
+      const status = await fetchRelayStatus(!!this.pairingSecretFromLink);
       this.applyRelayStatus(status);
       const e2ee = e2eeService.snapshot();
       if (e2ee.required && !e2ee.unlocked) {
@@ -191,9 +198,9 @@ class BootstrapService {
   }
 }
 
-async function fetchRelayStatus(): Promise<RelayStatusPayload | null> {
+async function fetchRelayStatus(publicStatus = false): Promise<RelayStatusPayload | null> {
   const target = appPath("/api/relay/status");
-  const response = e2eeService.isRequired() && e2eeService.hasSecret()
+  const response = !publicStatus && e2eeService.isRequired() && e2eeService.hasSecret()
     ? await e2eeService.protectedFetch(target)
     : await fetch(target);
   if (!response.ok) {

@@ -135,9 +135,9 @@ func requestProofPath(r *http.Request) string {
 		return ""
 	}
 	if r.URL.RawQuery == "" {
-		return r.URL.Path
+		return remoteProofPath(r)
 	}
-	return r.URL.Path + "?" + r.URL.RawQuery
+	return remoteProofPath(r) + "?" + r.URL.RawQuery
 }
 
 func writeProtectedJSON(w http.ResponseWriter, status int, key []byte, value any) error {
@@ -2678,7 +2678,7 @@ func (h *HTTPHandler) handleE2EEOpen(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusServiceUnavailable, err)
 		return
 	}
-	if _, err := manager.OpenSessionForClient(req.ClientID, derived); err != nil {
+	if _, err := manager.OpenSessionForNode(req.ClientID, derived, req.NodeID); err != nil {
 		respondError(w, http.StatusServiceUnavailable, err)
 		return
 	}

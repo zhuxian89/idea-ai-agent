@@ -45,7 +45,13 @@ export type NativeE2EESession = {
   transportKey: string;
 };
 
-class E2EEService {
+export class E2EEService {
+  private memorySecret = "";
+  private persistSecret = true;
+  constructor(private openURL: () => string = () => appURL("/api/e2ee/open")) {}
+
+  useMemorySecret() { this.persistSecret = false; }
+
   private configured = false;
   private required = false;
   private nodeId = "";
@@ -70,6 +76,7 @@ class E2EEService {
     this.required = nextRequired;
     if (this.nodeId !== nextNodeId) {
       this.zeroSession();
+      this.memorySecret = "";
       this.nodeId = nextNodeId;
       this.openingPromise = null;
     }
@@ -100,6 +107,7 @@ class E2EEService {
   }
 
   hasSecret(): boolean {
+    if (!this.persistSecret) return !!this.memorySecret;
     if (!this.nodeId || typeof window === "undefined") {
       return false;
     }
@@ -107,6 +115,7 @@ class E2EEService {
   }
 
   getSecret(): string {
+    if (!this.persistSecret) return this.memorySecret;
     if (!this.nodeId || typeof window === "undefined") {
       return "";
     }
@@ -118,7 +127,9 @@ class E2EEService {
     if (!this.nodeId || typeof window === "undefined") {
       return;
     }
-    if (!trimmed) {
+    if (!this.persistSecret) {
+      this.memorySecret = trimmed;
+    } else if (!trimmed) {
       window.localStorage.removeItem(this.secretStorageKey());
     } else {
       window.localStorage.setItem(this.secretStorageKey(), trimmed);
@@ -137,7 +148,8 @@ class E2EEService {
   }
 
   clearSecret() {
-    if (typeof window !== "undefined" && this.nodeId) {
+    this.memorySecret = "";
+    if (this.persistSecret && typeof window !== "undefined" && this.nodeId) {
       window.localStorage.removeItem(this.secretStorageKey());
     }
     this.clearSession();
@@ -396,7 +408,7 @@ class E2EEService {
     const clientNonce = encodeBase64(clientNonceBytes);
     const proof = await buildOpenProof(secret, this.nodeId, clientEphPK, clientNonce);
 
-    const response = await fetch(appURL("/api/e2ee/open"), {
+    const response = await fetch(this.openURL(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -11,7 +11,7 @@ const home = mkdtempSync(path.join(tmpdir(), 'idea-agent-tests-'));
 let exitCode = 1;
 try {
   const env = { ...process.env, ...caches, HOME: home, XDG_CONFIG_HOME: path.join(home, 'config'), AppData: path.join(home, 'appdata') };
-  for (const key of ['IDE_AGENT_DATA_DIR', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete env[key];
+  for (const key of ['IDE_AGENT_DATA_DIR', 'IDE_AGENT_REMOTE_HOST_DIR', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete env[key];
   const args = process.argv.slice(2);
   const result = spawnSync('go', ['test', '-p', '2', ...(args.length ? args : ['./server/...', '-count=1'])], { cwd: runtime, env, stdio: 'inherit' });
   if (result.error) throw result.error;

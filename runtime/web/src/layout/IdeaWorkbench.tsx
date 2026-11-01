@@ -114,7 +114,7 @@ export function IdeaWorkbench(props: Props) {
   }, [view]);
   return (
     <div className="idea-workbench" data-onboarding="shell" data-idea-view={view} data-idea-chrome={chrome ? "true" : undefined}>
-      {remoteOpen ? <RemoteAccessDialog onClose={() => setRemoteOpen(false)} /> : null}
+      {remoteOpen ? <RemoteAccessDialog projectName={props.projectName} onClose={() => setRemoteOpen(false)} /> : null}
       {!networkOnline || networkRestored ? <div className="idea-network-notice" role="status">{t(networkOnline ? "session.networkRestoredNotice" : "session.networkOfflineNotice")}</div> : null}
       {!chrome ? <header className="idea-toolbar">
         <strong>AI Agent</strong>

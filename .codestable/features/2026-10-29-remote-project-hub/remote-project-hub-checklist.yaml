@@ -1,0 +1,40 @@
+feature: 2026-10-29-remote-project-hub
+created: 2026-10-29
+steps:
+  - action: 本地跨进程入口与项目所有权
+    exit_signal: 一个 host，多项目登记，启动方退出不影响其他项目
+    status: done
+  - action: Relay 单连接与加密目录路由
+    exit_signal: 两个独立 runtime 可访问，未配对和篡改项目请求被拒
+    status: done
+  - action: 持久化恢复与旧版迁移
+    exit_signal: 复用身份，迁移幂等中断可恢复且无业务消息重发
+    status: done
+  - action: 项目面板选择页与导航
+    exit_signal: 一次扫码切换项目，草稿缓存隔离，编辑切换有提示
+    status: done
+  - action: 三端业务和关闭边界
+    exit_signal: 单 writer 与回放保持，项目关闭独立，全局停用全部撤销
+    status: done
+  - action: 复核与交付验证
+    exit_signal: 回归编译通过，验收证据和实机限制记录清楚
+    status: done
+checks:
+  - item: 唯一节点且不依赖第一个项目或 IDEA 版本目录
+    source: 流程级约束
+    status: done
+  - item: 全局配对与项目 E2EE 独立，旧授权不扩权
+    source: 名词契约
+    status: done
+  - item: 明确项目路径、HTTP/WS 证明与缓存作用域
+    source: 验收场景
+    status: done
+  - item: 逐项目开放和关闭，全局停用关闭所有远程通路
+    source: 挂载点
+    status: done
+  - item: 保留会话任务数据及单 writer 原有执行链路
+    source: 范围守护
+    status: done
+  - item: 旧版重复迁移、并发、崩溃和恢复有测试
+    source: 验收场景
+    status: done

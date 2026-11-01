@@ -185,7 +185,7 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[ws] connected client=%s remote=%s path=%s", clientID, r.RemoteAddr, r.URL.Path)
 	if h.AppContext != nil {
 		h.AppContext.GetSessionStreamHub().registerClient(clientID, conn, localIDE)
-		if h.AppContext.ProjectLocked && !localIDE && h.AppContext.Relay != nil && h.AppContext.Relay.NoRelayer() {
+		if !localIDE && ((isRemoteProjectAccess(r) && !remoteProjectAllowed(r)) || (!isRemoteProjectAccess(r) && h.AppContext.ProjectLocked && h.AppContext.Relay != nil && h.AppContext.Relay.NoRelayer())) {
 			h.AppContext.GetSessionStreamHub().UnregisterClient(clientID, conn)
 			_ = conn.Close()
 			return
@@ -307,9 +307,9 @@ func wsProofPath(r *http.Request) string {
 	query.Del(wsProofQuery)
 	next.RawQuery = query.Encode()
 	if next.RawQuery == "" {
-		return next.Path
+		return remoteProofPath(r)
 	}
-	return next.Path + "?" + next.RawQuery
+	return remoteProofPath(r) + "?" + next.RawQuery
 }
 
 func cloneQuery(values url.Values) url.Values {

@@ -1,3 +1,4 @@
+import { projectStorage } from "./remoteScope";
 import { appURL } from "./base";
 import { protectedJSON } from "./api";
 import { getCachedGitDiff, setCachedGitDiff, type CachedGitDiffPayload } from "./file";
@@ -127,13 +128,13 @@ const gitCommitDiffCache = new Map<string, GitDiffPayload>();
 const gitCommitDiffInflight = new Map<string, Promise<GitDiffPayload>>();
 
 function canUseStorage(): boolean {
-  return typeof window !== "undefined" && !!window.localStorage;
+  return typeof window !== "undefined" && !!projectStorage();
 }
 
 function readStorageJSON<T>(key: string): T | null {
   if (!canUseStorage()) return null;
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = projectStorage().getItem(key);
     return raw ? JSON.parse(raw) as T : null;
   } catch {
     return null;
@@ -143,15 +144,15 @@ function readStorageJSON<T>(key: string): T | null {
 function writeStorageJSON(key: string, value: unknown): void {
   if (!canUseStorage()) return;
   try {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    projectStorage().setItem(key, JSON.stringify(value));
   } catch {}
 }
 
 function removeStorageByPrefix(prefix: string): void {
   if (!canUseStorage()) return;
-  for (const key of Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index)).filter(Boolean) as string[]) {
+  for (const key of Array.from({ length: projectStorage().length }, (_, index) => projectStorage().key(index)).filter(Boolean) as string[]) {
     if (key.startsWith(prefix)) {
-      window.localStorage.removeItem(key);
+      projectStorage().removeItem(key);
     }
   }
 }
@@ -266,7 +267,7 @@ export function clearGitHistoryCache(rootId?: string): void {
   if (rootId) {
     gitHistoryListCache.delete(rootId);
     if (canUseStorage()) {
-      window.localStorage.removeItem(historyListStorageKey(rootId));
+      projectStorage().removeItem(historyListStorageKey(rootId));
     }
     removeStorageByPrefix(`${COMMIT_FILES_STORAGE_PREFIX}${encodeURIComponent(rootId)}:`);
     removeStorageByPrefix(`${COMMIT_DIFF_STORAGE_PREFIX}${encodeURIComponent(rootId)}:`);

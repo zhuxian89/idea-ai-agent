@@ -52,13 +52,17 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 
 #### 可选远程访问
 
-点击插件右上角“远程访问”，按提示登录 Relay 并绑定当前项目，无需另装 MindFS。绑定后保持远程访问开启，即可从其他电脑浏览器或手机访问。同一项目的浏览器、手机和 IDEA 插件共用一个后台服务与会话，消息和执行进度实时同步。
+默认远程服务为 [relay.20260310.best](https://relay.20260310.best)，由 `runtime/agents.json` 的 `relayBaseURL` 配置并随插件打包。
+
+当前源码已加入多项目统一入口（尚未发布；0.1.25 仍按项目绑定）。点击插件右上角“远程访问”，再点“开启远程访问”，首次登录并连接访问服务，无需另装 MindFS。同一系统用户的多个 IDEA 项目共用一次绑定，每个项目分别选择是否开放。浏览器配对一次后可切换已开放项目；各项目继续使用自己的原有后台服务与会话，消息和执行进度实时同步。
 
 - 手机扫描插件中的二维码后自动配对，不需要再输码。二维码携带访问凭据，请勿转发；页面读取后会清除地址栏中的配对参数。
-- 电脑首次打开普通链接时输入插件显示的配对密钥；浏览器会保存配对信息，下次自动连接。密钥无效才需要重新配对，网络连接失败可直接重试。
-- 开启过远程访问的项目，随 IDEA 打开自动连接 Relay，无需再打开插件面板。电脑需要联网，IDEA 和对应项目需要保持运行；关闭项目或退出 IDEA 后节点离线。
-- “关闭远程访问”会断开远程连接，本地仍可使用；“解绑”先关闭远程，再引导你到 Relay 节点管理页删除绑定。关闭访问不会删除浏览器保存的配对信息。
-- 远程端可以查看会话、审批、发送消息，以及查看和编辑磁盘文件；不会同步 IDEA 编辑器中尚未保存的内容。
+- 电脑点击“打开浏览器”，或将“复制链接”得到的连接链接在自己的其他设备打开，即可自动授权，无需输入配对码。链接与二维码同样包含访问凭据，请勿公开转发；浏览器会记住授权。普通节点地址不会绕过验证。
+- 开启过远程访问的项目，随 IDEA 打开自动加入统一入口，无需再打开插件面板。关闭 A 仅使 A 离线，B/C 保持可用；所有参与的项目服务退出后，统一入口自动结束。电脑需要联网，访问的项目需要在 IDEA 中打开。
+- 主面板直接展示二维码和访问链接，并携带当前会话位置。“管理”统一控制已开放的项目；暂停一个项目只断开该项目，关闭电脑远程访问则断开所有远程连接，本地任务继续运行。关闭访问不会删除浏览器保存的授权。
+- 远程端可以查看会话、审批、发送消息，以及查看和编辑磁盘文件；不会同步 IDEA 编辑器中尚未保存的内容。切换项目会保留同一标签页的文字草稿，未保存文件编辑会先提示。
+- 电脑身份保存在 Windows `%APPDATA%\LocalAIAgent\remote\` 或 macOS `~/Library/Application Support/LocalAIAgent/remote/`，独立于项目和 IDEA 版本目录。项目历史数据不搬动。
+- 旧项目通过同一个“开启远程访问”流程接入统一入口，其他项目点击“加入远程访问”复用已有绑定。准备完成前保留旧入口，不自动扩大旧项目访问权限；旧云端节点不自动删除。关闭面板后，未完成的连接仍可继续。
 
 远程业务请求体和响应使用现有端到端加密协议，经 Relay 转发；Relay 仍可见连接元数据及请求地址。远程浏览器会保存配对凭据与文件/会话缓存，详见 [隐私说明](PRIVACY.md)。
 
@@ -184,13 +188,17 @@ The plugin starts a bundled service for the lifetime of the project. It listens 
 
 #### Optional remote access
 
-Choose **Remote access** in the plugin toolbar, sign in to Relay and link the current project. No separate MindFS installation is required. With remote access enabled, another computer browser or phone shares the same backend and sessions as the IDEA plugin, including live messages and execution progress.
+The default remote service is [relay.20260310.best](https://relay.20260310.best), configured by `relayBaseURL` in the bundled `runtime/agents.json`.
+
+The current source adds a shared project entry (not released yet; 0.1.25 still links projects separately). Choose **Remote access**, then **Enable remote access** in the plugin toolbar. Sign in and connect the access service once. No separate MindFS installation is required. IDEA projects for the same OS user share the node and are enabled individually. A paired browser can switch between shared projects; each project retains its original backend, sessions and live progress.
 
 - Scanning the plugin's QR code pairs the phone automatically. The QR code grants access; do not share it. The page removes the pairing parameter from its address after reading it.
-- A computer opening the ordinary link needs the pairing key on first use. The browser remembers it for later connections. Connection failures can be retried without entering a valid key again.
-- Projects with remote access enabled reconnect when opened in IDEA, without opening the plugin panel. Keep the computer online and the IDEA project running; closing the project or IDEA takes the node offline.
-- **Turn off remote access** disconnects remote clients while local use continues. **Unlink** turns access off and directs you to delete the node in Relay. Turning access off does not remove saved browser pairing information.
-- Remote users can view sessions, respond to approvals, send messages and view/edit files on disk. Unsaved IDEA editor buffers are not synchronized.
+- Choose **Open browser**, or open the **Copy link** access link on your other device. Authorization is automatic, with no code to enter. The link grants the same access as the QR code: keep it private. Browsers remember authorization; plain node URLs do not bypass authentication.
+- Shared projects join the entry when opened in IDEA, without opening the plugin panel. Closing A only makes A unavailable; B/C continue working. The entry exits after all participating project services leave. Keep this computer online and the target project open in IDEA.
+- The main panel shows the QR code and access link with the current conversation location. **Manage** controls shared projects: pause one project or disable the whole computer. Local tasks continue, and saved browser authorization is retained.
+- Remote users can view sessions, respond to approvals, send messages and view/edit files on disk. Unsaved IDEA editor buffers are not synchronized. Text drafts survive project switches in the same browser tab; unsaved file edits require a decision before switching.
+- Computer identity lives in `%APPDATA%\LocalAIAgent\remote\` on Windows or `~/Library/Application Support/LocalAIAgent/remote/` on macOS, independently of project and IDE version directories. Existing project history stays in place.
+- Older projects use the same **Enable remote access** flow. Other projects choose **Share this project** to reuse the computer connection. Preparation failures retain the old entry without expanding its permissions. Closing the panel keeps a pending connection resumable. Old cloud nodes are not automatically deleted.
 
 Remote business request bodies and responses use the existing end-to-end encryption protocol through Relay. Relay still sees connection metadata and request addresses. Browsers retain pairing credentials and file/session caches; see the [Privacy Notice](PRIVACY.md).
 

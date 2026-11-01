@@ -38,7 +38,7 @@ export async function smokeMessageDelivery(page, reports) {
     });
   });
   await page.reload();
-  await page.waitForFunction(() => document.querySelector('.idea-view-heading p')?.textContent.includes('with spaces'), null, {timeout: 30000});
+  await page.locator('.idea-workbench').waitFor({state: 'visible', timeout: 30000});
   await page.getByRole('button', {name: 'Chat history', exact: true}).click();
   await page.getByText('Delivery regression', {exact: true}).click();
   const chat = page.locator('.idea-chat:visible');
@@ -58,14 +58,15 @@ export async function smokeMessageDelivery(page, reports) {
   assert.equal(await chat.getByText(exchange.content, {exact: true}).count(), 1, 'replay must not duplicate a user bubble');
   const status = chat.locator('[data-session-activity]');
   await status.waitFor({timeout: 2000});
-  assert.match(await status.innerText(), /Waiting for Agent|waiting for response/i);
+  assert.match(await status.innerText(), /Waiting for (?:the )?Agent|waiting for response/i);
   send('session.stream', {event: {type: 'thought_chunk', data: {content: 'Inspecting the request.'}}});
-  await status.getByText('Thinking', {exact: true}).waitFor();
+  await status.getByText('Thinking, lining up the clues…', {exact: true}).waitFor();
   send('session.stream', {event: {type: 'tool_call', data: {callId: 'tool-test', kind: 'execute', status: 'running', title: 'Run tests', meta: {description: 'Run tests'}}}});
-  await status.getByText('Running tool: Run tests', {exact: true}).waitFor();
+  await status.locator('.session-activity-text').filter({hasText: 'Run tests'}).waitFor();
   await page.clock.install();
   await page.clock.fastForward(65000);
-  await status.getByText(/No new activity for/).waitFor();
+  await status.getByText(/Last update 1m \d+s ago/).waitFor();
+  assert.doesNotMatch(await status.innerText(), /🥱|😨/, 'a running tool must not be reported stalled merely because it is quiet');
   assert.doesNotMatch(await status.innerText(), /crashed|deadlocked/i);
   backgroundSession = {
     ...session, key: 'delivery-switching', session_key: 'delivery-switching', name: 'Switching regression',
@@ -74,15 +75,16 @@ export async function smokeMessageDelivery(page, reports) {
   send('session.user_message', {session_key: backgroundSession.key, session: backgroundSession, exchange: backgroundSession.exchanges[0]});
   const openHistory = async name => {
     await page.getByRole('button', {name: 'Chat history', exact: true}).click();
-    await page.getByText(name, {exact: true}).click();
+    await page.locator('.idea-history').getByText(name, {exact: true}).click();
   };
   await openHistory(backgroundSession.name);
   await chat.getByText('Another running request', {exact: true}).waitFor();
-  assert.doesNotMatch(await status.innerText(), /Last update/, 'another session must not inherit the first session\'s activity time');
+  assert.doesNotMatch(await status.innerText(), /Last update 1m/, 'another session must not inherit the first session\'s activity time');
   await openHistory(session.name);
-  await status.getByText('Running tool: Run tests', {exact: true}).waitFor();
+  await status.locator('.session-activity-text').filter({hasText: 'Run tests'}).waitFor();
   assert.match(await status.innerText(), /Last update 1m \d+s ago/, 'returning to the running session must retain its last-update age');
-  await status.getByText(/No new activity for/).waitFor();
+  await status.getByText(/Last update 1m \d+s ago/).waitFor();
+  assert.doesNotMatch(await status.innerText(), /🥱|😨/, 'a running tool must not be reported stalled merely because it is quiet');
   await page.setViewportSize({width: 375, height: 850});
   await page.screenshot({path: path.join(reports, 'ide-message-activity.png'), animations: 'disabled'});
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -95,7 +97,7 @@ export async function smokeMessageDelivery(page, reports) {
   await status.getByText('Waiting while background task progresses', {exact: true}).waitFor();
   await page.clock.fastForward(20000);
   await openHistory(session.name);
-  await status.getByText('Running tool: Run tests in background', {exact: true}).waitFor();
+  await status.locator('.session-activity-text').filter({hasText: 'Run tests in background'}).waitFor();
   assert.match(await status.innerText(), /Last update 2\d+s ago/, 'background progress must retain its receipt time when the viewer opens');
   send('session.queue.updated', {queue: [{id: 'queue-next', content: 'Queued follow up', timestamp}]});
   await page.getByRole('button', {name: 'Delete queued message', exact: true}).waitFor();
@@ -103,7 +105,7 @@ export async function smokeMessageDelivery(page, reports) {
   session.pending = false;
   send('session.done', {});
   await page.getByRole('button', {name: 'Delete queued message', exact: true}).waitFor({state: 'detached'});
-  await status.waitFor({state: 'detached'});
+  await status.filter({hasNotText: 'This turn has ended'}).waitFor({state: 'detached'});
   console.log('PASS: authoritative user message and replay deduplication; live thought/tool status, session switching and background activity times, honest silence timer, queue drain and completion.');
 
   // Finish another session while its viewer is unmounted, then open its history.
@@ -122,6 +124,6 @@ export async function smokeMessageDelivery(page, reports) {
   await page.getByRole('button', {name: 'Chat history', exact: true}).click();
   await page.getByText('Completed in background', {exact: true}).click();
   await chat.getByText('Background answer preserved.', {exact: true}).waitFor();
-  await status.waitFor({state: 'detached', timeout: 2000});
+  await status.filter({hasNotText: 'This turn has ended'}).waitFor({state: 'detached', timeout: 2000});
   console.log('PASS: reopening a session completed in the background preserves the answer without restarting the generating indicator.');
 }

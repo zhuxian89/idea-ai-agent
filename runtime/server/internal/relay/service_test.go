@@ -117,11 +117,11 @@ func TestBuildBindPollURL(t *testing.T) {
 }
 
 func TestPrepareLocalProxyHeadersRemovesRelayInternalHeaders(t *testing.T) {
-	original, err := http.NewRequest(http.MethodGet, "https://test-node-relay.a9gent.com/", nil)
+	original, err := http.NewRequest(http.MethodGet, "https://test-node-relay.example.com/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	original.Host = "test-node-relay.a9gent.com"
+	original.Host = "test-node-relay.example.com"
 	original.Header.Set("X-MindFS-Relayed", "1")
 	original.Header.Set("X-MindFS-Relay-Service-Slug", "test")
 	targetURL, err := url.Parse("http://127.0.0.1:5173/")
@@ -138,17 +138,17 @@ func TestPrepareLocalProxyHeadersRemovesRelayInternalHeaders(t *testing.T) {
 	if got := outbound.Header.Get("X-MindFS-Relay-Service-Slug"); got != "" {
 		t.Fatalf("X-MindFS-Relay-Service-Slug = %q, want empty", got)
 	}
-	if got := outbound.Header.Get("X-Forwarded-Host"); got != "test-node-relay.a9gent.com" {
+	if got := outbound.Header.Get("X-Forwarded-Host"); got != "test-node-relay.example.com" {
 		t.Fatalf("X-Forwarded-Host = %q", got)
 	}
 }
 
 func TestPrepareLocalProxyHeadersKeepsRelayedHeaderForNodeProxy(t *testing.T) {
-	original, err := http.NewRequest(http.MethodGet, "https://relay.a9gent.com/n/node/", nil)
+	original, err := http.NewRequest(http.MethodGet, "https://relay.20260310.best/n/node/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	original.Host = "relay.a9gent.com"
+	original.Host = "relay.20260310.best"
 	original.Header.Set("X-MindFS-Relayed", "1")
 	targetURL, err := url.Parse("http://127.0.0.1:7331/")
 	if err != nil {
@@ -161,7 +161,7 @@ func TestPrepareLocalProxyHeadersKeepsRelayedHeaderForNodeProxy(t *testing.T) {
 	if got := outbound.Header.Get("X-MindFS-Relayed"); got != "1" {
 		t.Fatalf("X-MindFS-Relayed = %q, want 1", got)
 	}
-	if got := outbound.Header.Get("X-Forwarded-Host"); got != "relay.a9gent.com" {
+	if got := outbound.Header.Get("X-Forwarded-Host"); got != "relay.20260310.best" {
 		t.Fatalf("X-Forwarded-Host = %q", got)
 	}
 }

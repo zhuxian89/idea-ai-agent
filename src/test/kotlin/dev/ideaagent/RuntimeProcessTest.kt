@@ -61,13 +61,15 @@ class RuntimeProcessTest {
         val shellEnvironment = mapOf("PATH" to "/custom/bin:/usr/bin", "CODEX_HOME" to "/custom/codex",
             "IDE_AGENT_DATA_DIR" to "stale-data", "IDE_AGENT_TOKEN" to "stale-token", "MINDFS_STATIC_DIR" to "stale-web")
         withShellEnvironment(shellEnvironment) {
-            val builder = runtimeProcess(executable, project, data, "fresh-token")
+            val hostData = root.resolve("shared-remote")
+            val builder = runtimeProcess(executable, project, data, "fresh-token", hostData)
             assertEquals(listOf(executable.toString(), "--project", project.toString()), builder.command())
             assertEquals(executable.parent.toFile(), builder.directory())
             assertEquals(agentRuntimeEnvironment(shellEnvironment)["PATH"], builder.environment()["PATH"])
             assertEquals("/custom/codex", builder.environment()["CODEX_HOME"])
             assertEquals(data.toString(), builder.environment()["IDE_AGENT_DATA_DIR"])
             assertEquals("fresh-token", builder.environment()["IDE_AGENT_TOKEN"])
+            assertEquals(hostData.toString(), builder.environment()["IDE_AGENT_REMOTE_HOST_DIR"])
             assertEquals(executable.parent.resolve("web").toString(), builder.environment()["MINDFS_STATIC_DIR"])
             assertEquals("stale-token", EnvironmentUtil.getEnvironmentMap()["IDE_AGENT_TOKEN"])
         }

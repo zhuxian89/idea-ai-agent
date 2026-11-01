@@ -27,7 +27,7 @@ import (
 const (
 	defaultCheckInterval = time.Hour
 	releaseNotesPath     = "release-notes.md"
-	relayDownloadBase    = "https://relay.a9gent.com/mindfs-downloads"
+	relayDownloadBase    = "https://relay.20260310.best/mindfs-downloads"
 )
 
 var releaseManifestPublicKey string

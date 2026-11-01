@@ -1,3 +1,5 @@
+import { RemoteAccessRequired } from "./components/remote/RemoteAccessRequired";
+import { projectStorage } from "./services/remoteScope";
 import { compareGitFileInIdea, isIdeaRuntime, isIDEManagedProject, openIdeaFile, refreshIdeaFiles } from "./services/ideaBridge";
 import { mergeActivityFacts, mergeToolStatus } from "./services/activityFacts";
 import { applyAnsweredQuestion } from "./services/answeredQuestion";
@@ -190,7 +192,7 @@ import {
 } from "./services/tasks";
 import { shouldApplyTaskDetail } from "./services/taskDetailOrder";
 import { mergeRelatedFileGroups, taskIdsForUpdatedSession } from "./services/taskRelatedFiles";
-import { useI18n, type MessageKey, type MessageParams } from "./i18n";
+import { useI18n, translateNow, type MessageKey, type MessageParams } from "./i18n";
 import {
   completeOnboarding,
   dismissOnboarding,
@@ -891,7 +893,7 @@ function loadPersistedFileScrollPositions(): Record<string, number> {
     return {};
   }
   try {
-    const raw = window.localStorage.getItem(FILE_SCROLL_STORAGE_KEY);
+    const raw = projectStorage().getItem(FILE_SCROLL_STORAGE_KEY);
     if (!raw) {
       return {};
     }
@@ -918,7 +920,7 @@ function persistFileScrollPositions(positions: Record<string, number>): void {
     return;
   }
   try {
-    window.localStorage.setItem(
+    projectStorage().setItem(
       FILE_SCROLL_STORAGE_KEY,
       JSON.stringify(positions),
     );
@@ -1025,7 +1027,7 @@ function loadPersistedPluginQuery(
 ): Record<string, string> {
   if (!root || !file) return {};
   try {
-    const raw = window.localStorage.getItem(pluginQueryStorageKey(root, file));
+    const raw = projectStorage().getItem(pluginQueryStorageKey(root, file));
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
@@ -1050,7 +1052,7 @@ function persistPluginQuery(
 ): void {
   if (!root || !file) return;
   try {
-    window.localStorage.setItem(
+    projectStorage().setItem(
       pluginQueryStorageKey(root, file),
       JSON.stringify(query || {}),
     );
@@ -1063,11 +1065,11 @@ function removeLocalStorageByPrefix(prefix: string): void {
   }
   try {
     for (const key of Array.from(
-      { length: window.localStorage.length },
-      (_, index) => window.localStorage.key(index),
+      { length: projectStorage().length },
+      (_, index) => projectStorage().key(index),
     ).filter(Boolean) as string[]) {
       if (key.startsWith(prefix)) {
-        window.localStorage.removeItem(key);
+        projectStorage().removeItem(key);
       }
     }
   } catch {}
@@ -1284,7 +1286,7 @@ function loadLastRootId(): string {
   if (typeof window === "undefined") {
     return "";
   }
-  return window.localStorage.getItem(LAST_ROOT_STORAGE_KEY) || "";
+  return projectStorage().getItem(LAST_ROOT_STORAGE_KEY) || "";
 }
 
 function loadBooleanRecord(key: string): Record<string, boolean> {
@@ -1292,7 +1294,7 @@ function loadBooleanRecord(key: string): Record<string, boolean> {
     return {};
   }
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(key) || "{}") as Record<string, unknown>;
+    const parsed = JSON.parse(projectStorage().getItem(key) || "{}") as Record<string, unknown>;
     return Object.fromEntries(
       Object.entries(parsed).filter(([, value]) => typeof value === "boolean"),
     ) as Record<string, boolean>;
@@ -1306,7 +1308,7 @@ function loadStringBooleanRecord(key: string): Record<string, Record<string, boo
     return {};
   }
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(key) || "{}") as Record<string, unknown>;
+    const parsed = JSON.parse(projectStorage().getItem(key) || "{}") as Record<string, unknown>;
     return Object.fromEntries(
       Object.entries(parsed).map(([root, value]) => [
         root,
@@ -1444,7 +1446,7 @@ function isMainContentViewMode(value: unknown): value is MainContentViewMode {
 function loadMainContentViewByRoot(): Record<string, MainContentViewMode> {
   if (typeof window === "undefined") return {};
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(MAIN_CONTENT_VIEW_STORAGE_KEY) || "{}") as Record<string, unknown>;
+    const parsed = JSON.parse(projectStorage().getItem(MAIN_CONTENT_VIEW_STORAGE_KEY) || "{}") as Record<string, unknown>;
     return Object.fromEntries(
       Object.entries(parsed).filter(([, value]) => isMainContentViewMode(value)),
     ) as Record<string, MainContentViewMode>;
@@ -1458,7 +1460,7 @@ function loadSidebarsSwapped(): boolean {
     return false;
   }
   try {
-    return window.localStorage.getItem(SIDEBARS_SWAPPED_STORAGE_KEY) === "1";
+    return projectStorage().getItem(SIDEBARS_SWAPPED_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
@@ -1469,7 +1471,7 @@ function loadGitDiffSideBySide(): boolean {
     return false;
   }
   try {
-    return window.localStorage.getItem(GIT_DIFF_SIDE_BY_SIDE_STORAGE_KEY) === "1";
+    return projectStorage().getItem(GIT_DIFF_SIDE_BY_SIDE_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
@@ -1480,7 +1482,7 @@ function loadTaskCreateWorktreePreference(rootId: string): TaskCreateWorktreePre
     return { createWorktree: false, worktreeBranchMode: "new", worktreeBranch: "" };
   }
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(TASK_CREATE_WORKTREE_PREF_STORAGE_KEY) || "{}") as Record<string, unknown>;
+    const parsed = JSON.parse(projectStorage().getItem(TASK_CREATE_WORKTREE_PREF_STORAGE_KEY) || "{}") as Record<string, unknown>;
     const value = parsed[rootId] as Record<string, unknown> | undefined;
     return {
       createWorktree: value?.createWorktree === true,
@@ -1495,8 +1497,8 @@ function loadTaskCreateWorktreePreference(rootId: string): TaskCreateWorktreePre
 function saveTaskCreateWorktreePreference(rootId: string, pref: TaskCreateWorktreePreference): void {
   if (typeof window === "undefined" || !rootId) return;
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(TASK_CREATE_WORKTREE_PREF_STORAGE_KEY) || "{}") as Record<string, unknown>;
-    window.localStorage.setItem(TASK_CREATE_WORKTREE_PREF_STORAGE_KEY, JSON.stringify({
+    const parsed = JSON.parse(projectStorage().getItem(TASK_CREATE_WORKTREE_PREF_STORAGE_KEY) || "{}") as Record<string, unknown>;
+    projectStorage().setItem(TASK_CREATE_WORKTREE_PREF_STORAGE_KEY, JSON.stringify({
       ...parsed,
       [rootId]: pref,
     }));
@@ -1508,11 +1510,23 @@ function saveTaskCreateWorktreePreference(rootId: string, pref: TaskCreateWorktr
 export function App({ onGoHome }: AppProps) {
   const [fileEditStore] = useState(() => new FileEditStore({ load: fetchEditableFile, save: saveTextFile }));
   useEffect(() => {
-    const guard = (event: BeforeUnloadEvent) => { if (fileEditStore.hasDirty()) { event.preventDefault(); event.returnValue = ""; } };
+    let leavingProject = false;
+    const guard = (event: BeforeUnloadEvent) => { if (!leavingProject && fileEditStore.hasDirty()) { event.preventDefault(); event.returnValue = ""; } };
+    const leaveProject = (event: Event) => {
+      if (event.defaultPrevented) return;
+      if (fileEditStore.hasDirty() && !window.confirm(translateNow("remote.unsavedFileLeave"))) event.preventDefault();
+    };
+    const commitLeave = () => { leavingProject = true; };
     window.addEventListener("beforeunload", guard);
-    return () => window.removeEventListener("beforeunload", guard);
+    window.addEventListener("idea:leave-remote-project", leaveProject);
+    window.addEventListener("idea:remote-project-leaving", commitLeave);
+    return () => {
+      window.removeEventListener("beforeunload", guard);
+      window.removeEventListener("idea:leave-remote-project", leaveProject);
+      window.removeEventListener("idea:remote-project-leaving", commitLeave);
+    };
   }, [fileEditStore]);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const pluginManagerRef = useRef<PluginManager>(new PluginManager());
   const completionAudioContextRef = useRef<AudioContext | null>(null);
   const completionAudioUnlockedRef = useRef(false);
@@ -1572,7 +1586,7 @@ export function App({ onGoHome }: AppProps) {
   const sessionsRef = useRef<SessionItem[]>([]);
   const [multiProjectSessionsEnabled, setMultiProjectSessionsEnabled] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(MULTI_PROJECT_SESSION_STORAGE_KEY) === "1";
+    return projectStorage().getItem(MULTI_PROJECT_SESSION_STORAGE_KEY) === "1";
   });
   const [multiProjectSessionGroups, setMultiProjectSessionGroups] = useState<MultiProjectSessionGroup[]>([]);
   const [multiProjectSessionsLoading, setMultiProjectSessionsLoading] = useState(false);
@@ -1780,7 +1794,7 @@ export function App({ onGoHome }: AppProps) {
     }
     let remembered = "";
     try {
-      const parsed = JSON.parse(window.localStorage.getItem(TASK_TEMPLATE_SELECTION_STORAGE_KEY) || "{}") as Record<string, unknown>;
+      const parsed = JSON.parse(projectStorage().getItem(TASK_TEMPLATE_SELECTION_STORAGE_KEY) || "{}") as Record<string, unknown>;
       const value = parsed[currentRootId];
       remembered = typeof value === "string" ? value : "";
     } catch {
@@ -1796,8 +1810,8 @@ export function App({ onGoHome }: AppProps) {
   useEffect(() => {
     if (!currentRootId || !taskTemplateFilter) return;
     try {
-      const parsed = JSON.parse(window.localStorage.getItem(TASK_TEMPLATE_SELECTION_STORAGE_KEY) || "{}") as Record<string, unknown>;
-      window.localStorage.setItem(TASK_TEMPLATE_SELECTION_STORAGE_KEY, JSON.stringify({
+      const parsed = JSON.parse(projectStorage().getItem(TASK_TEMPLATE_SELECTION_STORAGE_KEY) || "{}") as Record<string, unknown>;
+      projectStorage().setItem(TASK_TEMPLATE_SELECTION_STORAGE_KEY, JSON.stringify({
         ...parsed,
         [currentRootId]: taskTemplateFilter,
       }));
@@ -2349,7 +2363,7 @@ export function App({ onGoHome }: AppProps) {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(
+      projectStorage().setItem(
         SIDEBARS_SWAPPED_STORAGE_KEY,
         sidebarsSwapped ? "1" : "0",
       );
@@ -2360,7 +2374,7 @@ export function App({ onGoHome }: AppProps) {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(
+      projectStorage().setItem(
         GIT_DIFF_SIDE_BY_SIDE_STORAGE_KEY,
         gitDiffSideBySide ? "1" : "0",
       );
@@ -2450,9 +2464,6 @@ export function App({ onGoHome }: AppProps) {
       setOnboardingOpen(false);
     }
   }, [isMobile, onboardingOpen]);
-  const [e2eeSecretInput, setE2eeSecretInput] = useState("");
-  const [e2eePromptError, setE2eePromptError] = useState("");
-  const [e2eePromptBusy, setE2eePromptBusy] = useState(false);
   const [editDraftRequest, setEditDraftRequest] = useState<{
     id: number;
     content: string;
@@ -2487,7 +2498,7 @@ export function App({ onGoHome }: AppProps) {
     if (typeof window === "undefined") {
       return DEFAULT_DIRECTORY_SORT_MODE;
     }
-    const saved = window.localStorage.getItem(TREE_SORT_STORAGE_KEY);
+    const saved = projectStorage().getItem(TREE_SORT_STORAGE_KEY);
     return isDirectorySortMode(saved) ? saved : DEFAULT_DIRECTORY_SORT_MODE;
   });
   const [directorySortOverrides, setDirectorySortOverrides] = useState<
@@ -2497,7 +2508,7 @@ export function App({ onGoHome }: AppProps) {
       return {};
     }
     try {
-      const saved = window.localStorage.getItem(
+      const saved = projectStorage().getItem(
         DIRECTORY_SORT_OVERRIDES_STORAGE_KEY,
       );
       if (!saved) {
@@ -2720,7 +2731,7 @@ export function App({ onGoHome }: AppProps) {
       return;
     }
     if (currentRootId) {
-      window.localStorage.setItem(LAST_ROOT_STORAGE_KEY, currentRootId);
+      projectStorage().setItem(LAST_ROOT_STORAGE_KEY, currentRootId);
     }
   }, [currentRootId]);
   useEffect(() => {
@@ -2768,7 +2779,7 @@ export function App({ onGoHome }: AppProps) {
     multiProjectPendingRef.current = multiProjectPendingByKey;
   }, [multiProjectPendingByKey]);
   useEffect(() => {
-    window.localStorage.setItem(
+    projectStorage().setItem(
       MULTI_PROJECT_SESSION_STORAGE_KEY,
       multiProjectSessionsEnabled ? "1" : "0",
     );
@@ -2810,25 +2821,25 @@ export function App({ onGoHome }: AppProps) {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(TREE_SORT_STORAGE_KEY, treeSortMode);
+    projectStorage().setItem(TREE_SORT_STORAGE_KEY, treeSortMode);
   }, [treeSortMode]);
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(GIT_STATUS_EXPANDED_STORAGE_KEY, JSON.stringify(gitStatusExpandedByRoot));
+    projectStorage().setItem(GIT_STATUS_EXPANDED_STORAGE_KEY, JSON.stringify(gitStatusExpandedByRoot));
   }, [gitStatusExpandedByRoot]);
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(GIT_HISTORY_EXPANDED_STORAGE_KEY, JSON.stringify(gitHistoryExpandedByRoot));
+    projectStorage().setItem(GIT_HISTORY_EXPANDED_STORAGE_KEY, JSON.stringify(gitHistoryExpandedByRoot));
   }, [gitHistoryExpandedByRoot]);
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(
+    projectStorage().setItem(
       DIRECTORY_SORT_OVERRIDES_STORAGE_KEY,
       JSON.stringify(directorySortOverrides),
     );
@@ -2837,7 +2848,7 @@ export function App({ onGoHome }: AppProps) {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(
+    projectStorage().setItem(
       MAIN_CONTENT_VIEW_STORAGE_KEY,
       JSON.stringify(mainContentViewByRoot),
     );
@@ -3218,9 +3229,9 @@ export function App({ onGoHome }: AppProps) {
     if (
       options?.removeLastRoot === true &&
       typeof window !== "undefined" &&
-      window.localStorage.getItem(LAST_ROOT_STORAGE_KEY) === root
+      projectStorage().getItem(LAST_ROOT_STORAGE_KEY) === root
     ) {
-      window.localStorage.removeItem(LAST_ROOT_STORAGE_KEY);
+      projectStorage().removeItem(LAST_ROOT_STORAGE_KEY);
     }
 
     bumpCacheVersion();
@@ -10763,7 +10774,7 @@ export function App({ onGoHome }: AppProps) {
     let cancelled = false;
     let settled = false;
     if (isRelayPWAContext() && !isRelayNodePage()) {
-      const lastNodeID = window.localStorage.getItem(
+      const lastNodeID = projectStorage().getItem(
         RELAY_LAST_NODE_ID_STORAGE_KEY,
       );
       if (lastNodeID) {
@@ -10892,13 +10903,6 @@ export function App({ onGoHome }: AppProps) {
   }, [e2eeState.nodeId, e2eeState.required, e2eeState.unlocked]);
 
   useEffect(() => {
-    if (!e2eeState.required) {
-      setE2eeSecretInput("");
-      setE2eePromptError("");
-    }
-  }, [e2eeState.required, e2eeState.secretPresent]);
-
-  useEffect(() => {
     if (bootstrapState.phase !== "ready") {
       return;
     }
@@ -10916,45 +10920,6 @@ export function App({ onGoHome }: AppProps) {
     multiProjectSessionsEnabled,
   ]);
 
-  const describeE2EEPromptError = useCallback((err: unknown) => {
-    const code = err instanceof Error ? String(err.message || "").trim() : "";
-    switch (code) {
-      case "e2ee_proof_invalid":
-        return t("e2ee.invalidProof");
-      case "e2ee_secure_context_required":
-      case "e2ee_webcrypto_unavailable":
-        return t("e2ee.secureContextRequired");
-      case "e2ee_secret_missing":
-        return t("e2ee.secretMissing");
-      case "e2ee_open_invalid_response":
-        return t("e2ee.invalidResponse");
-      default:
-        if (code.startsWith("e2ee_open_failed_")) {
-          return t("e2ee.openFailed");
-        }
-        return t("e2ee.failed");
-    }
-  }, [t]);
-
-  const submitE2EESecret = useCallback(async () => {
-    const trimmed = e2eeSecretInput.trim();
-    if (!trimmed) {
-      setE2eePromptError(t("e2ee.codeRequired"));
-      return;
-    }
-    setE2eePromptBusy(true);
-    setE2eePromptError("");
-    try {
-      await bootstrapService.submitPairingSecret(trimmed);
-      didInitRef.current = false;
-      setE2eeSecretInput("");
-    } catch (err) {
-      setE2eePromptError(describeE2EEPromptError(err));
-    } finally {
-      setE2eePromptBusy(false);
-    }
-  }, [describeE2EEPromptError, e2eeSecretInput, t]);
-
   useEffect(() => {
     if (!isRelayPWAContext()) {
       return;
@@ -10963,7 +10928,7 @@ export function App({ onGoHome }: AppProps) {
     if (!nodeID) {
       return;
     }
-    window.localStorage.setItem(RELAY_LAST_NODE_ID_STORAGE_KEY, nodeID);
+    projectStorage().setItem(RELAY_LAST_NODE_ID_STORAGE_KEY, nodeID);
   }, []);
 
   useEffect(() => {
@@ -14989,103 +14954,8 @@ export function App({ onGoHome }: AppProps) {
         didInitRef.current = false;
         void bootstrapService.start();
       }} /> : null}
-      {bootstrapState.phase === "needs_pairing" &&
-        e2eeState.required &&
-        !e2eeState.unlocked ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.46)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "24px",
-            zIndex: 2000,
-          }}
-        >
-          <div
-            style={{
-              width: "min(460px, 100%)",
-              background: "#fff",
-              borderRadius: "20px",
-              padding: "24px",
-              boxShadow: "0 28px 80px rgba(15, 23, 42, 0.22)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "14px",
-            }}
-	          >
-	            <div style={{ fontSize: "20px", fontWeight: 700, color: "#0f172a" }}>
-	              {t("e2ee.title")}
-	            </div>
-	            <input
-	              type="text"
-              value={e2eeSecretInput}
-              onChange={(event) => {
-                setE2eeSecretInput(event.target.value);
-                if (e2eePromptError) {
-                  setE2eePromptError("");
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !e2eePromptBusy) {
-                  void submitE2EESecret();
-                }
-              }}
-	              placeholder={t("e2ee.placeholder")}
-              autoFocus
-              spellCheck={false}
-              style={{
-                width: "100%",
-                borderRadius: "14px",
-                border: "1px solid rgba(148, 163, 184, 0.4)",
-                padding: "14px 16px",
-                fontSize: "14px",
-                outline: "none",
-              }}
-            />
-            {e2eePromptError ? (
-              <div style={{ color: "#dc2626", fontSize: "13px" }}>
-                {e2eePromptError}
-              </div>
-            ) : null}
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setE2eeSecretInput("");
-                  setE2eePromptError("");
-                }}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: "#64748b",
-                  padding: 0,
-                  cursor: "pointer",
-                }}
-              >
-                {t("e2ee.clear")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void submitE2EESecret()}
-                disabled={e2eePromptBusy}
-                style={{
-                  border: "none",
-                  borderRadius: "999px",
-                  background: e2eePromptBusy ? "#94a3b8" : "#0f172a",
-                  color: "#fff",
-                  padding: "10px 18px",
-                  cursor: e2eePromptBusy ? "not-allowed" : "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                {e2eePromptBusy ? t("e2ee.verifying") : t("e2ee.continue")}
-              </button>
-            </div>
-          </div>
-        </div>
+      {bootstrapState.phase === "needs_pairing" && e2eeState.required && !e2eeState.unlocked ? (
+        <div className="remote-access-overlay"><div className="remote-host-card" role="dialog" aria-modal="true" aria-label={locale === "zh-CN" ? "连接远程访问" : "Connect remote access"}><RemoteAccessRequired /></div></div>
       ) : null}
       {taskInlineEdit ? (
 	        (() => {

@@ -55,7 +55,7 @@ const INDEX_URL = new URL("./index.html", self.location.href).toString();
 const PRECACHE_URLS = ${JSON.stringify(precacheUrls, null, 2)};
 
 function normalizedPathname(pathname) {
-  const relayPrefixMatch = pathname.match(/^\\/n\\/[^/]+(?=\\/|$)/);
+  const relayPrefixMatch = pathname.match(/^\\/n\\/[^/]+(?:\\/p\\/[^/]+)?(?=\\/|$)/);
   if (!relayPrefixMatch) {
     return pathname;
   }

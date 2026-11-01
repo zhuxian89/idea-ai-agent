@@ -25,7 +25,6 @@ import (
 	"mindfs/server/internal/relay"
 	"mindfs/server/internal/scheduled"
 	"mindfs/server/internal/tlsutil"
-	"mindfs/server/internal/update"
 	"mindfs/server/internal/webpush"
 )
 
@@ -151,18 +150,11 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 	if err != nil {
 		log.Printf("[webpush] config.error err=%v", err)
 	}
-	executable, _ := os.Executable()
-	updateSvc := update.NewService("a9gent/mindfs", opts.Version, executable, opts.Args, 10*time.Minute)
-	if !opts.LocalOnly {
-		updateSvc.Start(ctx)
-	}
-
 	services := &api.AppContext{
 		ProjectLocked: opts.LocalOnly,
 		Dirs:          registry,
 		Agents:        agentPool,
 		Prober:        agentProber,
-		Update:        updateSvc,
 		Prefs:         prefs,
 		E2EE: e2ee.NewManager(e2ee.Config{
 			Enabled:       opts.E2EEConfig.Enabled,
@@ -234,8 +226,39 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 	}
 	services.Relay = relayMgr
 	services.RelayTips = relay.NewTipsService(relayMgr)
+	if err := relayMgr.Start(ctx); err != nil {
+		return err
+	}
+	var remoteHandler http.Handler = remoteAccessMiddleware(relayMgr, mux)
+	var sharedControl *remoteHostControl
+	if opts.LocalOnly {
+		var management http.Handler
+		control, controlErr := newRemoteAccessControl(relayMgr, services)
+		if controlErr == nil {
+			management = control
+			if hostDir := os.Getenv("IDE_AGENT_REMOTE_HOST_DIR"); hostDir != "" {
+				sharedControl, controlErr = newRemoteHostControl(control, hostDir, opts.ProjectRoot, "http://"+relayAddr)
+				if controlErr == nil {
+					management = sharedControl
+					remoteHandler = sharedControl.middleware(mux)
+				}
+			}
+		}
+		if controlErr != nil {
+			// A broken remote-only configuration must not take down local Agent work.
+			// Expose the failure in its own management endpoint and close remote entry.
+			_ = relayMgr.SetEnabled(false)
+			sharedControl = nil
+			management = remoteConfigurationError(controlErr)
+			remoteHandler = remoteConfigurationError(controlErr)
+		}
+		mux.Handle("/api/idea/remote", management)
+		mux.Handle("/api/idea/remote/", management)
+		defer services.GetSessionStreamHub().CloseRemoteClients()
+	}
+
 	if remoteListener != nil {
-		remoteServer := &http.Server{Handler: remoteAccessMiddleware(relayMgr, mux), ReadHeaderTimeout: 5 * time.Second}
+		remoteServer := &http.Server{Handler: remoteHandler, ReadHeaderTimeout: 5 * time.Second}
 		defer remoteServer.Close()
 		go func() {
 			if err := remoteServer.Serve(remoteListener); err != nil && err != http.ErrServerClosed {
@@ -243,18 +266,12 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 			}
 		}()
 	}
-	if err := relayMgr.Start(ctx); err != nil {
-		return err
+	if sharedControl != nil {
+		remoteCtx, cancelRemote := context.WithCancel(ctx)
+		sharedControl.start(remoteCtx)
+		defer func() { cancelRemote(); sharedControl.close() }()
 	}
-	if opts.LocalOnly {
-		control, err := newRemoteAccessControl(relayMgr, services)
-		if err != nil {
-			return err
-		}
-		mux.Handle("/api/idea/remote", control)
-		mux.Handle("/api/idea/remote/", control)
-		defer services.GetSessionStreamHub().CloseRemoteClients()
-	}
+
 	services.RelayTips.Start(ctx)
 	for _, root := range services.ListRoots() {
 		services.Kanban.Schedule(root.ID)

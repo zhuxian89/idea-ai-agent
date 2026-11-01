@@ -100,7 +100,7 @@ type FileResponse = {
   file?: FilePayload | null;
 };
 
-const remoteCacheScope = typeof window !== "undefined" ? /^\/n\/[^/]+/.exec(window.location?.pathname || "")?.[0] || "" : "";
+const remoteCacheScope = typeof window !== "undefined" ? /^\/n\/[^/]+(?:\/p\/[^/]+)?(?=\/|$)/.exec(window.location?.pathname || "")?.[0] || "" : "";
 const DB_NAME = "mindfs-file-cache" + remoteCacheScope;
 const DB_VERSION = 1;
 const STORE_NAME = "files";

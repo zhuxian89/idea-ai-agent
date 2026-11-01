@@ -4,7 +4,8 @@ import vm from "node:vm";
 import { test } from "node:test";
 import ts from "typescript";
 
-test("nodes with overlapping names cannot read or evict each other's file caches", async () => {
+for (const [kind, firstNode, secondNode] of [["nodes", "node", "node2"], ["projects", "node/p/P", "node/p/P2"]]) {
+test(`${kind} with overlapping names cannot read or evict each other's file caches`, async () => {
   const records = new Map();
   const localStorage = {
     get length() { return records.size; },
@@ -31,13 +32,14 @@ test("nodes with overlapping names cannot read or evict each other's file caches
     return exports;
   }
   const params = {rootId:"root",path:"same.ts"};
-  const first = client("node");
-  const second = client("node2");
+  const first = client(firstNode);
+  const second = client(secondNode);
   await first.fetchFile(params);
   assert.equal(await second.getCachedFile(params),null);
   await second.fetchFile(params);
-  assert.equal((await client("node").getCachedFile(params)).content,"node");
-  assert.equal((await client("node2").getCachedFile(params)).content,"node2");
+  assert.equal((await client(firstNode).getCachedFile(params)).content,firstNode);
+  assert.equal((await client(secondNode).getCachedFile(params)).content,secondNode);
   first.clearFileCacheForRoot("root");
-  assert.equal((await client("node2").getCachedFile(params)).content,"node2");
+  assert.equal((await client(secondNode).getCachedFile(params)).content,secondNode);
 });
+}

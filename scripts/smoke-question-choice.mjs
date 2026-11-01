@@ -74,7 +74,7 @@ export async function smokeQuestionChoice(browser, bootstrapURL, rootId, reports
     socket.send(JSON.stringify({type: 'session.answer_question.accepted', id: answers[0].id, payload: {root_id: rootId, session_key: sessions[0].key, tool_use_id: call.callId}}));
     emit('session.stream', {event: {type: 'tool_call_update', data: {...call, status: 'complete', meta: {...call.meta, answers: {q_0: 'Tabs'}}}}});
     emit('session.stream', {event: {type: 'thought_chunk', data: {content: 'Continue with Tabs'}}});
-    await page.locator('.idea-chat:visible').getByText('Thinking', {exact: true}).waitFor();
+    await expect(page.locator('.idea-chat:visible [data-session-activity]')).toContainText('Thinking, lining up the clues…');
     assert.equal(messages.length, 0, 'the answer must use the question endpoint, not a separate composer send');
     assert.deepEqual(errors, []);
     console.log('PASS: choice card opens, waits for explicit submission, survives session switching and resumes only after accepted answer.');

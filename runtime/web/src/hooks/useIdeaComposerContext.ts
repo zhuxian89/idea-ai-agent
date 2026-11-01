@@ -1,4 +1,7 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { readRemoteDrafts, saveRemoteDrafts } from "../services/remoteDrafts";
+import { remoteProjectPrefix } from "../services/remoteScope";
+import { translateNow } from "../i18n";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { subscribeIdeaContext, type IdeaContextTarget } from "../services/ideaBridge";
 import { composerDraftKey, subscribeComposerDraftPromotion } from "../services/composerDrafts";
 
@@ -18,7 +21,8 @@ type Options<T> = {
 export function useIdeaComposerContext<T extends Attachment>(options: Options<T>): void {
   const latest = useRef(options);
   latest.current = options;
-  const drafts = useRef(new Map<string, Draft<T>>());
+  const drafts = useRef(useMemo(() => new Map<string, Draft<T>>(readRemoteDrafts()), []));
+  const draftSaved = useRef(true);
   const activeKey = useRef(composerDraftKey(options.rootId, options.sessionKey));
   const pending = useRef<{ text: string; target: IdeaContextTarget; key: string; rootId: string }[]>([]);
 
@@ -26,6 +30,17 @@ export function useIdeaComposerContext<T extends Attachment>(options: Options<T>
     latest.current.draft = draft;
     latest.current.write(draft, settings);
   };
+
+  const restoredInitial = useRef(false);
+  useLayoutEffect(() => {
+    if (restoredInitial.current) return;
+    restoredInitial.current = true;
+    const saved = drafts.current.get(activeKey.current);
+    if (saved) {
+      drafts.current.delete(activeKey.current);
+      write(saved, { contextAdded: false, resetHistory: true });
+    }
+  }, []);
 
   useLayoutEffect(() => subscribeComposerDraftPromotion((from, to) => {
     const saved = drafts.current.get(from);
@@ -47,6 +62,34 @@ export function useIdeaComposerContext<T extends Attachment>(options: Options<T>
     drafts.current.delete(key);
     write(restored, { contextAdded: false, resetHistory: true });
   });
+
+  useLayoutEffect(() => {
+    const snapshot = new Map(drafts.current);
+    snapshot.set(activeKey.current, latest.current.draft);
+    draftSaved.current = saveRemoteDrafts(snapshot);
+  });
+
+  useEffect(() => {
+    if (!remoteProjectPrefix()) return;
+    let leaving = false;
+    const hasAttachments = () => [...drafts.current.values(), latest.current.draft].some(draft => draft.attachments.length > 0);
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!leaving && (hasAttachments() || !draftSaved.current)) { event.preventDefault(); event.returnValue = ""; }
+    };
+    const leave = (event: Event) => {
+      if (event.defaultPrevented) return;
+      if ((hasAttachments() || !draftSaved.current) && !window.confirm(translateNow("remote.unsavedAttachmentsLeave"))) event.preventDefault();
+    };
+    const commitLeave = () => { leaving = true; };
+    window.addEventListener("beforeunload", beforeUnload);
+    window.addEventListener("idea:remote-project-leaving", commitLeave);
+    window.addEventListener("idea:leave-remote-project", leave);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      window.removeEventListener("idea:remote-project-leaving", commitLeave);
+      window.removeEventListener("idea:leave-remote-project", leave);
+    };
+  }, []);
 
   const flush = () => {
     // The request keeps its click-time destination while a send/voice insertion

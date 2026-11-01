@@ -1,9 +1,13 @@
 package dev.ideaagent
 
 import com.intellij.util.EnvironmentUtil
+import dev.ideaagent.remote.remoteHostDataDir
 import java.nio.file.Path
 
-internal fun runtimeProcess(executable: Path, projectPath: Path, dataDir: Path, token: String): ProcessBuilder {
+internal fun runtimeProcess(
+    executable: Path, projectPath: Path, dataDir: Path, token: String,
+    remoteHostDir: Path = remoteHostDataDir(),
+): ProcessBuilder {
     val runtime = executable.parent
     val builder = ProcessBuilder(executable.toString(), "--project", projectPath.toString())
         .directory(runtime.toFile())
@@ -13,6 +17,7 @@ internal fun runtimeProcess(executable: Path, projectPath: Path, dataDir: Path, 
     builder.environment().putAll(agentRuntimeEnvironment(EnvironmentUtil.getEnvironmentMap()))
     builder.environment()["IDE_AGENT_DATA_DIR"] = dataDir.toString()
     builder.environment()["IDE_AGENT_TOKEN"] = token
+    builder.environment()["IDE_AGENT_REMOTE_HOST_DIR"] = remoteHostDir.toString()
     builder.environment()["MINDFS_STATIC_DIR"] = runtime.resolve("web").toString()
     return builder
 }

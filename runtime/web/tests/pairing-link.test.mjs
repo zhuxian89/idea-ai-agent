@@ -62,7 +62,7 @@ function browser(href, { secrets = new Map(), node = "project-a", expectedSecret
       throw new Error(name);
     },
   });
-  return { links, service: bootstrap.bootstrapService, secrets, requests, get url() { return url; }, get opens() { return opens; }, online: () => { offline = false; handshakeError = ""; refreshError = ""; } };
+  return { links, service: bootstrap.bootstrapService, secrets, requests, rotate: value => { expectedSecret = value; unlocked = false; }, get url() { return url; }, get opens() { return opens; }, online: () => { offline = false; handshakeError = ""; refreshError = ""; } };
 }
 
 test("handshake and protected status failures preserve pairing and recover on manual retry", async () => {
@@ -89,8 +89,10 @@ test("manual pairing network failure also retains the submitted key", async () =
 
 test("QR grants automatic pairing, removes fragment and preserves unrelated URL state", async () => {
   const b = browser("https://relay.test/n/node/?root=project#mindfs_pairing=scan-key&section=chat");
-  assert.equal(b.url.href, "https://relay.test/n/node/?root=project#section=chat");
+  // Module construction must not consume a host QR before the entry router decides its scope.
+  assert.ok(b.url.hash.includes("mindfs_pairing"));
   assert.equal((await b.service.start()).phase, "ready");
+  assert.equal(b.url.href, "https://relay.test/n/node/?root=project#section=chat");
   assert.equal(b.opens, 1);
   assert.equal(b.secrets.get("project-a"), "scan-key");
   assert.ok(b.requests.every(url => !url.includes("scan-key") && !url.includes("mindfs_pairing")));
@@ -132,4 +134,15 @@ test("local IDEA pages do not consume QR authorization", async () => {
   const b = browser("http://127.0.0.1:1234/#mindfs_pairing=scan-key");
   assert.equal((await b.service.start()).phase, "needs_pairing");
   assert.equal(b.secrets.size, 0);
+});
+
+
+test("a replacement access link recovers an existing page even with an expired cached credential", async () => {
+  const b = browser("https://relay.test/n/node/#mindfs_pairing=scan-key");
+  assert.equal((await b.service.start()).phase, "ready");
+  b.rotate("replacement-key");
+  b.service.acceptPairingLinkSecret("replacement-key");
+  assert.equal((await b.service.start()).phase, "ready");
+  assert.equal(b.secrets.get("project-a"), "replacement-key");
+  assert.equal(b.opens, 2);
 });

@@ -1,8 +1,8 @@
 import { getNativeBridge, parseNativeJSON } from "./nativeBridge";
 import { getNativePlatform, isAndroidRuntime, isHarmonyRuntime, isNativeShellRuntime, type NativePlatform } from "./runtime";
 
-const DEFAULT_ANDROID_VERSION_URL = "https://relay.a9gent.com/api/versions/android";
-const DEFAULT_HARMONY_VERSION_URL = "https://relay.a9gent.com/api/versions/harmony";
+const DEFAULT_ANDROID_VERSION_URL = "https://relay.20260310.best/api/versions/android";
+const DEFAULT_HARMONY_VERSION_URL = "https://relay.20260310.best/api/versions/harmony";
 
 export type AppUpdateState = {
   platform: NativePlatform;
