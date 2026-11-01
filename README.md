@@ -54,7 +54,7 @@ Codex 通过原生 `app-server` 协议运行，Claude Code 通过原生流式协
 
 默认远程服务为 [relay.20260310.best](https://relay.20260310.best)，由 `runtime/agents.json` 的 `relayBaseURL` 配置并随插件打包。
 
-当前源码已加入多项目统一入口（尚未发布；0.1.25 仍按项目绑定）。点击插件右上角“远程访问”，再点“开启远程访问”，首次登录并连接访问服务，无需另装 MindFS。同一系统用户的多个 IDEA 项目共用一次绑定，每个项目分别选择是否开放。浏览器配对一次后可切换已开放项目；各项目继续使用自己的原有后台服务与会话，消息和执行进度实时同步。
+从 0.1.26 起支持多项目统一入口。点击插件右上角“远程访问”，再点“开启远程访问”，首次登录并连接访问服务，无需另装 MindFS。同一系统用户的多个 IDEA 项目共用一次绑定，每个项目分别选择是否开放。浏览器配对一次后可切换已开放项目；各项目继续使用自己的原有后台服务与会话，消息和执行进度实时同步。
 
 - 手机扫描插件中的二维码后自动配对，不需要再输码。二维码携带访问凭据，请勿转发；页面读取后会清除地址栏中的配对参数。
 - 电脑点击“打开浏览器”，或将“复制链接”得到的连接链接在自己的其他设备打开，即可自动授权，无需输入配对码。链接与二维码同样包含访问凭据，请勿公开转发；浏览器会记住授权。普通节点地址不会绕过验证。
@@ -190,7 +190,7 @@ The plugin starts a bundled service for the lifetime of the project. It listens 
 
 The default remote service is [relay.20260310.best](https://relay.20260310.best), configured by `relayBaseURL` in the bundled `runtime/agents.json`.
 
-The current source adds a shared project entry (not released yet; 0.1.25 still links projects separately). Choose **Remote access**, then **Enable remote access** in the plugin toolbar. Sign in and connect the access service once. No separate MindFS installation is required. IDEA projects for the same OS user share the node and are enabled individually. A paired browser can switch between shared projects; each project retains its original backend, sessions and live progress.
+Starting with 0.1.26, projects can share one remote entry. Choose **Remote access**, then **Enable remote access** in the plugin toolbar. Sign in and connect the access service once. No separate MindFS installation is required. IDEA projects for the same OS user share the node and are enabled individually. A paired browser can switch between shared projects; each project retains its original backend, sessions and live progress.
 
 - Scanning the plugin's QR code pairs the phone automatically. The QR code grants access; do not share it. The page removes the pairing parameter from its address after reading it.
 - Choose **Open browser**, or open the **Copy link** access link on your other device. Authorization is automatic, with no code to enter. The link grants the same access as the QR code: keep it private. Browsers remember authorization; plain node URLs do not bypass authentication.

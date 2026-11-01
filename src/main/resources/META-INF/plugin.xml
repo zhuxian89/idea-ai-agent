@@ -19,16 +19,17 @@
             <li>Detect, configure, install, update, and restart supported local Agent CLIs from IDEA.</li>
             <li>See factual Agent activity in a quiet two-line status area and refresh available models without restarting IDEA.</li>
         </ul>
-        <h3>One project across IDEA, a browser and your phone</h3>
-        <p>Link the project to Relay from the Remote access toolbar button. Computer browsers and phones
-            share the IDEA project's sessions and live updates without a separate MindFS installation.
-            Phone QR scanning pairs automatically; ordinary links require a pairing key on first use.
-            Enabled projects connect when opened in IDEA. Keep IDEA and the project running.</p>
+        <h3>One computer, multiple projects across IDEA, browser and phone</h3>
+        <p>Connect the computer to Relay from the Remote access toolbar button. Projects on the same
+            computer share one remote entry and can be opened individually without a separate MindFS installation.
+            Scan the QR code or open the access link to connect automatically, without entering a pairing code.
+            Enabled projects reconnect when opened in IDEA. Keep IDEA and the project running.</p>
         <ul>
             <li>Messages and execution progress stay synchronized across connected clients in the same session.</li>
+            <li>Switch between shared projects while each project retains its own Agent backend and sessions.</li>
             <li>Send instructions, answer questions and respond to approval requests remotely using the same Agent backend.</li>
             <li>Browse project files, inspect changes and edit text files in the browser with revision-conflict detection.</li>
-            <li>Retry a failed connection without re-entering a valid pairing key. Turn remote access off while continuing locally.</li>
+            <li>Retry a failed connection with saved authorization. Manage individual projects or turn remote access off while continuing locally.</li>
         </ul>
         <p>Remote business traffic is encrypted through Relay; connection metadata remains visible to Relay.
             Browsers retain pairing credentials and file/session caches. See the privacy policy for details.</p>
@@ -81,12 +82,13 @@
             <li>在 IDEA 内检测、配置、安装、更新和重启本机 Agent CLI。</li>
             <li>用安静的两行状态展示真实 Agent 活动，主动刷新可用模型，无需重启 IDEA。</li>
         </ul>
-        <h3>IDEA、浏览器、手机，共用同一个项目</h3>
-        <p>通过工具栏“远程访问”绑定 Relay，电脑浏览器和手机即可与 IDEA 共用会话和实时进度，无需另装 MindFS。
-            手机扫码自动配对，普通链接首次访问输入配对密钥；已开启远程访问的项目随 IDEA 打开自动连接。
+        <h3>一台电脑，多个项目，IDEA、浏览器和手机随时切换</h3>
+        <p>通过工具栏“远程访问”连接 Relay，同一电脑上的项目共用一个远程入口，各项目可单独开放，无需另装 MindFS。
+            手机扫码或打开访问链接即可自动连接，无需输入配对码；已开启远程访问的项目随 IDEA 打开自动连接。
             使用期间需要保持 IDEA 和对应项目运行。</p>
         <ul>
             <li>同一会话的消息和执行进度在三端实时同步。</li>
+            <li>在开放的项目之间切换，各项目保留各自的 Agent 后台和会话。</li>
             <li>远程发送指令、回答追问和处理审批，沿用同一个 Agent 后台服务。</li>
             <li>在浏览器查看项目文件和代码差异，编辑文本文件时检测版本冲突。</li>
             <li>连接失败可重试，保留有效配对信息；关闭远程访问后，本地仍可继续使用。</li>
@@ -120,6 +122,16 @@
         </p>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>0.1.26 — Shared remote project hub / 多项目统一远程入口</b></p>
+        <ul>
+            <li>Share one computer connection across IDEA projects and switch between individually enabled projects from a browser or phone.</li>
+            <li>Connect by scanning a QR code or opening an access link, without entering a pairing code.</li>
+            <li>Manage project access separately and keep project sessions and Agent work on their existing backends.</li>
+            <li>Upgrade the shared remote entry automatically and restore registered projects while preserving its identity.</li>
+            <li>多个 IDEA 项目共用一个电脑远程入口，可在浏览器和手机切换，按项目控制开放权限。</li>
+            <li>扫码或打开访问链接自动连接，无需输入配对码；各项目继续使用原有会话和 Agent 后台。</li>
+            <li>自动升级共享远程后台并恢复项目登记，保留电脑身份。</li>
+        </ul>
         <p><b>0.1.25 — Remote access / 三端远程访问</b></p>
         <ul>
             <li>Adds a Remote access toolbar entry with Relay linking, shared IDEA/browser/phone sessions and live progress.</li>
