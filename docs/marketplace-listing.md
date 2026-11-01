@@ -23,7 +23,7 @@ This file contains the values to use for the JetBrains Marketplace listing of Lo
 
 Version 0.1.25 was uploaded to the default channel on 2026-10-29 as [update 1205662](https://plugins.jetbrains.com/plugin/34276-local-ai-agent/versions/stable/1205662). It is approved and publicly listed as of 2026-11-01.
 
-Version 0.1.26 was uploaded to the default channel on 2026-11-01 as [update 1209281](https://plugins.jetbrains.com/plugin/34276-local-ai-agent/versions/stable/1209281). Authenticated read-back confirmed the version and change notes; it was pending review and not publicly listed at submission time.
+Version 0.1.26 was reuploaded to the default channel on 2026-11-01 as [update 1209306](https://plugins.jetbrains.com/plugin/34276-local-ai-agent/versions/stable/1209306), after update 1209281 was removed. The new update was pending review at submission time.
 
 Use the public email attached to the JetBrains Vendor profile as the support email. The repository does not define a public support mailbox.
 
