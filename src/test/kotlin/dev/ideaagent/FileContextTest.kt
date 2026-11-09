@@ -87,6 +87,32 @@ class FileContextTest : BasePlatformTestCase() {
         assertEquals(original, Files.readString(Path.of(file.path)))
     }
 
+    fun testReferenceAndActionLabelsFollowPluginLanguage() {
+        val preferences = com.intellij.openapi.application.ApplicationManager.getApplication().getService(AgentPreferences::class.java)
+        val previous = preferences.state
+        try {
+            val clicked = file("language.txt")
+            assertEquals("File: ${clicked.path}", FileContext.reference(clicked, english = true))
+            assertEquals("文件：${clicked.path}", FileContext.reference(clicked))
+            val context = DataContext { key ->
+                when (key) {
+                    CommonDataKeys.PROJECT.name -> project
+                    CommonDataKeys.VIRTUAL_FILE.name -> clicked
+                    else -> null
+                }
+            }
+            val action = requireNotNull(ActionManager.getInstance().getAction("IdeaAgent.AddFileContext"))
+            for ((locale, expected) in listOf("en-US" to "Add to AI Agent Chat", "zh-CN" to "加入 AI Agent 对话")) {
+                preferences.setLocale(locale)
+                val event = AnActionEvent.createFromDataContext("test", null, context)
+                action.update(event)
+                assertEquals(expected, event.presentation.text)
+            }
+        } finally {
+            preferences.loadState(previous)
+        }
+    }
+
     fun testFileActionIsRegisteredInBothPopupsAndAvailableDuringIndexing() {
         val manager = ActionManager.getInstance()
         val action = requireNotNull(manager.getAction("IdeaAgent.AddFileContext"))

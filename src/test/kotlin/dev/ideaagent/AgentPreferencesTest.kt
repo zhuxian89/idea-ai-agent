@@ -2,10 +2,25 @@ package dev.ideaagent
 
 import com.intellij.util.xmlb.XmlSerializer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AgentPreferencesTest {
+    @Test fun savedLanguageWinsAndSystemLanguageDecidesOtherwise() {
+        assertTrue(useEnglish(null, "en"))
+        assertFalse(useEnglish(null, "zh"))
+        // Same fallback as the web UI: anything but English or Chinese shows Chinese.
+        assertFalse(useEnglish(null, "ja"))
+        assertFalse("explicit Chinese beats an English system", useEnglish("zh-CN", "en"))
+        assertTrue("explicit English beats a Chinese system", useEnglish("en-US", "zh"))
+        val preferences = AgentPreferences()
+        assertTrue(preferences.isEnglish("en"))
+        preferences.setLocale("zh-CN")
+        assertFalse(preferences.isEnglish("en"))
+    }
+
     @Test fun chosenLanguageSurvivesStateSerializationAndANewPluginInstance() {
         for (locale in listOf("zh-CN", "en-US")) {
             val previous = AgentPreferences()

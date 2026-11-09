@@ -49,22 +49,20 @@ class AgentToolWindowFactory : ToolWindowFactory, DumbAware {
         // web page drops its duplicated toolbar in ide_chrome mode, so these
         // title actions carry new/history/settings, and reconnecting moves into
         // the tool window gear menu.
+        val english = isEnglishUi()
         toolWindow.setTitleActions(NativeAgentCommands.all.map { command ->
             NativeAgentCommandAction(command, panel::sendNativeCommand,
-                NativeAgentCommands.title(command), NativeAgentCommands.description(command),
+                NativeAgentCommands.title(command, english), NativeAgentCommands.description(command, english),
                 NativeAgentCommands.icon(command))
         })
         toolWindow.setAdditionalGearActions(DefaultActionGroup(
-            object : DumbAwareAction("重新连接", "重新连接本地 Agent 聊天界面", AllIcons.Actions.Refresh) {
-                override fun getActionUpdateThread() = ActionUpdateThread.EDT
-                override fun actionPerformed(event: AnActionEvent) = panel.start()
-            },
-            object : DumbAwareAction("语音配置与测试 / Voice settings", "修改语音识别供应商、密钥并测试录音识别", AllIcons.General.Settings) {
-                override fun getActionUpdateThread() = ActionUpdateThread.EDT
-                override fun actionPerformed(event: AnActionEvent) {
-                    panel.openVoiceSettings()
-                }
-            },
+            LocalizedAction({ localized("重新连接", "Reconnect") },
+                { localized("重新连接本地 Agent 聊天界面", "Reconnect the local Agent chat view") },
+                AllIcons.Actions.Refresh) { panel.start() },
+            LocalizedAction({ "语音配置与测试 / Voice settings" },
+                { localized("修改语音识别供应商、密钥并测试录音识别",
+                    "Change the speech provider and credentials, and test recording") },
+                AllIcons.General.Settings) { panel.openVoiceSettings() },
         ))
         panel.start()
     }
@@ -73,18 +71,18 @@ class AgentToolWindowFactory : ToolWindowFactory, DumbAware {
 internal object NativeAgentCommands {
     val all = listOf("new", "history", "settings", "remote")
 
-    fun title(command: String): String = when (command) {
-        "remote" -> "远程访问"
-        "new" -> "新会话"
-        "history" -> "聊天历史"
-        else -> "Agent 配置"
+    fun title(command: String, english: Boolean = false): String = when (command) {
+        "remote" -> if (english) "Remote access" else "远程访问"
+        "new" -> if (english) "New session" else "新会话"
+        "history" -> if (english) "Chat history" else "聊天历史"
+        else -> if (english) "Agent settings" else "Agent 配置"
     }
 
-    fun description(command: String): String = when (command) {
-        "remote" -> "绑定 Relay，在浏览器中继续当前项目的会话"
-        "new" -> "开始一个新的 Agent 会话"
-        "history" -> "打开或返回聊天历史"
-        else -> "打开或返回 Agent 配置与安装"
+    fun description(command: String, english: Boolean = false): String = when (command) {
+        "remote" -> if (english) "Link Relay and continue this project's sessions in a browser" else "绑定 Relay，在浏览器中继续当前项目的会话"
+        "new" -> if (english) "Start a new Agent session" else "开始一个新的 Agent 会话"
+        "history" -> if (english) "Open or return from chat history" else "打开或返回聊天历史"
+        else -> if (english) "Open or return from Agent settings and installation" else "打开或返回 Agent 配置与安装"
     }
 
     fun icon(command: String): Icon = when (command) {
@@ -103,9 +101,29 @@ internal class NativeAgentCommandAction(
     icon: Icon,
 ) : DumbAwareAction(text, description, icon) {
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
+    override fun update(event: AnActionEvent) {
+        val english = isEnglishUi()
+        event.presentation.text = NativeAgentCommands.title(command, english)
+        event.presentation.description = NativeAgentCommands.description(command, english)
+    }
     override fun actionPerformed(event: AnActionEvent) = fire()
 
     internal fun fire() = send(command)
+}
+
+/** Gear-menu entry whose text follows the plugin language each time the menu opens. */
+private class LocalizedAction(
+    private val text: () -> String,
+    private val description: () -> String,
+    icon: Icon,
+    private val run: () -> Unit,
+) : DumbAwareAction(text(), description(), icon) {
+    override fun getActionUpdateThread() = ActionUpdateThread.EDT
+    override fun update(event: AnActionEvent) {
+        event.presentation.text = text()
+        event.presentation.description = description()
+    }
+    override fun actionPerformed(event: AnActionEvent) = run()
 }
 
 /** Commands clicked before the webview finishes loading replay once it has. */
@@ -122,7 +140,7 @@ internal class WebviewCommandQueue {
 
 class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
     private val body = JPanel(BorderLayout())
-    private val status = JLabel("正在启动本地 Agent…")
+    private val status = JLabel(startingText())
     private var browser: JBCefBrowser? = null
     private var connection: LocalRuntime.Connection? = null
     private var loaded = false
@@ -149,7 +167,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
 
     fun addCurrentEditorContext() {
         FileEditorManager.getInstance(project).selectedTextEditor?.let { editor ->
-            EditorContext.capture(project, editor)?.let(::addContext)
+            EditorContext.capture(project, editor, isEnglishUi())?.let(::addContext)
         }
     }
 
@@ -165,7 +183,8 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
     fun start() {
         if (closed) return
         if (!JBCefApp.isSupported()) {
-            showStatus("当前运行环境不支持 JCEF。请使用 IDEA 自带的 JetBrains Runtime。")
+            showStatus(localized("当前运行环境不支持 JCEF。请使用 IDEA 自带的 JetBrains Runtime。",
+                "This runtime does not support JCEF. Use the JetBrains Runtime bundled with IDEA."))
             return
         }
         // A (re)connect detaches the old page right away; keep every action
@@ -173,15 +192,17 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         // the view that is about to be replaced and be lost.
         voice.cancel()
         loaded = false
-        showStatus("正在启动本地 Agent…")
+        showStatus(startingText())
         project.getService(LocalRuntime::class.java).start().whenComplete { ready, error ->
             ApplicationManager.getApplication().invokeLater {
                 if (closed || project.isDisposed) return@invokeLater
-                if (error != null) showStatus("启动失败：${error.cause?.message ?: error.message}")
+                if (error != null) showStatus(localized("启动失败：", "Failed to start: ") + (error.cause?.message ?: error.message))
                 else attach(ready)
             }
         }
     }
+
+    private fun startingText() = localized("正在启动本地 Agent…", "Starting local Agent…")
 
     private fun showStatus(text: String) {
         status.text = text
@@ -264,7 +285,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                     }
                     "addFileContext" -> ApplicationManager.getApplication().invokeLater {
                         if (!project.isDisposed) {
-                            val context = FileContext.current(project)
+                            val context = FileContext.current(project, isEnglishUi())
                             if (context == null) FileContext.notifyUnavailable(project)
                             else addContext(context)
                         }
@@ -335,7 +356,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         voice.cancel()
         execute("window.dispatchEvent(new Event(\"ideaAgentVoiceSettingsOpening\"));")
         ApplicationManager.getApplication().getService(VoiceSettings::class.java)
-            .configure(project, ApplicationManager.getApplication().getService(AgentPreferences::class.java).state.locale == "en-US")
+            .configure(project, isEnglishUi())
     }
 
     private fun syncVoiceSettings() {

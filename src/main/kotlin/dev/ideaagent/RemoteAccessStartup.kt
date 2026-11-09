@@ -29,8 +29,8 @@ class RemoteAccessStartup : ProjectActivity {
             Logger.getInstance(RemoteAccessStartup::class.java).warn("Remote access startup failed", error)
             if (!project.isDisposed) {
                 NotificationGroupManager.getInstance().getNotificationGroup("IdeaAgent.Context")
-                    .createNotification("远程访问启动失败 / Remote access startup failed",
-                        "请打开 AI Agent 面板查看并重试。Open the AI Agent panel to check and retry.",
+                    .createNotification(localized("远程访问启动失败", "Remote access startup failed"),
+                        localized("请打开 AI Agent 面板查看并重试。", "Open the AI Agent panel to check and retry."),
                         NotificationType.ERROR)
                     .notify(project)
             }

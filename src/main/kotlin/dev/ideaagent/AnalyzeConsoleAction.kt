@@ -3,7 +3,6 @@ package dev.ideaagent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.wm.ToolWindowManager
@@ -12,7 +11,7 @@ abstract class AnalyzeConsoleAction(private val target: String) : DumbAwareActio
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
     override fun update(event: AnActionEvent) {
-        val english = isEnglish()
+        val english = isEnglishUi()
         event.presentation.text = if (target == "new") {
             if (english) "Analyze in New Agent Session" else "在新会话中分析"
         } else {
@@ -29,7 +28,7 @@ abstract class AnalyzeConsoleAction(private val target: String) : DumbAwareActio
         val editor = event.getData(CommonDataKeys.EDITOR) ?: return
         if (editor.editorKind != EditorKind.CONSOLE || editor.project != project) return
         val selection = editor.selectionModel.selectedText ?: return
-        val text = ConsoleContext.format(selection, isEnglish()) ?: return
+        val text = ConsoleContext.format(selection, isEnglishUi()) ?: return
         val window = ToolWindowManager.getInstance(project).getToolWindow("AI Agent") ?: return
         // Capture before focus moves away from the originating console.
         window.activate({
@@ -38,8 +37,6 @@ abstract class AnalyzeConsoleAction(private val target: String) : DumbAwareActio
             }
         }, true)
     }
-
-    private fun isEnglish() = ApplicationManager.getApplication().getService(AgentPreferences::class.java).state.locale == "en-US"
 }
 
 class AnalyzeConsoleCurrentAction : AnalyzeConsoleAction("current")

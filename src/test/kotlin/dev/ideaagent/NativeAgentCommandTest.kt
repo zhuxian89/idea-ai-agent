@@ -59,4 +59,15 @@ class NativeAgentCommandTest {
         val end = factorySource.indexOf("queuedCommands.drain().forEach(::sendNativeCommand)")
         assertTrue("queued commands must replay once the webview loads", end > start)
     }
+
+    @Test fun everyCommandHasATitleAndDescriptionInBothLanguages() {
+        for (command in NativeAgentCommands.all) {
+            val zh = NativeAgentCommands.title(command)
+            val en = NativeAgentCommands.title(command, english = true)
+            assertTrue("$command needs a Chinese title", zh.any { it.code in 0x4e00..0x9fff } || zh.startsWith("Agent"))
+            assertTrue("$command needs an English title", en.isNotBlank() && en.none { it.code in 0x4e00..0x9fff })
+            assertTrue(NativeAgentCommands.description(command, english = true).none { it.code in 0x4e00..0x9fff })
+            assertTrue(NativeAgentCommands.description(command).isNotBlank())
+        }
+    }
 }

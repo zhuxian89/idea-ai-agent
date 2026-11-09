@@ -221,7 +221,8 @@ internal object TurnDiffViewer {
         ApplicationManager.getApplication().invokeLater {
             if (!project.isDisposed) {
                 NotificationGroupManager.getInstance().getNotificationGroup("IdeaAgent.Context")
-                    .createNotification("无法打开 Git 对比", message ?: "当前文件没有未提交修改。", NotificationType.WARNING)
+                    .createNotification(localized("无法打开 Git 对比", "Cannot open Git comparison"),
+                        message ?: localized("当前文件没有未提交修改。", "This file has no uncommitted changes."), NotificationType.WARNING)
                     .notify(project)
             }
         }
@@ -229,7 +230,8 @@ internal object TurnDiffViewer {
 
     private fun notifyError(project: Project, message: String?) {
         NotificationGroupManager.getInstance().getNotificationGroup("IdeaAgent.Context")
-            .createNotification("无法打开本轮对比", message ?: "快照不可用或已过期。", NotificationType.WARNING)
+            .createNotification(localized("无法打开本轮对比", "Cannot open this turn's diff"),
+                message ?: localized("快照不可用或已过期。", "The snapshot is unavailable or has expired."), NotificationType.WARNING)
             .notify(project)
     }
 }
