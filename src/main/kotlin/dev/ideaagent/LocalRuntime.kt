@@ -29,6 +29,7 @@ class LocalRuntime(private val project: Project) : Disposable {
     private var future: CompletableFuture<Connection>? = null
     private var process: Process? = null
     private var remoteHostLease: AutoCloseable? = null
+    private var remoteHostTarget: Pair<Path, Path>? = null
     private var disposed = false
 
     init {
@@ -69,9 +70,10 @@ class LocalRuntime(private val project: Project) : Disposable {
             val builder = runtimeProcess(executable, projectPath, dataDir, token, hostDir)
             val child = synchronized(lock) {
                 if (disposed || result.isDone) return
-                remoteHostLease = ApplicationManager.getApplication().getService(RemoteHostService::class.java)
-                    .acquire(executable, hostDir)
-                builder.start().also { process = it }
+                remoteHostTarget = executable to hostDir
+                builder.start().also { process = it }.also {
+                    if (remoteHostWanted(dataDir, hostDir)) acquireRemoteHostLocked()
+                }
             }
             // Drain diagnostics without copying agent prompts or credentials into IDEA logs.
             AppExecutorUtil.getAppExecutorService().execute { child.errorStream.use { it.transferTo(java.io.OutputStream.nullOutputStream()) } }
@@ -97,6 +99,17 @@ class LocalRuntime(private val project: Project) : Disposable {
         } catch (error: Exception) {
             result.completeExceptionally(error)
         }
+    }
+
+    /** Starts the shared remote entry for this project; the remote panel calls it when it opens. */
+    fun requestRemoteHost() = synchronized(lock) {
+        if (!disposed && process != null) acquireRemoteHostLocked()
+    }
+
+    private fun acquireRemoteHostLocked() {
+        val (executable, hostDir) = remoteHostTarget ?: return
+        if (remoteHostLease == null) remoteHostLease = ApplicationManager.getApplication()
+            .getService(RemoteHostService::class.java).acquire(executable, hostDir)
     }
 
     private fun stopFailed(result: CompletableFuture<Connection>) {

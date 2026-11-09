@@ -204,3 +204,16 @@ test("the latest language choice wins when the bridge loads after repeated chang
   assert.equal(bridge.window.ideaAgent.locale, "zh-CN");
   assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), [{ action: "setLocale", locale: "zh-CN" }]);
 });
+
+test("opening the remote panel asks the IDE to start the shared remote entry, replaying if the bridge is late", () => {
+  const early = loadBridge();
+  early.exports.requestIdeaRemoteHost();
+  assert.equal(early.posts.length, 0);
+  early.injectBridge();
+  early.fireReady();
+  assert.deepEqual(JSON.parse(JSON.stringify(early.posts)), [{ action: "remoteAccess" }]);
+
+  const ready = loadBridge({ ready: true });
+  ready.exports.requestIdeaRemoteHost();
+  assert.deepEqual(JSON.parse(JSON.stringify(ready.posts)), [{ action: "remoteAccess" }]);
+});

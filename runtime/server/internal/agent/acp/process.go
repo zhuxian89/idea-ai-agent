@@ -573,7 +573,7 @@ func (p *Process) SendMessage(ctx context.Context, sessionKey, content string) e
 	if sess == nil {
 		return nil
 	}
-	log.Printf("[agent/acp] send.begin agent=%s session_key=%s content=%q", p.agentLabel(), sessionKey, content)
+	log.Printf("[agent/acp] send.begin agent=%s session_key=%s bytes=%d", p.agentLabel(), sessionKey, len(content))
 
 	promptCtx, promptCancel := context.WithCancel(ctx)
 	promptID := time.Now().UnixNano()
@@ -920,7 +920,7 @@ func streamProcessStderr(proc *Process, reader io.Reader) {
 		if line == "" {
 			continue
 		}
-		log.Printf("[agent/acp][stderr] agent=%s %s", proc.agentLabel(), line)
+		log.Printf("[agent/acp][stderr] agent=%s %s", proc.agentLabel(), truncateLogLine(line))
 		proc.captureStderrHint(line)
 	}
 	if err := scanner.Err(); err != nil {
@@ -1044,4 +1044,11 @@ func sessionUpdateLogValue(data any) string {
 		return `{"marshal_error":true}`
 	}
 	return string(raw)
+}
+
+func truncateLogLine(line string) string {
+	if len(line) > 500 {
+		return line[:500] + "...(truncated)"
+	}
+	return line
 }

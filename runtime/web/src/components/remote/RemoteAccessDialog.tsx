@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { appPath } from "../../services/base";
 import { buildPairingLink } from "../../services/pairingLink";
 import { useI18n } from "../../i18n";
+import { requestIdeaRemoteHost } from "../../services/ideaBridge";
 import "./remoteAccess.css";
 
 type ManagedProject = { project_id: string; name: string; label: string; enabled: boolean; availability: string };
@@ -10,7 +11,7 @@ type RemoteStatus = {
   relay_bound: boolean; enabled: boolean; connected: boolean;
   relay_base_url: string; node_url: string; pending_code: string;
   pairing_secret: string; last_error?: string; node_name?: string;
-  host_enabled?: boolean; host_bound?: boolean; project_id?: string; project_url?: string; project_name?: string;
+  host_enabled?: boolean; host_bound?: boolean; host_reachable?: boolean; project_id?: string; project_url?: string; project_name?: string;
   legacy_mode?: boolean; migration_pending?: boolean; projects?: ManagedProject[];
 };
 
@@ -35,10 +36,12 @@ export function RemoteAccessDialog({ onClose, projectName = "" }: { onClose: () 
   const [qr, setQR] = useState("");
   const [notice, setNotice] = useState("");
   const [managing, setManaging] = useState(false);
+  const openedAt = useRef(Date.now());
   const mutation = useRef(0);
   const mutating = useRef(false);
   useEffect(() => {
     dialog.current?.showModal();
+    requestIdeaRemoteHost();
     let disposed = false;
     let refreshing = false;
     const refresh = async () => {
@@ -108,7 +111,9 @@ export function RemoteAccessDialog({ onClose, projectName = "" }: { onClose: () 
     try { await navigator.clipboard.writeText(accessURL); setNotice(label("链接已复制，可在自己的其他设备上打开", "Link copied. Open it on your other device.")); }
     catch (e) { setError(String(e)); }
   }
-  const failure = error || status?.last_error;
+  // The shared entry starts when this panel opens; do not report its first seconds as a failed connection.
+  const hostStarting = !!status && status.host_reachable === false && Date.now() - openedAt.current < 10000;
+  const failure = hostStarting ? "" : error || status?.last_error;
   const disconnected = joined && shared && status?.host_enabled !== false && hostBound && (!status?.connected || !!failure);
   return <dialog ref={dialog} className="remote-access-dialog remote-access-panel" aria-labelledby="remote-title"
     onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
@@ -150,7 +155,7 @@ export function RemoteAccessDialog({ onClose, projectName = "" }: { onClose: () 
       <p className="remote-project-name">{name}</p>
       {disconnected ? <button className="remote-primary remote-wide" type="button" disabled={busy} onClick={() => void act()}>{label("检查连接", "Check connection")}</button>
         : bindingURL(status) ? <a className="remote-primary remote-wide" href={bindingURL(status)} target="_blank" rel="noreferrer">{label("继续连接", "Continue connecting")}</a>
-        : <button className="remote-primary remote-wide" type="button" disabled={busy} onClick={() => void enable()}>{busy ? label("正在连接…", "Connecting…") : label(pending ? "继续连接" : hostBound && status.host_enabled !== false && !joined ? "加入远程访问" : joined && !shared ? "恢复当前项目访问" : "开启远程访问", pending ? "Continue connecting" : hostBound && status.host_enabled !== false && !joined ? "Share this project" : joined && !shared ? "Resume sharing this project" : "Enable remote access")}</button>}
+        : <button className="remote-primary remote-wide" type="button" disabled={busy || hostStarting} onClick={() => void enable()}>{busy ? label("正在连接…", "Connecting…") : label(pending ? "继续连接" : hostBound && status.host_enabled !== false && !joined ? "加入远程访问" : joined && !shared ? "恢复当前项目访问" : "开启远程访问", pending ? "Continue connecting" : hostBound && status.host_enabled !== false && !joined ? "Share this project" : joined && !shared ? "Resume sharing this project" : "Enable remote access")}</button>}
       {!hostBound && !pending ? <p className="remote-note">{label("首次需登录并连接访问服务", "Sign in and connect the access service once")}</p> : null}
       {hostBound ? <button className="remote-text-button remote-manage-link" type="button" onClick={() => setManaging(true)}>{label("管理远程访问", "Manage remote access")}</button> : null}
     </section>}

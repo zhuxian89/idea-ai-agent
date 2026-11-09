@@ -13,6 +13,16 @@ internal fun runtimeDataDir(projectPath: Path, configDir: Path): Path {
     return configDir.resolve("idea-ai-agent").resolve(hash)
 }
 
+/**
+ * The shared remote entry is only needed once the user has used remote access: this project enabled it,
+ * or the computer was bound to Relay before (credentials.json). Everyone else starts it on demand when
+ * the remote panel opens. An unreadable settings file keeps the entry on, as before, so the panel can
+ * report the problem.
+ */
+internal fun remoteHostWanted(dataDir: Path, remoteHostDir: Path): Boolean =
+    runCatching { remoteAccessEnabled(dataDir) }.getOrDefault(true) ||
+        Files.isRegularFile(remoteHostDir.resolve("credentials.json"))
+
 internal fun remoteAccessEnabled(dataDir: Path): Boolean {
     val saved = try {
         Files.readString(dataDir.resolve("remote-access.json"))

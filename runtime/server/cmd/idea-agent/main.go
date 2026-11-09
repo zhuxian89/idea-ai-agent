@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 
 	"mindfs/server/app"
 	"mindfs/server/internal/agent"
+	"mindfs/server/internal/logfile"
 	"mindfs/server/internal/remotehost"
 )
 
@@ -27,6 +29,10 @@ func main() {
 	project := flag.String("project", "", "IDE project directory")
 	remoteHost := flag.Bool("remote-host", false, "Shared remote entry for this OS user")
 	flag.Parse()
+	// The plugin discards stderr (it can carry credentials), so keep diagnostics
+	// in a bounded file under the data directory instead.
+	closeLog := openRuntimeLog(*remoteHost)
+	defer closeLog()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if *remoteHost {
@@ -67,6 +73,27 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+const runtimeLogMaxBytes = 2 << 20
+
+// openRuntimeLog redirects the standard logger to <data dir>/logs/runtime.log.
+// Failing to open it must not stop the runtime: keep logging to stderr.
+func openRuntimeLog(remoteHost bool) func() {
+	dir := os.Getenv("IDE_AGENT_DATA_DIR")
+	name := "runtime.log"
+	if remoteHost {
+		dir, name = os.Getenv("IDE_AGENT_REMOTE_HOST_DIR"), "remote-host.log"
+	}
+	if dir == "" {
+		return func() {}
+	}
+	writer, err := logfile.Open(filepath.Join(dir, "logs", name), runtimeLogMaxBytes)
+	if err != nil {
+		return func() {}
+	}
+	log.SetOutput(writer)
+	return func() { log.SetOutput(os.Stderr); writer.Close() }
 }
 
 // Keep the host credential out of every Agent, probe and terminal environment.

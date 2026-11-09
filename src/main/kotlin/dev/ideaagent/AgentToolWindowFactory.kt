@@ -230,6 +230,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                         }
                     }
                     "voiceStart" -> voice.start(request.get("id").asString)
+                    "remoteAccess" -> project.getService(LocalRuntime::class.java).requestRemoteHost()
                     "compareGitFile" -> {
                         require(request.get("rootId")?.asString == ready.rootId) { "Different project" }
                         TurnDiffViewer.compareGitWorktree(

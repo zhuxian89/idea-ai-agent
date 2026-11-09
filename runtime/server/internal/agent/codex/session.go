@@ -225,7 +225,7 @@ func (s *session) SendMessage(ctx context.Context, content string) error {
 	}
 	turnCtx, turnID := s.turn.Begin(ctx)
 	defer s.turn.End(turnID)
-	log.Printf("[agent/codex] input session=%s content=%q", s.sessionKey, preview(content))
+	log.Printf("[agent/codex] input session=%s bytes=%d", s.sessionKey, len(content))
 	streamed, err := s.thread.RunStreamed(content, codexsdk.TurnOptions{Context: turnCtx})
 	if err != nil {
 		log.Printf("[agent/codex] send.error session=%s err=%v", s.sessionKey, err)
@@ -1625,13 +1625,6 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func preview(content string) string {
-	trimmed := strings.TrimSpace(content)
-	if len(trimmed) <= 300 {
-		return trimmed
-	}
-	return trimmed[:300] + "...(truncated)"
-}
 
 func logUnhandledEvent(sessionKey, scope string, raw []byte) {
 	const maxRawLogBytes = 1024

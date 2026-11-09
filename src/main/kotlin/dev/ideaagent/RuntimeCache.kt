@@ -6,6 +6,8 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.FileTime
+import java.time.Instant
 import java.security.MessageDigest
 import java.util.HexFormat
 
@@ -24,7 +26,11 @@ internal fun materializeRuntime(source: Path, executableName: String, cacheRoot:
     Files.createDirectories(cacheRoot)
     val target = cacheRoot.resolve(fingerprint)
     target.takeIf { cachedRuntimeReady(it, executableName, fingerprint) }
-        ?.let { return it.resolve(executableName) }
+        ?.let {
+            markRuntimeUsed(it)
+            pruneRuntimeCache(cacheRoot, it)
+            return it.resolve(executableName)
+        }
 
     val staging = Files.createTempDirectory(cacheRoot, ".install-")
     try {
@@ -44,7 +50,31 @@ internal fun materializeRuntime(source: Path, executableName: String, cacheRoot:
         if (Files.exists(staging)) deleteTree(staging)
     }
     check(cachedRuntimeReady(target, executableName, fingerprint)) { "Runtime cache is incomplete: $target" }
+    markRuntimeUsed(target)
+    pruneRuntimeCache(cacheRoot, target)
     return target.resolve(executableName)
+}
+
+/** The marker's mtime records the last launch, so pruning can rank cached versions by use. */
+private fun markRuntimeUsed(runtime: Path) {
+    runCatching { Files.setLastModifiedTime(runtime.resolve(COMPLETE_MARKER), FileTime.from(Instant.now())) }
+}
+
+/**
+ * Every plugin update leaves a ~30 MB fingerprint directory behind. Keep the current runtime and the
+ * most recently used older ones (another window or the shared remote host may still run from them);
+ * delete the rest. Only complete fingerprint directories are touched, never `.install-*` staging
+ * directories of concurrent windows. Best effort: a locked file (Windows) is retried on a later start.
+ */
+internal fun pruneRuntimeCache(cacheRoot: Path, current: Path, keepPrevious: Int = 1) {
+    runCatching {
+        val others = Files.list(cacheRoot).use { entries ->
+            entries.filter { it != current && Files.isDirectory(it) && FINGERPRINT.matches(it.fileName.toString()) }.toList()
+        }.mapNotNull { dir ->
+            runCatching { dir to Files.getLastModifiedTime(dir.resolve(COMPLETE_MARKER)) }.getOrNull()
+        }.sortedByDescending { it.second }
+        others.drop(keepPrevious).forEach { (dir, _) -> deleteTree(dir) }
+    }
 }
 
 private fun runtimeFiles(source: Path, executableName: String): List<Path> =
@@ -104,3 +134,4 @@ private fun deleteTree(root: Path) {
 
 private const val RUNTIME_PREFIX = "idea-agent-"
 private const val COMPLETE_MARKER = ".complete"
+private val FINGERPRINT = Regex("[a-f0-9]{64}")

@@ -41,6 +41,7 @@ type remoteHostControl struct {
 	projectPath, address, ownerID, token string
 	identity                             e2ee.Config
 	host                                 remotehost.Status
+	hostReachable                        bool
 	projectID                            string
 	lastError                            string
 	route                                atomic.Value
@@ -130,8 +131,10 @@ func (c *remoteHostControl) syncLocked(ctx context.Context) (err error) {
 	status, err := c.client.Status(ctx)
 	if err != nil {
 		c.host.Connected = false
+		c.hostReachable = false
 		return err
 	}
+	c.hostReachable = true
 	c.host = status
 	if c.saved.MigrationPending && status.Bound {
 		if c.saved.Mode != "host" {
@@ -326,9 +329,10 @@ func (c *remoteHostControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		LegacyMode       bool                        `json:"legacy_mode"`
 		MigrationPending bool                        `json:"migration_pending"`
 		HostBound        bool                        `json:"host_bound"`
+		HostReachable    bool                        `json:"host_reachable"`
 		ProjectName      string                      `json:"project_name"`
 		Projects         []remotehost.ManagedProject `json:"projects"`
-	}{status, c.saved.Enabled, c.host.Enabled, pairing, c.projectID, projectURL, legacyMode, c.saved.MigrationPending, c.host.Bound, filepath.Base(c.projectPath), c.host.Projects})
+	}{status, c.saved.Enabled, c.host.Enabled, pairing, c.projectID, projectURL, legacyMode, c.saved.MigrationPending, c.host.Bound, c.hostReachable, filepath.Base(c.projectPath), c.host.Projects})
 }
 func decodeRemoteEnabled(w http.ResponseWriter, r *http.Request) (bool, error) {
 	var input struct {

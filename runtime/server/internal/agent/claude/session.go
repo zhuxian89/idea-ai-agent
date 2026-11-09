@@ -216,7 +216,7 @@ func (s *session) SendMessage(ctx context.Context, content string) error {
 	turnCtx, turnID := s.turn.Begin(ctx)
 	defer s.turn.End(turnID)
 	s.sawMessageText = false
-	log.Printf("[agent/claude] input session=%s content=%q", s.sessionKey, preview(content))
+	log.Printf("[agent/claude] input session=%s bytes=%d", s.sessionKey, len(content))
 
 	waiter := make(chan error, 1)
 	s.enqueueTurn(waiter)
@@ -711,7 +711,7 @@ func (s *session) handlePartialAssistantMessage(rawEvent json.RawMessage, meta s
 	}
 	textDelta, thinkingDelta := extractDeltas(rawEvent)
 	if textDelta == "" && thinkingDelta == "" && len(rawEvent) > 0 && !isKnownNonDisplayPartialEvent(rawEvent) {
-		log.Printf("[agent/claude] output.unhandled.partial session=%s raw=%s", s.sessionKey, truncateRaw(rawEvent))
+		log.Printf("[agent/claude] output.unhandled.partial session=%s %s", s.sessionKey, rawShape(rawEvent))
 	}
 	if meta.hasSubagentRef() {
 		s.flushAllDeltas()
@@ -2347,7 +2347,7 @@ func (s *session) emit(event types.Event) {
 }
 
 func (s *session) logRawMessage(raw []byte) {
-	log.Printf("[agent/claude] output.raw session=%s msg=%s", s.sessionKey, truncateRaw(raw))
+	log.Printf("[agent/claude] output.raw session=%s %s", s.sessionKey, rawShape(raw))
 }
 
 func (s *session) logRawToolCallBlock(block claudeagent.ContentBlock) {
@@ -2653,13 +2653,6 @@ func normalizeToolName(name string) string {
 	return name
 }
 
-func preview(content string) string {
-	trimmed := strings.TrimSpace(content)
-	if len(trimmed) <= 300 {
-		return trimmed
-	}
-	return trimmed[:300] + "...(truncated)"
-}
 
 func toolCallLogValue(toolCall types.ToolCall) string {
 	raw, err := json.Marshal(toolCall)
@@ -2669,10 +2662,13 @@ func toolCallLogValue(toolCall types.ToolCall) string {
 	return string(raw)
 }
 
-func truncateRaw(raw []byte) string {
-	const maxRawLogBytes = 1024
-	if len(raw) > maxRawLogBytes {
-		raw = append(raw[:maxRawLogBytes], []byte("...(truncated)")...)
+// rawShape describes a stream message without its payload: results and deltas
+// contain the assistant's text and file contents, which must not reach log files.
+func rawShape(raw []byte) string {
+	var head struct {
+		Type    string `json:"type"`
+		Subtype string `json:"subtype"`
 	}
-	return string(raw)
+	_ = json.Unmarshal(raw, &head)
+	return fmt.Sprintf("type=%q subtype=%q bytes=%d", head.Type, head.Subtype, len(raw))
 }

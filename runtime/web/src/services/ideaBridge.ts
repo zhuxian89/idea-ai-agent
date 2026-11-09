@@ -117,6 +117,11 @@ export function compareGitFileInIdea(input: {
   postToHost({ action: "compareGitFile", ...input });
 }
 
+/** The shared remote entry starts lazily; ask the IDE to start it when the remote panel opens. */
+export function requestIdeaRemoteHost(): void {
+  postToHost({ action: "remoteAccess" });
+}
+
 export function refreshIdeaFiles(): void {
   window.ideaAgent?.postMessage({ action: "refresh" });
 }

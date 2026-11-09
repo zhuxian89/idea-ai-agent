@@ -528,8 +528,8 @@ func RemoveWorktree(ctx context.Context, rootPath string) error {
 	cmd := newGitCommand(ctx, "--git-dir", commonDir, "worktree", "remove", cleanRoot)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("[git] command.error dir=%q args=%q err=%v output=%q", "", cmd.Args[1:], err, strings.TrimSpace(string(output)))
-		return fmt.Errorf("git %s failed: %w: %s", strings.Join(cmd.Args[1:], " "), err, strings.TrimSpace(string(output)))
+		log.Printf("[git] command.error dir=%q args=%q err=%v output=%q", "", cmd.Args[1:], err, logSnippet(string(output)))
+		return fmt.Errorf("git %s failed: %w: %s", strings.Join(cmd.Args[1:], " "), err, logSnippet(string(output)))
 	}
 	return nil
 }
@@ -1434,7 +1434,7 @@ func runGitBytes(ctx context.Context, dir string, args ...string) ([]byte, error
 	cmd := newGitCommand(ctx, append([]string{"-C", dir}, args...)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("[git] command.error dir=%q args=%q err=%v output=%q", dir, append([]string{"-C", dir}, args...), err, strings.TrimSpace(string(out)))
+		log.Printf("[git] command.error dir=%q args=%q err=%v output=%q", dir, append([]string{"-C", dir}, args...), err, logSnippet(string(out)))
 		return nil, formatGitError(err, out)
 	}
 	return out, nil
@@ -1472,4 +1472,13 @@ func pathJoinSlash(parts ...string) string {
 		filtered = append(filtered, strings.Trim(part, "/"))
 	}
 	return strings.Join(filtered, "/")
+}
+
+// logSnippet keeps failure output short: git errors can quote file content.
+func logSnippet(output string) string {
+	output = strings.TrimSpace(output)
+	if len(output) > 300 {
+		return output[:300] + "...(truncated)"
+	}
+	return output
 }

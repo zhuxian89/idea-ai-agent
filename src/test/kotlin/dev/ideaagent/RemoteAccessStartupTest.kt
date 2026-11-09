@@ -40,4 +40,23 @@ class RemoteAccessStartupTest {
             assertThrows(Exception::class.java) { remoteAccessEnabled(data) }
         }
     }
+
+    @Test fun sharedRemoteEntryStartsOnlyForProjectsThatUsedRemoteAccess() {
+        val data = temporary.newFolder("project-data").toPath()
+        val host = temporary.newFolder("remote-host").toPath()
+        assertFalse("never used remote access: start on demand", remoteHostWanted(data, host))
+
+        Files.writeString(data.resolve("remote-access.json"), "{\"enabled\":false}")
+        assertFalse(remoteHostWanted(data, host))
+
+        Files.writeString(host.resolve("credentials.json"), "{}")
+        assertTrue("computer is already bound: keep the entry available", remoteHostWanted(data, host))
+        Files.delete(host.resolve("credentials.json"))
+
+        Files.writeString(data.resolve("remote-access.json"), "{\"enabled\":true}")
+        assertTrue(remoteHostWanted(data, host))
+
+        Files.writeString(data.resolve("remote-access.json"), "broken json")
+        assertTrue("unreadable settings must surface in the panel, not silently disable remote", remoteHostWanted(data, host))
+    }
 }

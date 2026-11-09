@@ -3232,7 +3232,7 @@ func (s *Service) sendCommandMessage(ctx context.Context, in SendMessageInput, m
 		TerminalCols: in.TerminalCols,
 	})
 	if err != nil {
-		log.Printf("[command] start.error root=%s session=%s command=%q err=%v", in.RootID, current.Key, in.Content, err)
+		log.Printf("[command] start.error root=%s session=%s bytes=%d err=%v", in.RootID, current.Key, len(in.Content), err)
 		final := startTool
 		final.Status = "failed"
 		final.Meta = cloneMeta(final.Meta)
