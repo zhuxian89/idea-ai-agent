@@ -969,6 +969,13 @@ function SessionViewerInner({
     session?.context_window,
     isAwaiting,
   );
+  const userMessageIndexByTimelineIndex = useMemo(() => {
+    const indexes = new Map<number, number>();
+    timeline.forEach((item, index) => {
+      if (item.type === "user_text") indexes.set(index, indexes.size + 1);
+    });
+    return indexes;
+  }, [timeline]);
   const shouldStickToBottomRef = useRef(true);
   const lastSessionKeyRef = useRef<string | null>(null);
   const targetSeqScrollKeyRef = useRef("");
@@ -1483,9 +1490,7 @@ function SessionViewerInner({
       );
     }
     const isUser = item.type === "user_text";
-    const userMessageIndex = isUser
-      ? timeline.slice(0, idx + 1).filter((timelineItem) => timelineItem.type === "user_text").length
-      : undefined;
+    const userMessageIndex = isUser ? userMessageIndexByTimelineIndex.get(idx) : undefined;
     const next = idx + 1 < timeline.length ? timeline[idx + 1] : null;
     const hasFollowingAssistantFlow =
       !isUser && !!next && next.type !== "user_text" && next.type !== "turn_diff";
