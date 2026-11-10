@@ -1212,6 +1212,16 @@ type CancelSessionTurnInput struct {
 	Key    string
 }
 
+type StopSessionTaskInput struct {
+	RootID string
+	// Key is the session that owns the running turn.
+	Key string
+	// TaskRef is the subagent's task id or the tool-use id of the call that started it.
+	TaskRef string
+}
+
+var errNoRunningTurn = errors.New("session has no running turn")
+
 const (
 	switchContextTailLines   = 20
 	sessionNameTimeout       = 30 * time.Second
@@ -3974,6 +3984,24 @@ func (s *Service) validateAgentModel(agentName, model string) error {
 		}
 	}
 	return fmt.Errorf("model %q is not supported by agent %q", model, agentName)
+}
+
+// StopSessionTask stops one subagent of a running turn and leaves the turn itself running.
+func (s *Service) StopSessionTask(ctx context.Context, in StopSessionTaskInput) error {
+	key := strings.TrimSpace(in.Key)
+	ref := strings.TrimSpace(in.TaskRef)
+	if key == "" || ref == "" {
+		return errors.New("session key and task id required")
+	}
+	active := getActiveTurn(in.RootID, key)
+	if active == nil || active.session == nil {
+		return errNoRunningTurn
+	}
+	stopper, ok := active.session.(agenttypes.TaskStopper)
+	if !ok {
+		return errors.New("this agent cannot stop individual tasks")
+	}
+	return stopper.StopTask(ctx, ref)
 }
 
 func (s *Service) CancelSessionTurn(ctx context.Context, in CancelSessionTurnInput) error {

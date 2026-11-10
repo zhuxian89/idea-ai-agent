@@ -557,6 +557,31 @@ func (s *session) CancelCurrentTurn() error {
 	return nil
 }
 
+// StopTask stops one subagent or background task. The caller knows the id the subagent was
+// announced with, which is either the CLI task id or the tool-use id of the Task call.
+func (s *session) StopTask(ctx context.Context, taskRef string) error {
+	taskRef = strings.TrimSpace(taskRef)
+	if taskRef == "" {
+		return errors.New("task id required")
+	}
+	if s.stream == nil {
+		return errors.New("claude stream is not running")
+	}
+	return s.stream.StopTask(ctx, s.cliTaskID(taskRef))
+}
+
+// cliTaskID maps a tool-use id back to the CLI task id; a task id maps to itself.
+func (s *session) cliTaskID(ref string) string {
+	s.pendingToolMu.Lock()
+	defer s.pendingToolMu.Unlock()
+	for taskID, info := range s.taskInfos {
+		if info.ToolUseID == ref {
+			return taskID
+		}
+	}
+	return ref
+}
+
 func (s *session) cancelPendingQuestions(err error) {
 	if err == nil {
 		err = errors.New("turn canceled")

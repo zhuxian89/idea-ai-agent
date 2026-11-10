@@ -72,6 +72,13 @@ type ResolveForkPointOutput struct {
 	CodexUserOrdinal  int
 }
 
+// TaskStopper is implemented by runtimes that can stop one running background task or subagent
+// without ending the whole turn.
+type TaskStopper interface {
+	// StopTask stops the task identified by the runtime's own task or tool-use id.
+	StopTask(ctx context.Context, taskRef string) error
+}
+
 type ForkPointResolver interface {
 	ResolveForkPointByAgentTurnIndex(ctx context.Context, in ResolveForkPointInput) (ResolveForkPointOutput, error)
 }

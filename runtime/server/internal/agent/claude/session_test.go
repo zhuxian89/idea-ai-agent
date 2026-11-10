@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -451,5 +452,35 @@ func TestToolResultUpdateFallsBackToOnlyPendingTool(t *testing.T) {
 	}
 	if len(update.Content) != 1 || !strings.Contains(update.Content[0].Text, "command output") {
 		t.Fatalf("content = %#v, want command output", update.Content)
+	}
+}
+
+func TestStopTaskResolvesToolUseIDToCLITaskID(t *testing.T) {
+	s := &session{sessionID: "claude-session", onUpdate: func(types.Event) {}}
+	s.handleTaskStartedMessage(claudeagent.TaskStartedMessage{
+		TaskID:       "task-7",
+		ToolUseID:    "toolu-7",
+		SubagentType: "Explore",
+		Description:  "Search the repo",
+	})
+
+	if got := s.cliTaskID("toolu-7"); got != "task-7" {
+		t.Fatalf("cliTaskID(tool-use id) = %q, want the CLI task id task-7", got)
+	}
+	if got := s.cliTaskID("task-7"); got != "task-7" {
+		t.Fatalf("cliTaskID(task id) = %q, want the id unchanged", got)
+	}
+	if got := s.cliTaskID("unknown"); got != "unknown" {
+		t.Fatalf("cliTaskID(unknown) = %q, want the id unchanged", got)
+	}
+}
+
+func TestStopTaskRejectsMissingIDAndMissingStream(t *testing.T) {
+	s := &session{sessionID: "claude-session"}
+	if err := s.StopTask(context.Background(), "  "); err == nil {
+		t.Fatal("StopTask with an empty id must fail")
+	}
+	if err := s.StopTask(context.Background(), "task-1"); err == nil {
+		t.Fatal("StopTask without a running stream must fail")
 	}
 }
