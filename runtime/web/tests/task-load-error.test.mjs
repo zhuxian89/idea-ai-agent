@@ -17,15 +17,3 @@ test("task load errors have their own classification and preserve diagnostic det
   const message = "SQL logic error: no such column: template_snapshot_json (1)";
   assert.equal(exports.errorService.fromCode("task.load_failed", message).message, message);
 });
-
-test("startup task loading never reports a file write failure", () => {
-  const source = readFileSync("src/App.tsx", "utf8");
-  const start = source.indexOf("const loadKanbanTasks =");
-  assert.ok(start >= 0);
-  // Capture through the task-specific error fallback, independent of inner const declarations.
-  const fallback = source.indexOf('t("task.loadFailed")', start);
-  assert.ok(fallback > start);
-  const handler = source.slice(start, fallback);
-  assert.match(handler, /reportError\("task\.load_failed"/);
-  assert.doesNotMatch(handler, /reportError\("file\.write_failed"/);
-});

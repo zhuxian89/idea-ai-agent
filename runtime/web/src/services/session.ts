@@ -271,7 +271,7 @@ type SessionActivityState = {
   userTimestamp?: string;
 };
 
-type SessionServiceEvent = {
+export type SessionServiceEvent = {
   type: string;
   sessionKey?: string;
   payload?: Record<string, unknown>;

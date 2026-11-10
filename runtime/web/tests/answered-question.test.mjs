@@ -30,7 +30,7 @@ test("correction matches live and saved questions without changing turn state or
 });
 
 test("App handles corrections before draft attachment, pending flags and normal stream effects", () => {
-  const source = fs.readFileSync("src/App.tsx", "utf8");
+  const source = fs.readFileSync("src/app/events/sessionStream.ts", "utf8");
   const handlerStart = source.indexOf("const handleSessionStream =");
   const start = source.indexOf('if (payload.event?.type === "question_answered")', handlerStart);
   const end = source.indexOf("let pending = pendingBySessionRef.current[ck];", start);

@@ -7,6 +7,7 @@ import { sessionActivityDetail } from "../services/sessionActivityDetail";
 import { readActivityFacts, toolActivityState } from "../services/activityFacts";
 import { useActivityTerminal } from "../hooks/useActivityTerminal";
 import { useNetworkOnline } from "../hooks/useNetworkOnline";
+import { ActivityEmoji } from "./ActivityEmoji";
 
 export function SessionActivity({ timeline, lastEventAt, connected, recoveryText, rootId = "", sessionKey = "", rootPath, active = true }: {
   timeline: TimelineItem[];
@@ -57,12 +58,12 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
     : last?.type === "thought" ? { emoji: "🤔", key: "session.activityThinking" } as const
     : last?.type === "assistant_text" ? { emoji: "✏️", key: "session.generating" } as const
     : { emoji: "👀", key: currentTurn.length === 0 ? "session.activityQueued" : "session.activityWaiting" } as const;
-  const reaction = terminal ? { emoji: terminal.kind === "error" ? "😱" : "👍", label: t(terminal.kind === "error" ? "session.activityError" : "session.activityDone") }
-    : !networkOnline ? { emoji: "🔌", label: t("session.activityOffline") }
-    : !connected ? { emoji: "🔌", label: t("session.activityDisconnected") }
-    : question ? { emoji: "💬", label: t("session.activityAnswer") }
-    : sending ? { emoji: "👀", label: t("session.activitySending") }
-    : recoveryText ? { emoji: "🔄", label: recoveryText }
+  const reaction = terminal ? { emoji: terminal.kind === "error" ? "😱" : "👍", label: t(terminal.kind === "error" ? "session.activityError" : "session.activityDone") } as const
+    : !networkOnline ? { emoji: "🔌", label: t("session.activityOffline") } as const
+    : !connected ? { emoji: "🔌", label: t("session.activityDisconnected") } as const
+    : question ? { emoji: "💬", label: t("session.activityAnswer") } as const
+    : sending ? { emoji: "👀", label: t("session.activitySending") } as const
+    : recoveryText ? { emoji: "🔄", label: recoveryText } as const
     : { emoji: working.emoji, label: t(working.key) };
   const detail = useMemo(() => sessionActivityDetail({ timeline, tool: toolView, locale }), [timeline, toolView, locale]);
   const showDetail = !terminal && networkOnline && connected && !question && !sending && !recoveryText && !compacting && !!detail;
@@ -75,12 +76,15 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
     return t("session.activityDurationSeconds", { seconds });
   };
   const idleDuration = formatDuration(idleSeconds);
-  const activityLabel = showDetail ? detail : reaction.label;
+  // Several tools can run at once; naming only the last one would hide the rest.
+  const parallelNote = showDetail && runningTools.length > 1
+    ? t("session.activityParallel", { count: runningTools.length }) : "";
+  const activityLabel = parallelNote ? `${parallelNote} · ${detail}` : showDetail ? detail : reaction.label;
   const timeLabel = `${t("session.activityElapsed", { duration: formatDuration(elapsedSeconds) })} · ${lastEventAt > 0 || terminal ? t("session.activityLastUpdate", { duration: idleDuration }) : t("session.activityNoUpdate")}`;
   if (!active && !terminal) return null;
   return <div data-session-activity className="session-activity">
     <div className="session-activity-label" role="status" aria-live="polite" aria-atomic="true">
-      <span aria-hidden="true" className="session-activity-emoji">{reaction.emoji}</span>
+      <ActivityEmoji emoji={reaction.emoji} />
       <span className={`session-activity-text${showDetail ? " session-activity-tool-summary" : ""}`} title={activityLabel} tabIndex={0}>{activityLabel}</span>
     </div>
     <div className="session-activity-time" title={timeLabel}>{timeLabel}</div>

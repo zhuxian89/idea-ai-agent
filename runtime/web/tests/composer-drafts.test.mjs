@@ -37,7 +37,7 @@ test("unsent and pending drafts follow actual session promotions, not unrelated 
 });
 
 test("App promotes composer drafts at creation and at the existing pending-session promotion boundary", () => {
-  const source = readFileSync("src/App.tsx", "utf8");
+  const source = readFileSync("src/app/useMessageSending.ts", "utf8");
   assert.match(source, /const tempKey = `pending-\$\{Date\.now\(\)\}`;\s+promoteComposerDraft\(activeRoot, "", tempKey\)/);
-  assert.match(source, /const pendingCacheKey = rootSessionKey\(rootID, pendingKey\);\s+promoteComposerDraft\(rootID, pendingKey, sessionKey\)/);
+  assert.match(readFileSync("src/app/useSessionCache.ts", "utf8"), /const pendingCacheKey = rootSessionKey\(rootID, pendingKey\);\s+promoteComposerDraft\(rootID, pendingKey, sessionKey\)/);
 });

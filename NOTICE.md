@@ -20,6 +20,12 @@ distribution. Its `README.idea-agent.md` documents the minimal constructor patch
 that allows the CLI to choose its native model. Neither transport is represented
 as an official vendor SDK.
 
+`runtime/web/public/assets/activity-emoji/` contains Google Noto Emoji artwork.
+The animated WebP files are licensed under CC BY 4.0, except `1f440.webp`, which
+is rendered from the Apache-2.0 SVG with the pupils moved sideways; the static SVG
+files are licensed under Apache-2.0. Both licenses and the asset sources are
+retained in that directory and shipped with the web assets.
+
 `github.com/santhosh-tekuri/jsonschema/v6` v6.0.3 validates native MCP form
 responses. Its Apache-2.0 license is retained in
 `runtime/third_party/jsonschema-v6-LICENSE` and included in runtime distributions.

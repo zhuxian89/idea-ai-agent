@@ -154,17 +154,6 @@ type FileTreeProps = {
   onAgentMenuOpened?: () => void;
   onAgentConfigSwitched?: (agent: string) => void;
   onProjectTreeTabChange?: (tab: ProjectTreeTab) => void;
-  creatingRootName?: string | null;
-  creatingRootBusy?: boolean;
-  creatingRootExtraContent?: React.ReactNode;
-  creatingRootSubmitOnBlur?: boolean;
-  onCreateRootStart?: () => void;
-  onOpenProjectAdd?: () => void;
-  onStartOnboarding?: () => void;
-  onCreateRootNameChange?: (name: string) => void;
-  onCreateRootSubmit?: () => void;
-  onCreateRootCancel?: () => void;
-  projectAddOverlay?: React.ReactNode;
   relayActionLabel?: string | null;
   relayActionDisabled?: boolean;
   relayActionHelp?: string | null;
@@ -187,7 +176,6 @@ type FileTreeProps = {
   onRunAgentLifecycleCommand?: (agentName: string, action: AgentLifecycleCommandAction, commands: string[]) => void | Promise<void>;
   onRestartAgent?: (agentName: string) => void | Promise<void>;
   onGoHome?: () => void;
-  footerTopContent?: React.ReactNode;
 };
 
 type AgentConfigFlow = "backup" | "switch";
@@ -1356,17 +1344,6 @@ export function FileTree({
   onAgentMenuOpened,
   onAgentConfigSwitched,
   onProjectTreeTabChange,
-  creatingRootName = null,
-  creatingRootBusy = false,
-  creatingRootExtraContent = null,
-  creatingRootSubmitOnBlur = true,
-  onCreateRootStart,
-  onOpenProjectAdd,
-  onStartOnboarding,
-  onCreateRootNameChange,
-  onCreateRootSubmit,
-  onCreateRootCancel,
-  projectAddOverlay,
   relayActionLabel = null,
   relayActionDisabled = false,
   relayActionHelp = null,
@@ -1389,7 +1366,6 @@ export function FileTree({
   onRunAgentLifecycleCommand,
   onRestartAgent,
   onGoHome,
-  footerTopContent,
 }: FileTreeProps) {
   const { locale, setLocale, t } = useI18n();
   const sortLabel = React.useCallback((mode: DirectorySortMode): string => {
@@ -1506,8 +1482,6 @@ export function FileTree({
   const agentLifecyclePopoverRef = React.useRef<HTMLDivElement | null>(null);
   const relayServicesPopoverRef = React.useRef<HTMLDivElement | null>(null);
   const updateNotesRef = React.useRef<HTMLDivElement | null>(null);
-  const createInputRef = React.useRef<HTMLInputElement | null>(null);
-  const previousCreatingRootNameRef = React.useRef<string | null>(null);
 
   const isIOS = React.useMemo(() => {
     if (typeof window === "undefined") {
@@ -1735,7 +1709,6 @@ export function FileTree({
   const hasFooterContent =
     !!updateActionLabel ||
     !!updateActionHelp ||
-    !!footerTopContent ||
     !!relayActionLabel ||
     !!relayActionHelp ||
     shouldShowRelayTip ||
@@ -1816,19 +1789,6 @@ export function FileTree({
       window.alert(t("pwa.alertUnavailable"));
     }
   }, [deferredInstallPrompt, isAndroidChrome, isDesktopChromium, isIOS, isKnownInstalled, isMacSafari, persistInstallState, t]);
-
-  React.useEffect(() => {
-    if (!creatingRootName) {
-      previousCreatingRootNameRef.current = creatingRootName;
-      return;
-    }
-    const enteredCreateMode = previousCreatingRootNameRef.current === null;
-    createInputRef.current?.focus();
-    if (enteredCreateMode) {
-      createInputRef.current?.select();
-    }
-    previousCreatingRootNameRef.current = creatingRootName;
-  }, [creatingRootName]);
 
   React.useEffect(() => {
     return bootstrapService.subscribe(() => {
@@ -2318,7 +2278,6 @@ export function FileTree({
     setAgentProbeAcceptedAgent("");
   }, [agentLifecycleAgents, agentProbeAcceptedAgent, agentProbingAgent]);
 
-
   const saveAgentConfigBackup = React.useCallback(async (overwrite = false) => {
     if (!agentConfigName.trim()) {
       setAgentConfigError(t("agentConfig.backupNameRequired"));
@@ -2497,103 +2456,7 @@ export function FileTree({
 
   const renderEntries = (items: FileEntry[], depth: number, branchRoot: string) => (
     <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-      {depth === 0 && creatingRootName !== null ? (
-        <li key="__draft_root__">
-          <div
-            style={{
-              padding: "6px 8px",
-              paddingLeft: PROJECT_TREE_ROOT_PADDING_LEFT,
-              display: "flex",
-              alignItems: creatingRootExtraContent ? "flex-start" : "center",
-              gap: "8px",
-              width: "100%",
-              color: "var(--accent-color)",
-              fontSize: "13px",
-              borderRadius: "6px",
-              background: "var(--selection-bg)",
-              boxSizing: "border-box",
-            }}
-          >
-            <div style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <ChevronRight isOpen={false} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
-              <input
-                ref={createInputRef}
-                value={creatingRootName}
-                disabled={creatingRootBusy}
-                onChange={(event) => onCreateRootNameChange?.(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    onCreateRootSubmit?.();
-                  } else if (event.key === "Escape") {
-                    event.preventDefault();
-                    onCreateRootCancel?.();
-                  }
-                }}
-                onBlur={() => {
-                  if (!creatingRootBusy && creatingRootSubmitOnBlur) {
-                    onCreateRootSubmit?.();
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--text-primary)",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  outline: "none",
-                  padding: 0,
-                }}
-              />
-              {creatingRootExtraContent}
-            </div>
-            {!creatingRootExtraContent ? null : (
-              <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
-                <button
-                  type="button"
-                  disabled={creatingRootBusy}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => onCreateRootSubmit?.()}
-                  style={{
-                    border: "none",
-                    background: "var(--accent-color)",
-                    color: "#fff",
-                    borderRadius: "6px",
-                    padding: "4px 7px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    cursor: creatingRootBusy ? "not-allowed" : "pointer",
-                    opacity: creatingRootBusy ? 0.6 : 1,
-                  }}
-                >
-                  {t("fileTree.create")}
-                </button>
-                <button
-                  type="button"
-                  disabled={creatingRootBusy}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => onCreateRootCancel?.()}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--text-secondary)",
-                    borderRadius: "6px",
-                    padding: "4px 6px",
-                    fontSize: "11px",
-                    cursor: creatingRootBusy ? "not-allowed" : "pointer",
-                    opacity: creatingRootBusy ? 0.6 : 1,
-                  }}
-                >
-                  {t("common.cancel")}
-                </button>
-              </div>
-            )}
-          </div>
-        </li>
-      ) : null}
+
       {sortDirectoryEntries(visibleEntries(items, depth), sortMode).map((entry) => {
         const isManagedRootNode = entry.is_root === true;
         const entryRoot = isManagedRootNode ? entry.path : branchRoot;
@@ -3005,40 +2868,7 @@ export function FileTree({
                 zIndex: 20,
               }}
             >
-                {(onOpenProjectAdd || onCreateRootStart) && <button
-                  type="button"
-                  onClick={() => {
-                    if (onOpenProjectAdd) {
-                      onOpenProjectAdd();
-                    } else {
-                      onCreateRootStart?.();
-                    }
-                    setIsMenuOpen(false);
-                    setIsAppearanceMenuOpen(false);
-                    setIsLocaleMenuOpen(false);
-                    setIsSortMenuOpen(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--text-primary)",
-                    borderRadius: "8px",
-                    padding: "8px 10px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                    <path d="M12 5v14" />
-                    <path d="M5 12h14" />
-                  </svg>
-                  <span>{t("fileTree.addProject")}</span>
-                </button>}
+
                 <button
                   type="button"
                   onClick={() => openAgentConfigFlow("backup")}
@@ -3310,22 +3140,7 @@ export function FileTree({
                 );
               }) : null}
               <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />
-              {onStartOnboarding ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onStartOnboarding();
-                    setIsMenuOpen(false);
-                    setIsAppearanceMenuOpen(false);
-                    setIsLocaleMenuOpen(false);
-                    setIsSortMenuOpen(false);
-                  }}
-                  style={fileTreeMenuButtonStyle}
-                >
-                  <OnboardingGuideIcon />
-                  <span>{t("onboarding.menu")}</span>
-                </button>
-              ) : null}
+
               <button
                 type="button"
                 onClick={() => {
@@ -3463,18 +3278,7 @@ export function FileTree({
               </button>
             </div>
           ) : null}
-          {projectAddOverlay ? (
-            <div
-              style={{
-                position: "absolute",
-                top: "calc(100% + 6px)",
-                right: 0,
-                zIndex: 30,
-              }}
-            >
-              {projectAddOverlay}
-            </div>
-          ) : null}
+
         </div>
         {agentConfiguration}
         {idleReleaseOpen ? (
@@ -3683,7 +3487,7 @@ export function FileTree({
         ) : null}
       </div>
       <div style={{ padding: "8px", flex: 1, minHeight: 0, overflow: "auto", display: "flex", flexDirection: "column" }}>
-        {entries.length === 0 && creatingRootName === null ? (
+        {entries.length === 0 ? (
           <div
             style={{
               flex: 1,
@@ -3972,9 +3776,6 @@ export function FileTree({
               </div>
             ) : null}
           </div>
-        ) : null}
-        {footerTopContent ? (
-          <div style={{ width: "100%" }}>{footerTopContent}</div>
         ) : null}
         {shouldShowInstallButton ? (
           relayActionLabel ? (

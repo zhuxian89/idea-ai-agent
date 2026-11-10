@@ -42,10 +42,17 @@ test("quiet workbench follows real activity without silence-based overrides", as
     t.after(() => assert.deepEqual(errors, []));
     await page.clock.install({ time: new Date("2026-10-23T01:00:00Z") });
     await page.clock.pauseAt(new Date("2026-10-23T01:00:01Z"));
-    await page.setContent('<html><body><div id="root"></div></body></html>');
+    await page.route("https://activity.fixture.test/**", route => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (pathname.startsWith("/assets/activity-emoji/")) {
+        return route.fulfill({ path: fileURLToPath(new URL(`../public${pathname}`, import.meta.url)) });
+      }
+      return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div></body></html>' });
+    });
+    await page.goto("https://activity.fixture.test/");
     await page.addStyleTag({ content: readFileSync(new URL("../src/index.css", import.meta.url), "utf8").replace(/^@import.*$/gm, "") });
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
-    await expect(page.locator(".session-activity-emoji")).toHaveText("👀");
+    await expect(page.locator(".session-activity-emoji")).toHaveAttribute("data-emoji", "👀");
     return page;
   }
   const emoji = page => page.locator(".session-activity-emoji");
@@ -58,21 +65,77 @@ test("quiet workbench follows real activity without silence-based overrides", as
     callId: "tool", kind, status: "running", title: "Build and deploy to the web",
   } });
 
+  await t.test("emoji artwork animates internally and stops for reduced motion or offscreen activity", async t => {
+    const page = await open(t);
+    await page.clock.resume();
+    await progress(page, [tool("execute")]);
+    const image = emoji(page).locator("img");
+    await expect(image).toHaveAttribute("src", /\/assets\/activity-emoji\/1f525\.webp$/);
+    await image.evaluate(img => img.decode());
+    assert.equal(await image.evaluate(img => getComputedStyle(img).transform), "none");
+    const frames = [];
+    for (let i = 0; i < 3; i++) {
+      frames.push(await image.screenshot({ animations: "allow" }));
+      await page.waitForTimeout(250);
+    }
+    assert.ok(frames.some(frame => !frame.equals(frames[0])), "the image pixels must change without moving the element");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(image).toHaveAttribute("src", /\/assets\/activity-emoji\/1f525\.svg$/);
+    await image.evaluate(img => img.decode());
+    const still = await image.screenshot();
+    await page.waitForTimeout(300);
+    assert.ok(still.equals(await image.screenshot()), "reduced motion uses a still image");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await expect(image).toHaveAttribute("src", /\.webp$/);
+    await page.locator("[data-session-activity]").evaluate(el => { el.style.marginTop = "1200px"; });
+    await expect(image).toHaveAttribute("src", /\.svg$/);
+    await image.scrollIntoViewIfNeeded();
+    await expect(image).toHaveAttribute("src", /\.webp$/);
+    await page.locator("[data-session-activity]").evaluate(el => { el.style.marginTop = "16px"; });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const directory = new URL("../../../output/playwright/animated-activity/", import.meta.url);
+    mkdirSync(directory, { recursive: true });
+    for (const [theme, width] of [["light", 320], ["dark", 720]]) {
+      await page.setViewportSize({ width, height: 220 });
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      await expect(page.locator("[data-session-activity]")).toHaveCount(1);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await page.screenshot({ path: fileURLToPath(new URL(`${theme}-${width}.png`, directory)), animations: "allow" });
+    }
+    // Every shipped reaction has a decodable local asset, including the still
+    // recovery arrows, which use CSS rotation instead of an animated bitmap.
+    const assets = ["1f914", "1f631", "1f4ac", "1f44d", "270d", "1f440", "26a1", "1f525", "1f50c", "1f4bb", "270f"];
+    await page.evaluate(async codes => {
+      for (const code of codes) {
+        for (const extension of ["webp", "svg"]) {
+          const image = new Image();
+          image.src = `/assets/activity-emoji/${code}.${extension}`;
+          await image.decode();
+        }
+      }
+    }, assets);
+    await patch(page, { recoveryText: "正在恢复会话" });
+    await expect(image).toHaveAttribute("src", /1f504\.svg$/);
+    assert.equal(await image.evaluate(img => getComputedStyle(img).animationName), "session-activity-recovering");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(image).not.toHaveClass("session-activity-emoji-recovering");
+  });
+
   await t.test("30/90 seconds retain real activity and both independent clocks", async t => {
     const page = await open(t);
     await progress(page, [{ id: "thought", type: "thought", content: "Working" }]);
-    await expect(emoji(page)).toHaveText("🤔");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "🤔");
     await page.clock.fastForward(29000);
-    await expect(emoji(page)).toHaveText("🤔");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "🤔");
     await page.clock.fastForward(1000);
-    await expect(emoji(page)).toHaveText("🤔");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "🤔");
     await page.clock.fastForward(59000);
-    await expect(emoji(page)).toHaveText("🤔");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "🤔");
     await page.clock.fastForward(1000);
-    await expect(emoji(page)).toHaveText("🤔");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "🤔");
     await expect(page.locator(".session-activity-time")).toHaveText("已等待 1 分钟 30 秒 · 最近更新于 1 分钟 30 秒前");
     await progress(page, [tool("fetch")]);
-    await expect(emoji(page)).toHaveText("⚡");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "⚡");
     await expect(page.locator(".session-activity-time")).toHaveText("已等待 1 分钟 30 秒 · 最近更新于 0 秒前");
     await expect(page.locator(".session-activity-note")).toHaveCount(0);
     await patch(page, { lastEventAt: 0 });
@@ -84,12 +147,12 @@ test("quiet workbench follows real activity without silence-based overrides", as
     await page.clock.fastForward(120000);
     await patch(page, { connected: false });
     await expect(label(page)).toContainText("连接已中断");
-    await expect(emoji(page)).toHaveText("🔌");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "🔌");
     await expect(page.locator(".session-activity-note")).toHaveCount(0);
     await patch(page, { connected: true });
     await page.evaluate(item => window.patch({ timeline: [window.user, item] }), tool("ask_user"));
     await expect(label(page)).toContainText("等待你的回答");
-    await expect(emoji(page)).toHaveText("💬");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "💬");
     await expect(page.locator(".session-activity-note")).toHaveCount(0);
     await page.evaluate(() => window.patch({ timeline: [{ ...window.user, pendingAck: true }] }));
     await expect(label(page)).toContainText("正在发送");
@@ -99,7 +162,7 @@ test("quiet workbench follows real activity without silence-based overrides", as
     await expect(page.locator(".session-activity-note")).toHaveCount(0);
     await patch(page, { recoveryText: "" });
     await progress(page, [{ ...tool("ask_user"), toolCall: { ...tool("ask_user").toolCall, status: "complete" } }, tool("read")]);
-    await expect(emoji(page)).toHaveText("👨‍💻");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "👨‍💻");
     await expect(label(page)).not.toContainText("等待你的回答");
   });
 
@@ -108,20 +171,20 @@ test("quiet workbench follows real activity without silence-based overrides", as
     for (const agent of ["codex", "claude"]) {
       for (const [kind, reaction] of [["read", "👨‍💻"], ["edit", "👨‍💻"], ["execute", "🔥"], ["mcp", "🔥"], ["web_search", "⚡"], ["fetch", "⚡"]]) {
         await progress(page, [tool(kind, agent)]);
-        await expect(emoji(page)).toHaveText(reaction);
+        await expect(emoji(page)).toHaveAttribute("data-emoji", reaction);
         await expect(page.locator(".session-activity-tool-summary")).toHaveCount(1);
       }
     }
     await progress(page, [{ id: "compact", type: "compact", compactNotice: { status: "running" } }]);
     await expect(label(page)).toContainText("正在收拾桌面");
-    await expect(emoji(page)).toHaveText("✍️");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "✍️");
     await page.clock.fastForward(120000);
-    await expect(emoji(page)).toHaveText("✍️");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "✍️");
     await progress(page, [{ id: "compact", type: "compact", compactNotice: { status: "complete" } }]);
-    await expect(emoji(page)).toHaveText("👀");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "👀");
     await expect(label(page)).toContainText("下一步");
     await progress(page, [{ id: "answer", type: "assistant_text", content: "Reply" }]);
-    await expect(emoji(page)).toHaveText("✏️");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "✏️");
     await expect(label(page)).toContainText("正在生成");
   });
 
@@ -134,7 +197,7 @@ test("quiet workbench follows real activity without silence-based overrides", as
         window.patch({ active: false, lastEventAt: 0 });
       }, type);
       const done = type === "session.done";
-      await expect(emoji(page)).toHaveText(done ? "👍" : "😱");
+      await expect(emoji(page)).toHaveAttribute("data-emoji", done ? "👍" : "😱");
       await expect(label(page)).toContainText(done ? "本轮已结束" : "本轮执行遇到问题");
       await page.clock.fastForward(1000);
       await expect(page.locator(".session-activity-time")).toHaveText("已等待 35 秒 · 最近更新于 0 秒前");
@@ -149,15 +212,15 @@ test("quiet workbench follows real activity without silence-based overrides", as
   await t.test("errors survive a following done event; new turns and other sessions never inherit them", async t => {
     const page = await open(t);
     await page.evaluate(() => { window.emit("session.error"); window.emit("session.done"); });
-    await expect(emoji(page)).toHaveText("😱");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "😱");
     await page.evaluate(() => {
       window.user = { ...window.user, id: "next", timestamp: new Date().toISOString() };
       window.patch({ timeline: [window.user], lastEventAt: 0 });
       window.emit("session.user_message", { exchange: { timestamp: window.user.timestamp } });
     });
-    await expect(emoji(page)).toHaveText("👀");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "👀");
     await page.evaluate(() => window.emit("session.error", {}, "B"));
-    await expect(emoji(page)).toHaveText("👀");
+    await expect(emoji(page)).toHaveAttribute("data-emoji", "👀");
   });
 
   await t.test("English copy and narrow desktop layout keep real tool details and timers readable", async t => {
@@ -181,10 +244,10 @@ test("quiet workbench follows real activity without silence-based overrides", as
         await page.setViewportSize({ width, height: 300 });
         await progress(page, [tool("execute")]);
         await page.clock.fastForward(30000);
-        await expect(emoji(page)).toHaveText("🔥");
+        await expect(emoji(page)).toHaveAttribute("data-emoji", "🔥");
         await page.screenshot({ path: fileURLToPath(new URL(`${theme}-${width}-30s.png`, directory)) });
         await page.clock.fastForward(60000);
-        await expect(emoji(page)).toHaveText("🔥");
+        await expect(emoji(page)).toHaveAttribute("data-emoji", "🔥");
         await expect(label(page)).toContainText("运行命令");
         await page.screenshot({ path: fileURLToPath(new URL(`${theme}-${width}-90s.png`, directory)) });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -192,7 +255,7 @@ test("quiet workbench follows real activity without silence-based overrides", as
         await expect(page.locator(".session-activity-time")).toBeVisible();
         await progress(page, [{ ...tool("execute"), toolCall: { ...tool("execute").toolCall, status: "complete" } }]);
         await page.clock.fastForward(148000);
-        await expect(emoji(page)).toHaveText("👀");
+        await expect(emoji(page)).toHaveAttribute("data-emoji", "👀");
         await expect(label(page)).toContainText("等待 Agent 的下一步");
         await expect(page.locator(".session-activity-note")).toHaveCount(0);
         await expect(page.locator(".session-activity-tool-summary")).toHaveCount(0);
@@ -237,14 +300,14 @@ test("quiet workbench follows real activity without silence-based overrides", as
     for (const status of ["pending", "in_progress", "inProgress", " RUNNING "]) {
       await progress(page, [{ ...tool("execute"), toolCall: { ...tool("execute").toolCall, status } }]);
       await page.clock.fastForward(120000);
-      await expect(emoji(page)).toHaveText("🔥");
+      await expect(emoji(page)).toHaveAttribute("data-emoji", "🔥");
     }
     for (const kind of ["execute", "ask_user"]) {
       for (const outcome of ["completed", "failed", "cancelled", "declined", "interrupted"]) {
         await progress(page, [{ ...tool(kind), toolCall: { ...tool(kind).toolCall,
           activity: { schemaVersion: 1, agent: "codex", origin: "live", source: "agent", operation: kind === "execute" ? "execute" : "other", outcome },
         } }]);
-        await expect(emoji(page)).toHaveText("👀");
+        await expect(emoji(page)).toHaveAttribute("data-emoji", "👀");
         await expect(label(page)).toContainText("等待 Agent 的下一步");
         await expect(page.locator(".session-activity-tool-summary")).toHaveCount(0);
       }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const git = readFileSync(new URL("../src/app/useWorkspaceGit.ts", import.meta.url), "utf8");
 const fileTree = readFileSync(new URL("../src/components/FileTree.tsx", import.meta.url), "utf8");
 const fileService = readFileSync(new URL("../src/services/file.ts", import.meta.url), "utf8");
 
@@ -47,19 +48,9 @@ assert.match(
   "worktree refresh should reload the list and only the expanded worktree status",
 );
 assert.match(
-  app,
-  /fetchGitHistory\(rootID, \{ afterCommit: newest \}\)[\s\S]*?options\?\.waitForIncremental[\s\S]*?return refreshAfterNewest\(\)/,
+  git,
+  /fetchGitHistory\(rootID,\s*\{\s*afterCommit: newest,?\s*\}\)[\s\S]*?options\?\.waitForIncremental[\s\S]*?return refreshAfterNewest\(\)/,
   "manual history refresh should await the existing after_commit probe",
-);
-assert.match(
-  app,
-  /data-onboarding="task-refresh"[\s\S]*?width: "22px"[\s\S]*?data-task-refresh-visual[\s\S]*?width: "18px"/,
-  "task refresh should use a compact hit area and centered feedback background",
-);
-assert.match(
-  app,
-  /data-onboarding="task-create"[\s\S]*?width: "28px"[\s\S]*?background: taskCreateTemplateMenuOpen[\s\S]*?justifyContent: "center"/,
-  "task create should retain its normal button size",
 );
 assert.match(
   app,

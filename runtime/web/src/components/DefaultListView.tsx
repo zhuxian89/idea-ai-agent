@@ -12,7 +12,6 @@ import { useI18n, type MessageKey } from "../i18n";
 import { CompactUploadProgress } from "./CompactUploadProgress";
 
 type DirectorySortControlValue = DirectorySortMode | "inherit";
-export type MainContentViewMode = "task-kanban" | "file-browser";
 
 const sortLabelKeys: Partial<Record<DirectorySortControlValue, MessageKey>> = {
   "name-asc": "sort.nameAsc",
@@ -48,7 +47,6 @@ type DefaultListViewProps = {
   path?: string;
   entries: FileEntry[];
   errorMessage?: string;
-  topContent?: React.ReactNode;
   showHiddenFiles?: boolean;
   sortMode: DirectorySortMode;
   sortControlValue: DirectorySortControlValue;
@@ -58,20 +56,12 @@ type DefaultListViewProps = {
   onUploadFiles?: (files: File[]) => void | Promise<void>;
   onCancelUpload?: () => void;
   uploadProgress?: UploadProgress | null;
-  onRenameRoot?: (nextName: string) => Promise<boolean> | boolean;
-  onRemoveRoot?: () => void;
   isGitRepo?: boolean;
   isGitWorktree?: boolean;
   showGitHistory?: boolean;
   enableGitHistoryToggle?: boolean;
   onToggleGitHistory?: () => void;
-  onCreateWorktree?: () => void;
-  onSwitchWorktree?: () => void;
-  onRemoveWorktree?: () => void;
   onOpenScheduledAgentTasks?: () => void;
-  currentViewMode?: MainContentViewMode;
-  onViewModeChange?: (mode: MainContentViewMode) => void;
-  menuOverlay?: React.ReactNode;
 };
 
 function formatCompactTime(value?: string): string {
@@ -152,66 +142,15 @@ function FileEntryIcon({ entry }: { entry: FileEntry }) {
   );
 }
 
-function GitBranchMenuIcon({
-  marker,
-}: {
-  marker?: "plus" | "minus" | "switch";
-}) {
-  const markerPath =
-    marker === "plus"
-      ? "M19 16v6M16 19h6"
-      : marker === "minus"
-        ? "M16 19h6"
-        : "M21 17.5h-7M18 14.5l3 3M13.8 21h7M13.8 21l3 3";
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      style={{ flexShrink: 0 }}
-    >
-      <path
-        fill="currentColor"
-        d="M7 5a2 2 0 1 1 3.763.945h.58a4 4 0 0 1 4 4v1.28a2 2 0 0 1-1.02 3.72a2 2 0 0 1-.98-3.745V9.945a2 2 0 0 0-2-2H10v9.323A2 2 0 0 1 9 21a2 2 0 0 1-1-3.732V6.732A2 2 0 0 1 7 5"
-      />
-      {marker ? (
-        <path
-          d={markerPath}
-          stroke="currentColor"
-          strokeWidth={marker === "switch" ? "1.7" : "2.6"}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-    </svg>
-  );
-}
-
 // 路径导航组件
 function Breadcrumbs({
   root,
   path,
   onPathClick,
-  editingRoot = false,
-  rootDraft = "",
-  rootRenaming = false,
-  inputRef,
-  onRootDraftChange,
-  onRootRenameSubmit,
-  onRootRenameCancel,
 }: {
   root?: string;
   path: string;
   onPathClick?: (path: string) => void;
-  editingRoot?: boolean;
-  rootDraft?: string;
-  rootRenaming?: boolean;
-  inputRef?: React.RefObject<HTMLInputElement | null>;
-  onRootDraftChange?: (value: string) => void;
-  onRootRenameSubmit?: () => void;
-  onRootRenameCancel?: () => void;
 }) {
   const { t } = useI18n();
   const normalizedPath =
@@ -240,122 +179,7 @@ function Breadcrumbs({
     >
       {root && (
         <>
-          {editingRoot ? (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-                minWidth: 0,
-                maxWidth: "min(320px, 60vw)",
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  position: "relative",
-                  minWidth: 0,
-                  maxWidth: "100%",
-                }}
-              >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    visibility: "hidden",
-                    display: "block",
-                    whiteSpace: "pre",
-                    height: "24px",
-                    border: "1px solid transparent",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    padding: "0 10px",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  {rootDraft || " "}
-                </span>
-                <input
-                  ref={inputRef}
-                  value={rootDraft}
-                  disabled={rootRenaming}
-                  onChange={(event) => {
-                    const input = event.currentTarget;
-                    onRootDraftChange?.(event.target.value);
-                    window.requestAnimationFrame(() => {
-                      if (input.scrollWidth <= input.clientWidth + 1) {
-                        input.scrollLeft = 0;
-                      }
-                    });
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      onRootRenameCancel?.();
-                      return;
-                    }
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      onRootRenameSubmit?.();
-                    }
-                  }}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    minWidth: 0,
-                    width: "100%",
-                    maxWidth: "100%",
-                    height: "24px",
-                    borderRadius: "6px",
-                    border: "1px solid var(--accent-color)",
-                    background: "var(--content-bg, #fff)",
-                    color: "var(--text-primary)",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    padding: "0 8px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </span>
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={onRootRenameCancel}
-                disabled={rootRenaming}
-                aria-label={t("directory.cancelRename")}
-                style={{
-                  width: "22px",
-                  height: "22px",
-                  borderRadius: "6px",
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--text-secondary)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: rootRenaming ? "default" : "pointer",
-                  opacity: rootRenaming ? 0.6 : 1,
-                  padding: 0,
-                  flexShrink: 0,
-                }}
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </span>
-          ) : (
+          {
             <span
               data-onboarding="project-home"
               onClick={() => onPathClick?.(".")}
@@ -372,7 +196,7 @@ function Breadcrumbs({
             >
               {root}
             </span>
-          )}
+          }
           {parts.length > 0 && (
             <span style={{ opacity: 0.4, fontSize: "10px", flexShrink: 0 }}>
               ❯
@@ -418,7 +242,6 @@ export function DefaultListView({
   path = "",
   entries,
   errorMessage,
-  topContent,
   showHiddenFiles = false,
   sortMode,
   sortControlValue,
@@ -428,31 +251,20 @@ export function DefaultListView({
   onUploadFiles,
   onCancelUpload,
   uploadProgress = null,
-  onRenameRoot,
-  onRemoveRoot,
   isGitRepo = false,
   isGitWorktree = false,
   showGitHistory = true,
   enableGitHistoryToggle = true,
   onToggleGitHistory,
-  onCreateWorktree,
-  onSwitchWorktree,
-  onRemoveWorktree,
   onOpenScheduledAgentTasks,
-  currentViewMode = "task-kanban",
-  onViewModeChange,
-  menuOverlay = null,
 }: DefaultListViewProps) {
   const { t } = useI18n();
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const rootNameInputRef = React.useRef<HTMLInputElement>(null);
+
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isSortMenuOpen, setIsSortMenuOpen] = React.useState(false);
-  const [isViewMenuOpen, setIsViewMenuOpen] = React.useState(false);
-  const [editingRoot, setEditingRoot] = React.useState(false);
-  const [rootDraft, setRootDraft] = React.useState(root || "");
-  const [rootRenaming, setRootRenaming] = React.useState(false);
+
   const sortedEntries = React.useMemo(() => {
     const visibleEntries = showHiddenFiles
       ? entries
@@ -465,28 +277,11 @@ export function DefaultListView({
     sortMode === "size-desc" ||
     sortMode === "size-asc";
   const isRootView = !!root && (!!path ? path === root : true);
-  const showTaskKanban = currentViewMode === "task-kanban";
-  const showFileBrowser = currentViewMode === "file-browser";
-  const currentViewLabel = showTaskKanban ? t("directory.taskKanban") : t("directory.fileBrowser");
   const sortLabel = (value: DirectorySortControlValue): string => {
     if (value === "inherit") return t("directory.followGlobal");
     const key = sortLabelKeys[value];
     return key ? t(key) : t("directory.defaultSort");
   };
-
-  React.useEffect(() => {
-    if (!editingRoot) {
-      setRootDraft(root || "");
-    }
-  }, [editingRoot, root]);
-
-  React.useEffect(() => {
-    if (!editingRoot) {
-      return;
-    }
-    rootNameInputRef.current?.focus();
-    rootNameInputRef.current?.select();
-  }, [editingRoot]);
 
   React.useEffect(() => {
     if (!isMenuOpen) {
@@ -500,39 +295,6 @@ export function DefaultListView({
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [isMenuOpen]);
-
-  const cancelRootRename = React.useCallback(() => {
-    setEditingRoot(false);
-    setRootRenaming(false);
-    setRootDraft(root || "");
-  }, [root]);
-
-  const submitRootRename = React.useCallback(async () => {
-    if (rootRenaming) {
-      return;
-    }
-    const trimmed = rootDraft.trim();
-    if (!trimmed || trimmed === String(root || "").trim()) {
-      cancelRootRename();
-      return;
-    }
-    if (!onRenameRoot) {
-      cancelRootRename();
-      return;
-    }
-    setRootRenaming(true);
-    try {
-      const ok = await onRenameRoot(trimmed);
-      if (ok === false) {
-        rootNameInputRef.current?.focus();
-        rootNameInputRef.current?.select();
-        return;
-      }
-      setEditingRoot(false);
-    } finally {
-      setRootRenaming(false);
-    }
-  }, [cancelRootRename, onRenameRoot, root, rootDraft, rootRenaming]);
 
   return (
     <div
@@ -569,26 +331,17 @@ export function DefaultListView({
             root={root}
             path={path || ""}
             onPathClick={onPathClick}
-            editingRoot={editingRoot}
-            rootDraft={rootDraft}
-            rootRenaming={rootRenaming}
-            inputRef={rootNameInputRef}
-            onRootDraftChange={setRootDraft}
-            onRootRenameSubmit={() => {
-              void submitRootRename();
-            }}
-            onRootRenameCancel={cancelRootRename}
           />
           {uploadProgress ? (
-          <div style={{ marginLeft: "10px", flexShrink: 0 }}>
-            <CompactUploadProgress
-              progress={uploadProgress}
-              label={t("upload.directoryProgress")}
-              statusLabel={t("upload.inProgress")}
-              cancelLabel={t("upload.cancel")}
-              onCancel={onCancelUpload}
-            />
-          </div>
+            <div style={{ marginLeft: "10px", flexShrink: 0 }}>
+              <CompactUploadProgress
+                progress={uploadProgress}
+                label={t("upload.directoryProgress")}
+                statusLabel={t("upload.inProgress")}
+                cancelLabel={t("upload.cancel")}
+                onCancel={onCancelUpload}
+              />
+            </div>
           ) : null}
         </div>
         <div
@@ -599,7 +352,7 @@ export function DefaultListView({
             flexShrink: 0,
           }}
         >
-          {showFileBrowser ? (
+          {
             <div
               style={{
                 fontSize: "11px",
@@ -609,7 +362,7 @@ export function DefaultListView({
             >
               {t("directory.itemCount", { count: sortedEntries.length })}
             </div>
-          ) : null}
+          }
           <div ref={menuRef} style={{ position: "relative" }}>
             <button
               type="button"
@@ -619,7 +372,6 @@ export function DefaultListView({
                   const nextOpen = !open;
                   if (nextOpen) {
                     setIsSortMenuOpen(false);
-                    setIsViewMenuOpen(false);
                   }
                   return nextOpen;
                 });
@@ -670,7 +422,6 @@ export function DefaultListView({
                   type="button"
                   onClick={() => {
                     setIsSortMenuOpen((open) => !open);
-                    setIsViewMenuOpen(false);
                   }}
                   style={{
                     width: "100%",
@@ -768,7 +519,11 @@ export function DefaultListView({
                             fontSize: "12px",
                           }}
                         >
-                          <span>{sortLabel(option.value as DirectorySortControlValue)}</span>
+                          <span>
+                            {sortLabel(
+                              option.value as DirectorySortControlValue,
+                            )}
+                          </span>
                           <span
                             style={{
                               fontSize: "11px",
@@ -782,86 +537,7 @@ export function DefaultListView({
                     })}
                   </>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsViewMenuOpen((open) => !open);
-                    setIsSortMenuOpen(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--text-primary)",
-                    borderRadius: "8px",
-                    padding: "8px 10px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                  }}
-                  aria-expanded={isViewMenuOpen}
-                >
-                  <span style={{ flex: 1 }}>{t("directory.currentView")}</span>
-                  <span
-                    style={{ color: "var(--text-secondary)", fontSize: "11px" }}
-                  >
-                    {currentViewLabel}
-                  </span>
-                  <ChevronRight isOpen={isViewMenuOpen} />
-                </button>
-                {isViewMenuOpen ? (
-                  <>
-                    {([
-                      ["task-kanban", t("directory.taskKanban")],
-                      ["file-browser", t("directory.fileBrowser")],
-                    ] as const).map(([mode, label]) => {
-                      const active = currentViewMode === mode;
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => {
-                            onViewModeChange?.(mode);
-                            setIsMenuOpen(false);
-                            setIsSortMenuOpen(false);
-                            setIsViewMenuOpen(false);
-                          }}
-                          style={{
-                            width: "100%",
-                            border: "none",
-                            background: active
-                              ? "var(--selection-bg)"
-                              : "transparent",
-                            color: active
-                              ? "var(--accent-color)"
-                              : "var(--text-primary)",
-                            borderRadius: "8px",
-                            padding: "8px 10px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            textAlign: "left",
-                            cursor: "pointer",
-                            fontSize: "12px",
-                          }}
-                        >
-                          <span>{label}</span>
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              opacity: active ? 1 : 0,
-                            }}
-                          >
-                            ✓
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </>
-                ) : null}
+
                 <div
                   style={{
                     height: "1px",
@@ -934,93 +610,7 @@ export function DefaultListView({
                         </span>
                       </button>
                     ) : null}
-                    {isGitRepo && onCreateWorktree ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onCreateWorktree?.();
-                          setIsMenuOpen(false);
-                        }}
-                        style={{
-                          width: "100%",
-                          border: "none",
-                          background: "transparent",
-                          color: "var(--text-primary)",
-                          borderRadius: "8px",
-                          padding: "8px 10px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          textAlign: "left",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                        }}
-                      >
-                        <GitBranchMenuIcon marker="plus" />
-                        <span>{t("directory.createWorktree")}</span>
-                      </button>
-                    ) : null}
-                    {isGitRepo && onSwitchWorktree ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSwitchWorktree?.();
-                          setIsMenuOpen(false);
-                        }}
-                        style={{
-                          width: "100%",
-                          border: "none",
-                          background: "transparent",
-                          color: "var(--text-primary)",
-                          borderRadius: "8px",
-                          padding: "8px 10px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          textAlign: "left",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                        }}
-                      >
-                        <GitBranchMenuIcon marker="switch" />
-                        <span>{t("directory.switchWorktree")}</span>
-                      </button>
-                    ) : null}
-                    {isGitWorktree && onRemoveWorktree ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onRemoveWorktree?.();
-                          setIsMenuOpen(false);
-                        }}
-                        style={{
-                          width: "100%",
-                          border: "none",
-                          background: "transparent",
-                          color: "#dc2626",
-                          borderRadius: "8px",
-                          padding: "8px 10px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          textAlign: "left",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                        }}
-                      >
-                        <GitBranchMenuIcon marker="minus" />
-                        <span>{t("directory.removeWorktree")}</span>
-                      </button>
-                    ) : null}
-                    {(isGitRepo && (onCreateWorktree || onSwitchWorktree)) || (isGitWorktree && onRemoveWorktree) ? (
-                      <div
-                        style={{
-                          height: "1px",
-                          background: "var(--border-color)",
-                          margin: "6px 4px",
-                        }}
-                      />
-                    ) : null}
+
                     <button
                       type="button"
                       onClick={() => {
@@ -1058,81 +648,7 @@ export function DefaultListView({
                       </svg>
                       <span>{t("directory.scheduledTasks")}</span>
                     </button>
-                    {onRenameRoot && <button
-                      type="button"
-                      onClick={() => {
-                        setRootDraft(root || "");
-                        setEditingRoot(true);
-                        setIsMenuOpen(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        background: "transparent",
-                        color: "var(--text-primary)",
-                        borderRadius: "8px",
-                        padding: "8px 10px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        textAlign: "left",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                      }}
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 20h9" />
-                        <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-                      </svg>
-                      <span>{t("directory.renameProject")}</span>
-                    </button>}
-                    {onRemoveRoot && <button
-                      type="button"
-                      onClick={() => {
-                        onRemoveRoot?.();
-                        setIsMenuOpen(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        background: "transparent",
-                        color: "#dc2626",
-                        borderRadius: "8px",
-                        padding: "8px 10px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        textAlign: "left",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                      }}
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.2a2 2 0 0 1 1.4.58l1.82 1.84A2 2 0 0 0 13.84 6H20a2 2 0 0 1 2 2z" />
-                        <path d="M9 14h6" />
-                      </svg>
-                      <span>{t("directory.removeProject")}</span>
-                    </button>}
+
                     <div
                       style={{
                         height: "1px",
@@ -1183,18 +699,6 @@ export function DefaultListView({
                 </button>
               </div>
             ) : null}
-            {menuOverlay ? (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 6px)",
-                  right: 0,
-                  zIndex: 30,
-                }}
-              >
-                {menuOverlay}
-              </div>
-            ) : null}
           </div>
           <input
             ref={inputRef}
@@ -1213,10 +717,7 @@ export function DefaultListView({
       </header>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-        {showTaskKanban && topContent ? (
-          <div style={{ padding: "8px 16px 24px" }}>{topContent}</div>
-        ) : null}
-        {showFileBrowser ? (
+        {
           <div style={{ padding: "24px 16px" }}>
             {errorMessage ? (
               <div
@@ -1318,7 +819,7 @@ export function DefaultListView({
               ))}
             </div>
           </div>
-        ) : null}
+        }
       </div>
     </div>
   );

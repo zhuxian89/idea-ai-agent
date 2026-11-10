@@ -498,34 +498,6 @@ export async function fetchGitWorktrees(rootId: string): Promise<GitWorktreesPay
   };
 }
 
-export async function createGitWorktree(input: {
-  rootId: string;
-  parentPath: string;
-  name: string;
-  branchMode: "new" | "existing";
-  branch?: string;
-}): Promise<any> {
-  return protectedJSON<any>(appURL("/api/git/worktrees"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      root: input.rootId,
-      parent_path: input.parentPath,
-      name: input.name,
-      branch_mode: input.branchMode,
-      branch: input.branch || "",
-    }),
-  });
-}
-
-export async function removeGitWorktree(rootId: string): Promise<any> {
-  return protectedJSON<any>(appURL("/api/git/worktrees"), {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ root: rootId }),
-  });
-}
-
 export function buildGitDiffCacheSignature(item?: Partial<GitStatusItem> | null): string {
   if (!item) {
     return "";

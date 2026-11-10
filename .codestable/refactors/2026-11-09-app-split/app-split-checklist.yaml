@@ -1,0 +1,17 @@
+refactor: 2026-11-09-app-split
+steps:
+  - id: remove-financial-ui
+    status: completed
+    checks: [typecheck, reference-scan]
+  - id: remove-unused-task-and-project-ui
+    status: completed
+    checks: [entry-point-review, typecheck, real-app-browser-startup]
+  - id: session-and-git-modules
+    status: completed
+    checks: [typecheck, session-navigation, message-sending, git-browser-regressions]
+  - id: business-events
+    status: completed
+    checks: [typecheck, event-lifecycle]
+  - id: verification
+    status: completed
+    checks: [frontend-tests, typecheck, build, diff-check]

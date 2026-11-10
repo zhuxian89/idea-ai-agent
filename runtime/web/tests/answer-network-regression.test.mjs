@@ -104,7 +104,7 @@ test("desktop offline and answered-question lifecycle regressions", async t => {
   await t.test("a late correction after done cannot revive the clock, including remount and the next question", async t => {
     const page = await open(t);
     await page.evaluate(() => window.emit("session.done"));
-    await expect(page.locator(".session-activity-emoji")).toHaveText("👍");
+    await expect(page.locator(".session-activity-emoji")).toHaveAttribute("data-emoji", "👍");
     await page.evaluate(() => window.correct());
     await page.clock.fastForward(2000);
     await expect(page.locator("[data-session-activity]")).toHaveCount(0);
@@ -126,7 +126,7 @@ test("desktop offline and answered-question lifecycle regressions", async t => {
     await expect(page.locator(".session-activity-label")).toContainText("网络已离线");
     assert.equal(await page.evaluate(() => window.socketState()), 1);
     await page.clock.fastForward(120000);
-    await expect(page.locator(".session-activity-emoji")).toHaveText("🔌");
+    await expect(page.locator(".session-activity-emoji")).toHaveAttribute("data-emoji", "🔌");
     await expect(page.locator(".session-activity-note")).toHaveCount(0);
     await page.context().setOffline(false);
     await expect(page.locator(".idea-network-notice")).toContainText("网络连接已恢复");
