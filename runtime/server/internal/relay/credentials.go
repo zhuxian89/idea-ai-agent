@@ -68,15 +68,21 @@ func (s *CredentialsStore) Save(creds Credentials) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.writeLocked(creds)
+}
 
+// writeLocked replaces the file in one step. Writing in place would leave truncated JSON
+// if the process stops midway, and Load would then fail on every later start.
+func (s *CredentialsStore) writeLocked(creds Credentials) error {
 	payload, err := json.MarshalIndent(creds, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.filePath, payload, 0o600); err != nil {
+	tmp := s.filePath + ".tmp"
+	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
 		return err
 	}
-	return os.Chmod(s.filePath, 0o600)
+	return os.Rename(tmp, s.filePath)
 }
 
 func (s *CredentialsStore) SaveTokenStation(token string) error {
@@ -92,15 +98,7 @@ func (s *CredentialsStore) SaveTokenStation(token string) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	payload, err := json.MarshalIndent(creds, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(s.filePath, payload, 0o600); err != nil {
-		return err
-	}
-	return os.Chmod(s.filePath, 0o600)
+	return s.writeLocked(creds)
 }
 
 func (s *CredentialsStore) Clear() error {
