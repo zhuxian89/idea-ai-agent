@@ -9,9 +9,7 @@ import (
 func newTestCredentialsStore(t *testing.T) *CredentialsStore {
 	t.Helper()
 	configRoot := t.TempDir()
-	t.Setenv("IDE_AGENT_DATA_DIR", "")
-	t.Setenv("XDG_CONFIG_HOME", configRoot)
-	t.Setenv("HOME", configRoot)
+	t.Setenv("IDE_AGENT_DATA_DIR", configRoot)
 	store, err := NewCredentialsStore()
 	if err != nil {
 		t.Fatalf("NewCredentialsStore() error = %v", err)

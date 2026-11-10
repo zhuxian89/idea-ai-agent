@@ -498,6 +498,7 @@ class SessionService {
   }
 
   disconnect() {
+    this.rootId = null;
     this.clearReconnectTimer();
     this.clearConnectTimeout();
     this.clearProbe();
@@ -1026,18 +1027,14 @@ class SessionService {
     return this.sendTracked(requestId, msg);
   }
 
-  // A message that reports failure must not stay queued: the caller tells the user it was not
-  // sent, and reconnecting would otherwise deliver it anyway, next to the user's manual retry.
+  // Reconnect only resends messages already sent and still awaiting server acceptance.
   private async sendTracked(
     requestId: string,
     msg: Record<string, unknown>,
   ): Promise<boolean> {
-    this.pendingMessages.set(requestId, { id: requestId, message: msg });
-    let sent = false;
-    try {
-      sent = await this.sendWSMessage(msg);
-    } finally {
-      if (!sent) this.pendingMessages.delete(requestId);
+    const sent = await this.sendWSMessage(msg);
+    if (sent) {
+      this.pendingMessages.set(requestId, { id: requestId, message: msg });
     }
     return sent;
   }
