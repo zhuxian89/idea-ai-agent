@@ -1303,6 +1303,13 @@ func agentPoolSessionKey(sessionKey, agentName string) string {
 	return strings.ToLower(trimmedAgent) + "-" + trimmedSessionKey
 }
 
+// resumeFallbackNotice tells the user the native session could not be resumed. The agent starts
+// fresh and only re-reads the recorded chat text, so earlier tool activity is not restored.
+func resumeFallbackNotice(totalExchanges int) string {
+	n := calculateSwitchReadLines(totalExchanges, 0)
+	return fmt.Sprintf("原生会话无法恢复，已用最近 %d 条消息重建上下文，部分历史和工具记录可能缺失", n)
+}
+
 func calculateSwitchReadLines(total, lastCtxSeq int) int {
 	delta := total - lastCtxSeq
 	if delta < 0 {
@@ -1809,6 +1816,7 @@ func (s *Service) ensureAgentSession(
 	fastService string,
 	rootAbs string,
 	developerInstructions string,
+	onResumeFallback func(),
 ) (agenttypes.Session, *int, error) {
 	poolSessionKey := agentPoolSessionKey(current.Key, agentName)
 	nextModel := resolveRuntimeModel(current, nil, model)
@@ -1940,6 +1948,9 @@ func (s *Service) ensureAgentSession(
 			if err == nil {
 				zero := 0
 				ctxSeqOverride = &zero
+				if onResumeFallback != nil {
+					onResumeFallback()
+				}
 			}
 		}
 	}
@@ -2202,7 +2213,14 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		// must not replace the user's configured developer instructions.
 		includeReplyTipsInUserMessage = false
 	}
-	sess, agentCtxSeq, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, in.Agent, in.Model, in.Mode, in.Effort, in.FastService, rootAbs, developerInstructions)
+	sess, agentCtxSeq, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, in.Agent, in.Model, in.Mode, in.Effort, in.FastService, rootAbs, developerInstructions, func() {
+		if in.OnUpdate != nil {
+			in.OnUpdate(agenttypes.Event{
+				Type: agenttypes.EventTypeRecovery,
+				Data: agenttypes.RecoveryStatus{Message: resumeFallbackNotice(len(current.Exchanges))},
+			})
+		}
+	})
 	if err != nil {
 		return err
 	}
@@ -2556,7 +2574,7 @@ func (s *Service) RunTransientSlashCommand(ctx context.Context, in RunTransientS
 	}
 	root := manager.Root()
 	rootAbs, _ := root.RootDir()
-	sess, _, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, agentName, in.Model, in.Mode, in.Effort, in.FastService, rootAbs, "")
+	sess, _, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, agentName, in.Model, in.Mode, in.Effort, in.FastService, rootAbs, "", nil)
 	if err != nil {
 		return err
 	}

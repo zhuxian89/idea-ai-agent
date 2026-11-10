@@ -1,7 +1,9 @@
 package usecase
 
 import (
+	"fmt"
 	"mindfs/server/internal/agent"
+	"strings"
 	"testing"
 )
 
@@ -16,6 +18,15 @@ func TestNativeDefaultsDoNotPinCachedModelOrEffort(t *testing.T) {
 		applyMessageRuntimeDefaultsFromStatus(&in, agent.Status{Name: name}, true)
 		if in.Model != "explicit-model" || in.Effort != "ultra" {
 			t.Fatal("explicit selection changed")
+		}
+	}
+}
+
+func TestResumeFallbackNoticeReportsHowManyMessagesAreRebuilt(t *testing.T) {
+	for total, want := range map[int]int{0: 0, 7: 7, 20: 20, 500: switchContextTailLines} {
+		got := resumeFallbackNotice(total)
+		if !strings.Contains(got, fmt.Sprintf("最近 %d 条消息", want)) {
+			t.Fatalf("total=%d notice=%q, want %d messages", total, got, want)
 		}
 	}
 }
