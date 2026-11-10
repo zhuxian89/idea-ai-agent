@@ -45,7 +45,7 @@ export function UserMessageSummaryButton({ summaries }: { summaries: IdeaUserMes
       if (!nodes.length) return;
       let active = activeSeq;
       for (const node of nodes) {
-        if (node.getBoundingClientRect().bottom < window.innerHeight * 0.5) active = Number(node.dataset.userMessageIndex || 0) || active;
+        if (node.getBoundingClientRect().bottom < window.innerHeight * 0.5) active = Number(node.dataset.sessionSeq || 0) || active;
       }
       setActiveSeq(active);
     };
@@ -62,7 +62,7 @@ export function UserMessageSummaryButton({ summaries }: { summaries: IdeaUserMes
     </button>
     {open ? <div role="dialog" aria-label={t("session.userSummary")} className="idea-user-summary-menu">
       {summaries.map((item) => <button key={item.id} type="button" className={item.seq === activeSeq ? "active" : undefined} onClick={() => {
-        document.querySelector<HTMLElement>(`[data-user-message-index="${item.seq}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+        document.querySelector<HTMLElement>(`[data-user-message-index][data-session-seq="${item.seq}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
         setOpen(false);
       }} title={item.summary}><span>{item.summary}</span></button>)}
     </div> : null}
