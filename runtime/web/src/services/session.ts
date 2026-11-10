@@ -1023,8 +1023,23 @@ class SessionService {
       },
     };
 
+    return this.sendTracked(requestId, msg);
+  }
+
+  // A message that reports failure must not stay queued: the caller tells the user it was not
+  // sent, and reconnecting would otherwise deliver it anyway, next to the user's manual retry.
+  private async sendTracked(
+    requestId: string,
+    msg: Record<string, unknown>,
+  ): Promise<boolean> {
     this.pendingMessages.set(requestId, { id: requestId, message: msg });
-    return this.sendWSMessage(msg);
+    let sent = false;
+    try {
+      sent = await this.sendWSMessage(msg);
+    } finally {
+      if (!sent) this.pendingMessages.delete(requestId);
+    }
+    return sent;
   }
 
   async setPlanMode(
@@ -1081,8 +1096,7 @@ class SessionService {
         fast_service: fastService,
       },
     };
-    this.pendingMessages.set(requestId, { id: requestId, message: msg });
-    return this.sendWSMessage(msg);
+    return this.sendTracked(requestId, msg);
   }
 
   private resendPendingMessages() {
