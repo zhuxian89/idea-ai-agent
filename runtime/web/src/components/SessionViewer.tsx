@@ -19,6 +19,8 @@ import type { AgentStatus } from "../services/agents";
 import { useI18n, type Locale } from "../i18n";
 import { formatSessionDuration } from "../services/sessionDuration";
 import { SessionActivity } from "./SessionActivity";
+import { RunningSubagents } from "./RunningSubagents";
+import { runningSubagents, type RunningSubagent } from "../services/runningSubagents";
 import { SessionRecovery } from "./SessionRecovery";
 import { ActivityTimeline } from "./stream/ActivityTimeline";
 import { TurnDiffSummary } from "./TurnDiffSummary";
@@ -102,6 +104,9 @@ type SessionViewerProps = {
   }) => void | Promise<void>;
   onEditUserMessage?: (content: string) => void;
   onForkAgentMessage?: (seq: number) => void | Promise<void>;
+  // Opens the child session of a running subagent; absent when the host cannot navigate.
+  onOpenSubagent?: (subagent: RunningSubagent) => void;
+  onStopSubagent?: (subagent: RunningSubagent) => void;
   targetSeqRequestKey?: string | number;
   agents?: AgentStatus[];
 };
@@ -938,6 +943,8 @@ function SessionViewerInner({
   onAskUserAnswer,
   onEditUserMessage,
   onForkAgentMessage,
+  onOpenSubagent,
+  onStopSubagent,
   agents,
 }: SessionViewerProps) {
   const { locale, t } = useI18n();
@@ -969,6 +976,7 @@ function SessionViewerInner({
     session?.context_window,
     isAwaiting,
   );
+  const subagents = useMemo(() => runningSubagents(timeline), [timeline]);
   const userMessageIndexByTimelineIndex = useMemo(() => {
     const indexes = new Map<number, number>();
     timeline.forEach((item, index) => {
@@ -2273,6 +2281,7 @@ function SessionViewerInner({
             {renderSlashCommandResult()}
             <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText}
               active={isAwaiting || isStreaming} rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined} />
+            {isAwaiting || isStreaming ? <RunningSubagents items={subagents} onOpen={onOpenSubagent} onStop={onStopSubagent} /> : null}
             {session && rootId ? <SessionRecovery key={`${rootId}:${sessionKey}`} session={session} rootId={rootId}
               connected={connected} active={loading || isAwaiting || isStreaming} /> : null}
 

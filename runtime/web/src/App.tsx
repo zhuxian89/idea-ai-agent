@@ -87,6 +87,7 @@ import { SessionViewer } from "./components/SessionViewer";
 import { ToastContainer } from "./components/Toast";
 
 import { UserMessageSummaryButton } from "./components/UserMessageSummaryButton";
+import type { RunningSubagent } from "./services/runningSubagents";
 import {
   relatedFileStatKey,
   useRelatedFileStats,
@@ -5379,6 +5380,53 @@ export function App({ onGoHome }: AppProps) {
     [],
   );
 
+  // The child session of a running subagent records the call that started it.
+  const handleOpenSubagent = useCallback(
+    async (rootID: string, parentKey: string, subagent: RunningSubagent) => {
+      if (!rootID || !parentKey) return;
+      const find = (items: SessionItem[]) =>
+        items.find(
+          (item) =>
+            item.parent_session_key === parentKey &&
+            [subagent.callId, subagent.stopRef].includes(item.parent_tool_call_id || ""),
+        );
+      let child = find(sessionsRef.current);
+      if (!child) {
+        const fetched = await sessionService.fetchChildSessions(rootID, parentKey, {
+          limit: CHILD_SESSION_PAGE_SIZE,
+        });
+        const items = fetched
+          .map((item) => toSessionItem(rootID, item))
+          .filter((item): item is SessionItem => !!item);
+        if (items.length > 0) setSessions((prev) => mergeSessionItems(prev, items));
+        child = find(items);
+      }
+      if (!child) {
+        reportError("session.sync_failed", t("session.subagentNotReady"));
+        return;
+      }
+      await handleSelectSession(child);
+    },
+    [handleSelectSession, t],
+  );
+
+  const handleStopSubagent = useCallback(
+    async (rootID: string, parentKey: string, subagent: RunningSubagent) => {
+      if (!rootID || !parentKey) return;
+      try {
+        await sessionService.stopTask(rootID, parentKey, subagent.stopRef);
+      } catch (error) {
+        reportError(
+          "session.sync_failed",
+          t("session.subagentStopFailed", {
+            reason: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
+    },
+    [t],
+  );
+
   const handleEditUserMessage = useCallback((content: string) => {
     setEditDraftRequest((prev) => ({
       id: (prev?.id || 0) + 1,
@@ -5679,6 +5727,20 @@ export function App({ onGoHome }: AppProps) {
           selectedSession?.root_id || currentRootId,
           selectedSessionSnapshot?.key || selectedSessionSnapshot?.session_key,
           seq,
+        )
+      }
+      onOpenSubagent={(subagent) =>
+        void handleOpenSubagent(
+          selectedSession?.root_id || currentRootId || "",
+          selectedSessionSnapshot?.key || selectedSessionSnapshot?.session_key || "",
+          subagent,
+        )
+      }
+      onStopSubagent={(subagent) =>
+        void handleStopSubagent(
+          selectedSession?.root_id || currentRootId || "",
+          selectedSessionSnapshot?.key || selectedSessionSnapshot?.session_key || "",
+          subagent,
         )
       }
     />
@@ -7787,6 +7849,20 @@ export function App({ onGoHome }: AppProps) {
                     drawerSessionSnapshot?.key ||
                       drawerSessionSnapshot?.session_key,
                     seq,
+                  )
+                }
+                onOpenSubagent={(subagent) =>
+                  void handleOpenSubagent(
+                    currentRootId || "",
+                    drawerSessionSnapshot?.key || drawerSessionSnapshot?.session_key || "",
+                    subagent,
+                  )
+                }
+                onStopSubagent={(subagent) =>
+                  void handleStopSubagent(
+                    currentRootId || "",
+                    drawerSessionSnapshot?.key || drawerSessionSnapshot?.session_key || "",
+                    subagent,
                   )
                 }
               />

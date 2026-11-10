@@ -323,6 +323,7 @@ class SessionService {
   private failedSessions = new Map<string, { sending: boolean; requestId?: string }>();
   private eventCursors = new Map<string, string>();
   private pendingMessages = new Map<string, PendingMessage>();
+  private pendingTaskStops = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private pendingAnswers = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private listeners = new Set<(event: SessionServiceEvent) => void>();
   private reconnectTimer: number | null = null;
@@ -531,6 +532,7 @@ class SessionService {
 
   private closeSocket() {
     this.rejectPendingAnswers();
+    this.rejectPendingTaskStops();
     this.clearConnectTimeout();
     this.clearProbe();
     this.openingSocket = false;
@@ -672,6 +674,16 @@ class SessionService {
   private handleMessage(msg: any) {
     const type = msg.type as string;
     const payload = msg.payload || {};
+    if (typeof msg.id === "string" && this.pendingTaskStops.has(msg.id)) {
+      if (type === "session.task.stopped") {
+        this.finishTaskStop(msg.id);
+        return;
+      }
+      if (type === "session.error" || type === "error" || type === "e2ee.error") {
+        this.finishTaskStop(msg.id, new Error(msg.error?.message || payload.message || "停止失败"));
+        return;
+      }
+    }
     if (typeof msg.id === "string" && this.pendingAnswers.has(msg.id)) {
       if (type === "session.answer_question.accepted") {
         this.finishAnswer(msg.id);
@@ -1128,6 +1140,39 @@ class SessionService {
     return this.sendWSMessage(msg);
   }
 
+  // Stops one subagent of the running turn; the turn itself keeps running. Resolves once the agent
+  // accepted the request and rejects with the reason when it could not be stopped.
+  async stopTask(rootId: string, sessionKey: string, taskId: string): Promise<void> {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error("连接已断开，请等待重新连接后重试");
+    }
+    if (!rootId || !sessionKey || !taskId) {
+      throw new Error("子 Agent 信息不完整");
+    }
+    const msg = {
+      id: this.createRequestId("stop-task"),
+      type: "session.task.stop",
+      payload: { root_id: rootId, session_key: sessionKey, task_id: taskId },
+    };
+    return new Promise<void>((resolve, reject) => {
+      // The server gives up after 10 seconds; this only covers a lost reply.
+      const timer = setTimeout(() => this.finishTaskStop(msg.id, new Error("没有收到停止结果，请检查子 Agent 状态")), 15000);
+      this.pendingTaskStops.set(msg.id, { resolve, reject, timer });
+      this.sendWSMessage(msg).then((sent) => {
+        if (!sent) this.finishTaskStop(msg.id, new Error("连接已断开，停止请求未发送"));
+      }, (error) => this.finishTaskStop(msg.id, error instanceof Error ? error : new Error(String(error))));
+    });
+  }
+
+  private finishTaskStop(id: string, error?: Error) {
+    const pending = this.pendingTaskStops.get(id);
+    if (!pending) return;
+    this.pendingTaskStops.delete(id);
+    clearTimeout(pending.timer);
+    if (error) pending.reject(error);
+    else pending.resolve();
+  }
+
   async removeQueuedMessage(rootId: string, sessionKey: string, queueId: string): Promise<boolean> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !rootId || !sessionKey || !queueId) {
       return false;
@@ -1216,6 +1261,12 @@ class SessionService {
     clearTimeout(pending.timer);
     if (error) pending.reject(error);
     else pending.resolve();
+  }
+
+  private rejectPendingTaskStops() {
+    for (const id of this.pendingTaskStops.keys()) {
+      this.finishTaskStop(id, new Error("连接已断开，请检查子 Agent 状态"));
+    }
   }
 
   private rejectPendingAnswers() {
