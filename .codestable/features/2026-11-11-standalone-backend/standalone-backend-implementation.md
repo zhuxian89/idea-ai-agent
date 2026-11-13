@@ -1,3 +1,65 @@
+# Windows .27 插件重打与发布（2026-11-13，已发布）
+
+源码同步：用户授权 push，Windows 下载与日志修复、两项新增回归、Windows 测试环境及 SQLite 连接清理修正、三份交接资料共 9 文件随本次提交同步至 `main`。提交前 `git fetch origin` 确认本地与远端均为 `cb1ea91`，无分叉；Git 空白检查通过。相关回归、包核对和用户实测采用本节记录的结果。
+
+用户验收补充：用户反馈“完美解决了”，确认本次 Windows 实际后台更新故障解决。首次安装与更新均调用 `StandaloneInstaller.kt:77` 的 Windows 命令及相同内置 `install.ps1`，此次下载跳转和 UTF-8 日志修复同时覆盖两条路径；首次安装额外传 `-DeferStart`。已通过的 `StandaloneInstallerTest.kt:96–109` 在空安装记录下验证下载、校验、解压、安装记录、版本与重复安装，使用临时包内安装桩，不注册真实系统任务；`WindowsStandaloneInstallerCommandTest.kt:14–34` 验证首次参数、中文错误及带单引号路径。全新 Windows 环境的真实计划任务注册、重启接入与登录自启仍待实机验收。本轮仅核对源码与同步交接，未另行安装或启动后台。
+
+发布完成：`gh release upload --clobber` 顺序替换 `v0.1.27` 的 Windows x64 ZIP 与 `SHA256SUMS.txt`，新资产 ID 为 `741888281` / `741888811`。原生 Windows PowerShell `5.1.26100.9711` 使用本轮下载函数，从公开 URL 匿名重新下载两文件，逐字节及 SHA-256 与本地产物一致；日志 `build/reports/windows-0.1.27-public-plugin.log`。Release 元数据复核确认标题仍为 `0.1.27`，正文、标签和目标提交保持原值，其余 4 ZIP 的资产 ID、digest 和更新时间未变；报告 `windows-0.1.27-release-verification.json`。原包与发布前元数据保留于 `build/release-backups/windows-0.1.27/`。用户下一步重新安装插件、重启 IDEA 后重试后台更新；本轮未操作真实安装或后台。
+
+当前结果：相关 Kotlin 回归 6/6 通过、0 失败/错误/跳过（完整安装 1、Release 查询 2、更新面板 1、Windows 启动命令 2），插件配置检查通过，`buildPlugin` 成功。Kotlin 命令显式传 `'-Pkotlin.compiler.execution.strategy=in-process'`，且 `-x buildRuntime` 复用此前成功生成的资源；日志 `build/reports/windows-0.1.27-kotlin.log`、`windows-0.1.27-build.log`。首次未整体引用该 PowerShell 参数导致 Gradle 把后半段当成任务名，已纠正启动命令。
+
+候选包 `build/releases/0.1.27/idea-ai-agent-0.1.27-windows-amd64.zip` 已生成，15,769,797 字节，SHA-256 `8d1c18752f1c4ad8bed605311fe01e8b9be77a7b080c4c030e1a0ae18dcd6094`。以已验证原 Release 包为底包，仅换入本轮 Gradle 新 JAR；322 个条目列表相同，JAR 外所有文件（含运行程序与 304 个网页文件）逐字节一致。JAR 内安装脚本与当前源码一致，Shell 脚本与原包相同，测试类未打入，PE 架构和插件版本正确。其余 JAR 资源差异仅 XML/SVG 换行及 MANIFEST 的 Windows/JBR 构建元数据；生产 class 变化全部属于 `StandaloneInstaller`。报告 `build/reports/windows-0.1.27-package.json`，总校验文件仅替换 Windows x64 一行。
+
+完整任务复核 `Review: PASS`：基线为本轮修改前源码（初始已有三份诊断文档）；检查下载流与元数据 `Content`、逐跳 HTTPS/五次请求上限、校验后安装、Windows 参数引用/退出码/UTF-8、首次延后启动与更新立即启动，以及 `AgentToolWindowFactory.kt:239–247` 的错误展示和成功重启消费者。附加测试变更仅清理临时 SQLite 连接、隔离 PS7 模块路径；生产数据库、Mac 命令及 Shell 脚本保持契约。code-simplifier 复核无进一步安全简化，源码无附加改写。最终任务差异与空白检查通过，用户后续实际更新反馈见本节顶部。
+
+用户明确授权重打 `0.1.27` 插件并更新 GitHub Release，按当前 Windows x64 环境仅替换对应 ZIP 和总校验文件，其他平台包保持原值。原生 PowerShell 5.1 / pwsh 下载回归 2/2、0 跳过通过。首轮 `go test ./server/internal/kanban -count=1` 失败：18 个 service 测试的 TempDir 清理报告 SQLite 文件被占用，`Service.stores` 中的测试数据库连接没有关闭；迁移测试自身已有 Close。先补测试清理再复跑，生产数据库代码不改。前端 Volta pnpm shim 缺失，改用项目锁定的 `corepack pnpm` 准备依赖；Gradle 使用 IDEA JBR 21，构建准备中。此时 Release 尚未替换。
+
+测试清理第一轮仅 Close，仍有一项因在途查询持有连接而失败，日志 `build/reports/windows-0.1.27-kanban-cleanup-first.log`；补上检查连接数归零后再清理临时目录，完整 kanban 复跑通过（29.356 秒），日志 `build/reports/windows-0.1.27-kanban.log`。本轮只改 `service_test.go` 的测试清理，任务库迁移和生产实现保持原样。Kotlin 编译 daemon 连续连接失败后已使用 Gradle 自带进程内回退；后续命令显式选择 in-process，不修改项目编译配置。
+
+旧库迁移 race 通过（7.531 秒），日志 `windows-0.1.27-migration-race.log`；类型检查和 Vite 生产构建通过，入口仍为 `index-BCQTOTCL.js`。原生 Windows PowerShell 5.1 使用本轮下载函数下载真实 `.27` Windows 后台并完成 SHA-256 校验，摘要 `d9892e891e06bb5166949837f68f2a0e94ff467fd71082285787bd0934c64327`，仅下载未安装，日志 `windows-0.1.27-public-download.log`。
+
+首轮 Kotlin：`WindowsStandaloneInstallerCommandTest` 两项通过，完整 `StandaloneInstallerTest` 在预期 SHA-256 断言处因 PowerShell 5.1 找不到 `Get-FileHash` 失败，原始 XML 保存在 `build/reports/windows-0.1.27-installer-first.xml`。测试从 PowerShell 7 启动 Gradle，继承的 `PSModulePath` 不匹配实际 5.1；测试夹具仅对 Windows 移除该环境键，让子进程自行生成 5.1 默认模块路径，Mac 及生产环境处理不改。修正后复跑与包核对结果见本节顶部。
+
+# Windows 更新修复（2026-11-13，源码完成）
+
+用户授权修复 Windows 下载跳转和日志编码，并确认 Mac 已实测正常。本轮起始基线仅三份交接资料已有诊断改动，生产源码无待提交修改；保留这些诊断记录。
+
+- `scripts/install.ps1`：用 `HttpWebRequest` 禁用自动跳转后直接读取响应状态和 `Location`，消除 Windows PowerShell 5.1 将 `MaximumRedirection=0` 响应转成错误的差异。相对 Location 仍按当前 URI 解析，五次请求上限、逐跳 HTTPS 拒绝降级、测试专用下载地址覆盖和真实 HTTP 错误均保留。二进制按流写入下载文件，版本元数据仍返回字符串 `Content`；响应和流在 finally 中释放。下载及 SHA-256 校验完成后才调用原包内安装器。
+- `StandaloneInstaller.kt`：仅 Windows 使用 `-Command`，在加载安装脚本前设置严格错误传播和无 BOM UTF-8 输出，与既有 `Files.readString(log)` 一致。脚本路径和版本作为 PowerShell 单引号字面量传递并转义内嵌单引号；首次安装仍加 `-DeferStart`，更新仍立即启动。原 Mac/Linux `/bin/sh` 命令及参数不变，`scripts/install.sh` 未改。
+- `scripts/standalone/download-redirect.test.mjs`：真实本机 HTTP 服务覆盖 301/302/303/307/308、相对及多级跳转、二进制内容、版本元数据、五次跳转上限、缺 Location、404 和 HTTPS 限制。Windows 默认使用原生 `powershell.exe` 并补 pwsh（未安装时报告跳过），只调用下载函数，不调用安装或服务。
+- `WindowsStandaloneInstallerCommandTest.kt`：两项 Windows 用例覆盖 UTF-8 中文错误、含空格/单引号路径、首次安装参数、更新不带延后启动参数以及成功/失败退出码，均使用临时脚本。
+
+静态审查 `Review: PASS`：对照原始源码检查完整本轮生产差异、下载和校验消费者、安装锁/版本判断/状态回调，并追踪 `AgentToolWindowFactory.updateStandalone()` 将非零安装结果的 error 传给 `RemoteBackendUpdate`；错误仍为字符串，成功才续接并重启 IDEA。当前安装日志每次执行先覆盖，统一生产端 UTF-8 后无需猜测历史日志编码。code-simplifier 检查无进一步安全简化，未额外改写。Git 空白检查通过。
+
+本轮没有编译、运行测试、安装、停止、重启、打包或更新在线入口；旧的全通过结论不覆盖本轮源码。待授权执行的 Windows 定向验证：
+
+```powershell
+node --test scripts/standalone/download-redirect.test.mjs
+.\gradlew.bat test --tests dev.ideaagent.WindowsStandaloneInstallerCommandTest --tests dev.ideaagent.StandaloneInstallerTest
+```
+
+通过后再生成包含修复的 Windows 插件，并验证真实 IDEA 更新；打包前仍需项目规定的两项旧库必检。当前已发布 `.27` 插件及在线 PowerShell 脚本未更新，用户正在使用的程序未替换。
+
+# Windows 实机更新失败（2026-11-13）
+
+用户截图 `.mindfs/upload/2026-11-13/image (1).png`：当前后台 `0.1.26-standalone.13`，目标 `0.1.27`，点击更新后详情为 `Input length = 1`。
+
+本机 `C:/Users/42169/AppData/Roaming/LocalAIAgent/remote/logs/install.log`（763 字节，修改时间 2026-11-13 09:07:16 +08:00）实际为 GBK，内容确认：
+
+```text
+Installing Local AI Agent 0.1.27 (windows/amd64)
+Downloading https://github.com/zhuxian89/idea-ai-agent/releases/download/standalone-v0.1.27/local-ai-agent-0.1.27-windows-amd64.zip
+Invoke-WebRequest : 已超过最大重定向数。要增加允许的重定向数，请为 -MaximumRedirection 参数提供一个更高的值。
+...ps1:30 字符: 25
+FullyQualifiedErrorId : MaximumRedirectExceeded,Microsoft.PowerShell.Commands.InvokeWebRequestCommand
+```
+
+源码链路：`scripts/install.ps1:19-43` 为每跳 HTTPS 校验而使用 `MaximumRedirection = 0` 并在 catch 中取 Response 的状态及 Location；本次 Windows 调用在此报错，当前现场的手动重定向处理失败。`:70` 下载 ZIP，`:85` 才调用包内安装器，因此本次尚未执行后台替换。具体重定向错误对象与 Windows PowerShell 的兼容处理仍需在修复阶段复现确认，不能仅据提示把跳数调大。
+
+第二层错误：`StandaloneInstaller.kt:67-73` 使用 `powershell.exe`，输出重定向至安装日志；`:86` 在非零退出时调用 `Files.readString(log)`，默认 UTF-8，遇到本次 GBK 中文错误字节发生解码异常；`:93-95` 只将异常 message 传入面板，原始下载错误被替换为 `Input length = 1`。
+
+本轮为实际日志与静态调用链诊断；未修改生产源码、执行测试、安装、停止、重启或生成新包。接下来修复 PowerShell 重定向兼容和日志编码契约，补 Windows 原生回归，再复验插件更新流程。原有隔离下载、资产哈希及测试记录保留各自范围，本次 Windows 实机升级为失败。
+
 # 全部源码同步（2026-11-13）
 
 用户明确要求全部 push。远端 main 为 `5718d70`，本地 main 相对远端独有 8 个提交、落后 1 个提交；工作区有 197 个待提交文件（含删除），其中 11 个未跟踪文件，均纳入本次源码提交。`git diff --check`、`git diff --cached --check` 和 `runtime/web` 的 `npm run typecheck` 通过，常见私钥/GitHub token/AWS access key 格式扫描未命中。计划提交工作区后正常合并远端，不强推、不移动已发布标签，不重新打包或操作真实服务。首轮显式暂存列表包含已暂存删除的路径，`git add` 因路径不存在失败；后续命令误继续提交了旧暂存区。已改为先 `git add -u` 纳入全部已跟踪修改，再逐项加入未跟踪文件，并修订刚创建且未推送的提交，防止遗漏工作区最新内容。最终源码提交 `fd897a24070bd7bf20e56d265934a810382f8273`，197 文件、13475 行新增/2525 行删除，工作区清空。使用正常 merge 合并远端 `5718d70`，没有内容冲突；合并提交 `0b95c3a` 已成功推送 origin/main。原本地独有 8 个提交全部进入远端历史。此处既有全量测试记录保持各自时间与范围，本轮仅重新执行类型检查和 Git 空白检查，未重新打包、重跑全量或操作真实服务。交接状态随随后文档提交同步。

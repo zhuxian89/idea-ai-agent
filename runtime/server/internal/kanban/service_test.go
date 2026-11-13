@@ -65,6 +65,26 @@ func (r *fakeRunner) RunAgentStage(ctx context.Context, exec AgentStageExecution
 
 func (r *fakeRunner) TaskUpdated(rootID string, detail TaskDetail) {}
 
+func closeTestServiceStores(t *testing.T, svc *Service) {
+	t.Helper()
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	// Windows 不允许删除打开的 SQLite 文件，必须先释放测试连接再清理临时目录。
+	for _, store := range svc.stores {
+		if err := store.Close(); err != nil {
+			t.Errorf("close test task store: %v", err)
+		}
+		// Close 后并发查询仍可能持有连接，等连接释放完成再让 TempDir 删除文件。
+		deadline := time.Now().Add(5 * time.Second)
+		for store.db.Stats().OpenConnections > 0 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if count := store.db.Stats().OpenConnections; count != 0 {
+			t.Errorf("test task store still has %d open connections", count)
+		}
+	}
+}
+
 func TestTaskTemplateStoreSeedsBundledTemplatesWhenUserFileMissing(t *testing.T) {
 	dir := t.TempDir()
 	bundledPath := filepath.Join(t.TempDir(), taskTemplateFile)
@@ -201,6 +221,7 @@ func TestCreateTaskAutoAdvanceControlsQueueAdmission(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 
 	manual, err := store.SaveTaskTemplate(TaskTemplate{
 		Name: "Manual",
@@ -273,6 +294,7 @@ func TestNextRequiresCurrentUserInputWhenTargetReferencesIt(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{}
 	svc.SetRunner(runner)
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
@@ -325,6 +347,7 @@ func TestNextAllowsEmptyInputWhenTargetDoesNotReferenceIt(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{}
 	svc.SetRunner(runner)
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
@@ -368,6 +391,7 @@ func TestNextRequiresCurrentInputFromAgentStageWhenTargetReferencesIt(t *testing
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{}
 	svc.SetRunner(runner)
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
@@ -439,6 +463,7 @@ func TestTaskCreateWorktreeIsTaskScoped(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
 		Name: "Task scoped worktree",
@@ -486,6 +511,7 @@ func TestTaskTemplateEditBlockedByUnfinishedTasksExceptConcurrency(t *testing.T)
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
 		Name:           "Bug fix",
@@ -528,6 +554,7 @@ func TestTaskWorktreeNameUsesTaskNumber(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{}
 	svc.SetRunner(runner)
 
@@ -607,6 +634,7 @@ func TestTaskWorktreeCreateErrorStoredOnTask(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{worktreeErr: errors.New("git worktree add failed")}
 	svc.SetRunner(runner)
 
@@ -675,6 +703,7 @@ func TestUpdateCurrentInputKeepsPreviousStageInput(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
 		Name: "Current input",
@@ -738,6 +767,7 @@ func TestCompleteFinalWaitingTask(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
 		Name: "Final review",
@@ -780,6 +810,7 @@ func TestTaskNumbersIncrement(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
 		Name: "Numbered",
 		Stages: []TaskTemplateStage{{
@@ -848,6 +879,7 @@ func TestSchedulerRunsAgentStageAndStoresSessionKey(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{}
 	svc.SetRunner(runner)
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
@@ -925,6 +957,7 @@ func TestAgentStageSessionErrorKeepsTaskAndStageRunning(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{runErr: errors.New("agent unavailable")}
 	svc.SetRunner(runner)
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
@@ -995,6 +1028,7 @@ func TestNextRejectsRunningCurrentStage(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{runErr: errors.New("agent unavailable")}
 	svc.SetRunner(runner)
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
@@ -1067,6 +1101,7 @@ func TestCompletingAdmittedTaskSchedulesNextQueuedTask(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{}
 	svc.SetRunner(runner)
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
@@ -1149,6 +1184,7 @@ func TestAgentStageAllowsBlankModel(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	runner := &fakeRunner{}
 	svc.SetRunner(runner)
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
@@ -1210,6 +1246,7 @@ func TestRunNowBypassesConcurrencySlot(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	svc.SetRunner(&fakeRunner{})
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
 		Name:           "Serial Agent Flow",
@@ -1290,6 +1327,7 @@ func TestCancellingAdmittedTaskSchedulesNextQueuedTask(t *testing.T) {
 	root := fs.NewRootInfo("root", "root", t.TempDir())
 	store := NewTemplateStoreAt(t.TempDir())
 	svc := NewService(store, testRoots{root: root})
+	t.Cleanup(func() { closeTestServiceStores(t, svc) })
 	svc.SetRunner(&fakeRunner{})
 	tmpl, err := store.SaveTaskTemplate(TaskTemplate{
 		Name:           "Two Slot Agent Flow",

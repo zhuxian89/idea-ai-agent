@@ -1,8 +1,23 @@
 feature: 2026-11-11-standalone-backend
 status: in_progress
 entrypoint: README.md
-current_step: source-push
+current_step: windows-first-install-acceptance
 steps:
+  - id: windows-update-source-push
+    description: 用户授权 push，本次提交同步 Windows 下载跳转与日志编码修复、两项新增回归、Windows 测试环境/SQLite 清理修正及三份交接资料共 9 文件；提交前 fetch 确认 main 与 origin/main 一致，Git 空白检查通过，既有回归和用户实测结果见相应步骤
+    status: done
+  - id: windows-update-failure-diagnosis
+    description: 2026-11-13 实机从 .13 升级 .27 在 GitHub ZIP 下载处报 MaximumRedirectExceeded；GBK 安装日志被插件按 UTF-8 读取，页面显示 Input length = 1；日志及源码核对完成，未进入后台替换
+    status: done
+  - id: windows-update-redirect-log-fix
+    description: 源码改用 HTTP 响应手动跳转并保留逐跳 HTTPS 检查；Windows 启动时设置 UTF-8，原 Mac 命令及 Shell 脚本不变；新增下载回归与两项 Windows 命令回归，完整任务 Review PASS、无进一步简化
+    status: done
+  - id: windows-update-redirect-log-verification
+    description: 下载回归 2/2、相关 Kotlin 6/6（无跳过）、kanban 全量/旧库迁移 race、类型/生产构建、插件配置与原生 5.1 公网下载校验通过；首轮 Windows SQLite 清理及 PS7 模块路径失败均仅修测试夹具后复跑通过
+    status: done
+  - id: windows-0.1.27-release-replace
+    description: .27 Windows x64 新包及总校验已替换 GitHub Release，原生 5.1 匿名下载/字节/SHA-256 通过；322 条目、143 class、版本和架构通过，仅换新 JAR，304 网页与运行程序不变；SHA-256 8d1c18752f1c4ad8bed605311fe01e8b9be77a7b080c4c030e1a0ae18dcd6094；其余 4 ZIP 资产 ID/哈希/更新时间不变，标题仍为 0.1.27
+    status: done
   - id: source-push
     description: 197 文件提交 fd897a2，原本地 8 提交保留；正常合并远端 5718d70 后，0b95c3a 已推送 main；类型与 Git 空白检查通过，本轮仅同步源码与交接资料
     status: done
@@ -121,7 +136,10 @@ steps:
     description: .8 x64/ARM64 与固定版本 PowerShell 已发布 prerelease；6 资产匿名 HTTP 200/校验一致；安装任务 7 项、补充新装、race/vet、旧库迁移、类型构建及浏览器 8 项通过；公网原脚本默认版本流程通过
     status: done
   - id: windows-native-acceptance
-    description: 安装 .23 插件，从旧后台网页原生入口检查并升级至 .13，复验启动服务/绑定/重启续接/切换与新面板；Windows EXE、计划任务注册、重启登录、异常恢复与完整升级待实机验收
+    description: 用户安装本次修复的 .27 Windows x64 插件后反馈“完美解决了”，本次实际后台更新故障验收通过；操作由用户完成
+    status: done
+  - id: windows-first-install-acceptance
+    description: 首次安装共用已修复的下载和 UTF-8 日志逻辑，临时包回归覆盖下载/校验/解压/安装记录/延后启动；全新 Windows 环境真实计划任务注册、重启接入及登录自启待实机验收
     status: pending
   - id: mac-login-service
     description: macOS 登录自启、异常恢复、手动启停、升级注销通过实际 launchd 验证；race、安装 5 项和旧库检查通过；.7 单文件脚本新装与 .6 升级验证通过

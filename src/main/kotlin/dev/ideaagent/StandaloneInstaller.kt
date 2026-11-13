@@ -31,6 +31,16 @@ internal fun isInstalled(dir: Path): Boolean = try {
     standaloneExecutable(dir) != null
 } catch (_: IllegalArgumentException) { false }
 
+internal fun windowsStandaloneInstallCommand(script: Path, version: String, deferStart: Boolean): List<String> {
+    val quote = { value: String -> "'${value.replace("'", "''")}'" }
+    val invocation = "& ${quote(script.toString())} -Version ${quote(version)}" +
+        if (deferStart) " -DeferStart" else ""
+    // 在加载脚本前统一输出编码，让中文异常与安装日志的 UTF-8 读取契约一致。
+    return listOf("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+        "-ExecutionPolicy", "Bypass", "-Command",
+        "\$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(\$false); $invocation")
+}
+
 /** Uses the published installer for first installation and user-requested updates. */
 @Service(Service.Level.APP)
 internal class StandaloneInstaller {
@@ -64,10 +74,9 @@ internal class StandaloneInstaller {
                         requireNotNull(javaClass.getResourceAsStream("/installers/install.$extension")).use {
                             Files.copy(it, script, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
                         }
-                        val command = (if (windows) listOf("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-                            "-ExecutionPolicy", "Bypass", "-File", script.toString(), "-Version", target)
-                        else listOf("/bin/sh", script.toString(), "--version", target)) +
-                            if (update) emptyList() else listOf(if (windows) "-DeferStart" else "--defer-start")
+                        val command = if (windows) windowsStandaloneInstallCommand(script, target, deferStart = !update)
+                        else listOf("/bin/sh", script.toString(), "--version", target) +
+                            if (update) emptyList() else listOf("--defer-start")
                         val log = dir.resolve("logs/install.log")
                         Files.createDirectories(log.parent)
                         val builder = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(log.toFile())

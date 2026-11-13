@@ -24,19 +24,30 @@ function Get-HttpsContent {
         if (-not $AllowInsecure -and $current -notmatch '^https://') {
             throw "Refusing a non-HTTPS download location: $current"
         }
-        $parameters = @{ Uri = $current; UseBasicParsing = $true; MaximumRedirection = 0; ErrorAction = 'Stop' }
-        if ($OutFile) { $parameters.OutFile = $OutFile }
+        # Windows PowerShell 5.1 会把禁用自动跳转的 302 响应变成错误，直接读取 HTTP 响应以保留 Location。
+        $request = [System.Net.HttpWebRequest]::Create($current)
+        $request.AllowAutoRedirect = $false
+        $response = $request.GetResponse()
         try {
-            $response = Invoke-WebRequest @parameters
-            return $response
-        } catch {
-            $status = $_.Exception.Response.StatusCode.value__
-            $location = $_.Exception.Response.Headers.Location
+            $status = [int]$response.StatusCode
+            $location = $response.Headers['Location']
             if ($status -in 301, 302, 303, 307, 308 -and $location) {
                 $current = ([System.Uri]::new([System.Uri]$current, $location)).AbsoluteUri
                 continue
             }
-            throw
+            if ($status -ge 300) { throw "Download returned HTTP $status without a supported redirect: $current" }
+            $stream = $response.GetResponseStream()
+            try {
+                if ($OutFile) {
+                    $file = [System.IO.File]::Create($OutFile)
+                    try { $stream.CopyTo($file) } finally { $file.Dispose() }
+                    return
+                }
+                $reader = [System.IO.StreamReader]::new($stream)
+                try { return @{ Content = $reader.ReadToEnd() } } finally { $reader.Dispose() }
+            } finally { $stream.Dispose() }
+        } finally {
+            $response.Dispose()
         }
     }
     throw "Too many redirects while downloading $Uri"

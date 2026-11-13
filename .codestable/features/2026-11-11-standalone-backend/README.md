@@ -1,6 +1,18 @@
 # 独立后端计划与进度
 
-更新于 2026-11-13。全部工作区源码已提交并推送 main，原本地 8 个提交已一并同步。
+更新于 2026-11-13。Windows 更新修复及相关回归通过，0.1.27 Windows x64 插件已重打并替换 GitHub Release，匿名下载校验通过；用户反馈“完美解决了”，本次实际更新故障验收通过。修复源码、测试与交接记录随本次提交同步至 `main`；全新 Windows 环境首次安装及自启动注册待实机验收。
+
+## Windows 更新修复（2026-11-13，已重打发布）
+
+用户已授权重打 `0.1.27` Windows x64 插件并替换 GitHub Release 对应包。PowerShell 5.1/pwsh 下载回归 2/2、相关 Kotlin 回归 6/6（均无跳过）、kanban 全量、旧库迁移 race、类型检查、生产构建和插件配置检查通过；原生 5.1 下载真实 GitHub 后台包及 SHA-256 通过。完整安装用例首轮继承 PowerShell 7 模块路径，导致 5.1 缺 `Get-FileHash`；仅修正测试环境后复跑通过。
+
+用户从后台 `0.1.26-standalone.13` 更新 `0.1.27`，页面显示 `Input length = 1`。本机 `remote/logs/install.log` 确认下载 GitHub ZIP 时，Windows PowerShell 报 `MaximumRedirectExceeded`；插件再按 UTF-8 读取 GBK 错误日志，解码异常覆盖了下载错误。失败在下载阶段，尚未调用包内安装器替换后台。
+
+源码已改为直接读取 HTTP 响应处理跳转，保留逐跳 HTTPS 检查与五次请求上限；Windows 启动命令在加载安装脚本前设置 UTF-8。完整任务差异正确性与兼容复核 `Review: PASS`，包含测试环境和 Windows SQLite 连接清理修正；code-simplifier 检查无进一步简化。
+
+Windows x64 新包仅换入新构建插件 JAR，322 个 ZIP 条目、143 个 class、版本和 PE 架构通过核对，其余内容（含 304 个网页文件及运行程序）逐字节保持一致。JAR 其他资源差异仅为换行和构建环境元数据。SHA-256：`8d1c18752f1c4ad8bed605311fe01e8b9be77a7b080c4c030e1a0ae18dcd6094`；报告 `build/reports/windows-0.1.27-package.json`。
+
+GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows PowerShell 5.1 匿名下载两资产并核对本地字节和 SHA-256 通过。其余 4 个 ZIP 的资产 ID、哈希与更新时间均保持原值，Release 标题仍为 `0.1.27`；报告 `windows-0.1.27-release-verification.json`、日志 `windows-0.1.27-public-plugin.log`。用户已确认 Mac 实测正常，并确认安装[新 Windows x64 包](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.27/idea-ai-agent-0.1.27-windows-amd64.zip)后本次更新故障解决。首次安装共用同一下载与日志修复，临时包回归覆盖下载、校验、解压、安装记录和延后启动参数；真实首次自启动注册尚待新环境实机验收。实现与原始失败见 [implementation](standalone-backend-implementation.md#windows-27-插件重打与发布2026-11-13已发布)。
 
 ## 全部源码同步（2026-11-13）
 
@@ -14,7 +26,7 @@
 - [独立后台与安装脚本](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.27)：Windows/macOS/Linux x64 与 ARM64 六平台；macOS/Linux 另有单文件安装器，Windows 和 Unix 均提供固定版本在线脚本。
 - [Windows x64 插件直接下载](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.27/idea-ai-agent-0.1.27-windows-amd64.zip)。本地目录 `build/releases/0.1.27/` 和 `build/standalone/0.1.27/`。
 
-310 项前端、97 项 Kotlin、Go 后端全量、11 项安装脚本及两项旧库必检通过。11 个程序包的 304 网页文件一致，5 插件包的 142 个 class 一致；架构、版本、指南与安装器一致性、原生 ARM64 签名通过。30 个公开资产匿名 HTTP 200 且 SHA-256 与本地一致；前端和新旧插件真实查询类在六个平台均发现 `0.1.27`。报告 `build/reports/release-0.1.27-*.json` / `.log`。
+首次发布时：310 项前端、97 项 Kotlin、Go 后端全量、11 项安装脚本及两项旧库必检通过；11 个程序包的 304 网页文件一致，5 插件包的 142 个 class 一致；架构、版本、指南与安装器一致性、原生 ARM64 签名通过。30 个公开资产匿名 HTTP 200 且 SHA-256 与本地一致；前端和新旧插件真实查询类在六个平台均发现 `0.1.27`。报告 `build/reports/release-0.1.27-*.json` / `.log`。本次 Windows x64 重打后的验证与 class 变化见顶部记录。
 
 旧插件和后台过渡测试 Release 共 11 个、本地过渡文件或目录共 84 项已删除；保留市场正式版本 `0.1.26` 及更早包，28 个本地正式文件哈希未变。GitHub 旧测试标签作为源码引用保留，测试安装包与 Release 已删除。用户要求所有发布标题只显示版本号，历史与新版本统一整理；包和更新说明保留。
 
