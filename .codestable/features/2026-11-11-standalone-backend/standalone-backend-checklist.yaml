@@ -4,8 +4,8 @@ entrypoint: README.md
 current_step: source-push
 steps:
   - id: source-push
-    description: 用户要求推送全部本地提交和工作区源码；197 文件已核对，前端类型检查与 Git 空白检查通过，待提交、合并远端并核验推送
-    status: in_progress
+    description: 197 文件提交 fd897a2，原本地 8 提交保留；正常合并远端 5718d70 后，0b95c3a 已推送 main；类型与 Git 空白检查通过，本轮仅同步源码与交接资料
+    status: done
   - id: stable-installer-url
     description: 固定 raw URL/版本元数据已发布 main 5718d70；12 安装测试、真实 Mac/Windows 包下载校验解压通过且安装调用截断；4 更新在线资产 HTTP 200/哈希一致，指南与 Release 已改固定入口
     status: done
