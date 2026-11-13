@@ -1,7 +1,7 @@
 {
-  "name": "MindFS",
-  "short_name": "MindFS",
-  "description": "MindFS workspace browser and session viewer.",
+  "name": "Local AI Agent",
+  "short_name": "Local AI Agent",
+  "description": "Local AI Agent workspace and conversations.",
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",

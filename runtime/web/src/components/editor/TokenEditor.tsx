@@ -42,6 +42,7 @@ export type TokenEditorHandle = {
   focus: () => void;
   blur: () => void;
   getHeight: () => number;
+  getSerializedText: () => string;
   clear: () => void;
   setText: (value: string, resetHistory?: boolean) => void;
   prepareVoiceInsertion: () => (text: string) => void;
@@ -677,6 +678,9 @@ const TokenEditor = forwardRef<TokenEditorHandle, TokenEditorProps>(function Tok
     },
     blur() {
       rootRef.current?.blur();
+    },
+    getSerializedText() {
+      return editorRef.current?.getEditorState().read(serializeEditor) || "";
     },
     getHeight() {
       return rootRef.current?.scrollHeight || 44;

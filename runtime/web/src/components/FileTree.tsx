@@ -1,7 +1,9 @@
+import "./workspaceSidebar.css";
 import React from "react";
+import { StandaloneProjects } from "./StandaloneProjects";
+import { isIDEManagedProject } from "../services/ideaBridge";
 import { IdeaAgentSettings } from "./IdeaAgentSettings";
 import { AGENT_INSTALLATION_CHANGED } from "../services/agentInstallation";
-import { rootBadgeStyle } from "./rootBadgeStyle";
 import { openExternalURL } from "../services/platformNavigation";
 import { isNativeShellRuntime, shouldEnablePWAInstall } from "../services/runtime";
 import {
@@ -125,6 +127,7 @@ function isProjectTreeTab(value: unknown): value is ProjectTreeTab {
 }
 
 type FileTreeProps = {
+  onProjectAdded?: (rootId: string) => void | Promise<void>;
   agentSettingsOnly?: boolean;
   agentSettingsActive?: boolean;
   agentsVersion?: number;
@@ -1315,6 +1318,7 @@ const agentConfigIconButtonStyle = (disabled: boolean): React.CSSProperties => (
 });
 
 export function FileTree({
+  onProjectAdded,
   agentSettingsOnly = false,
   agentSettingsActive = false,
   agentsVersion = 0,
@@ -2527,14 +2531,14 @@ export function FileTree({
                 gap: "4px",
                 width: "100%",
                 textAlign: "left",
-                color: isSelected ? "var(--accent-color)" : "var(--text-primary)",
-                fontSize: "13px",
+                color: isSelected ? "var(--accent-hover)" : "var(--text-primary)",
+                fontSize: isManagedRootNode ? "14px" : "13px",
                 borderRadius: "6px",
                 transition: "all 0.1s",
-                fontWeight: isSelected ? 600 : 400,
+                fontWeight: isSelected || isManagedRootNode ? 600 : 400,
                 outline: "none",
               }}
-              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--menu-active-bg)"; }}
               onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
             >
               <span
@@ -2561,7 +2565,7 @@ export function FileTree({
               >
                 <span
                   style={{
-                    ...(isManagedRootNode ? rootBadgeStyle : {}),
+                    ...(isManagedRootNode ? { fontWeight: isSelected ? 600 : 500 } : {}),
                     maxWidth: "100%",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -2691,67 +2695,32 @@ export function FileTree({
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <div className="workspace-projects" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {!isIDEManagedProject ? <div className="workspace-projects-title"><span>{t("fileTree.projects")}</span><StandaloneProjects compact onAdded={onProjectAdded} /></div> : null}
       <div style={{ position: "relative", height: "36px", padding: "0 3px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--mindfs-topbar-bg, transparent)", boxSizing: "border-box", flexShrink: 0, gap: 0, overflow: "visible" }}>
         <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: "1 1 auto", maxWidth: "calc(100% - 56px)", marginRight: "6px" }}>
           <div
             role="tablist"
+            className="workspace-project-tabs"
             data-onboarding="project-tabs"
             aria-label={t("fileTree.projectTabs")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0,
-              padding: "2px",
-              borderRadius: "8px",
-              border: "1px solid rgba(100, 116, 139, 0.36)",
-              background: "rgba(148, 163, 184, 0.10)",
-              minWidth: 0,
-              width: "100%",
-            }}
           >
             {([
               ["files", t("fileTree.files")],
               ["git", "git"],
               ["worktrees", t("fileTree.worktrees")],
               ["related", t("fileTree.relatedFiles")],
-            ] as const).map(([value, label], index) => {
+            ] as const).map(([value, label]) => {
               const active = projectTreeTab === value;
               const flexGrow = value === "related" ? 1.45 : value === "worktrees" ? 1.15 : 0.85;
               return (
                 <React.Fragment key={value}>
-                  {index > 0 ? (
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: "1px",
-                        height: "16px",
-                        background: "rgba(100, 116, 139, 0.32)",
-                        margin: "0 1px",
-                        flexShrink: 0,
-                      }}
-                    />
-                  ) : null}
                   <button
                     type="button"
                     role="tab"
                     aria-selected={active}
                     onClick={() => setProjectTreeTab(value)}
-                    style={{
-                      border: "none",
-                      borderRadius: "6px",
-                      background: active ? "var(--accent-color)" : "transparent",
-                      color: active ? "#fff" : "var(--text-secondary)",
-                      padding: "3px 5px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      lineHeight: "14px",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                      minWidth: 0,
-                      flex: `${flexGrow} 1 auto`,
-                      boxShadow: active ? "0 1px 3px rgba(37, 99, 235, 0.28)" : "none",
-                    }}
+                    style={{ flex: `${flexGrow} 1 auto` }}
                   >
                     {label}
                   </button>
@@ -3860,10 +3829,9 @@ export function FileTree({
             onClick={() => { void handleInstall(); }}
             style={{
               width: "100%",
-              border:
-                "1px solid color-mix(in srgb, var(--accent-color) 72%, var(--border-color))",
-              background: "var(--accent-color)",
-              color: "#fff",
+              border: "1px solid var(--border-color)",
+              background: "transparent",
+              color: "var(--text-secondary)",
               borderRadius: "10px",
               padding: "10px 12px",
               display: "flex",

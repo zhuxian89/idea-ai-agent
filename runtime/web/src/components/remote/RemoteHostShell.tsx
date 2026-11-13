@@ -1,16 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n";
-import { hostPath } from "../../services/base";
 import { remoteNodePrefix, remoteProjectId } from "../../services/remoteScope";
-import { e2eeService } from "../../services/e2ee";
 import {
-  listRemoteProjects, navigateRemoteProject, openRemoteProject, readRemoteHostStatus,
-  remoteHostE2EE, type RemoteProject,
+  listRemoteProjects, navigateRemoteProject, readRemoteHostStatus, type RemoteProject,
 } from "../../services/remoteHost";
-import { RemoteAccessRequired } from "./RemoteAccessRequired";
 import "./remoteAccess.css";
 
-type Phase = "loading" | "legacy" | "pairing" | "catalog" | "project" | "error";
+type Phase = "loading" | "legacy" | "catalog" | "project" | "error";
 
 export function RemoteHostShell({ children }: { children: React.ReactNode }) {
   const { locale } = useI18n();
@@ -36,11 +32,6 @@ export function RemoteHostShell({ children }: { children: React.ReactNode }) {
       if (attempt !== generation.current) return;
       if (!status.remote_host) { setPhase("legacy"); return; }
       setHostName(status.node_name || "");
-      if (!remoteHostE2EE.hasSecret()) { setPhase("pairing"); return; }
-      await remoteHostE2EE.ensureSession();
-      const privateStatus = await remoteHostE2EE.protectedJSON<{node_name?: string}>(hostPath("/api/relay/status"));
-      if (attempt !== generation.current) return;
-      if (typeof privateStatus.node_name === "string") setHostName(privateStatus.node_name);
       const next = await listRemoteProjects();
       if (attempt !== generation.current) return;
       setProjects(next);
@@ -49,14 +40,13 @@ export function RemoteHostShell({ children }: { children: React.ReactNode }) {
         if (!project || project.availability !== "online") {
           throw new Error(project ? `project_${project.availability}` : "project_not_available");
         }
-        await openRemoteProject(currentProject);
       }
       if (attempt === generation.current) setPhase(currentProject ? "project" : "catalog");
     } catch (failure) {
       if (attempt !== generation.current) return;
       const reason = failure instanceof Error ? failure.message : String(failure);
       setError(reason);
-      setPhase(reason === "e2ee_proof_invalid" || reason === "e2ee_secret_missing" ? "pairing" : "error");
+      setPhase("error");
     } finally {
       if (attempt === generation.current) setBusy(false);
     }
@@ -68,26 +58,6 @@ export function RemoteHostShell({ children }: { children: React.ReactNode }) {
     void connect();
   }, [connect]);
 
-  useEffect(() => {
-    // Opening a new access link in this tab can change only the fragment;
-    // browsers then keep the current document instead of mounting it again.
-    const useAccessLink = () => {
-      if (new URLSearchParams(window.location.hash.slice(1)).has("mindfs_pairing")) void connect();
-    };
-    window.addEventListener("hashchange", useAccessLink);
-    return () => window.removeEventListener("hashchange", useAccessLink);
-  }, [connect]);
-
-  useEffect(() => {
-    if (phase !== "project") return;
-    return e2eeService.subscribe(state => {
-      if (state.required && !state.secretPresent) {
-        generation.current++;
-        setPhase("error"); setError("project_authorization_expired");
-      }
-    });
-  }, [phase]);
-
   const refresh = useCallback(async () => {
     if (refreshing.current) return;
     refreshing.current = true;
@@ -97,18 +67,13 @@ export function RemoteHostShell({ children }: { children: React.ReactNode }) {
       if (attempt !== generation.current) return;
       setProjects(next); setError("");
       if (currentProject && !next.some(item => item.project_id === currentProject && item.availability === "online")) {
-        e2eeService.clearSecret();
         setPhase("error"); setError("project_not_available");
       }
     } catch (failure) {
       if (attempt !== generation.current) return;
       const reason = failure instanceof Error ? failure.message : String(failure);
       setError(reason);
-      if (["remote_access_disabled", "e2ee_proof_invalid", "e2ee_secret_missing"].includes(reason)) {
-        e2eeService.clearSecret();
-        setPhase(remoteHostE2EE.hasSecret() ? "error" : "pairing");
-        setError(reason);
-      }
+      setPhase("error");
     } finally { refreshing.current = false; }
   }, [currentProject]);
   useEffect(() => {
@@ -147,7 +112,6 @@ export function RemoteHostShell({ children }: { children: React.ReactNode }) {
     project_closed: text("项目已关闭，请在 IDEA 中打开。", "The project is closed. Open it in IDEA."),
     project_starting: text("项目正在启动，请稍后重试。", "The project is starting. Retry shortly."),
     project_not_available: text("项目未开放或已离线，请在 IDEA 检查。", "This project is not shared or is offline. Check IDEA."),
-    project_authorization_expired: text("项目连接需要重新验证，请重试。电脑配对信息仍保留。", "The project connection needs to be verified again. Retry using your saved computer pairing."),
     remote_access_disabled: text("这台电脑的远程访问已关闭。", "Remote access is disabled on this computer."),
   } as Record<string, string>)[reason] || reason;
 
@@ -171,9 +135,8 @@ export function RemoteHostShell({ children }: { children: React.ReactNode }) {
   return <main className="remote-host-home"><section className="remote-host-card">
     <h1>{hostName || text("远程访问", "Remote access")}</h1>
     {phase === "loading" ? <p role="status">{text("正在连接你的电脑…", "Connecting to your computer…")}</p> : null}
-    {phase === "pairing" ? <RemoteAccessRequired /> : null}
     {phase === "catalog" ? <><p>{text("选择一个项目继续工作", "Choose a project to continue")}</p>{projectList}</> : null}
-    {error && phase !== "pairing" ? <p role="alert">{errorMessage(error)}</p> : null}
+    {error ? <p role="alert">{errorMessage(error)}</p> : null}
     {phase === "error" ? <div className="remote-actions"><button type="button" onClick={() => void connect()} disabled={busy}>{text("重试", "Retry")}</button>
       {currentProject ? <a href={`${remoteNodePrefix()}/`}>{text("返回项目列表", "Back to projects")}</a> : null}</div> : null}
   </section></main>;

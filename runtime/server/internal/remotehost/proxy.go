@@ -55,8 +55,7 @@ func newProjectRoute(address, token string) *projectRoute {
 	}
 	p.transport = transport
 	p.proxy = &httputil.ReverseProxy{Transport: transport, Rewrite: func(r *httputil.ProxyRequest) {
-		// Keep the escaped /p/P prefix unchanged: the project verifies this signed
-		// path before dispatching its original unprefixed business routes.
+		// Keep the escaped /p/P prefix for project routing.
 		r.Out.URL.Scheme = target.Scheme
 		r.Out.URL.Host = target.Host
 		r.Out.Host = target.Host
@@ -68,7 +67,7 @@ func newProjectRoute(address, token string) *projectRoute {
 		r.Out.Header.Del("X-IDE-Agent-Token")
 		// Relay has already rewritten WS Origin to this host's loopback entry.
 		// This second trusted hop must target the project's loopback origin;
-		// the project still requires its host credential and browser E2EE proof.
+		// the project accepts the host credential on this internal connection.
 		if r.In.Header.Get("Origin") != "" {
 			r.Out.Header.Set("Origin", target.Scheme+"://"+target.Host)
 		}

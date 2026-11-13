@@ -1,0 +1,218 @@
+feature: 2026-11-11-standalone-backend
+status: in_progress
+entrypoint: README.md
+current_step: source-push
+steps:
+  - id: source-push
+    description: 用户要求推送全部本地提交和工作区源码；197 文件已核对，前端类型检查与 Git 空白检查通过，待提交、合并远端并核验推送
+    status: in_progress
+  - id: stable-installer-url
+    description: 固定 raw URL/版本元数据已发布 main 5718d70；12 安装测试、真实 Mac/Windows 包下载校验解压通过且安装调用截断；4 更新在线资产 HTTP 200/哈希一致，指南与 Release 已改固定入口
+    status: done
+  - id: market-history-release-restore
+    description: 按市场记录补齐 GitHub 0.1.24/0.1.25，10 原始 ZIP 核验且 12 公开资产 HTTP 200/哈希一致；0.1.20–26 日期写入说明，标题纯版本号，最新版仍 0.1.27
+    status: done
+  - id: unified-0.1.27-release
+    description: 0.1.27 五插件/六平台后台已在 GitHub 发布，30 资产匿名 HTTP 200/哈希一致；310 前端/97 Kotlin/Go 全量/11 脚本/旧库通过；新旧真实查询类六平台选 .27；清理 11 测试 Release 与 84 本地过渡项，正式历史保留，不发市场
+    status: done
+  - id: plugin-platforms-package-cleanup
+    description: 历史四平台 .26 已齐并核验；随后被用户统一 0.1.27 指示替代，过渡 .26/.16/.18 包已清理
+    status: done
+  - id: project-hierarchy-mac-package
+    description: Mac ARM64 插件 .26 和后台 .18 已发布；97 项 Kotlin/两项旧库/类型构建/304 网页一致性通过，8 公开资产匿名 HTTP 200 且哈希一致，公网选择器发现 .18；未操作真实安装
+    status: done
+  - id: workspace-project-hierarchy
+    description: 两侧项目名统一 14px/600，右侧主会话在项目下缩进并增加层级线；8 项浏览器回归/类型检查/双主题窄屏及坐标层级检查通过，已纳入 Mac .26/.18
+    status: done
+  - id: remote-update-mac-acceptance
+    description: 用户截图确认插件 .25 已安装，后台仍 .16 且已检测到 .17；待用户点击更新并重启后验收新版页面，本轮未代操作后台
+    status: pending
+  - id: remote-update-mac-package
+    description: Mac ARM64 插件 .25 与后台 .17 已发布；最终 97 项 Kotlin 无跳过、两项旧库/类型/构建/304 网页一致性通过，8 公开资产匿名 HTTP 200 且哈希一致；用户实测待反馈
+    status: done
+  - id: remote-update-notice
+    description: 远程面板打开即检查新版，圆点和文字入口跳转设置；服务启停在独立后台区域常显，13 项测试/类型/构建与 8 张双主题窄宽截图通过，已纳入 Mac .25/.17 及后续包
+    status: done
+  - id: standalone16-plugin-upgrade-acceptance
+    description: 用户已反馈从真实 IDEA 插件手动升级 .16 成功；升级操作由用户完成
+    status: done
+  - id: standalone16-stop-fix
+    description: Core 持续轮询与 ACP 退出通知修复完成；Go/race/旧库/11 项脚本及隔离真实 .14 到 .16 升级 11.44 秒通过；六平台已发布，24 资产匿名下载哈希一致，真实插件类六平台发现 .16
+    status: done
+  - id: standalone15-package
+    description: .15 六平台及安装器已发布；24 资产匿名 HTTP 200/哈希一致，真实 .24 插件类六平台发现 .15；用户手动升级复现停止 Core 超时，未替换 .14 程序
+    status: done
+  - id: remote-stop-plugin-acceptance
+    description: 用户已确认本机停止 Gateway 后插件实际聊天正常；Core 保持原进程，此结论覆盖普通停止远程
+    status: done
+  - id: chat-runtime-lifecycle-diagnosis
+    description: 已核实普通远程停止只停 Gateway，安装升级和注销会停共享 Core；本机两端 .14 在运行，本轮只读诊断，未改生产代码和服务
+    status: done
+  - id: chat-runtime-lifecycle-design
+    description: 待确认聊天运行时与可选远程包的安装资源及生命周期隔离方案；两条必须同时满足，不采用未经批准的项目抢锁和远程只读限制
+    status: pending
+  - id: chat-runtime-lifecycle-verification
+    description: 修订实施后需隔离验证远程停止/故障/升级/卸载不影响本地连接及运行任务，IDEA 关闭后远程继续聊天；保留真实面板升级验收
+    status: pending
+  - id: workspace-session-menu-implementation
+    description: 接入复制 ID/日志路径、接力包和固定会话定时任务，保留旧调度数据
+    status: done
+  - id: workspace-sidebar-implementation
+    description: 实现双主题侧栏、统一字号、项目分组、运行子代理常显和结束子代理折叠，中间样式不变
+    status: done
+  - id: workspace-interaction-verification
+    description: 菜单/接力包/调度及子代理真实交互，深浅色和手机检查，类型构建与相关回归
+    status: done
+  - id: remote-workspace-sidebar-typography
+    description: 预览项目与会话主名称统一 13px 和字重，移除窄屏会话文字缩小；三种宽度计算字号一致，中间样式和位置不变，双主题图已更新
+    status: done
+  - id: mindfs-session-menu-reuse-review
+    description: 对比同级 MindFS 菜单；4 项已有、4 项可移植，已明确日志路径接口/接力包草稿追加/固定会话调度依赖；调研完成，生产迁移未开始
+    status: done
+  - id: remote-workspace-multi-agent-preview
+    description: 右侧补充 4 运行和 3 完成子代理；项目及运行列表默认展开，完成默认收起；13 项浏览器检查通过，中间 DOM/计算样式/位置一致；深浅色细节图已更新
+    status: done
+  - id: remote-workspace-design-preview
+    description: 双主题 HTML 与设计图完成；1600 桌面和 390 手机、菜单/搜索/折叠/选中/模型/独立抽屉/系统主题/静态表情/离线通过；首测浅色对比度问题已修复，双主题最低 4.79 和 4.94 比 1；生产界面未改
+    status: done
+  - id: remote-web-style-review
+    description: ui-ux-pro-max 评估按桌面截图纠正并补充左右侧栏专项方案；优先右侧会话层级/子会话收纳，再统一左侧导航；保留三栏、已有模型菜单、工具折叠、动态表情和运行中子会话可见性；生产样式未改
+    status: done
+  - id: mac-backend13-live-upgrade
+    description: 后台 .13 已安装，循环更新临时任务已移除；121 次连续检查无错误/断连、两端 PID 不变，7441/原项目/远程身份/新网页/正式自启通过；插件仍 .13
+    status: done
+  - id: remote-access-v3-package
+    description: Windows x64 插件 .23 和六平台后台 .13 已发布；旧库必检、97 项插件及 7 包资源检查通过；26 个资产匿名 HTTP 200/字节/SHA-256 一致；最终插件真实查询类发现 .13 并识别 .12 可更新，前端六平台均选 .13
+    status: done
+  - id: remote-access-usability
+    description: 首页、设置、项目和首次/故障流程已接入；31 项前端加 9 项相邻检查通过，中英深浅及窄屏完成；已纳入 .23/.13
+    status: done
+  - id: remote-access-html-preview
+    description: 独立 HTML 展示首页、设置、首次使用和故障状态；安装登录、更新、暂停恢复、方式切换、项目二维码与链接、关闭重开和故障恢复演示通过；最终控制台无错误警告，无新包
+    status: done
+  - id: release-update-discovery
+    description: IDEA 与独立浏览器支持手动及打开设置自动检查；原生入口兼容旧网页，初次安装和升级动态选版；97 项 Kotlin 无跳过，最终 .23 插件类与前端六平台公开 Release 查询均发现 .13
+    status: done
+  - id: turn-diff-ownership
+    description: 改为仅按真实 seq 关联历史 aux；修复前 2 项单元与浏览器复现失败，真实历史回放复现 15 文件 +187/-42；修复后 39 项前端回归、类型检查、生产构建通过，0 跳过
+    status: done
+  - id: turn-diff-package
+    description: .22 Windows/macOS 插件与 .12 六平台独立后台已发布，28 个资产匿名 HTTP 200/逐字节/SHA-256 一致；95 项 Kotlin、两项旧库必检、类型构建、8 包架构/304 网页/26 表情和安装源校验通过
+    status: done
+  - id: in-plugin-update
+    description: IDEA 远程入口增加原生版本检测与更新并重启按钮，不依赖旧后台网页；复用安装脚本，成功重启续接、失败显示详情；Kotlin 95/95、旧库及类型构建通过；.21 已发布，ZIP/校验文件匿名 HTTP 200 与字节/哈希一致
+    status: done
+  - id: windows-core-startup
+    description: PowerShell Legacy 空参数与服务状态入口已修复并发布 .20/.11；安装器 11/11、Kotlin 94/94、Go/race/旧库、面板最终 9/9 通过；26 资产匿名 HTTP 200/字节/哈希一致，公网原 PowerShell 默认 .11 入口 1/1
+    status: done
+  - id: restart-and-continue
+    description: 重启并继续与稍后重启已实现；Kotlin 94/94、面板 9/9、Bridge 17/17、旧库必检通过；Bridge 首次 cwd 错误后补跑通过；.19 已发布，ZIP 与校验文件匿名 HTTP 200/字节/哈希一致
+    status: done
+  - id: in-panel-install
+    description: 面板检测、一键安装与分步远程界面已发布 .18/.10；Kotlin 93/93、安装器 10/10、面板最终 9/9、旧库必检通过；全量首轮 299 通过后定位器修正并定向复验；26 资产公网校验及原 Shell 实际延后安装、PowerShell 入口测试通过
+    status: done
+  - id: backend-mode-selection
+    description: 首次选择与重启交接已发布 .17/.9；前端 301/301、Kotlin 92/92、安装器 7/7、Go 全量/相关 race/vet、旧库必检通过；8 个资产匿名 HTTP 200/字节/哈希一致
+    status: done
+  - id: windows-plugin-package
+    description: .16 Windows x64 插件已发布并通过匿名 HTTP 200/字节/哈希核对；前端 301/301、Kotlin 88/88、两项旧库迁移、类型构建及包核对通过；浏览器确认复制 .8 正式安装 URL
+    status: done
+  - id: windows-login-installer
+    description: .8 x64/ARM64 与固定版本 PowerShell 已发布 prerelease；6 资产匿名 HTTP 200/校验一致；安装任务 7 项、补充新装、race/vet、旧库迁移、类型构建及浏览器 8 项通过；公网原脚本默认版本流程通过
+    status: done
+  - id: windows-native-acceptance
+    description: 安装 .23 插件，从旧后台网页原生入口检查并升级至 .13，复验启动服务/绑定/重启续接/切换与新面板；Windows EXE、计划任务注册、重启登录、异常恢复与完整升级待实机验收
+    status: pending
+  - id: mac-login-service
+    description: macOS 登录自启、异常恢复、手动启停、升级注销通过实际 launchd 验证；race、安装 5 项和旧库检查通过；.7 单文件脚本新装与 .6 升级验证通过
+    status: done
+  - id: remove-desktop-wrapper
+    description: 已删除 Swift 管理应用、DMG 构建与应用复制流程；本机管理入口移至废纸篓，Core/Gateway 状态 200；Shell 3/3、脚本语法检查通过，旧包待替换
+    status: done
+  - id: remote-reconnect-diagnosis
+    description: 17:14 用户要求停止采集，排查暂停；重开的代理已退出、原入口已恢复、Core/Gateway 健康且 PID 不变，未收到新浏览器样本；已有前台故障心跳未到 Core、本机控制心跳正常的证据，连接器与上游传输尚未区分，根因未定案
+    status: paused
+  - id: standalone-review-fixes
+    description: 四项修复及验证完成；Go 后端全量、相关 race/vet、两项旧库迁移、Kotlin 强制复跑 88 项、安装 5 项均通过且无跳过，Windows x64 交叉编译通过；Kotlin 首轮系统 sleep 夹具失败后改用真实 Core 通过；未提交和打包，旧 .15/.6 包不含修复
+    status: done
+  - id: review-fix-package
+    description: 独立版 macOS .7、Windows .8 与 Windows 插件 .16 已生成验证；macOS 配套插件及真实 IDEA 接入仍待完成
+    status: pending
+  - id: standalone-overall-review
+    description: 2026-11-12 已按全局与项目 AGENTS 整体 review 未提交独立后端；报告 audits/2026-11-12-standalone-backend-review，发现 2 条 P1 与 2 条 P2，后续均已修复并完成回归
+    status: done
+    followup: 四项发现均 resolved，修复记录 issues/2026-11-12-standalone-review-fixes；继续新配套包和实机验收
+  - id: restore-project-add
+    description: 空白项目、本地目录选择和 GitHub 导入已恢复，含 Windows 盘符及路径输入；前端全量 301 项、类型检查、生产构建、相关 Go 模块及无 WebSocket 导入 race 通过；生产 App 入口与窄屏深浅色检查通过，使用说明已更新；现有 .15/.6 包不含本次恢复
+    status: done
+    maintenance: 按用户要求拆出目录选择和 GitHub 导入组件，去掉重复登记逻辑与冗余转换；拆分后类型检查、定向浏览器 7 项、生产构建及 diff 检查通过，原 301 项与样式截图为拆分前结果
+  - id: relay-login-only
+    description: 取消浏览器配对与项目二次授权；后端全量、race、旧库检查和 Kotlin 87 项通过；.15/.6 包及真实 HTML 入口核对通过；前端 294 项全部通过；云端修改已按用户要求撤回
+    status: done
+  - id: existing-relay-install
+    description: 云端保持现状；此前 .6 安装因等待旧 OpenCode 退出超时中止；待包含项目添加恢复及 review 修复的新包生成后，安装并验证现有公网 HTTP/WebSocket
+    status: pending
+  - id: mac-live-script-upgrade
+    description: 2026-11-12 本机通过包内脚本从 .3 升级 .5；首次因旧 Cursor 子进程清理超过停止等待时间中止，确认退出后再次安装成功；原目录、7441 端口、身份和会话保留，两端 API 与 Relay 连接通过
+    status: done
+  - id: mac-simple-installer
+    description: 历史完成 DMG 与应用入口；用户已取消图形界面，保留脚本自动启动、原目录与旧端口保留
+    status: done
+  - id: remote-failure-isolation
+    description: 独立优先仅用于远程；插件直连共享本地数据服务，远程启停不销毁插件页面；数据写入仍由单一服务持有
+    status: done
+  - id: mac-isolation-package
+    description: 完成本轮故障隔离、旧库迁移及配套 macOS 插件和独立包验证
+    status: done
+  - id: mac-idea-acceptance
+    description: 本机独立版 .5 已更新，插件仍为 .13；待安装 .14 并验证真实 IDEA 的远程控制与本地会话连续性；原生管理应用已按用户要求移除
+    status: pending
+  - id: handoff
+    description: 核对历史与工作区，整理决策、状态、验证证据和下一步
+    status: done
+  - id: backend
+    description: 独立服务、控制协议、发现与进程互斥
+    status: done
+  - id: idea
+    description: IDEA 连接独立服务及生命周期操作
+    status: done
+  - id: web
+    description: 复用当前界面并恢复独立模式项目添加
+    status: done
+  - id: distribution
+    description: 在线与离线安装脚本及 .2 测试分发包；.3 打包另列
+    status: done
+  - id: remote-data-handoff
+    description: 自动接入旧远程项目、保留数据与绑定、映射旧项目链接；导入、去重、旧链接测试通过
+    status: done
+  - id: frontend-failure
+    description: 减少动态效果截图断言失败已定位为时序偶发；单跑 13/13，全量 3 次 297/297，未复现，未改代码
+    status: done
+  - id: optional-install-entry
+    description: 远程面板在内置后端下提供“复制安装命令”引导；不自动安装；独立后端下只显示服务控制
+    status: done
+  - id: relay-assets
+    description: 已核实：独立版版本号带后缀，不触发 Relay 前端改写；无需调整
+    status: done
+  - id: package-v3
+    description: 历史阶段已生成 .13 插件与 .3 mac 独立包；本轮由 .14/.4 配套包取代
+    status: done
+checks:
+  - id: standalone-review-verification
+    description: 本轮 Go app/backend/remotehost/独立 CLI/kanban 五包与强制旧库迁移 race 通过；安装测试 3 通过、1 PowerShell 跳过；临时数据复现 alias 重复登记、活进程缓存资源被删、Gateway 存活且 Core 停止后新 CLI 误报运行并返回 503；未重跑前端和 Kotlin 全量
+    status: done
+  - id: live-public-relay-authorization
+    description: 2026-11-12 经真实公网 Relay 使用原配对密钥完成 E2EE 握手，解密读取 3 个项目通过；用户从首页节点进入出现配对引导，已提供完整授权链接，手机进入结果待确认
+    status: done
+  - id: lifecycle
+    description: 多项目持久化、复用、退出与互斥行为
+    status: done
+  - id: authentication
+    description: 本地控制与远程鉴权隔离
+    status: done
+  - id: repeated-project
+    description: 旧远程已有 A、独立版重复添加 A、新插件再打开 A 复用同一项目与历史；已修复浏览器添加路径不解析软链接
+    status: done
+  - id: regressions
+    description: 本轮前端 299/299、Kotlin 87/87、Go 全量复跑、相关 race 与旧库迁移通过；最终 .14/.4 包检查及临时安装升级通过
+    status: done

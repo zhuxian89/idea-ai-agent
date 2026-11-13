@@ -13,6 +13,7 @@ export async function mount(
   handleRequest,
   width = 900,
   path = "/",
+  head = "",
 ) {
   const bundle = await build({
     stdin: {
@@ -55,7 +56,7 @@ export async function mount(
     if (route.request().resourceType() === "document") {
       return route.fulfill({
         contentType: "text/html",
-        body: '<!doctype html><html><body style="margin:16px;font:14px system-ui;--text-color:#222;--text-primary:#222;--text-secondary:#666;--border-color:#ccc;--menu-bg:#fff;--input-bg:#fff;--accent-color:#2563eb"><div id="root"></div></body></html>',
+        body: `<!doctype html><html><head>${head}</head><body style="margin:16px;font:14px system-ui;--text-color:#222;--text-primary:#222;--text-secondary:#666;--border-color:#ccc;--menu-bg:#fff;--input-bg:#fff;--accent-color:#2563eb"><div id="root"></div></body></html>`,
       });
     }
     const result = await handleRequest(route.request());

@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 @Service(Service.Level.PROJECT)
 class LocalRuntime(private val project: Project) : Disposable {
     data class Ready(val url: String, val rootId: String)
-    data class Connection(val endpoint: URI, val rootId: String, val token: String)
+    data class Connection(val endpoint: URI, val rootId: String, val token: String, val standalone: Boolean = false)
 
     private val lock = Any()
     private var future: CompletableFuture<Connection>? = null
@@ -36,21 +36,26 @@ class LocalRuntime(private val project: Project) : Disposable {
         instances.add(this)
     }
 
-    fun start(): CompletableFuture<Connection> = synchronized(lock) {
+    fun start(): CompletableFuture<Connection> = start(remoteHostDataDir())
+
+    internal fun start(hostDir: Path): CompletableFuture<Connection> = synchronized(lock) {
         check(!disposed) { "Project is closed" }
-        future?.let { return@synchronized it }
+        future?.let {
+            if (!it.isDone || it.isCompletedExceptionally || !it.join().standalone) return@synchronized it
+        }
         val result = CompletableFuture<Connection>()
         future = result
-        AppExecutorUtil.getAppExecutorService().execute { launch(result) }
+        AppExecutorUtil.getAppExecutorService().execute { launch(result, hostDir) }
         result.orTimeout(45, TimeUnit.SECONDS).whenComplete { _, error ->
             if (error != null) stopFailed(result)
         }
         result
     }
 
-    private fun launch(result: CompletableFuture<Connection>) {
+    private fun launch(result: CompletableFuture<Connection>, hostDir: Path) {
         try {
             val projectPath = Path.of(requireNotNull(project.basePath) { "Open a project directory first" }).toRealPath()
+            val dataDir = runtimeDataDir(projectPath, Path.of(PathManager.getConfigPath()))
             val bundledRuntime = requireNotNull(PluginPathManager.getPluginResource(LocalRuntime::class.java, "runtime")).toPath()
             val os = System.getProperty("os.name").lowercase().let {
                 when { it.contains("win") -> "windows"; it.contains("mac") -> "darwin"; else -> "linux" }
@@ -63,10 +68,14 @@ class LocalRuntime(private val project: Project) : Disposable {
             val executableName = "idea-agent-$os-$arch" + if (os == "windows") ".exe" else ""
             val executable = materializeRuntime(bundledRuntime, executableName,
                 Path.of(PathManager.getSystemPath(), "idea-ai-agent", "runtime"))
-            val dataDir = runtimeDataDir(projectPath, Path.of(PathManager.getConfigPath()))
+            val mode = ApplicationManager.getApplication().getService(BackendModeService::class.java).prepare(hostDir, executable)
+            if (mode == BackendMode.STANDALONE) {
+                ensureLocalCore(executable, hostDir)
+                result.complete(connectLocalCore(hostDir, projectPath, dataDir))
+                return
+            }
             Files.createDirectories(dataDir)
             val token = HexFormat.of().formatHex(ByteArray(32).also { SecureRandom().nextBytes(it) })
-            val hostDir = remoteHostDataDir()
             val builder = runtimeProcess(executable, projectPath, dataDir, token, hostDir)
             val child = synchronized(lock) {
                 if (disposed || result.isDone) return

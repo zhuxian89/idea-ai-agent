@@ -46,6 +46,8 @@ type HTTPHandler struct {
 	Version          string
 	LocalCLIToken    string
 	LocalAccessToken string
+	Standalone       bool
+	RelayStatus      func(context.Context) (relay.Status, error)
 }
 
 type protectedResponseWriter struct {
@@ -346,6 +348,7 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Get("/api/sessions/{key}/turn-diffs/{snapshotID}", h.handleTurnDiffArtifact)
 	r.Post("/api/sessions/{key}/sync", h.protectedEndpoint(h.handleSessionSync))
 	r.Get("/api/sessions/{key}", h.protectedEndpoint(h.handleSessionGet))
+	r.Get("/api/sessions/{key}/log-path", h.protectedEndpoint(h.handleSessionLogPathGet))
 	r.Get("/api/sessions/{key}/related-files", h.protectedEndpoint(h.handleSessionRelatedFilesGet))
 	r.Post("/api/sessions/{key}/pin", h.protectedEndpoint(h.handleSessionPin))
 	r.Post("/api/sessions/{key}/rename", h.protectedEndpoint(h.handleSessionRename))
@@ -392,6 +395,7 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Get("/api/app/update", h.protectedEndpoint(h.handleAppUpdateGet))
 	r.Post("/api/app/update", h.protectedEndpoint(h.handleAppUpdatePost))
 	r.Post("/api/imports/github", h.protectedEndpoint(h.handleGitHubImportStart))
+	r.Get("/api/imports/github/{id}", h.protectedEndpoint(h.handleGitHubImportStatus))
 	r.Get("/api/web-push/status", h.protectedEndpoint(h.handleWebPushStatus))
 	r.Post("/api/web-push/subscriptions", h.protectedEndpoint(h.handleWebPushSubscriptionSave))
 	r.Delete("/api/web-push/subscriptions", h.protectedEndpoint(h.handleWebPushSubscriptionDelete))
@@ -865,6 +869,21 @@ func (h *HTTPHandler) handleSessionGet(w http.ResponseWriter, r *http.Request) {
 		Seq:    auxAfterSeq,
 	})
 	respondJSON(w, http.StatusOK, h.sessionResponse(r.Context(), rootID, out, pendingUser, contextWindow, exchangeAux))
+}
+
+func (h *HTTPHandler) handleSessionLogPathGet(w http.ResponseWriter, r *http.Request) {
+	out, err := h.service().GetSessionLogPath(r.Context(), usecase.GetSessionInput{
+		RootID: r.URL.Query().Get("root"),
+		Key:    chi.URLParam(r, "key"),
+	})
+	if err != nil {
+		respondError(w, http.StatusNotFound, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{
+		"path":             out.Path,
+		"agent_session_id": out.AgentSessionID,
+	})
 }
 
 func (h *HTTPHandler) handleSessionSync(w http.ResponseWriter, r *http.Request) {
@@ -1512,6 +1531,20 @@ func (h *HTTPHandler) handleLocalDirs(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, out)
 }
 
+func (h *HTTPHandler) handleGitHubImportStatus(w http.ResponseWriter, r *http.Request) {
+	if h.AppContext == nil || h.AppContext.GetGitHubImportService() == nil {
+		respondError(w, http.StatusServiceUnavailable, errInvalidRequest("github import service not configured"))
+		return
+	}
+	status, ok := h.AppContext.GetGitHubImportService().GetStatus(chi.URLParam(r, "id"))
+	if !ok {
+		respondError(w, http.StatusNotFound, errInvalidRequest("github import task not found"))
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	respondJSON(w, http.StatusOK, status)
+}
+
 func (h *HTTPHandler) handleGitHubImportStart(w http.ResponseWriter, r *http.Request) {
 	if h.AppContext == nil || h.AppContext.GetGitHubImportService() == nil {
 		respondError(w, http.StatusServiceUnavailable, errInvalidRequest("github import service not configured"))
@@ -1618,9 +1651,15 @@ func (h *HTTPHandler) serveFrontendIndex(w http.ResponseWriter, r *http.Request,
 		w.Write([]byte(renderFallbackFrontend(indexHTML, frontendAssetMissingNotice(missing))))
 		return
 	}
+	if h.Standalone {
+		content = []byte(strings.Replace(string(content), "<head>", `<head><meta name="local-ai-agent-mode" content="standalone">`, 1))
+	}
 	if h.shouldRewriteRelayedAssets(r) {
+		content = []byte(rewriteRelayedFrontendContent(string(content)))
+	}
+	if h.Standalone || h.shouldRewriteRelayedAssets(r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(rewriteRelayedFrontendContent(string(content))))
+		w.Write(content)
 		return
 	}
 	http.ServeFile(w, r, indexPath)
@@ -2528,16 +2567,29 @@ func readManagedDirPath(r *http.Request) string {
 
 func (h *HTTPHandler) handleRelayStatus(w http.ResponseWriter, r *http.Request) {
 	manager := h.AppContext.GetRelayManager()
-	if manager == nil {
+	if manager == nil && h.RelayStatus == nil {
 		respondError(w, http.StatusServiceUnavailable, errServiceUnavailable("relay manager not configured"))
 		return
 	}
-	status := h.relayStatusWithE2EE(manager.Status())
+	status := relay.Status{NoRelayer: true}
+	if manager != nil {
+		status = manager.Status()
+	}
+	status = h.relayStatusWithE2EE(status)
 	if isLocalIDEAccess(r) {
 		status.E2EERequired = false
 		respondJSON(w, http.StatusOK, status)
 		return
 	}
+	if h.RelayStatus != nil {
+		var err error
+		status, err = h.RelayStatus(r.Context())
+		if err != nil {
+			respondError(w, http.StatusServiceUnavailable, err)
+			return
+		}
+	}
+	status = h.relayStatusWithE2EE(status)
 	if !status.E2EERequired {
 		respondJSON(w, http.StatusOK, status)
 		return

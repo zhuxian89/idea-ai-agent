@@ -282,6 +282,20 @@ func (h *StreamHub) CloseRemoteClients() {
 	}
 }
 
+// CloseClients also disconnects local browsers when the backend shuts down.
+// HTTP Server.Shutdown does not close upgraded WebSocket connections.
+func (h *StreamHub) CloseClients() {
+	h.mu.RLock()
+	connections := make([]*websocket.Conn, 0, len(h.clients))
+	for _, conn := range h.clients {
+		connections = append(connections, conn)
+	}
+	h.mu.RUnlock()
+	for _, conn := range connections {
+		_ = conn.Close()
+	}
+}
+
 func (h *StreamHub) registerClient(clientID string, conn *websocket.Conn, localIDE bool) {
 	if blank(clientID) || conn == nil {
 		return

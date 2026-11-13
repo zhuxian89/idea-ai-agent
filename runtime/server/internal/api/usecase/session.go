@@ -718,6 +718,40 @@ type GetSessionExchangeAuxInput struct {
 	Seq    int
 }
 
+type SessionLogPath struct {
+	Path           string
+	AgentSessionID string
+}
+
+func (s *Service) GetSessionLogPath(ctx context.Context, in GetSessionInput) (SessionLogPath, error) {
+	if err := s.ensureRegistry(); err != nil {
+		return SessionLogPath{}, err
+	}
+	manager, err := s.Registry.GetSessionManager(in.RootID)
+	if err != nil {
+		return SessionLogPath{}, err
+	}
+	current, err := manager.Get(ctx, in.Key, 0)
+	if err != nil {
+		return SessionLogPath{}, err
+	}
+	path := manager.ExchangeLogAbsolutePath(in.Key)
+	if path == "" {
+		return SessionLogPath{}, errors.New("session log path unavailable")
+	}
+	out := SessionLogPath{Path: path}
+	agentName := strings.TrimSpace(session.InferAgentFromSession(current))
+	if agentName != "" {
+		binding, err := manager.FindAgentBinding(ctx, in.Key, agentName)
+		if err != nil {
+			return SessionLogPath{}, fmt.Errorf("read session agent binding: %w", err)
+		} else if binding != nil {
+			out.AgentSessionID = strings.TrimSpace(binding.AgentSessionID)
+		}
+	}
+	return out, nil
+}
+
 func (s *Service) GetSessionExchangeAux(ctx context.Context, in GetSessionExchangeAuxInput) (map[int][]session.ExchangeAux, error) {
 	if err := s.ensureRegistry(); err != nil {
 		return nil, err
@@ -1211,16 +1245,6 @@ type CancelSessionTurnInput struct {
 	RootID string
 	Key    string
 }
-
-type StopSessionTaskInput struct {
-	RootID string
-	// Key is the session that owns the running turn.
-	Key string
-	// TaskRef is the subagent's task id or the tool-use id of the call that started it.
-	TaskRef string
-}
-
-var errNoRunningTurn = errors.New("session has no running turn")
 
 const (
 	switchContextTailLines   = 20
@@ -3984,24 +4008,6 @@ func (s *Service) validateAgentModel(agentName, model string) error {
 		}
 	}
 	return fmt.Errorf("model %q is not supported by agent %q", model, agentName)
-}
-
-// StopSessionTask stops one subagent of a running turn and leaves the turn itself running.
-func (s *Service) StopSessionTask(ctx context.Context, in StopSessionTaskInput) error {
-	key := strings.TrimSpace(in.Key)
-	ref := strings.TrimSpace(in.TaskRef)
-	if key == "" || ref == "" {
-		return errors.New("session key and task id required")
-	}
-	active := getActiveTurn(in.RootID, key)
-	if active == nil || active.session == nil {
-		return errNoRunningTurn
-	}
-	stopper, ok := active.session.(agenttypes.TaskStopper)
-	if !ok {
-		return errors.New("this agent cannot stop individual tasks")
-	}
-	return stopper.StopTask(ctx, ref)
 }
 
 func (s *Service) CancelSessionTurn(ctx context.Context, in CancelSessionTurnInput) error {

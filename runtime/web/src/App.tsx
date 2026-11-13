@@ -74,8 +74,8 @@ import { GitStatusPanel } from "./components/GitStatusPanel";
 import { ModeIcon } from "./components/ModeIcon";
 import { RelatedFileCompareButton } from "./components/RelatedFileCompareButton";
 import { ConnectionErrorDialog } from "./components/remote/ConnectionErrorDialog";
-import { RemoteAccessRequired } from "./components/remote/RemoteAccessRequired";
 import { RemoteFileViewer } from "./components/remote/RemoteFileViewer";
+import { HandoffPackDialog } from "./components/HandoffPackDialog";
 import { ScheduledAgentTaskDialog } from "./components/ScheduledAgentTaskDialog";
 import {
   MultiProjectSessionList,
@@ -87,7 +87,6 @@ import { SessionViewer } from "./components/SessionViewer";
 import { ToastContainer } from "./components/Toast";
 
 import { UserMessageSummaryButton } from "./components/UserMessageSummaryButton";
-import type { RunningSubagent } from "./services/runningSubagents";
 import {
   relatedFileStatKey,
   useRelatedFileStats,
@@ -149,10 +148,12 @@ import {
 import {
   compareGitFileInIdea,
   isIdeaRuntime,
+  isStandaloneRuntime,
   isIDEManagedProject,
   openIdeaFile,
 } from "./services/ideaBridge";
 import { storeRelayNodes } from "./services/launcherNodeSync";
+import { RemoteAccessDialog } from "./components/remote/RemoteAccessDialog";
 import {
   cancelScheduledWebViewCacheClear,
   scheduleWebViewCacheClearOnNextLaunch,
@@ -195,7 +196,7 @@ const CHILD_SESSION_PAGE_SIZE = 100;
 const MULTI_PROJECT_SESSION_LIMIT = 6;
 const SESSION_PAGE_SIZE = 50;
 const MULTI_PROJECT_SESSION_STORAGE_KEY = "mindfs-multi-project-session-list";
-const APP_DOCUMENT_TITLE = "MindFS";
+const APP_DOCUMENT_TITLE = "Local AI Agent";
 
 function formatDocumentTitle(relayStatus: RelayStatusPayload | null): string {
   if (!isRelayNodePage()) {
@@ -399,6 +400,7 @@ function buildURLSearch(next: URLState): string {
   // Session/file navigation rewrites the URL. Preserve the native host flags
   // so a reload still hides the web toolbar and subscribes to title actions.
   const current = new URLSearchParams(window.location.search);
+  if (current.get("ide") === "1") params.set("ide", "1");
   if (current.get("ide_chrome") === "1") params.set("ide_chrome", "1");
   const ideaTheme = current.get("ide_theme");
   if (ideaTheme === "dark" || ideaTheme === "light")
@@ -742,6 +744,8 @@ export function App({ onGoHome }: AppProps) {
   const importMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [availableAgents, setAvailableAgents] = useState<AgentStatus[]>([]);
+  const [scheduledAgentSession, setScheduledAgentSession] = useState<SessionItem | null>(null);
+  const [handoffSession, setHandoffSession] = useState<SessionItem | null>(null);
   const [scheduledAgentDialogOpen, setScheduledAgentDialogOpen] =
     useState(false);
 
@@ -794,6 +798,10 @@ export function App({ onGoHome }: AppProps) {
   const [isRightOpen, setIsRightOpen] = useState(
     () => !isIdeaRuntime && window.innerWidth >= 768,
   );
+
+  useEffect(() => {
+    if (isMobile) { setIsLeftOpen(false); setIsRightOpen(false); }
+  }, [isMobile]);
 
   const [currentRootId, setCurrentRootId] = useState<string | null>(null);
   const currentRootIdRef = useRef<string | null>(null);
@@ -916,6 +924,7 @@ export function App({ onGoHome }: AppProps) {
   const [editDraftRequest, setEditDraftRequest] = useState<{
     id: number;
     content: string;
+    mode?: "replace" | "append";
   } | null>(null);
   const [entriesByPath, setEntriesByPath] = useState<
     Record<string, FileEntry[]>
@@ -5380,53 +5389,6 @@ export function App({ onGoHome }: AppProps) {
     [],
   );
 
-  // The child session of a running subagent records the call that started it.
-  const handleOpenSubagent = useCallback(
-    async (rootID: string, parentKey: string, subagent: RunningSubagent) => {
-      if (!rootID || !parentKey) return;
-      const find = (items: SessionItem[]) =>
-        items.find(
-          (item) =>
-            item.parent_session_key === parentKey &&
-            [subagent.callId, subagent.stopRef].includes(item.parent_tool_call_id || ""),
-        );
-      let child = find(sessionsRef.current);
-      if (!child) {
-        const fetched = await sessionService.fetchChildSessions(rootID, parentKey, {
-          limit: CHILD_SESSION_PAGE_SIZE,
-        });
-        const items = fetched
-          .map((item) => toSessionItem(rootID, item))
-          .filter((item): item is SessionItem => !!item);
-        if (items.length > 0) setSessions((prev) => mergeSessionItems(prev, items));
-        child = find(items);
-      }
-      if (!child) {
-        reportError("session.sync_failed", t("session.subagentNotReady"));
-        return;
-      }
-      await handleSelectSession(child);
-    },
-    [handleSelectSession, t],
-  );
-
-  const handleStopSubagent = useCallback(
-    async (rootID: string, parentKey: string, subagent: RunningSubagent) => {
-      if (!rootID || !parentKey) return;
-      try {
-        await sessionService.stopTask(rootID, parentKey, subagent.stopRef);
-      } catch (error) {
-        reportError(
-          "session.sync_failed",
-          t("session.subagentStopFailed", {
-            reason: error instanceof Error ? error.message : String(error),
-          }),
-        );
-      }
-    },
-    [t],
-  );
-
   const handleEditUserMessage = useCallback((content: string) => {
     setEditDraftRequest((prev) => ({
       id: (prev?.id || 0) + 1,
@@ -5727,20 +5689,6 @@ export function App({ onGoHome }: AppProps) {
           selectedSession?.root_id || currentRootId,
           selectedSessionSnapshot?.key || selectedSessionSnapshot?.session_key,
           seq,
-        )
-      }
-      onOpenSubagent={(subagent) =>
-        void handleOpenSubagent(
-          selectedSession?.root_id || currentRootId || "",
-          selectedSessionSnapshot?.key || selectedSessionSnapshot?.session_key || "",
-          subagent,
-        )
-      }
-      onStopSubagent={(subagent) =>
-        void handleStopSubagent(
-          selectedSession?.root_id || currentRootId || "",
-          selectedSessionSnapshot?.key || selectedSessionSnapshot?.session_key || "",
-          subagent,
         )
       }
     />
@@ -7088,7 +7036,7 @@ export function App({ onGoHome }: AppProps) {
           true
         }
         enableGitHistoryToggle={false}
-        onOpenScheduledAgentTasks={() => setScheduledAgentDialogOpen(true)}
+        onOpenScheduledAgentTasks={() => { setScheduledAgentSession(null); setScheduledAgentDialogOpen(true); }}
         onItemClick={(e) =>
           e.is_dir
             ? actionHandlers.open_dir({ path: e.path })
@@ -7171,7 +7119,13 @@ export function App({ onGoHome }: AppProps) {
     });
   }, [file, actionHandlers]);
 
+  const [standaloneRemoteOpen, setStandaloneRemoteOpen] = useState(false);
+  const standaloneLocal = isStandaloneRuntime && !isRelayNodePage();
   const handleRelayAction = useCallback(async () => {
+    if (standaloneLocal) {
+      setStandaloneRemoteOpen(true);
+      return;
+    }
     if (!currentRootId) {
       return;
     }
@@ -7203,9 +7157,10 @@ export function App({ onGoHome }: AppProps) {
       target.searchParams.set("node_name", nodeName);
     }
     navigatePopup(pendingPopup, target.toString());
-  }, [currentRootId, startRelayBinding, relayStatus]);
+  }, [currentRootId, startRelayBinding, relayStatus, standaloneLocal]);
 
   const relayActionLabel = useMemo(() => {
+    if (standaloneLocal) return t("relay.publicAccess");
     if (isRelayNodePage()) {
       return null;
     }
@@ -7213,11 +7168,11 @@ export function App({ onGoHome }: AppProps) {
       return null;
     }
     return t("relay.publicAccess");
-  }, [relayStatus, t]);
+  }, [relayStatus, t, standaloneLocal]);
 
   const relayActionDisabled =
-    !currentRootId ||
-    (!relayStatus?.relay_bound && !relayStatus?.relay_base_url);
+    !standaloneLocal && (!currentRootId ||
+    (!relayStatus?.relay_bound && !relayStatus?.relay_base_url));
   const showUpdateButton =
     !isIDEManagedProject && shouldShowUpdateButton(updateState);
   const updateBusy =
@@ -7323,6 +7278,13 @@ export function App({ onGoHome }: AppProps) {
       ) : null}
     </div>
   );
+  const openSessionSchedule = (session: SessionItem) => {
+    setScheduledAgentSession({ ...session, root_id: session.root_id || currentRootId || undefined });
+    setScheduledAgentDialogOpen(true);
+  };
+  const openSessionHandoff = (session: SessionItem) => {
+    setHandoffSession({ ...session, root_id: session.root_id || currentRootId || undefined });
+  };
   const sessionSidebar =
     sessionListMode === "import" ? (
       <ExternalSessionList
@@ -7385,6 +7347,8 @@ export function App({ onGoHome }: AppProps) {
         onPin={handlePinSession}
         onRename={handleRenameSession}
         onDelete={handleDeleteSession}
+        onScheduledTask={openSessionSchedule}
+        onHandoffPack={openSessionHandoff}
         onProjectClick={(rootId) => {
           actionHandlers.open_dir({
             path: rootId,
@@ -7402,7 +7366,7 @@ export function App({ onGoHome }: AppProps) {
         sessions={
           sessionSearchOpen && sessionSearchResultsMode
             ? sessionSearchResults
-            : sessions
+            : sessions.map(session => ({ ...session, root_id: session.root_id || currentRootId || undefined }))
         }
         selectedKey={selectedSession?.key}
         headerAction={sessionImportMenu}
@@ -7481,6 +7445,8 @@ export function App({ onGoHome }: AppProps) {
         onPin={handlePinSession}
         onRename={handleRenameSession}
         onDelete={handleDeleteSession}
+        onScheduledTask={openSessionSchedule}
+        onHandoffPack={openSessionHandoff}
         onLoadChildren={
           sessionSearchOpen && sessionSearchResultsMode
             ? undefined
@@ -7563,10 +7529,14 @@ export function App({ onGoHome }: AppProps) {
         sidebarsSwapped={sidebarsSwapped}
         onCloseLeft={() => setIsLeftOpen(false)}
         onCloseRight={() => setIsRightOpen(false)}
-        onOpenLeft={() => setIsLeftOpen(true)}
-        onOpenRight={() => setIsRightOpen(true)}
+        onOpenLeft={() => { setIsLeftOpen(true); if (isMobile) setIsRightOpen(false); }}
+        onOpenRight={() => { setIsRightOpen(true); if (isMobile) setIsLeftOpen(false); }}
         sidebar={
           <FileTree
+            onProjectAdded={async (rootId) => {
+              await refreshManagedRoots();
+              await actionHandlersRef.current.open_dir({ path: rootId, root: rootId, isRoot: true });
+            }}
             agentSettingsOnly={isIdeaRuntime}
             agentSettingsActive={isLeftOpen}
             agentsVersion={agentsVersion}
@@ -7757,8 +7727,8 @@ export function App({ onGoHome }: AppProps) {
               onNewSession={handleNewSession}
               onRequestFileContext={handleRequestFileContext}
               onClearFileContext={handleClearFileContext}
-              onToggleLeftSidebar={() => setIsLeftOpen((v) => !v)}
-              onToggleRightSidebar={() => setIsRightOpen((v) => !v)}
+              onToggleLeftSidebar={() => { setIsLeftOpen(v => !v); if (isMobile) setIsRightOpen(false); }}
+              onToggleRightSidebar={() => { setIsRightOpen(v => !v); if (isMobile) setIsLeftOpen(false); }}
               sidebarsSwapped={sidebarsSwapped}
               onSessionClick={() => {
                 const rootID = currentRootIdRef.current;
@@ -7851,20 +7821,6 @@ export function App({ onGoHome }: AppProps) {
                     seq,
                   )
                 }
-                onOpenSubagent={(subagent) =>
-                  void handleOpenSubagent(
-                    currentRootId || "",
-                    drawerSessionSnapshot?.key || drawerSessionSnapshot?.session_key || "",
-                    subagent,
-                  )
-                }
-                onStopSubagent={(subagent) =>
-                  void handleStopSubagent(
-                    currentRootId || "",
-                    drawerSessionSnapshot?.key || drawerSessionSnapshot?.session_key || "",
-                    subagent,
-                  )
-                }
               />
             ) : (
               <div style={{ padding: "40px", textAlign: "center" }}>
@@ -7884,31 +7840,21 @@ export function App({ onGoHome }: AppProps) {
           }}
         />
       ) : null}
-      {bootstrapState.phase === "needs_pairing" &&
-      e2eeState.required &&
-      !e2eeState.unlocked ? (
-        <div className="remote-access-overlay">
-          <div
-            className="remote-host-card"
-            role="dialog"
-            aria-modal="true"
-            aria-label={
-              locale === "zh-CN" ? "连接远程访问" : "Connect remote access"
-            }
-          >
-            <RemoteAccessRequired />
-          </div>
-        </div>
-      ) : null}
 
       <ScheduledAgentTaskDialog
         open={scheduledAgentDialogOpen}
-        rootId={currentRootId}
+        rootId={scheduledAgentSession?.root_id || currentRootId}
+        session={scheduledAgentSession}
         agents={availableAgents}
         onClose={() => setScheduledAgentDialogOpen(false)}
       />
 
+      <HandoffPackDialog session={handoffSession} onClose={() => setHandoffSession(null)} onInsert={pack => {
+        setEditDraftRequest(prev => ({ id: (prev?.id || 0) + 1, content: pack, mode: "append" }));
+        if (isMobile) setIsRightOpen(false);
+      }} />
       <ToastContainer />
+      {standaloneRemoteOpen ? <RemoteAccessDialog projectName={basenameOfPath(managedRootByIdRef.current[currentRootId || ""]?.root_path || currentRootId || "")} onClose={() => setStandaloneRemoteOpen(false)} /> : null}
     </>
   );
 }

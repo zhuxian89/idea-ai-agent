@@ -16,11 +16,21 @@ import (
 
 	"mindfs/server/app"
 	"mindfs/server/internal/agent"
+	"mindfs/server/internal/backend"
 	"mindfs/server/internal/logfile"
 	"mindfs/server/internal/remotehost"
 )
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if handled, err := app.RunCoreCommand(ctx, os.Args[1:], "idea-0.1.0"); handled {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	accessToken, err := takeAccessToken()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "cannot isolate IDE access token:", err)
@@ -33,8 +43,6 @@ func main() {
 	// in a bounded file under the data directory instead.
 	closeLog := openRuntimeLog(*remoteHost)
 	defer closeLog()
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 	if *remoteHost {
 		err := runRemoteHost(ctx)
 		if err != nil && !errors.Is(err, context.Canceled) {
@@ -43,6 +51,20 @@ func main() {
 		}
 		return
 	}
+	hostDir := os.Getenv("IDE_AGENT_REMOTE_HOST_DIR")
+	if hostDir == "" {
+		hostDir, err = remotehost.DefaultDir()
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	lease, err := backend.Acquire(hostDir, true)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer lease.Close()
 	// The project host owns stdin; EOF shuts down its runtime after an IDE crash.
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)

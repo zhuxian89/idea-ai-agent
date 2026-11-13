@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
-	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/relay"
 	"mindfs/server/internal/remotehost"
 )
@@ -184,7 +182,9 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 	}
 	put(filepath.Join(hostDir, "projects.json"), map[string]any{"enabled": true, "projects": []any{}})
 	put(filepath.Join(hostDir, "credentials.json"), relay.Credentials{Relay: relay.RelayCredentials{NodeID: "computer", DeviceToken: "test-device", Endpoint: "ws" + strings.TrimPrefix(cloud.URL, "http") + "/connector"}})
-	put(filepath.Join(hostDir, "e2ee.json"), e2ee.Config{Enabled: true, NodeID: "computer-e2ee", PairingSecret: "computer-secret"})
+	if err := os.WriteFile(filepath.Join(hostDir, "e2ee.json"), []byte(`{obsolete-pairing-config`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	agentPath := filepath.Join(dir, "agents.json")
 	put(agentPath, map[string]any{"agents": []any{}, "shells": []any{}, "relayBaseURL": cloud.URL})
 	env := map[string]string{"HOME": dir, "IDE_AGENT_REMOTE_HOST_DIR": hostDir, "IDE_AGENT_DATA_DIR": hostDir, "MINDFS_RELAY_BASE_URL": cloud.URL, "MINDFS_AGENTS_CONFIG": agentPath, "MINDFS_STATIC_DIR": dir}
@@ -208,6 +208,9 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 		_ = os.MkdirAll(data, 0700)
 		_ = os.MkdirAll(root, 0700)
 		put(filepath.Join(data, "remote-access.json"), remoteProjectPreference{Mode: "host", Enabled: true})
+		if err := os.WriteFile(filepath.Join(data, "remote-host-e2ee.json"), []byte(`{obsolete-project-pairing`), 0600); err != nil {
+			t.Fatal(err)
+		}
 		penv := map[string]string{}
 		for k, v := range env {
 			penv[k] = v
@@ -252,36 +255,27 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 	transport := &http.Transport{DisableKeepAlives: true, DialContext: func(context.Context, string, string) (net.Conn, error) { return tunnel.Open() }}
 	defer transport.CloseIdleConnections()
 	browser := &http.Client{Transport: transport, Timeout: 5 * time.Second}
-	hostKey := hubHandshake(t, browser, "", "computer-e2ee", "computer-secret", "host-browser")
+	var remoteStatus relay.Status
+	hubJSON(t, browser, "/api/relay/status", &remoteStatus)
+	if remoteStatus.E2EERequired || remoteStatus.E2EENodeID != "" {
+		t.Fatal("browser pairing is still required", remoteStatus)
+	}
 	var catalog struct {
 		Projects []remotehost.Project `json:"projects"`
 	}
-	hubProtected(t, browser, "GET", "/api/remote/projects", "host-browser", hostKey, &catalog)
+	hubJSON(t, browser, "/api/remote/projects", &catalog)
 	if len(catalog.Projects) != 2 {
 		t.Fatalf("catalog projects: %+v", catalog.Projects)
 	}
-	keys := make([][]byte, 2)
 	for i, p := range projects {
-		var access struct {
-			NodeID string `json:"e2ee_node_id"`
-			Secret string `json:"pairing_secret"`
-		}
-		hubProtected(t, browser, "POST", "/api/remote/projects/"+p.id+"/access", "host-browser", hostKey, &access)
-		keys[i] = hubHandshake(t, browser, "/p/"+p.id, access.NodeID, access.Secret, fmt.Sprintf("browser%d", i))
 		var dirs []map[string]any
-		hubProtected(t, browser, "GET", "/p/"+p.id+"/api/dirs", fmt.Sprintf("browser%d", i), keys[i], &dirs)
+		hubJSON(t, browser, "/p/"+p.id+"/api/dirs", &dirs)
 		if len(dirs) != 1 || dirs[0]["root_path"] != filepath.Join(dir, fmt.Sprintf("project%d", i)) {
 			t.Fatalf("project isolation failed: %+v", dirs)
 		}
 	}
-	// Real encrypted WS must survive the new host mount (legacy Relay is disabled).
+	// WebSocket uses ordinary JSON without browser pairing.
 	p := projects[1]
-	clientID := "browser1"
-	q := url.Values{"client_id": {clientID}}
-	proofPath := "/p/" + p.id + "/ws?" + q.Encode()
-	ts := time.Now().UTC().Format(time.RFC3339)
-	q.Set("e2ee_ts", ts)
-	q.Set("e2ee_proof", e2ee.BuildRequestProof(keys[1], "GET", proofPath, ts, clientID))
 	// The connector stream carries HTTP headers followed by Relay's message
 	// frames, not RFC6455 frames; the cloud gateway upgrades the browser hop.
 	ws, err := tunnel.Open()
@@ -289,7 +283,7 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ws.Close()
-	upgrade, _ := http.NewRequest("GET", "http://node/p/"+p.id+"/ws?"+q.Encode(), nil)
+	upgrade, _ := http.NewRequest("GET", "http://node/p/"+p.id+"/ws?client_id=browser1", nil)
 	upgrade.Header.Set("Connection", "Upgrade")
 	upgrade.Header.Set("Upgrade", "websocket")
 	upgrade.Header.Set("Sec-WebSocket-Version", "13")
@@ -314,7 +308,7 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 	_ = projects[0].child.stdin.Close()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		hubProtected(t, browser, "GET", "/api/remote/projects", "host-browser", hostKey, &catalog)
+		hubJSON(t, browser, "/api/remote/projects", &catalog)
 		closed := false
 		for _, entry := range catalog.Projects {
 			if entry.ProjectID == projects[0].id && entry.Availability == "closed" {
@@ -330,7 +324,7 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	var dirs []map[string]any
-	hubProtected(t, browser, "GET", "/p/"+p.id+"/api/dirs", clientID, keys[1], &dirs)
+	hubJSON(t, browser, "/p/"+p.id+"/api/dirs", &dirs)
 	if len(dirs) != 1 {
 		t.Fatal("closing A affected B")
 	}
@@ -340,12 +334,8 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 	default:
 	}
 	// Exercise the still-open socket after A leaves; initial server broadcasts
-	// are optional and cannot substitute for an encrypted request/response.
-	ping, err := e2ee.EncryptJSON(keys[1], map[string]string{"id": "after-close-A", "type": "ping"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	pingPayload, err := json.Marshal(ping)
+	// are optional and cannot substitute for a request/response.
+	pingPayload, err := json.Marshal(map[string]string{"id": "after-close-A", "type": "ping"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +350,7 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 	for {
 		var header [6]byte
 		if _, err := io.ReadFull(wsReader, header[:]); err != nil {
-			t.Fatal("no encrypted pong after A closed", err)
+			t.Fatal("no pong after A closed", err)
 		}
 		if header[0] != 1 || header[1] != websocket.TextMessage {
 			t.Fatalf("unexpected connector frame %d opcode %d", header[0], header[1])
@@ -373,16 +363,12 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 		if _, err := io.ReadFull(wsReader, payload); err != nil {
 			t.Fatal(err)
 		}
-		var envelope e2ee.CipherEnvelope
-		if json.Unmarshal(payload, &envelope) != nil {
-			t.Fatal("invalid encrypted WS frame")
-		}
 		var message struct {
 			ID   string `json:"id"`
 			Type string `json:"type"`
 		}
-		if err = e2ee.DecryptJSON(keys[1], &envelope, &message); err != nil {
-			t.Fatal("WS encrypted with wrong project key", err)
+		if err = json.Unmarshal(payload, &message); err != nil {
+			t.Fatal("invalid JSON WebSocket frame", err)
 		}
 		if message.Type == "pong" && message.ID == "after-close-A" {
 			break
@@ -430,10 +416,9 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("upgraded connector did not connect")
 	}
-	hostKey = hubHandshake(t, browser, "", "computer-e2ee", "computer-secret", "host-browser")
 	deadline = time.Now().Add(10 * time.Second)
 	for {
-		hubProtected(t, browser, "GET", "/api/remote/projects", "host-browser", hostKey, &catalog)
+		hubJSON(t, browser, "/api/remote/projects", &catalog)
 		if len(catalog.Projects) != 2 {
 			t.Fatal("upgrade lost the catalog", catalog.Projects)
 		}
@@ -451,7 +436,7 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	hubProtected(t, browser, "GET", "/p/"+p.id+"/api/dirs", clientID, keys[1], &dirs)
+	hubJSON(t, browser, "/p/"+p.id+"/api/dirs", &dirs)
 	if len(dirs) != 1 {
 		t.Fatal("upgrade affected B's existing project session")
 	}
@@ -472,64 +457,17 @@ func TestSharedRemoteHostRealProjectProcesses(t *testing.T) {
 
 }
 
-func hubHandshake(t *testing.T, c *http.Client, prefix, node, secret, client string) []byte {
+func hubJSON(t *testing.T, c *http.Client, path string, out any) {
 	t.Helper()
-	priv, pub, err := e2ee.GenerateECDHKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-	nonce := "browser-nonce"
-	body, _ := json.Marshal(map[string]string{"client_id": client, "node_id": node, "client_eph_pk": pub, "client_nonce": nonce, "proof": e2ee.BuildOpenProof(secret, node, pub, nonce)})
-	resp, err := c.Post("http://node"+prefix+"/api/e2ee/open", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	var out struct {
-		Public string `json:"node_eph_pk"`
-		Nonce  string `json:"server_nonce"`
-		Proof  string `json:"server_proof"`
-	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("handshake status %d", resp.StatusCode)
-	}
-	if err = json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		t.Fatal(err)
-	}
-	if !e2ee.VerifyProof(e2ee.BuildAcceptProof(secret, node, pub, out.Public, nonce, out.Nonce), out.Proof) {
-		t.Fatal("bad server proof")
-	}
-	remote, err := e2ee.DecodePublicKey(out.Public)
-	if err != nil {
-		t.Fatal(err)
-	}
-	key, err := e2ee.DeriveKey(secret, node, pub, out.Public, nonce, out.Nonce, priv, remote)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return key.Transport
-}
-func hubProtected(t *testing.T, c *http.Client, method, path, client string, key []byte, out any) {
-	t.Helper()
-	req, _ := http.NewRequest(method, "http://node"+path, nil)
-	ts := time.Now().UTC().Format(time.RFC3339)
-	req.Header.Set("X-MindFS-E2EE", "1")
-	req.Header.Set("X-MindFS-Client-ID", client)
-	req.Header.Set("X-MindFS-TS", ts)
-	req.Header.Set("X-MindFS-Proof", e2ee.BuildRequestProof(key, method, path, ts, client))
-	resp, err := c.Do(req)
+	resp, err := c.Get("http://node" + path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		t.Fatalf("%s %s status %d", method, path, resp.StatusCode)
+		t.Fatalf("GET %s status %d", path, resp.StatusCode)
 	}
-	var envelope e2ee.CipherEnvelope
-	if err = json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-		t.Fatal(err)
-	}
-	if err = e2ee.DecryptJSON(key, &envelope, out); err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(out); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -545,7 +483,7 @@ func TestRemoteConfigurationFailurePreservesLocalProject(t *testing.T) {
 	files := map[string]string{
 		filepath.Join(dir, "index.html"):             "test local shell",
 		filepath.Join(dir, "agents.json"):            `{"agents":[],"shells":[]}`,
-		filepath.Join(data, "remote-access.json"):    `{"mode":"host","enabled":true}`,
+		filepath.Join(data, "remote-access.json"):    `{malformed`,
 		filepath.Join(data, "remote-host-e2ee.json"): `{malformed`,
 	}
 	for p, value := range files {

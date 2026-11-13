@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -502,8 +501,6 @@ func (h *WSHandler) handleWSRequest(ctx context.Context, conn *websocket.Conn, c
 		go h.handleSessionReady(clientID, req)
 	case "session.cancel":
 		h.handleSessionCancel(ctx, conn, clientID, req)
-	case "session.task.stop":
-		go h.handleSessionTaskStop(ctx, conn, clientID, req)
 	case "session.queue.remove":
 		h.handleSessionQueueRemove(ctx, conn, clientID, req)
 	case "session.queue.update":
@@ -1099,43 +1096,6 @@ func (h *WSHandler) handleSessionCancel(ctx context.Context, conn *websocket.Con
 		h.sendWSError(conn, clientID, req.ID, "session.cancel_failed", err.Error())
 		return
 	}
-}
-
-// taskStopTimeout bounds how long a stop request waits for the CLI to answer.
-const taskStopTimeout = 10 * time.Second
-
-// handleSessionTaskStop stops one subagent without ending the turn that started it. It runs off
-// the read loop, so a slow CLI cannot hold up heartbeats, answers or cancellation, and it always
-// answers the request id: accepted on success, an error otherwise.
-func (h *WSHandler) handleSessionTaskStop(ctx context.Context, conn *websocket.Conn, clientID string, req WSRequest) {
-	rootID := getString(req.Payload, "root_id")
-	key := getString(req.Payload, "session_key")
-	taskRef := getString(req.Payload, "task_id")
-	if rootID == "" || key == "" || taskRef == "" {
-		h.sendWSError(conn, clientID, req.ID, "invalid_request", "root_id, session_key and task_id required")
-		return
-	}
-	log.Printf("[ws] session.task.stop root=%s session=%s task=%s request=%s", rootID, key, taskRef, req.ID)
-	stopCtx, cancel := context.WithTimeout(ctx, taskStopTimeout)
-	defer cancel()
-	uc := &usecase.Service{Registry: h.AppContext}
-	if err := uc.StopSessionTask(stopCtx, usecase.StopSessionTaskInput{RootID: rootID, Key: key, TaskRef: taskRef}); err != nil {
-		log.Printf("[ws] session.task.stop.error root=%s session=%s task=%s request=%s err=%v", rootID, key, taskRef, req.ID, err)
-		h.sendWSError(conn, clientID, req.ID, "session.task_stop_failed", taskStopErrorMessage(err))
-		return
-	}
-	_ = h.writeWSJSON(clientID, conn, WSResponse{
-		ID:      req.ID,
-		Type:    "session.task.stopped",
-		Payload: map[string]any{"root_id": rootID, "session_key": key, "task_id": taskRef},
-	})
-}
-
-func taskStopErrorMessage(err error) string {
-	if errors.Is(err, context.DeadlineExceeded) {
-		return "the agent did not answer the stop request in time"
-	}
-	return err.Error()
 }
 
 func (h *WSHandler) handleSessionQueueRemove(_ context.Context, conn *websocket.Conn, clientID string, req WSRequest) {

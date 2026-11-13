@@ -14,7 +14,7 @@ const compiledPreferences = ts.transpileModule(fs.readFileSync("src/services/ide
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 
-function loadBridge({ ready = false, search = "", pathname = "/" } = {}) {
+function loadBridge({ ready = false, search = "", pathname = "/", standalone = false } = {}) {
   const listeners = {};
   const posts = [];
   const inject = () => { window.ideaAgent = { postMessage: (payload) => posts.push(payload) }; };
@@ -28,6 +28,7 @@ function loadBridge({ ready = false, search = "", pathname = "/" } = {}) {
   vm.runInNewContext(compiledPreferences, preferences);
   const sandbox = {
     window,
+    document: { querySelector: () => standalone ? { getAttribute: () => "standalone" } : null },
     URLSearchParams,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
     exports: {},
@@ -46,6 +47,23 @@ function loadBridge({ ready = false, search = "", pathname = "/" } = {}) {
     exports: sandbox.exports,
   };
 }
+
+test("standalone browser, IDEA and Relay select their supported project controls", () => {
+  const browser = loadBridge({ standalone: true }).exports;
+  assert.equal(browser.isStandaloneRuntime, true);
+  assert.equal(browser.isIdeaRuntime, false);
+  assert.equal(browser.isIDEManagedProject, false);
+  const idea = loadBridge({ standalone: true, search: "?ide=1" }).exports;
+  assert.equal(idea.isIdeaRuntime, true);
+  assert.equal(idea.isIDEManagedProject, true);
+  const relay = loadBridge({ standalone: true, pathname: "/n/shared-node/" }).exports;
+  assert.equal(relay.isIdeaRuntime, false);
+  assert.equal(relay.isIDEManagedProject, false);
+  const embedded = loadBridge().exports;
+  assert.equal(embedded.isStandaloneRuntime, false);
+  assert.equal(embedded.isIdeaRuntime, true);
+  assert.equal(embedded.isIDEManagedProject, true);
+});
 
 test("native commands clicked before the view subscribes replay in order", () => {
   const bridge = loadBridge();
@@ -211,9 +229,27 @@ test("opening the remote panel asks the IDE to start the shared remote entry, re
   assert.equal(early.posts.length, 0);
   early.injectBridge();
   early.fireReady();
-  assert.deepEqual(JSON.parse(JSON.stringify(early.posts)), [{ action: "remoteAccess" }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(early.posts)), [{ action: "remoteAccess", updateUI: true }]);
 
   const ready = loadBridge({ ready: true });
   ready.exports.requestIdeaRemoteHost();
-  assert.deepEqual(JSON.parse(JSON.stringify(ready.posts)), [{ action: "remoteAccess" }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(ready.posts)), [{ action: "remoteAccess", updateUI: true }]);
+});
+
+
+test("continuing remote setup requests an IDEA restart, including before the bridge is ready", () => {
+  const bridge = loadBridge();
+  bridge.exports.restartIdeaForRemoteSetup();
+  assert.equal(bridge.posts.length, 0);
+  bridge.injectBridge(); bridge.fireReady();
+  assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), [{ action: "restartIdea" }]);
+});
+
+
+test("update checks and user requested updates queue separately until the native bridge is ready", () => {
+  const bridge = loadBridge({ standalone: true, search: "?ide=1" });
+  bridge.exports.checkIdeaBackendUpdate(); bridge.exports.updateIdeaBackend();
+  assert.deepEqual(bridge.posts, []);
+  bridge.injectBridge(); bridge.fireReady();
+  assert.deepEqual(JSON.parse(JSON.stringify(bridge.posts)), [{action:"checkBackendUpdate"},{action:"updateBackend"}]);
 });

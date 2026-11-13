@@ -43,6 +43,8 @@ class RemoteHostTest {
             Files.writeString(cache.resolve("web/index.html"), marker)
         }
         val data = base.resolve("remote")
+        Files.createDirectories(data)
+        Files.writeString(data.resolve("e2ee.json"), "{obsolete-browser-pairing")
         val environment = mapOf("PATH" to "", "HOME" to base.toString(), "MINDFS_RELAY_BASE_URL" to "http://127.0.0.1:1")
         val legacy = remoteHostProcess(oldCache.resolve(name), data, environment).start()
         try {

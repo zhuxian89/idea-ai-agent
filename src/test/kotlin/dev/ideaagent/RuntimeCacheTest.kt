@@ -107,6 +107,52 @@ class RuntimeCacheTest {
         assertTrue(Files.isDirectory(foreign))
     }
 
+    @Test fun runningCoreResourcesSurviveUpdatesAndArePrunedAfterExit() {
+        val runtime = System.getenv("IDE_AGENT_UPGRADE_TEST_RUNTIME")
+        org.junit.Assume.assumeTrue("Requires a host-platform test runtime", !runtime.isNullOrBlank())
+        val root = temporary.root.toPath()
+        val source = testRuntime(root.resolve("plugin/runtime"))
+        val windows = System.getProperty("os.name").startsWith("Windows")
+        val executableName = if (windows) "idea-agent-windows-amd64.exe" else "idea-agent-darwin-arm64"
+        Files.copy(Path.of(runtime!!), source.resolve(executableName), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        val cache = root.resolve("system")
+        val first = materializeRuntime(source, executableName, cache)
+        val discovery = root.resolve("remote")
+        val builder = ProcessBuilder(first.toString(), "--local-core").redirectErrorStream(true)
+            .redirectOutput(root.resolve("core.log").toFile())
+        builder.environment().apply {
+            put("HOME", root.toString())
+            put("USERPROFILE", root.toString())
+            put("IDE_AGENT_REMOTE_HOST_DIR", discovery.toString())
+            put("IDE_AGENT_DATA_DIR", discovery.toString())
+            put("MINDFS_STATIC_DIR", first.parent.resolve("web").toString())
+            put("MINDFS_RELAY_BASE_URL", "http://127.0.0.1:1")
+            put("PATH", "")
+            remove("IDE_AGENT_TOKEN")
+        }
+        val process = builder.start()
+        try {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+            while (!Files.exists(discovery.resolve("core.json")) && process.isAlive && System.nanoTime() < deadline) {
+                process.waitFor(50, TimeUnit.MILLISECONDS)
+            }
+            assertTrue(Files.readString(root.resolve("core.log")), Files.exists(discovery.resolve("core.json")))
+            val newest = (2..3).map { version ->
+                Files.writeString(source.resolve("web/index.html"), "web-v$version")
+                materializeRuntime(source, executableName, cache)
+            }.last()
+            assertTrue(process.isAlive)
+            assertTrue(Files.isRegularFile(first))
+            assertEquals("web-v1", Files.readString(first.parent.resolve("web/index.html")))
+
+            process.destroyForcibly().waitFor(5, TimeUnit.SECONDS)
+            pruneRuntimeCache(cache, newest.parent)
+            assertFalse("exited runtime can be reclaimed", Files.exists(first.parent))
+        } finally {
+            process.destroyForcibly().waitFor(5, TimeUnit.SECONDS)
+        }
+    }
+
     private fun testRuntime(source: Path): Path {
         Files.createDirectories(source.resolve("web"))
         Files.writeString(source.resolve("web/index.html"), "web-v1")

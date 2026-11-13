@@ -109,4 +109,8 @@ func TestIDEAndEncryptedBrowserShareSessionBroadcast(t *testing.T) {
 	if err := local.ReadJSON(&localResponse); err != nil || localResponse.Type != "local.still.running" {
 		t.Fatalf("local connection interrupted: %v", err)
 	}
+	hub.CloseClients()
+	if _, _, err := local.ReadMessage(); err == nil {
+		t.Fatal("local WebSocket survived backend shutdown")
+	}
 }

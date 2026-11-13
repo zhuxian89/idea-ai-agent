@@ -15,6 +15,7 @@ import (
 
 	"mindfs/server/internal/agent"
 	"mindfs/server/internal/api"
+	"mindfs/server/internal/backend"
 	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/fs"
 	"mindfs/server/internal/githubimport"
@@ -35,6 +36,8 @@ const hostedAgentsRefreshInterval = 10 * time.Minute
 type StartOptions struct {
 	// LocalOnly is used by the IntelliJ host. Agent networking remains available.
 	LocalOnly       bool
+	SharedCore      bool
+	ControlDir      string
 	ProjectRoot     string
 	AccessToken     string
 	OnReady         func(address, rootID string) error
@@ -79,17 +82,23 @@ func EnsureE2EEConfig(enabled bool) (E2EEEnsureResult, error) {
 
 // Start boots the HTTP/WS server.
 func Start(ctx context.Context, addr string, opts StartOptions) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	privateLocal := opts.LocalOnly || opts.SharedCore
+	if opts.SharedCore {
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil || host != "127.0.0.1" || len(opts.AccessToken) < 32 || opts.ControlDir == "" {
+			return fmt.Errorf("standalone backend requires loopback binding, a private token and a control directory")
+		}
+		opts.E2EEConfig = E2EEConfig{}
+	}
 	if opts.LocalOnly {
 		if err := validateLocalOptions(addr, opts); err != nil {
 			return err
 		}
 		opts.NoRelayer = true
 		opts.WebPushEnabled = false
-		ensured, err := EnsureE2EEConfig(true)
-		if err != nil {
-			return err
-		}
-		opts.E2EEConfig = ensured.Config
+		opts.E2EEConfig = E2EEConfig{}
 	}
 	registry, err := fs.NewDefaultRegistry()
 	if err != nil {
@@ -102,13 +111,32 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 			return err
 		}
 	}
+	var standaloneHistory *standaloneMigration
+	if opts.SharedCore {
+		standaloneHistory, err = migrateStandaloneProjects(opts.ControlDir, registry)
+		if err != nil {
+			return err
+		}
+	}
 	prefs, prefsErr := preferences.NewStore()
 	if prefsErr != nil {
 		log.Printf("[preferences] init.error err=%v", prefsErr)
 	}
 	rootID := ""
 	if opts.ProjectRoot != "" {
-		root, err := registry.Upsert(opts.ProjectRoot)
+		location := fs.MetaLocationProject
+		if opts.SharedCore {
+			location, err = fs.MetaLocationForNewRoot(opts.ProjectRoot, location)
+			if err != nil {
+				return err
+			}
+		}
+		var root fs.RootInfo
+		if opts.LocalOnly {
+			root, err = registerEmbeddedProject(registry, opts.ProjectRoot)
+		} else {
+			root, err = registry.UpsertWithMetaLocation(opts.ProjectRoot, location)
+		}
 		if err != nil {
 			return err
 		}
@@ -128,7 +156,15 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		relayBaseURL = agentConfig.RelayBaseURL
 	}
 	agentPool := agent.NewPool(agentConfig)
-	defer agentPool.CloseAll()
+	var services *api.AppContext
+	defer func() {
+		agentPool.CloseAll()
+		if services != nil {
+			for _, root := range services.ListRoots() {
+				services.ReleaseRootResources(root.ID)
+			}
+		}
+	}()
 	agentProber := agent.NewProber(&agentConfig, agentPool, 5*time.Minute)
 	agentProber.Start(ctx)
 	defer agentProber.Stop()
@@ -150,7 +186,7 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 	if err != nil {
 		log.Printf("[webpush] config.error err=%v", err)
 	}
-	services := &api.AppContext{
+	services = &api.AppContext{
 		ProjectLocked: opts.LocalOnly,
 		Dirs:          registry,
 		Agents:        agentPool,
@@ -181,16 +217,22 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		AppContext: services,
 		StaticDir:  resolveStaticDir(),
 		Version:    opts.Version,
+		Standalone: opts.SharedCore,
 	}
 	wsHandler := &api.WSHandler{AppContext: services}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", httpHandler.Routes())
 	mux.Handle("/ws", wsHandler)
+	if opts.SharedCore {
+		mux.Handle("/p/", standaloneHistory.projectLinks(registry))
+	}
 
 	var handler http.Handler = api.LoggingMiddleware(api.CORSMiddleware(mux))
 	if opts.LocalOnly {
 		handler = localAccessMiddleware(opts.AccessToken, rootID, api.LocalIDEAccess(api.LoggingMiddleware(mux)))
+	} else if opts.SharedCore {
+		handler = standaloneAccess(opts.AccessToken, services, api.LocalIDEAccess(api.LoggingMiddleware(mux)))
 	}
 
 	server := &http.Server{
@@ -212,7 +254,7 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 
 	relayAddr := listener.Addr().String()
 	var remoteListener net.Listener
-	if opts.LocalOnly {
+	if privateLocal {
 		remoteListener, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			return err
@@ -220,17 +262,35 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		defer remoteListener.Close()
 		relayAddr = remoteListener.Addr().String()
 	}
-	relayMgr, err := relay.NewManager(relayAddr, opts.NoRelayer, relayBaseURL, opts.UseTLS && !opts.LocalOnly)
-	if err != nil {
-		return err
+	var relayMgr *relay.Manager
+	var remoteHandler http.Handler
+	if !opts.SharedCore {
+		relayMgr, err = relay.NewManager(relayAddr, opts.NoRelayer, relayBaseURL, opts.UseTLS && !privateLocal)
+		if err != nil {
+			return err
+		}
+		services.Relay = relayMgr
+		services.RelayTips = relay.NewTipsService(relayMgr)
+		if err := relayMgr.Start(ctx); err != nil {
+			return err
+		}
+		defer relayMgr.SetEnabled(false)
+		remoteHandler = remoteAccessMiddleware(relayMgr, mux)
 	}
-	services.Relay = relayMgr
-	services.RelayTips = relay.NewTipsService(relayMgr)
-	if err := relayMgr.Start(ctx); err != nil {
-		return err
-	}
-	var remoteHandler http.Handler = remoteAccessMiddleware(relayMgr, mux)
 	var sharedControl *remoteHostControl
+	if opts.SharedCore {
+		httpHandler.RelayStatus = coreRelayStatus(opts.ControlDir)
+		control := coreRemoteControl(opts.ControlDir, services)
+		mux.Handle("/api/idea/remote", control)
+		mux.Handle("/api/idea/remote/", control)
+		mux.Handle("/control/", &standaloneControl{services: services, token: opts.AccessToken, address: "http://" + listener.Addr().String(), version: opts.Version, stop: cancel})
+		remoteHandler = coreRemoteAccess(opts.AccessToken, mux)
+		if err := backend.PublishCore(opts.ControlDir, listener.Addr().String(), relayAddr, opts.AccessToken); err != nil {
+			return err
+		}
+		defer os.Remove(filepath.Join(opts.ControlDir, "core.json"))
+		defer services.GetSessionStreamHub().CloseClients()
+	}
 	if opts.LocalOnly {
 		var management http.Handler
 		control, controlErr := newRemoteAccessControl(relayMgr, services)
@@ -272,7 +332,9 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		defer func() { cancelRemote(); sharedControl.close() }()
 	}
 
-	services.RelayTips.Start(ctx)
+	if services.RelayTips != nil {
+		services.RelayTips.Start(ctx)
+	}
 	for _, root := range services.ListRoots() {
 		services.Kanban.Schedule(root.ID)
 	}
@@ -282,11 +344,15 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		}
 	}
 
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		server.Shutdown(shutdownCtx)
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			server.Close()
+		}
 	}()
 
 	if services.E2EE != nil {
@@ -294,9 +360,13 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 	}
 
 	if opts.UseTLS {
-		return server.ServeTLS(listener, opts.CertFile, opts.KeyFile)
+		err = server.ServeTLS(listener, opts.CertFile, opts.KeyFile)
+	} else {
+		err = server.Serve(listener)
 	}
-	return server.Serve(listener)
+	cancel()
+	<-shutdownDone
+	return err
 }
 
 func startHostedAgentConfigLoop(ctx context.Context, relayBaseURL string, localConfig agent.Config, pool *agent.Pool, prober *agent.Prober) {

@@ -122,6 +122,17 @@
         </p>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>0.1.27 — Standalone backend and remote workspace / 独立后台与远程工作区</b></p>
+        <ul>
+            <li>Choose the embedded or standalone backend from the remote panel, with installation, update checks and service controls.</li>
+            <li>Keep remote access available after IDEA closes, preserving existing project sessions and remote identity.</li>
+            <li>Improve project and session hierarchy in light and dark themes, and add session menu actions.</li>
+            <li>Fix standalone upgrade shutdown waiting and repeated per-turn change summaries.</li>
+            <li>远程面板可选择内置或独立后台，提供安装、检查更新及服务启停入口。</li>
+            <li>关闭 IDEA 后仍可远程访问，保留既有项目会话与远程身份。</li>
+            <li>优化深浅色项目与会话层级，补充会话菜单功能。</li>
+            <li>修复独立后台升级停止等待与本轮修改摘要重复显示。</li>
+        </ul>
         <p><b>0.1.26 — Shared remote project hub / 多项目统一远程入口</b></p>
         <ul>
             <li>Share one computer connection across IDEA projects and switch between individually enabled projects from a browser or phone.</li>

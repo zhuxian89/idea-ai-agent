@@ -145,6 +145,9 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
     private var connection: LocalRuntime.Connection? = null
     private var loaded = false
     private var closed = false
+    private var backendBusy = false
+    private var updateState = StandaloneUpdateState()
+    private var updatePanel: StandaloneUpdatePanel? = null
     private val pendingContexts = mutableListOf<IdeaContextRequest>()
     private val queuedCommands = WebviewCommandQueue()
     private val gson = Gson()
@@ -163,6 +166,12 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         ApplicationManager.getApplication().messageBus.connect(this).subscribe(VoiceSettings.TOPIC, VoiceSettingsListener {
             ApplicationManager.getApplication().invokeLater { syncVoiceSettings() }
         })
+        ApplicationManager.getApplication().messageBus.connect(this).subscribe(StandaloneBackendListener.TOPIC, object : StandaloneBackendListener {
+            override fun changed(action: String) {
+                if (closed || project.isDisposed || !loaded) return
+                execute("window.dispatchEvent(new CustomEvent('idea:backend-state', {detail: {busy: false}}));")
+            }
+        })
     }
 
     fun addCurrentEditorContext() {
@@ -178,6 +187,66 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
             return
         }
         execute("window.ideaAgentNativeCommand?.(${gson.toJson(command)});")
+    }
+
+    private fun publishUpdate(state: StandaloneUpdateState) {
+        updateState = state
+        updatePanel?.showState(state)
+        if (loaded) execute("window.dispatchEvent(new CustomEvent('idea:standalone-update', {detail: ${gson.toJson(state.copy())}}));")
+    }
+
+    private fun remoteUpdateEntry(webSettings: Boolean) {
+        if (connection?.standalone != true) return
+        if (webSettings) {
+            updatePanel?.let { remove(it) }
+            updatePanel = null
+        } else if (updatePanel == null) {
+            updatePanel = StandaloneUpdatePanel(isEnglishUi(), { checkStandaloneUpdate() }, { updateStandalone() })
+            add(updatePanel, BorderLayout.NORTH)
+            checkStandaloneUpdate()
+        }
+        revalidate(); repaint()
+    }
+
+    private fun checkStandaloneUpdate() {
+        if (connection?.standalone != true) return
+        if (updateState.checking || updateState.updating) { publishUpdate(updateState); return }
+        publishUpdate(updateState.copy(checking = true, latest = "", error = ""))
+        val app = ApplicationManager.getApplication()
+        com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService().execute {
+            val result = runCatching {
+                val installed = requireNotNull(installedStandaloneVersion(dev.ideaagent.remote.remoteHostDataDir())) { "Standalone service is not installed" }
+                StandaloneUpdateState(version = installed, latest = latestStandaloneVersion())
+            }
+            app.invokeLater {
+                if (closed || project.isDisposed) return@invokeLater
+                publishUpdate(result.getOrElse { updateState.copy(checking = false, error = it.message.orEmpty()) })
+            }
+        }
+    }
+
+    private fun updateStandalone() {
+        if (!updateState.available || updateState.checking || updateState.updating) return
+        val app = ApplicationManager.getApplication()
+        val installer = app.getService(StandaloneInstaller::class.java)
+        if (installer.installing) {
+            publishUpdate(updateState.copy(error = localized("已有安装或更新正在进行。", "An installation or update is already running.")))
+            return
+        }
+        val target = updateState.latest
+        publishUpdate(updateState.copy(updating = true, error = ""))
+        com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService().execute {
+            val updated = installer.install(dev.ideaagent.remote.remoteHostDataDir(), changed = {
+                app.invokeLater { app.messageBus.syncPublisher(StandaloneBackendListener.TOPIC).changed("update") }
+            }, update = true, version = target)
+            app.invokeLater {
+                if (closed || project.isDisposed) return@invokeLater
+                if (updated) {
+                    app.getService(AgentPreferences::class.java).continueRemoteAfterRestart(project.locationHash)
+                    app.restart()
+                } else publishUpdate(updateState.copy(updating = false, error = installer.error))
+            }
+        }
     }
 
     fun start() {
@@ -204,12 +273,70 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
 
     private fun startingText() = localized("正在启动本地 Agent…", "Starting local Agent…")
 
+    private fun backendMode(ready: LocalRuntime.Connection, selected: String? = null) {
+        com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService().execute {
+            val result = runCatching {
+                val service = ApplicationManager.getApplication().getService(BackendModeService::class.java)
+                val dir = dev.ideaagent.remote.remoteHostDataDir()
+                if (selected != null) service.save(dir, BackendMode.parse(selected))
+                service.state(dir, if (ready.standalone) BackendMode.STANDALONE else BackendMode.EMBEDDED)
+            }
+            ApplicationManager.getApplication().invokeLater {
+                if (!closed && !project.isDisposed && loaded) {
+                    val detail = result.getOrElse { mapOf("error" to it.message.orEmpty()) }
+                    execute("window.dispatchEvent(new CustomEvent('idea:backend-mode', {detail: ${gson.toJson(detail)}}));")
+                }
+                if (selected != null && result.isSuccess) {
+                    ApplicationManager.getApplication().messageBus.syncPublisher(StandaloneBackendListener.TOPIC).changed("mode")
+                }
+            }
+        }
+    }
+
     private fun showStatus(text: String) {
         status.text = text
         body.removeAll()
         body.add(status, BorderLayout.CENTER)
         body.revalidate()
         body.repaint()
+    }
+
+    private fun installBackend(ready: LocalRuntime.Connection) {
+        val app = ApplicationManager.getApplication()
+        com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService().execute {
+            val dir = dev.ideaagent.remote.remoteHostDataDir()
+            val installed = app.getService(StandaloneInstaller::class.java).install(dir, changed = {
+                app.invokeLater { app.messageBus.syncPublisher(StandaloneBackendListener.TOPIC).changed("install") }
+            })
+            backendMode(ready, if (installed) BackendMode.STANDALONE.value else null)
+        }
+    }
+
+    private fun controlBackend(action: String) {
+        ApplicationManager.getApplication().invokeLater {
+            if (backendBusy) return@invokeLater
+            if (action != "start" && com.intellij.openapi.ui.Messages.showYesNoDialog(project,
+                    localized("此操作会断开远程设备。本地聊天继续运行。继续？", "This disconnects remote devices. Local chats keep running. Continue?"),
+                    "Local AI Agent", com.intellij.openapi.ui.Messages.getWarningIcon()) != com.intellij.openapi.ui.Messages.YES) return@invokeLater
+            backendBusy = true
+            execute("window.dispatchEvent(new CustomEvent('idea:backend-state', {detail: {busy: true}}));")
+            com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService().execute {
+                val result = runCatching {
+                    manageStandalone(dev.ideaagent.remote.remoteHostDataDir(), action)
+                    ApplicationManager.getApplication().getService(BackendModeService::class.java)
+                        .clearRemoteError(dev.ideaagent.remote.remoteHostDataDir())
+                }
+                ApplicationManager.getApplication().invokeLater completed@{
+                    if (closed || project.isDisposed) return@completed
+                    backendBusy = false
+                    result.fold(onSuccess = {
+                        ApplicationManager.getApplication().messageBus.syncPublisher(StandaloneBackendListener.TOPIC).changed(action)
+                    }, onFailure = {
+                        execute("window.dispatchEvent(new CustomEvent('idea:backend-state', {detail: ${gson.toJson(mapOf("busy" to false, "error" to it.message.orEmpty()))}}));")
+                    })
+                }
+            }
+        }
     }
 
     private fun attach(ready: LocalRuntime.Connection) {
@@ -251,7 +378,12 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                         }
                     }
                     "voiceStart" -> voice.start(request.get("id").asString)
-                    "remoteAccess" -> project.getService(LocalRuntime::class.java).requestRemoteHost()
+                    "remoteAccess" -> {
+                        project.getService(LocalRuntime::class.java).requestRemoteHost()
+                        ApplicationManager.getApplication().invokeLater {
+                            if (!closed && !project.isDisposed) remoteUpdateEntry(request.get("updateUI")?.asBoolean == true)
+                        }
+                    }
                     "compareGitFile" -> {
                         require(request.get("rootId")?.asString == ready.rootId) { "Different project" }
                         TurnDiffViewer.compareGitWorktree(
@@ -278,6 +410,22 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                         openVoiceSettings()
                     }
                     "refresh" -> VirtualFileManager.getInstance().asyncRefresh(null)
+                    "backendStart" -> controlBackend("start")
+                    "backendRestart" -> controlBackend("restart")
+                    "backendStop" -> controlBackend("stop")
+                    "backendMode" -> backendMode(ready)
+                    "setBackendMode" -> backendMode(ready, request.get("mode").asString)
+                    "installBackend" -> installBackend(ready)
+                    "checkBackendUpdate" -> ApplicationManager.getApplication().invokeLater {
+                        if (!closed && !project.isDisposed) checkStandaloneUpdate()
+                    }
+                    "updateBackend" -> ApplicationManager.getApplication().invokeLater {
+                        if (!closed && !project.isDisposed) updateStandalone()
+                    }
+                    "restartIdea" -> ApplicationManager.getApplication().invokeLater {
+                        preferences.continueRemoteAfterRestart(project.locationHash)
+                        ApplicationManager.getApplication().restart()
+                    }
                     "setLocale" -> preferences.setLocale(request.get("locale").asString)
                     "setAppearance" -> preferences.setAppearance(request.get("appearance").asString)
                     "addContext" -> ApplicationManager.getApplication().invokeLater {
@@ -315,6 +463,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
                     pendingContexts.clear()
                     contexts.forEach(::addContext)
                     queuedCommands.drain().forEach(::sendNativeCommand)
+                    if (preferences.consumeRemoteContinuation(project.locationHash)) sendNativeCommand("remote")
                 }
             }
         }, view.cefBrowser)
@@ -335,7 +484,7 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         body.add(view.component, BorderLayout.CENTER)
         body.revalidate()
         body.repaint()
-        view.loadURL("${ready.endpoint}/?ide_token=${ready.token}&ide_theme=$theme&ide_chrome=1")
+        view.loadURL("${ready.endpoint}/?ide_token=${ready.token}&root=${java.net.URLEncoder.encode(ready.rootId, Charsets.UTF_8)}&ide=1&ide_theme=$theme&ide_chrome=1")
     }
 
     private fun openExternal(url: String) {

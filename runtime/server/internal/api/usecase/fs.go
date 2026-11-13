@@ -789,6 +789,9 @@ func (s *Service) AddManagedDir(_ context.Context, in AddManagedDirInput) (AddMa
 	if err != nil {
 		return AddManagedDirOutput{}, err
 	}
+	if root, found := fs.FindRootByPath(s.Registry.ListRoots(), abs); found {
+		return AddManagedDirOutput{Dir: root}, nil
+	}
 	if err := ensureManagedDirNameAvailable(s.Registry, abs); err != nil {
 		return AddManagedDirOutput{}, err
 	}
@@ -856,7 +859,13 @@ func resolveManagedDirPath(registry Registry, raw string, create bool) (string, 
 	if !info.IsDir() {
 		return "", errors.New("path must be a directory")
 	}
-	return abs, nil
+	// A symlink and its target are the same project; registering both would give
+	// two project IDs over one conversation history.
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", apperr.Wrap("resolve", abs, err)
+	}
+	return resolved, nil
 }
 
 func createManagedDir(registry Registry, name string) (string, error) {

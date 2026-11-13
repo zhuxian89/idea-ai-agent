@@ -1,9 +1,7 @@
 package remotehost
 
 import (
-	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,8 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"mindfs/server/internal/e2ee"
 )
 
 func jsonResponse(w http.ResponseWriter, status int, value any) {
@@ -160,18 +156,8 @@ func (h *host) publicHandler() http.Handler {
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/api/relay/status" {
 			status := h.status()
-			status.PairingSecret = ""
-			status.Projects = nil // Management inventory is local-only, never a public directory.
-			if r.Header.Get("X-MindFS-E2EE") == "" {
-				jsonResponse(w, 200, map[string]any{"remote_host": true, "e2ee_required": true, "e2ee_node_id": status.E2EENodeID, "no_relayer": !status.Enabled})
-				return
-			}
-			sess, err := h.requireProof(r)
-			if err != nil {
-				apiError(w, err)
-				return
-			}
-			h.encrypted(w, 200, sess.Key, status)
+			status.Projects = nil
+			jsonResponse(w, 200, status)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/control/") || strings.HasPrefix(r.URL.Path, "/api/idea/") {
@@ -188,34 +174,8 @@ func (h *host) publicHandler() http.Handler {
 			}
 		}
 		switch {
-		case r.URL.Path == "/api/e2ee/open" && r.Method == http.MethodPost:
-			h.open(w, r)
 		case r.URL.Path == "/api/remote/projects" && r.Method == http.MethodGet:
-			sess, err := h.requireProof(r)
-			if err != nil {
-				apiError(w, err)
-				return
-			}
-			h.encrypted(w, 200, sess.Key, map[string]any{"projects": h.projects()})
-		case strings.HasPrefix(r.URL.Path, "/api/remote/projects/") && strings.HasSuffix(r.URL.Path, "/access") && r.Method == http.MethodPost:
-			sess, err := h.requireProof(r)
-			if err != nil {
-				apiError(w, err)
-				return
-			}
-			id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/remote/projects/"), "/access")
-			h.mu.Lock()
-			p, err := h.availableLocked(id)
-			var payload any
-			if err == nil {
-				payload = map[string]string{"project_id": id, "e2ee_node_id": p.E2EENodeID, "pairing_secret": p.PairingSecret}
-			}
-			h.mu.Unlock()
-			if err != nil {
-				apiError(w, err)
-				return
-			}
-			h.encrypted(w, 200, sess.Key, payload)
+			jsonResponse(w, 200, map[string]any{"projects": h.projects()})
 		case strings.HasPrefix(r.URL.Path, "/p/"):
 			h.proxyProject(w, r)
 		case strings.HasPrefix(r.URL.Path, "/api/"):
@@ -250,82 +210,4 @@ func (h *host) availableLocked(id string) (*activeProject, error) {
 		return nil, &APIError{404, "project_not_found"}
 	}
 	return p, nil
-}
-func (h *host) requireProof(r *http.Request) (*e2ee.Session, error) {
-	if r.Header.Get("X-MindFS-E2EE") == "" {
-		return nil, &APIError{401, "e2ee_required"}
-	}
-	id, ts, proof := r.Header.Get("X-MindFS-Client-ID"), r.Header.Get("X-MindFS-TS"), r.Header.Get("X-MindFS-Proof")
-	if id == "" || ts == "" || proof == "" {
-		return nil, &APIError{401, "e2ee_proof_required"}
-	}
-	sess, err := h.e2ee.SessionForClient(id)
-	if err != nil {
-		return nil, &APIError{401, err.Error()}
-	}
-	timestamp, err := time.Parse(time.RFC3339, ts)
-	if err != nil || time.Since(timestamp) > 5*time.Minute || time.Until(timestamp) > 5*time.Minute {
-		return nil, &APIError{401, "e2ee_proof_expired"}
-	}
-	path := r.URL.EscapedPath()
-	if r.URL.RawQuery != "" {
-		path += "?" + r.URL.RawQuery
-	}
-	if !e2ee.VerifyProof(e2ee.BuildRequestProof(sess.Key, r.Method, path, ts, id), proof) {
-		return nil, &APIError{401, "e2ee_proof_invalid"}
-	}
-	return sess, nil
-}
-func (h *host) encrypted(w http.ResponseWriter, status int, key []byte, payload any) {
-	envelope, err := e2ee.EncryptJSON(key, payload)
-	if err != nil {
-		apiError(w, err)
-		return
-	}
-	w.Header().Set("X-MindFS-E2EE", "1")
-	jsonResponse(w, status, envelope)
-}
-func (h *host) open(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		ClientID     string `json:"client_id"`
-		NodeID       string `json:"node_id"`
-		ClientEphPK  string `json:"client_eph_pk"`
-		ClientNonce  string `json:"client_nonce"`
-		Proof        string `json:"proof"`
-		ProtoVersion int    `json:"proto_version"`
-	}
-	if err := decode(r, &in); err != nil {
-		apiError(w, err)
-		return
-	}
-	if in.ClientID == "" || in.ClientNonce == "" || in.ClientEphPK == "" || in.NodeID != h.e2ee.NodeID() || !e2ee.VerifyProof(e2ee.BuildOpenProof(h.e2ee.PairingSecret(), in.NodeID, in.ClientEphPK, in.ClientNonce), in.Proof) {
-		apiError(w, &APIError{403, "e2ee_proof_invalid"})
-		return
-	}
-	clientPub, err := e2ee.DecodePublicKey(in.ClientEphPK)
-	if err != nil {
-		apiError(w, &APIError{400, "invalid_client_eph_pk"})
-		return
-	}
-	private, public, err := e2ee.GenerateECDHKeypair()
-	if err != nil {
-		apiError(w, err)
-		return
-	}
-	nonceBytes := make([]byte, 16)
-	if _, err = rand.Read(nonceBytes); err != nil {
-		apiError(w, err)
-		return
-	}
-	nonce := base64.StdEncoding.EncodeToString(nonceBytes)
-	key, err := e2ee.DeriveKey(h.e2ee.PairingSecret(), in.NodeID, in.ClientEphPK, public, in.ClientNonce, nonce, private, clientPub)
-	if err != nil {
-		apiError(w, err)
-		return
-	}
-	if _, err = h.e2ee.OpenSessionForClient(in.ClientID, key); err != nil {
-		apiError(w, err)
-		return
-	}
-	jsonResponse(w, 200, map[string]any{"ok": true, "node_eph_pk": public, "server_nonce": nonce, "server_proof": e2ee.BuildAcceptProof(h.e2ee.PairingSecret(), in.NodeID, in.ClientEphPK, public, in.ClientNonce, nonce)})
 }

@@ -21,29 +21,28 @@ const Protocol = 1
 const ProjectTokenHeader = "X-Idea-Remote-Host"
 
 type Descriptor struct {
-	Protocol int    `json:"protocol"`
-	URL      string `json:"url"`
-	Token    string `json:"token"`
+	Protocol  int    `json:"protocol"`
+	URL       string `json:"url"`
+	Token     string `json:"token"`
+	Mode      string `json:"mode,omitempty"`
+	RemoteURL string `json:"remote_url,omitempty"`
 }
 type Status struct {
 	relay.Status
 	Protocol       int              `json:"protocol"`
 	Enabled        bool             `json:"enabled"`
-	PairingSecret  string           `json:"pairing_secret,omitempty"`
 	RemoteHost     bool             `json:"remote_host"`
 	Projects       []ManagedProject `json:"projects,omitempty"`
 	RuntimeVersion string           `json:"runtime_version,omitempty"`
 }
 type Registration struct {
-	Protocol      int    `json:"protocol"`
-	ProjectPath   string `json:"project_path"`
-	Name          string `json:"name"`
-	OwnerID       string `json:"owner_id"`
-	Address       string `json:"address"`
-	Token         string `json:"token"`
-	E2EENodeID    string `json:"e2ee_node_id"`
-	PairingSecret string `json:"pairing_secret"`
-	Enabled       bool   `json:"enabled"`
+	Protocol    int    `json:"protocol"`
+	ProjectPath string `json:"project_path"`
+	Name        string `json:"name"`
+	OwnerID     string `json:"owner_id"`
+	Address     string `json:"address"`
+	Token       string `json:"token"`
+	Enabled     bool   `json:"enabled"`
 }
 type Ownership struct {
 	ProjectID string `json:"project_id"`
@@ -74,8 +73,12 @@ func DefaultDir() (string, error) {
 	return filepath.Join(base, "LocalAIAgent", "remote"), nil
 }
 func ReadDescriptor(dir string) (Descriptor, error) {
+	return ReadDescriptorFile(dir, "host.json")
+}
+
+func ReadDescriptorFile(dir, name string) (Descriptor, error) {
 	var d Descriptor
-	b, err := os.ReadFile(filepath.Join(dir, "host.json"))
+	b, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
 		return d, err
 	}
@@ -87,6 +90,11 @@ func ReadDescriptor(dir string) (Descriptor, error) {
 	}
 	if _, err = loopbackURL(d.URL); err != nil {
 		return d, err
+	}
+	if d.RemoteURL != "" {
+		if _, err = loopbackURL(d.RemoteURL); err != nil {
+			return d, err
+		}
 	}
 	if d.Token == "" {
 		return d, fmt.Errorf("remote_host_invalid_descriptor")
@@ -107,15 +115,20 @@ func loopbackURL(address string) (*url.URL, error) {
 
 // Client reads the descriptor for every request, so a restarted host is discoverable.
 type Client struct {
-	Dir  string
-	HTTP *http.Client
+	Dir            string
+	HTTP           *http.Client
+	DescriptorName string
 }
 
 func NewClient(dir string) *Client {
 	return &Client{Dir: dir, HTTP: &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
 func (c *Client) Call(ctx context.Context, method, path string, input, output any) error {
-	d, err := ReadDescriptor(c.Dir)
+	name := c.DescriptorName
+	if name == "" {
+		name = "host.json"
+	}
+	d, err := ReadDescriptorFile(c.Dir, name)
 	if err != nil {
 		return err
 	}

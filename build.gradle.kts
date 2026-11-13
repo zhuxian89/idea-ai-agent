@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "dev.ideaagent"
-version = providers.gradleProperty("pluginVersion").getOrElse("0.1.26")
+version = providers.gradleProperty("pluginVersion").getOrElse("0.1.27")
 
 repositories {
     mavenCentral()
@@ -43,6 +43,12 @@ kotlin {
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+}
+tasks.processResources {
+    from("scripts") {
+        include("install.sh", "install.ps1")
+        into("installers")
+    }
 }
 tasks.withType<JavaCompile>().configureEach { options.release = 17 }
 tasks.withType<KotlinCompile>().configureEach {

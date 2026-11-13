@@ -439,7 +439,9 @@ func (s *Service) proxyHTTPToBase(req *http.Request, stream io.Writer, baseURL s
 	outbound.Host = targetURL.Host
 	prepareLocalProxyHeaders(outbound, req, targetURL, stripRelayInternalHeaders)
 
-	resp, err := s.client.Do(outbound)
+	client := *s.client
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := client.Do(outbound)
 	if err != nil {
 		return err
 	}

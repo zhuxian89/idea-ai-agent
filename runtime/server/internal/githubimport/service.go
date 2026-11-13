@@ -82,6 +82,13 @@ func (s *Service) ActiveStatuses() []Status {
 	return out
 }
 
+func (s *Service) GetStatus(taskID string) (Status, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	status, ok := s.statuses[taskID]
+	return status, ok
+}
+
 func (s *Service) Start(ctx context.Context, in StartInput) (Status, error) {
 	if s == nil {
 		return Status{}, errors.New("github import service not configured")

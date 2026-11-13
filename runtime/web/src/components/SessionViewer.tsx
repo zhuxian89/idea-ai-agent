@@ -19,8 +19,7 @@ import type { AgentStatus } from "../services/agents";
 import { useI18n, type Locale } from "../i18n";
 import { formatSessionDuration } from "../services/sessionDuration";
 import { SessionActivity } from "./SessionActivity";
-import { RunningSubagents } from "./RunningSubagents";
-import { runningSubagents, type RunningSubagent } from "../services/runningSubagents";
+import { settingsChanges, type SettingsChange } from "../services/sessionSettingsChange";
 import { SessionRecovery } from "./SessionRecovery";
 import { ActivityTimeline } from "./stream/ActivityTimeline";
 import { TurnDiffSummary } from "./TurnDiffSummary";
@@ -104,9 +103,6 @@ type SessionViewerProps = {
   }) => void | Promise<void>;
   onEditUserMessage?: (content: string) => void;
   onForkAgentMessage?: (seq: number) => void | Promise<void>;
-  // Opens the child session of a running subagent; absent when the host cannot navigate.
-  onOpenSubagent?: (subagent: RunningSubagent) => void;
-  onStopSubagent?: (subagent: RunningSubagent) => void;
   targetSeqRequestKey?: string | number;
   agents?: AgentStatus[];
 };
@@ -270,6 +266,21 @@ function formatAssistantExchangeMeta(
     parts.push("fast");
   }
   return parts.join(" · ");
+}
+
+type MessageTimelineItem = Extract<TimelineItem, { type: "user_text" | "assistant_text" }>;
+type TranslateFn = ReturnType<typeof useI18n>["t"];
+
+function formatSettingsChange(change: SettingsChange, t: TranslateFn): string {
+  const value = (raw: string) => raw || t("session.settingsDefault");
+  if (change.field === "model") {
+    return `${t("agent.model")} ${change.from} → ${change.to}`;
+  }
+  if (change.field === "effort") {
+    return `${t("agent.effort")} ${value(change.from)} → ${value(change.to)}`;
+  }
+  const fast = (raw: string) => (raw === "on" ? t("agent.enabled") : raw === "off" ? t("agent.disabled") : value(raw));
+  return `${t("agent.fastMode")} ${fast(change.from)} → ${fast(change.to)}`;
 }
 
 function previousUserTimestamp(timeline: TimelineItem[], index: number): string {
@@ -943,8 +954,6 @@ function SessionViewerInner({
   onAskUserAnswer,
   onEditUserMessage,
   onForkAgentMessage,
-  onOpenSubagent,
-  onStopSubagent,
   agents,
 }: SessionViewerProps) {
   const { locale, t } = useI18n();
@@ -976,7 +985,6 @@ function SessionViewerInner({
     session?.context_window,
     isAwaiting,
   );
-  const subagents = useMemo(() => runningSubagents(timeline), [timeline]);
   const userMessageIndexByTimelineIndex = useMemo(() => {
     const indexes = new Map<number, number>();
     timeline.forEach((item, index) => {
@@ -984,6 +992,31 @@ function SessionViewerInner({
     });
     return indexes;
   }, [timeline]);
+  // Comparing settings across agents is meaningless (fast mode only exists for
+  // some), so a notice only appears between two messages of the same agent.
+  const settingsNoticeByTimelineIndex = useMemo(() => {
+    const notices = new Map<number, string>();
+    let previous: MessageTimelineItem | undefined;
+    const settingsOf = (item: MessageTimelineItem) => ({
+      model: `${item.model || ""}`.trim(),
+      modelName: `${item.modelDisplayName || ""}`.trim() || modelDisplayName(agents, item.agent, item.model),
+      effort: `${item.effort || ""}`.trim(),
+      fastService: `${item.fastService || ""}`.trim(),
+    });
+    timeline.forEach((item, index) => {
+      if (item.type !== "user_text") return;
+      if (previous && previous.agent === item.agent) {
+        const changes = settingsChanges(settingsOf(previous), settingsOf(item));
+        if (changes.length) {
+          notices.set(index, t("session.settingsChanged", {
+            changes: changes.map((change) => formatSettingsChange(change, t)).join(" · "),
+          }));
+        }
+      }
+      previous = item;
+    });
+    return notices;
+  }, [timeline, agents, t]);
   const shouldStickToBottomRef = useRef(true);
   const lastSessionKeyRef = useRef<string | null>(null);
   const targetSeqScrollKeyRef = useRef("");
@@ -1499,6 +1532,7 @@ function SessionViewerInner({
     }
     const isUser = item.type === "user_text";
     const userMessageIndex = isUser ? userMessageIndexByTimelineIndex.get(idx) : undefined;
+    const settingsNotice = isUser ? settingsNoticeByTimelineIndex.get(idx) : undefined;
     const next = idx + 1 < timeline.length ? timeline[idx + 1] : null;
     const hasFollowingAssistantFlow =
       !isUser && !!next && next.type !== "user_text" && next.type !== "turn_diff";
@@ -1561,6 +1595,21 @@ function SessionViewerInner({
               minWidth: 0,
             }}
           >
+            {settingsNotice ? (
+              <div
+                data-session-settings-change
+                style={{
+                  alignSelf: "flex-end",
+                  maxWidth: "100%",
+                  fontSize: "11px",
+                  color: "var(--text-secondary)",
+                  textAlign: "right",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {settingsNotice}
+              </div>
+            ) : null}
             {hasRichUserAttachments ? (
               <div
                 style={{
@@ -2281,7 +2330,6 @@ function SessionViewerInner({
             {renderSlashCommandResult()}
             <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText}
               active={isAwaiting || isStreaming} rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined} />
-            {isAwaiting || isStreaming ? <RunningSubagents items={subagents} onOpen={onOpenSubagent} onStop={onStopSubagent} /> : null}
             {session && rootId ? <SessionRecovery key={`${rootId}:${sessionKey}`} session={session} rootId={rootId}
               connected={connected} active={loading || isAwaiting || isStreaming} /> : null}
 

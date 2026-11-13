@@ -2,11 +2,15 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,9 +18,141 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
 	"mindfs/server/internal/api"
+	"mindfs/server/internal/backend"
 	"mindfs/server/internal/e2ee"
+	"mindfs/server/internal/fs"
 	"mindfs/server/internal/relay"
+	"mindfs/server/internal/remotehost"
 )
+
+func TestStandaloneMigrationReconnectsExistingRelay(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("IDE_AGENT_DATA_DIR", dir)
+	t.Setenv("MINDFS_RELAY_BASE_URL", "")
+	project := filepath.Join(dir, "project")
+	if err := os.MkdirAll(project, 0700); err != nil {
+		t.Fatal(err)
+	}
+	writePreviousRemoteProjects(t, dir, true, previousRemoteProjectFixture{ID: "old-project", Path: project, Enabled: true})
+	registry := fs.NewRegistry(filepath.Join(dir, "registry.json"))
+	migration, err := migrateStandaloneProjects(dir, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "e2ee.json"), []byte(`{obsolete-pairing-config`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	identityData, err := os.ReadFile(filepath.Join(dir, "e2ee.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connections := make(chan *yamux.Session, 1)
+	cloud := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/connector" || r.Header.Get("Authorization") != "Bearer previous-device" {
+			http.Error(w, "unexpected binding request", 400)
+			return
+		}
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		tunnel, err := yamux.Server(relay.NewWebSocketNetConn(conn), nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer tunnel.Close()
+		connections <- tunnel
+		select {
+		case <-ctx.Done():
+		case <-tunnel.CloseChan():
+		}
+	}))
+	defer cloud.Close()
+	t.Setenv("MINDFS_RELAY_BASE_URL", cloud.URL)
+	remoteMux := http.NewServeMux()
+	remoteMux.Handle("/p/", migration.projectLinks(registry))
+	services := &api.AppContext{Dirs: registry, E2EE: e2ee.NewManager(e2ee.Config{})}
+	remoteMux.Handle("/", (&api.HTTPHandler{AppContext: services, RelayStatus: coreRelayStatus(dir)}).Routes())
+	coreToken := strings.Repeat("c", 64)
+	remote := httptest.NewServer(coreRemoteAccess(coreToken, remoteMux))
+	defer remote.Close()
+	if err := backend.PublishCore(dir, remote.Listener.Addr().String(), remote.Listener.Addr().String(), coreToken); err != nil {
+		t.Fatal(err)
+	}
+	store, err := relay.NewCredentialsStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(relay.Credentials{Relay: relay.RelayCredentials{NodeID: "previous-node", DeviceToken: "previous-device", Endpoint: "ws" + strings.TrimPrefix(cloud.URL, "http") + "/connector"}}); err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := os.ReadFile(filepath.Join(dir, "credentials.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- StartRemoteGateway(ctx, dir, "127.0.0.1:0", "test", strings.Repeat("g", 64), false) }()
+	defer func() { cancel(); <-done }()
+	var tunnel *yamux.Session
+	select {
+	case tunnel = <-connections:
+	case <-time.After(3 * time.Second):
+		t.Fatal("existing Relay binding did not reconnect")
+	}
+	stream, err := tunnel.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	stream.SetDeadline(time.Now().Add(3 * time.Second))
+	req := httptest.NewRequest("GET", "http://node/p/old-project/?session=existing", nil)
+	if err := req.Write(stream); err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.ReadResponse(bufio.NewReader(stream), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusTemporaryRedirect || response.Header.Get("Location") != "../../?root=project&session=existing" {
+		t.Fatal("old link did not pass through the existing Relay connector", response.StatusCode, response.Header.Get("Location"))
+	}
+	var status relay.Status
+	if err := remotehost.NewClient(dir).Call(ctx, "GET", "/control/relay-status", nil, &status); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Bound || status.NodeID != "previous-node" {
+		t.Fatal("Relay node identity changed")
+	}
+	transport := &http.Transport{DisableKeepAlives: true, DialContext: func(context.Context, string, string) (net.Conn, error) { return tunnel.Open() }}
+	defer transport.CloseIdleConnections()
+	browser := &http.Client{Transport: transport, Timeout: 5 * time.Second}
+	var roots []fs.RootInfo
+	hubJSON(t, browser, "/api/dirs", &roots)
+	if len(roots) != 1 || roots[0].ID != "project" {
+		t.Fatal("gateway did not return the core's projects", roots)
+	}
+	for _, path := range []string{"/control/status", "/control/open-project", "/api/idea/remote"} {
+		response, err := browser.Get("http://node" + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != 404 {
+			t.Fatal("remote exposed local controls", path, response.StatusCode)
+		}
+	}
+	for filename, before := range map[string][]byte{"e2ee.json": identityData, "credentials.json": credentials} {
+		after, err := os.ReadFile(filepath.Join(dir, filename))
+		if err != nil || !bytes.Equal(before, after) {
+			t.Fatal("existing identity was rewritten", filename, err)
+		}
+	}
+}
 
 // Real connector + yamux + HTTP forwarding, using only temporary credentials.
 func TestRemoteConnectorSharedAPIAndRestartPreference(t *testing.T) {

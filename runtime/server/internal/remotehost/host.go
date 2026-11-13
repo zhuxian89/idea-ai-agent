@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/relay"
 )
 
@@ -56,7 +55,6 @@ type host struct {
 	active     map[string]*activeProject
 	emptySince time.Time
 	relay      *relay.Manager
-	e2ee       *e2ee.Manager
 	probeHTTP  *http.Client
 	version    string
 	stop       context.CancelFunc
@@ -122,11 +120,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err := os.Setenv("IDE_AGENT_DATA_DIR", opts.Dir); err != nil {
 		return err
 	}
-	ensured, err := e2ee.EnsureConfigAtPath(filepath.Join(opts.Dir, "e2ee.json"), true)
-	if err != nil {
-		return err
-	}
-	h, err := newHost(opts.Dir, opts.StaticDir, e2ee.NewManager(ensured.Config))
+	h, err := newHost(opts.Dir, opts.StaticDir)
 	if err != nil {
 		return err
 	}
@@ -170,7 +164,6 @@ func Run(ctx context.Context, opts Options) error {
 			return err
 		}
 	}
-	h.e2ee.StartCleanup(ctx.Done())
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	for {
@@ -189,8 +182,8 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 }
-func newHost(dir, staticDir string, manager *e2ee.Manager) (*host, error) {
-	h := &host{dir: dir, staticDir: staticDir, e2ee: manager, active: map[string]*activeProject{}, emptySince: time.Now(), probeHTTP: &http.Client{Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }, Timeout: 2 * time.Second}}
+func newHost(dir, staticDir string) (*host, error) {
+	h := &host{dir: dir, staticDir: staticDir, active: map[string]*activeProject{}, emptySince: time.Now(), probeHTTP: &http.Client{Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }, Timeout: 2 * time.Second}}
 	token, err := randomID(32)
 	if err != nil {
 		return nil, err
@@ -249,9 +242,7 @@ func canonicalProject(path string) (string, error) {
 func (h *host) status() Status {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	s := Status{Status: h.relay.Status(), Protocol: Protocol, Enabled: h.state.Enabled, RemoteHost: true, PairingSecret: h.e2ee.PairingSecret()}
-	s.E2EERequired = true
-	s.E2EENodeID = h.e2ee.NodeID()
+	s := Status{Status: h.relay.Status(), Protocol: Protocol, Enabled: h.state.Enabled, RemoteHost: true}
 	s.Projects = h.managedProjectsLocked()
 	s.RuntimeVersion = h.version
 	return s
@@ -288,7 +279,7 @@ func (h *host) register(ctx context.Context, in Registration) (string, error) {
 	if in.Protocol != Protocol {
 		return "", &APIError{409, "remote_protocol_incompatible"}
 	}
-	if in.OwnerID == "" || in.Token == "" || in.E2EENodeID == "" || in.PairingSecret == "" || strings.TrimSpace(in.Name) == "" {
+	if in.OwnerID == "" || in.Token == "" || strings.TrimSpace(in.Name) == "" {
 		return "", &APIError{400, "invalid_project_registration"}
 	}
 	path, err := canonicalProject(in.ProjectPath)
@@ -344,7 +335,7 @@ func (h *host) register(ctx context.Context, in Registration) (string, error) {
 			return "", err
 		}
 	}
-	if current != nil && current.OwnerID == in.OwnerID && current.Address == in.Address && current.Token == in.Token && current.E2EENodeID == in.E2EENodeID && current.PairingSecret == in.PairingSecret {
+	if current != nil && current.OwnerID == in.OwnerID && current.Address == in.Address && current.Token == in.Token {
 		current.lastSeen = time.Now()
 		current.Enabled = in.Enabled
 		if !in.Enabled && current.route != nil {

@@ -10,14 +10,14 @@ import java.util.Locale
 @Service(Service.Level.APP)
 @State(name = "LocalAIAgentPreferences", storages = [Storage("local-ai-agent.xml")])
 class AgentPreferences : PersistentStateComponent<AgentPreferences.Preferences> {
-    data class Preferences(var locale: String? = null, var appearance: String? = null)
+    data class Preferences(var locale: String? = null, var appearance: String? = null, var remoteSetupProject: String? = null)
 
     @Volatile private var preferences = Preferences()
 
     override fun getState(): Preferences = preferences
 
     override fun loadState(state: Preferences) {
-        preferences = Preferences(state.locale?.takeIf(::isSupportedLocale), state.appearance?.takeIf(::isSupportedAppearance))
+        preferences = Preferences(state.locale?.takeIf(::isSupportedLocale), state.appearance?.takeIf(::isSupportedAppearance), state.remoteSetupProject)
     }
 
     /** A saved choice wins; before one exists, follow the system language the way the web UI does. */
@@ -32,6 +32,16 @@ class AgentPreferences : PersistentStateComponent<AgentPreferences.Preferences> 
     @Synchronized fun setAppearance(appearance: String) {
         require(isSupportedAppearance(appearance)) { "Unsupported appearance" }
         preferences = preferences.copy(appearance = appearance)
+    }
+
+    @Synchronized fun continueRemoteAfterRestart(project: String) {
+        preferences = preferences.copy(remoteSetupProject = project)
+    }
+
+    @Synchronized fun consumeRemoteContinuation(project: String): Boolean {
+        if (preferences.remoteSetupProject != project) return false
+        preferences = preferences.copy(remoteSetupProject = null)
+        return true
     }
 
     private fun isSupportedLocale(locale: String): Boolean = locale == "zh-CN" || locale == "en-US"

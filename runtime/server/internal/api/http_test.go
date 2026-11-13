@@ -108,6 +108,28 @@ func TestServeFrontendIndexKeepsLocalAssetRefsForDevVersion(t *testing.T) {
 	}
 }
 
+func TestStandaloneModeSurvivesRelayedAssetRewrite(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "assets", "main.js"), []byte("// test"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	index := filepath.Join(dir, "index.html")
+	if err := os.WriteFile(index, []byte(`<html><head><script type="module" src="./assets/main.js"></script></head></html>`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	handler := &HTTPHandler{StaticDir: dir, Version: "0.1.26", Standalone: true}
+	request := httptest.NewRequest("GET", "/", nil)
+	request.Header.Set("X-MindFS-Relayed", "1")
+	response := httptest.NewRecorder()
+	handler.serveFrontendIndex(response, request, dir, index)
+	if !strings.Contains(response.Body.String(), `name="local-ai-agent-mode" content="standalone"`) || !strings.Contains(response.Body.String(), "/mindfs-assets/main.js") {
+		t.Fatal("standalone mode or relayed assets were lost", response.Body.String())
+	}
+}
+
 func TestIsStandardReleaseVersion(t *testing.T) {
 	tests := []struct {
 		version string

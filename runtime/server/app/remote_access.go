@@ -105,15 +105,20 @@ func (c *remoteAccessControl) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	status := c.manager.Status()
+	projects := make([]map[string]any, 0)
+	for _, root := range c.app.ListRoots() {
+		projects = append(projects, map[string]any{"project_id": root.ID, "name": root.Name, "label": root.RootPath, "enabled": true, "availability": "online"})
+	}
 	_ = json.NewEncoder(w).Encode(struct {
 		relay.Status
-		Enabled       bool   `json:"enabled"`
-		PairingSecret string `json:"pairing_secret"`
-	}{status, c.enabled, c.app.E2EE.PairingSecret()})
+		Enabled     bool             `json:"enabled"`
+		HostEnabled bool             `json:"host_enabled"`
+		HostBound   bool             `json:"host_bound"`
+		Projects    []map[string]any `json:"projects"`
+	}{status, c.enabled, c.enabled, status.Bound, projects})
 }
 
-// The connector forwards to a dedicated loopback listener. No IDEA credential
-// is accepted here; protected API and WS handlers require browser E2EE proofs.
+// The existing Relay connector forwards remote requests to this loopback listener.
 func remoteAccessMiddleware(manager *relay.Manager, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" && r.Method == http.MethodGet {

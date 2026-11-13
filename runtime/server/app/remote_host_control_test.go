@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"mindfs/server/internal/api"
 	"mindfs/server/internal/e2ee"
@@ -48,7 +47,7 @@ func TestRemoteHostMigrationPreservesLegacyUntilBound(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/control/status", "/control/bind":
-			_ = json.NewEncoder(w).Encode(remotehost.Status{Status: relay.Status{Bound: bound, Connected: true, NodeURL: "https://relay.test/n/computer/"}, Enabled: true, PairingSecret: "computer-secret", Protocol: 1})
+			_ = json.NewEncoder(w).Encode(remotehost.Status{Status: relay.Status{Bound: bound, Connected: true, NodeURL: "https://relay.test/n/computer/"}, Enabled: true, Protocol: 1})
 		case "/control/register":
 			_ = json.NewDecoder(r.Body).Decode(&registered)
 			if failRegister {
@@ -113,8 +112,12 @@ func TestRemoteHostMigrationPreservesLegacyUntilBound(t *testing.T) {
 	if !manager.NoRelayer() || c.saved.Mode != "host" || c.saved.MigrationPending || !registered.Enabled || !c.allowed() {
 		t.Fatal("migration did not transfer entry")
 	}
-	if app.E2EE.NodeID() == old.NodeID || app.E2EE.PairingSecret() == old.PairingSecret {
-		t.Fatal("legacy browser authority was reused")
+	registrationData, _ := json.Marshal(registered)
+	if strings.Contains(string(registrationData), "pairing_secret") || strings.Contains(string(registrationData), "e2ee_node_id") {
+		t.Fatal("registration still requires browser pairing")
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "remote-host-e2ee.json")); !os.IsNotExist(err) {
+		t.Fatal("created obsolete project pairing identity", err)
 	}
 	var saved remoteProjectPreference
 	bytes, err := os.ReadFile(preference)
@@ -149,59 +152,39 @@ func TestRemoteHostMigrationPreservesLegacyUntilBound(t *testing.T) {
 	}
 }
 
-func TestRemoteProjectEntryBindsProofToProjectAndRejectsNativeBypass(t *testing.T) {
-	dataDir := t.TempDir()
-	t.Setenv("IDE_AGENT_DATA_DIR", dataDir)
+func TestRemoteProjectEntryUsesInternalMountWithoutBrowserProof(t *testing.T) {
+	t.Setenv("IDE_AGENT_DATA_DIR", t.TempDir())
 	manager, err := relay.NewManager("127.0.0.1:1", true, "https://relay.invalid", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	crypto := e2ee.NewManager(e2ee.Config{Enabled: true, NodeID: "new-project", PairingSecret: "new-secret"})
-	key := []byte("0123456789abcdef0123456789abcdef")
-	if _, err = crypto.OpenSessionForClient("browser", e2ee.DerivedKey{Transport: key}); err != nil {
-		t.Fatal(err)
-	}
-	app := &api.AppContext{E2EE: crypto, ProjectLocked: true, Relay: manager}
+	app := &api.AppContext{E2EE: e2ee.NewManager(e2ee.Config{}), ProjectLocked: true, Relay: manager}
 	c := &remoteHostControl{legacy: &remoteAccessControl{app: app, manager: manager}, token: "private-project-token", projectID: "P"}
 	c.route.Store(remoteProjectRoute{ID: "P", Active: true})
 	handler := c.middleware((&api.HTTPHandler{AppContext: app}).Routes())
-	send := func(path, proofPath, token string) int {
+	send := func(path, token string) int {
 		r := httptest.NewRequest("GET", path, nil)
-		if token != "" {
-			r.Header.Set(remotehost.ProjectTokenHeader, token)
-		}
-		r.Header.Set("X-MindFS-Local-CLI-Token", "native-token")
-		r.Header.Set("X-IDE-Local", "true")
-		if proofPath != "" {
-			ts := time.Now().UTC().Format(time.RFC3339)
-			r.Header.Set("X-MindFS-E2EE", "1")
-			r.Header.Set("X-MindFS-Client-ID", "browser")
-			r.Header.Set("X-MindFS-TS", ts)
-			r.Header.Set("X-MindFS-Proof", e2ee.BuildRequestProof(key, "GET", proofPath, ts, "browser"))
-		}
+		r.Header.Set(remotehost.ProjectTokenHeader, token)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)
 		return w.Code
 	}
 	for _, tc := range []struct {
-		path, proof, token string
-		want               int
+		path, token string
+		want        int
 	}{
-		{"/p/P/api/dirs", "/p/P/api/dirs", c.token, 200},
-		{"/p/P/api/dirs", "/api/dirs", c.token, 401},
-		{"/p/P/api/dirs", "/p/Q/api/dirs", c.token, 401},
-		{"/p/P/api/dirs", "", c.token, 401},
-		{"/p/P/api/dirs", "/p/P/api/dirs", "", 401},
-		{"/p/Q/api/dirs", "/p/Q/api/dirs", c.token, 404},
-		{"/p/P/api/idea/remote", "/p/P/api/idea/remote", c.token, 404},
-		{"/p/P/api/dirs?name=%E4%B8%AD%20x", "/p/P/api/dirs?name=%E4%B8%AD%20x", c.token, 200},
+		{"/p/P/api/dirs", c.token, 200},
+		{"/p/P/api/dirs", "", 401},
+		{"/p/Q/api/dirs", c.token, 404},
+		{"/p/P/api/idea/remote", c.token, 404},
+		{"/p/P/api/dirs?name=%E4%B8%AD%20x", c.token, 200},
 	} {
-		if got := send(tc.path, tc.proof, tc.token); got != tc.want {
-			t.Errorf("%s proof=%s got=%d want=%d", tc.path, tc.proof, got, tc.want)
+		if got := send(tc.path, tc.token); got != tc.want {
+			t.Errorf("%s got=%d want=%d", tc.path, got, tc.want)
 		}
 	}
 	c.setRoute(false)
-	if got := send("/p/P/api/dirs", "/p/P/api/dirs", c.token); got != 503 {
-		t.Fatalf("revoked project: %d", got)
+	if got := send("/p/P/api/dirs", c.token); got != 503 {
+		t.Fatal("stopped project", got)
 	}
 }

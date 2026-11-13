@@ -98,11 +98,10 @@ func TestSeparateProcessesShareOneHostAndRecoverAfterCrash(t *testing.T) {
 	if _, err := NewClient(dir).Status(context.Background()); err != nil {
 		t.Fatal("duplicate launcher exit stopped shared host", err)
 	}
-	identityBefore, err := os.ReadFile(filepath.Join(dir, "e2ee.json"))
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(dir, "e2ee.json")); !os.IsNotExist(err) {
+		t.Fatal("host created obsolete pairing identity", err)
 	}
-	if err = first.Process.Kill(); err != nil {
+	if err := first.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
 	_ = first.Wait()
@@ -110,11 +109,10 @@ func TestSeparateProcessesShareOneHostAndRecoverAfterCrash(t *testing.T) {
 	if c.Token == a.Token {
 		t.Fatal("crash reused process control credential")
 	}
-	identityAfter, err := os.ReadFile(filepath.Join(dir, "e2ee.json"))
-	if err != nil || string(identityBefore) != string(identityAfter) {
-		t.Fatal("crash changed persisted node identity", err)
+	if _, err := os.Stat(filepath.Join(dir, "e2ee.json")); !os.IsNotExist(err) {
+		t.Fatal("restart created obsolete pairing identity", err)
 	}
-	if _, err = NewClient(dir).Status(context.Background()); err != nil {
+	if _, err := NewClient(dir).Status(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }

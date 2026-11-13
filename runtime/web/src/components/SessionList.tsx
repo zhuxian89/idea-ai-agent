@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ActivityEmoji } from "./ActivityEmoji";
+import { SessionMenu, type SessionMenuActions } from "./SessionMenu";
+import { buildSessionRows, type SessionRow } from "./sessionHierarchy";
+import "./workspaceSidebar.css";
 import { AgentIcon } from "./AgentIcon";
 import { ModeIcon } from "./ModeIcon";
-import { rootBadgeButtonStyle, rootBadgeStyle } from "./rootBadgeStyle";
 import { useI18n, type Locale } from "../i18n";
 
 export type SessionType = "chat" | "plugin" | "command";
@@ -29,7 +32,7 @@ export type SessionItem = {
   search_match_type?: "name" | "user" | "reply";
 };
 
-type SessionListProps = {
+type SessionListProps = SessionMenuActions & {
   sessions: SessionItem[];
   selectedKey?: string;
   headerAction?: React.ReactNode;
@@ -58,21 +61,9 @@ type SessionListProps = {
   hasMore?: boolean;
 };
 
-const COLLAPSED_CHILD_SESSION_LIMIT = 3;
 const MULTI_PROJECT_VISIBLE_LIMIT = 6;
 const MAIN_SESSION_ICON_OFFSET = "2px";
-const SUB_SESSION_ICON_OFFSET = "0px";
 const PINNED_PROJECTS_STORAGE_KEY = "mindfs-pinned-session-projects";
-
-type VisibleSessionRow =
-  | { type: "session"; session: SessionItem }
-  | {
-      type: "child-toggle";
-      parent: SessionItem;
-      loadedChildCount: number;
-      hiddenCount: number;
-      expanded: boolean;
-    };
 
 export type ProjectSessionGroup = {
   rootId: string;
@@ -82,7 +73,7 @@ export type ProjectSessionGroup = {
   totalCount: number;
 };
 
-type ProjectSessionListProps = {
+type ProjectSessionListProps = SessionMenuActions & {
   groups: ProjectSessionGroup[];
   selectedKey?: string;
   selectedRootId?: string;
@@ -203,6 +194,20 @@ function ToggleRowButton({
   );
 }
 
+function Chevron({ expanded }: { expanded: boolean }) {
+  return <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" style={{ transform: expanded ? "rotate(90deg)" : undefined }}><path d="m6 3 5 5-5 5" /></svg>;
+}
+
+function ChildGroupRow({ row, loading, onClick }: { row: Exclude<SessionRow, { type: "session" }>; loading: boolean; onClick: () => void }) {
+  const { t } = useI18n();
+  const group = row.type === "child-group";
+  return <button type="button" className="workspace-child-group" style={{ marginLeft: `${row.depth * 12 + 8}px` }}
+    aria-expanded={group ? row.expanded : undefined} disabled={loading} onClick={onClick}>
+    {group ? <Chevron expanded={row.expanded} /> : null}
+    {loading ? t("sessionList.loading") : group ? t(row.group === "running" ? "sessionList.runningChildren" : "sessionList.endedChildren", { count: row.count }) : t("sessionList.loadMoreChildren")}
+  </button>;
+}
+
 function PinIcon({ pinned }: { pinned: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
@@ -311,6 +316,8 @@ export function SessionList({
   onPin,
   onRename,
   onDelete,
+  onScheduledTask,
+  onHandoffPack,
   onLoadChildren,
   onLoadOlder,
   loadingOlder = false,
@@ -320,76 +327,14 @@ export function SessionList({
   const effectiveEmptyText = emptyText || t("sessionList.empty");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBlurTimerRef = useRef<number | null>(null);
+  const [collapsedRunning, setCollapsedRunning] = useState<Record<string, boolean>>({});
   const [expandedChildren, setExpandedChildren] = useState<Record<string, boolean>>({});
   const [loadingChildren, setLoadingChildren] = useState<Record<string, boolean>>({});
   const [childrenHasMore, setChildrenHasMore] = useState<Record<string, boolean>>({});
-  const visibleSessions = useMemo(() => {
-    if (searchResultsMode) {
-      return sessions.map((session): VisibleSessionRow => ({ type: "session", session }));
-    }
-    const childrenByParent = new Map<string, SessionItem[]>();
-    const topLevel: SessionItem[] = [];
-    const keys = new Set(sessions.map((item) => item.key));
-    const parentByKey = new Map<string, string>();
-    for (const item of sessions) {
-      const parentKey = String(item.parent_session_key || "").trim();
-      if (parentKey && keys.has(parentKey)) {
-        const children = childrenByParent.get(parentKey) || [];
-        children.push(item);
-        childrenByParent.set(parentKey, children);
-        parentByKey.set(item.key, parentKey);
-      } else {
-        topLevel.push(item);
-      }
-    }
-    const activeParentKeys = new Set<string>();
-    if (selectedKey) {
-      activeParentKeys.add(selectedKey);
-      let parentKey = parentByKey.get(selectedKey) || "";
-      while (parentKey) {
-        activeParentKeys.add(parentKey);
-        parentKey = parentByKey.get(parentKey) || "";
-      }
-    }
-    const out: VisibleSessionRow[] = [];
-    const append = (item: SessionItem) => {
-      out.push({ type: "session", session: item });
-      const children = childrenByParent.get(item.key) || [];
-      const active = activeParentKeys.has(item.key);
-      const expanded = !!expandedChildren[item.key];
-      const visibleChildren = active
-        ? expanded
-          ? children
-          : children.slice(0, COLLAPSED_CHILD_SESSION_LIMIT)
-        : [];
-      for (const child of visibleChildren) {
-        append(child);
-      }
-      const hiddenCount = Math.max(0, children.length - COLLAPSED_CHILD_SESSION_LIMIT);
-      if (active && (children.length > COLLAPSED_CHILD_SESSION_LIMIT || expanded || childrenHasMore[item.key])) {
-        out.push({
-          type: "child-toggle",
-          parent: item,
-          loadedChildCount: children.length,
-          hiddenCount,
-          expanded,
-        });
-      }
-    };
-    topLevel.forEach((item) => append(item));
-    return out;
-  }, [childrenHasMore, expandedChildren, searchResultsMode, selectedKey, sessions]);
-  const childCountByParent = useMemo(() => {
-    const counts = new Map<string, number>();
-    const keys = new Set(sessions.map((item) => item.key));
-    for (const item of sessions) {
-      const parentKey = String(item.parent_session_key || "").trim();
-      if (parentKey && keys.has(parentKey)) {
-        counts.set(parentKey, (counts.get(parentKey) || 0) + 1);
-      }
-    }
-    return counts;
-  }, [sessions]);
+  const visibleSessions = useMemo(() => searchResultsMode
+    ? sessions.map((session): SessionRow => ({ type: "session", session, depth: 0 }))
+    : buildSessionRows(sessions, selectedKey || "", collapsedRunning, expandedChildren, childrenHasMore, session => session.key),
+  [sessions, selectedKey, searchResultsMode, collapsedRunning, expandedChildren, childrenHasMore]);
   const selectedParentKey = useMemo(() => {
     if (!selectedKey) return "";
     return sessions.find((item) => item.key === selectedKey)?.parent_session_key || "";
@@ -429,25 +374,23 @@ export function SessionList({
     }
   };
 
-  const handleChildToggle = async (row: Extract<VisibleSessionRow, { type: "child-toggle" }>) => {
-    const parentKey = row.parent.key;
-    if (!row.expanded) {
-      setExpandedChildren((prev) => ({ ...prev, [parentKey]: true }));
-      await loadChildren(row.parent);
-      return;
-    }
-    if (childrenHasMore[parentKey]) {
-      const lastChild = sessions
-        .filter((item) => item.parent_session_key === parentKey)
-        .sort((left, right) => (Date.parse(left.updated_at || "") || 0) - (Date.parse(right.updated_at || "") || 0))[0];
-      await loadChildren(row.parent, lastChild?.updated_at);
+  const handleChildToggle = async (row: Exclude<SessionRow, { type: "session" }>) => {
+    const key = row.parent.key;
+    if (row.type === "child-group") {
+      if (row.group === "running") setCollapsedRunning(prev => ({ ...prev, [key]: row.expanded }));
+      else {
+        setExpandedChildren(prev => ({ ...prev, [key]: !row.expanded }));
+        if (!row.expanded) await loadChildren(row.parent);
+      }
     } else {
-      setExpandedChildren((prev) => ({ ...prev, [parentKey]: false }));
+      const oldest = sessions.filter(item => item.parent_session_key === key)
+        .sort((a, b) => Date.parse(a.updated_at || "") - Date.parse(b.updated_at || ""))[0];
+      await loadChildren(row.parent, oldest?.updated_at);
     }
   };
 
   return (
-    <div
+    <div className="workspace-sessions"
       style={{
         flex: 1,
         width: "100%",
@@ -484,6 +427,7 @@ export function SessionList({
             </button>
           ) : (
             <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span className="workspace-sessions-title">{t("sessionList.title")}</span>
               {onSearchToggle ? (
                 <button
                   type="button"
@@ -665,36 +609,8 @@ export function SessionList({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             {visibleSessions.map((row) => {
-              if (row.type === "child-toggle") {
-                const loading = !!loadingChildren[row.parent.key];
-                const hasMoreChildren = !!childrenHasMore[row.parent.key];
-                const label = loading
-                  ? t("sessionList.loading")
-                  : row.expanded
-                    ? hasMoreChildren
-                      ? t("sessionList.loadMoreChildren")
-                      : t("common.collapse")
-                    : row.hiddenCount > 0
-                      ? t("sessionList.remainingChildren", { count: row.hiddenCount })
-                      : t("sessionList.expandChildren");
-                return (
-                  <ToggleRowButton
-                    key={`children-toggle-${row.parent.key}`}
-                    loading={loading}
-                    label={label}
-                    showExpandIcon={!loading && (!row.expanded || hasMoreChildren)}
-                    showCollapseIcon={!loading && row.expanded}
-                    marginLeft={SUB_SESSION_ICON_OFFSET}
-                    onClick={() => void handleChildToggle(row)}
-                    onCollapse={() =>
-                      setExpandedChildren((prev) => ({
-                        ...prev,
-                        [row.parent.key]: false,
-                      }))
-                    }
-                  />
-                );
-              }
+              if (row.type !== "session") return <ChildGroupRow key={`${row.parent.key}:${row.type}:${row.type === "child-group" ? row.group : "more"}`} row={row}
+                loading={!!loadingChildren[row.parent.key]} onClick={() => void handleChildToggle(row)} />;
               const session = row.session;
               return (
                 <SessionCard
@@ -705,12 +621,14 @@ export function SessionList({
                   parentHighlighted={!!selectedParentKey && session.key === selectedParentKey}
                   highlightQuery={searchResultsMode ? searchQuery : ""}
                   syncing={isSessionSyncing(session, syncingSessionKeys)}
-                  childCount={childCountByParent.get(session.key) || 0}
+                  depth={row.depth}
                   onSelect={onSelect}
                   onSync={onSync}
                   onPin={onPin}
                   onRename={onRename}
                   onDelete={onDelete}
+                  onScheduledTask={onScheduledTask}
+                  onHandoffPack={onHandoffPack}
                 />
               );
             })}
@@ -774,14 +692,18 @@ export function MultiProjectSessionList({
   onPin,
   onRename,
   onDelete,
+  onScheduledTask,
+  onHandoffPack,
   onProjectClick,
   onLoadMoreProject,
   onLoadChildren,
 }: ProjectSessionListProps) {
   const { t } = useI18n();
   const effectiveEmptyText = emptyText || t("sessionList.empty");
+  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [loadingProjects, setLoadingProjects] = useState<Record<string, boolean>>({});
+  const [collapsedRunning, setCollapsedRunning] = useState<Record<string, boolean>>({});
   const [expandedChildren, setExpandedChildren] = useState<Record<string, boolean>>({});
   const [loadingChildren, setLoadingChildren] = useState<Record<string, boolean>>({});
   const [childrenHasMore, setChildrenHasMore] = useState<Record<string, boolean>>({});
@@ -864,86 +786,30 @@ export function MultiProjectSessionList({
     }
   };
 
-  const buildRows = (sessions: SessionItem[], fallbackRootId: string): VisibleSessionRow[] => {
-    const childrenByParent = new Map<string, SessionItem[]>();
-    const topLevel: SessionItem[] = [];
-    const keys = new Set(sessions.map((item) => item.key));
-    const parentByKey = new Map<string, string>();
-    for (const item of sessions) {
-      const parentKey = String(item.parent_session_key || "").trim();
-      if (parentKey && keys.has(parentKey)) {
-        const children = childrenByParent.get(parentKey) || [];
-        children.push(item);
-        childrenByParent.set(parentKey, children);
-        parentByKey.set(item.key, parentKey);
-      } else {
-        topLevel.push(item);
-      }
-    }
-    const activeParentKeys = new Set<string>();
-    if (selectedKey && selectedRootId === fallbackRootId) {
-      activeParentKeys.add(selectedKey);
-      let parentKey = parentByKey.get(selectedKey) || "";
-      while (parentKey) {
-        activeParentKeys.add(parentKey);
-        parentKey = parentByKey.get(parentKey) || "";
-      }
-    }
-    const out: VisibleSessionRow[] = [];
-    const append = (item: SessionItem) => {
-      out.push({ type: "session", session: item });
-      const children = childrenByParent.get(item.key) || [];
-      const stateKey = childStateKey(item, fallbackRootId);
-      const active = activeParentKeys.has(item.key);
-      const expanded = !!expandedChildren[stateKey];
-      const visibleChildren = active
-        ? expanded
-          ? children
-          : children.slice(0, COLLAPSED_CHILD_SESSION_LIMIT)
-        : [];
-      for (const child of visibleChildren) {
-        append(child);
-      }
-      const hiddenCount = Math.max(0, children.length - COLLAPSED_CHILD_SESSION_LIMIT);
-      if (active && (children.length > COLLAPSED_CHILD_SESSION_LIMIT || expanded || childrenHasMore[stateKey])) {
-        out.push({
-          type: "child-toggle",
-          parent: item,
-          loadedChildCount: children.length,
-          hiddenCount,
-          expanded,
-        });
-      }
-    };
-    topLevel.forEach((item) => append(item));
-    return out;
-  };
+  const buildRows = (sessions: SessionItem[], rootId: string) => buildSessionRows(
+    sessions, selectedRootId === rootId ? selectedKey : "", collapsedRunning, expandedChildren, childrenHasMore,
+    session => childStateKey(session, rootId),
+  );
 
-  const handleChildToggle = async (
-    row: Extract<VisibleSessionRow, { type: "child-toggle" }>,
-    groupSessions: SessionItem[],
-    fallbackRootId: string,
-  ) => {
-    const parentKey = row.parent.key;
-    const stateKey = childStateKey(row.parent, fallbackRootId);
-    if (!row.expanded) {
-      setExpandedChildren((prev) => ({ ...prev, [stateKey]: true }));
-      await loadChildren(row.parent);
-      return;
-    }
-    if (childrenHasMore[stateKey]) {
-      const lastChild = groupSessions
-        .filter((item) => item.parent_session_key === parentKey)
-        .sort((left, right) => (Date.parse(left.updated_at || "") || 0) - (Date.parse(right.updated_at || "") || 0))[0];
-      await loadChildren(row.parent, lastChild?.updated_at);
+  const handleChildToggle = async (row: Exclude<SessionRow, { type: "session" }>, sessions: SessionItem[], rootId: string) => {
+    const key = childStateKey(row.parent, rootId);
+    const parent = { ...row.parent, root_id: rootId };
+    if (row.type === "child-group") {
+      if (row.group === "running") setCollapsedRunning(prev => ({ ...prev, [key]: row.expanded }));
+      else {
+        setExpandedChildren(prev => ({ ...prev, [key]: !row.expanded }));
+        if (!row.expanded) await loadChildren(parent);
+      }
     } else {
-      setExpandedChildren((prev) => ({ ...prev, [stateKey]: false }));
+      const oldest = sessions.filter(item => item.parent_session_key === parent.key)
+        .sort((a, b) => Date.parse(a.updated_at || "") - Date.parse(b.updated_at || ""))[0];
+      await loadChildren(parent, oldest?.updated_at);
     }
   };
 
   const handleProjectToggle = async (group: ProjectSessionGroup) => {
     const expanded = !!expandedProjects[group.rootId];
-    const remaining = Math.max(0, group.totalCount - group.sessions.length);
+    const remaining = Math.max(0, group.totalCount - topLevelSessionsForGroup(group.sessions).length);
     if (!expanded) {
       setExpandedProjects((prev) => ({ ...prev, [group.rootId]: true }));
       if (remaining > 0 && onLoadMoreProject) {
@@ -972,23 +838,32 @@ export function MultiProjectSessionList({
     setExpandedProjects((prev) => ({ ...prev, [rootId]: false }));
   };
 
-  const topLevelSessionsForGroup = (sessions: SessionItem[]) =>
-    sessions.filter((session) => !String(session.parent_session_key || "").trim());
+  const topLevelSessionsForGroup = (sessions: SessionItem[]) => {
+    const keys = new Set(sessions.map(session => session.key));
+    return sessions.filter(session => !session.parent_session_key || !keys.has(session.parent_session_key));
+  };
 
-  const sessionsForTopLevelLimit = (sessions: SessionItem[], limit: number) => {
+  const sessionsForTopLevelLimit = (sessions: SessionItem[], limit: number, rootId: string) => {
     const topLevel = topLevelSessionsForGroup(sessions);
-    if (limit >= topLevel.length) {
-      return sessions;
-    }
-    const visibleParentKeys = new Set(topLevel.slice(0, limit).map((session) => session.key));
-    return sessions.filter((session) => {
-      const parentKey = String(session.parent_session_key || "").trim();
-      return !parentKey ? visibleParentKeys.has(session.key) : visibleParentKeys.has(parentKey);
-    });
+    if (limit >= topLevel.length) return sessions;
+    const byKey = new Map(sessions.map(session => [session.key, session]));
+    const topParent = (session: SessionItem): string => {
+      let parent = session;
+      const visited = new Set<string>();
+      while (parent.parent_session_key && byKey.has(parent.parent_session_key) && !visited.has(parent.key)) {
+        visited.add(parent.key);
+        parent = byKey.get(parent.parent_session_key)!;
+      }
+      return parent.key;
+    };
+    const visibleKeys = new Set(topLevel.slice(0, limit).map(session => session.key));
+    const selected = selectedRootId === rootId ? byKey.get(selectedKey) : undefined;
+    if (selected) visibleKeys.add(topParent(selected));
+    return sessions.filter(session => visibleKeys.has(topParent(session)));
   };
 
   return (
-    <div style={{ flex: 1, width: "100%", minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", background: "transparent" }}>
+    <div className="workspace-sessions" style={{ flex: 1, width: "100%", minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", background: "transparent" }}>
       <div
         data-onboarding="session-actions"
         style={{
@@ -1004,6 +879,7 @@ export function MultiProjectSessionList({
         }}
       >
         <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+          <span className="workspace-sessions-title">{t("sessionList.title")}</span>
           {onSearchToggle ? (
             <button
               type="button"
@@ -1049,135 +925,27 @@ export function MultiProjectSessionList({
               const topLevelSessions = topLevelSessionsForGroup(group.sessions);
               const sessions = expanded
                 ? group.sessions
-                : sessionsForTopLevelLimit(group.sessions, MULTI_PROJECT_VISIBLE_LIMIT);
+                : sessionsForTopLevelLimit(group.sessions, MULTI_PROJECT_VISIBLE_LIMIT, group.rootId);
               const rows = buildRows(sessions, group.rootId);
-              const childCountByParent = new Map<string, number>();
-              const sessionKeys = new Set(group.sessions.map((item) => item.key));
-              for (const item of group.sessions) {
-                const parentKey = String(item.parent_session_key || "").trim();
-                if (parentKey && sessionKeys.has(parentKey)) {
-                  childCountByParent.set(parentKey, (childCountByParent.get(parentKey) || 0) + 1);
-                }
-              }
               const remaining = Math.max(0, group.totalCount - topLevelSessions.length);
               const projectLoading = !!loadingProjects[group.rootId];
               return (
-                <section key={group.rootId} style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      minWidth: 0,
-                      height: "22px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      padding: "0 24px 0 2px",
-                      background: "transparent",
-                      boxSizing: "border-box",
-                      position: "relative",
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        height: "1px",
-                        flex: 1,
-                        minWidth: "12px",
-                        background: "var(--border-color)",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onProjectClick?.(group.rootId)}
-                      style={{
-                        ...rootBadgeButtonStyle,
-                        flexShrink: 1,
-                        maxWidth: "100%",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        cursor: onProjectClick ? "pointer" : "default",
-                      }}
-                    >
-                      {group.rootName || group.rootId}
+                <section key={group.rootId} className="workspace-session-project" style={{ minWidth: 0 }}>
+                  <div className="workspace-project-heading">
+                    <button type="button" className="workspace-group-toggle" aria-expanded={!collapsedProjects[group.rootId]}
+                      aria-label={`${t(collapsedProjects[group.rootId] ? "common.expand" : "common.collapse")} ${group.rootName || group.rootId}`}
+                      onClick={() => setCollapsedProjects(prev => ({ ...prev, [group.rootId]: !prev[group.rootId] }))}>
+                      <Chevron expanded={!collapsedProjects[group.rootId]} />
                     </button>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        height: "1px",
-                        flex: 1,
-                        minWidth: "12px",
-                        background: "var(--border-color)",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      aria-label={pinned ? t("sessionList.unpinProject") : t("sessionList.pinProject")}
-                      title={pinned ? t("sessionList.unpin") : t("sessionList.pin")}
-                      onClick={() => togglePinnedProject(group.rootId)}
-                      style={{
-                        position: "absolute",
-                        right: 0,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        width: "20px",
-                        height: "20px",
-                        border: "none",
-                        borderRadius: "6px",
-                        padding: 0,
-                        background: "transparent",
-                        color: pinned ? "#4b5563" : "var(--text-secondary)",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        opacity: pinned ? 1 : 0.72,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(0,0,0,0.05)";
-                        e.currentTarget.style.opacity = "1";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.opacity = pinned ? "1" : "0.72";
-                      }}
-                    >
-                      <PinIcon pinned={pinned} />
-                    </button>
+                    <button type="button" className="workspace-project-name" onClick={() => onProjectClick?.(group.rootId)} title={group.rootName || group.rootId}>{group.rootName || group.rootId}</button>
+                    <span className="workspace-project-count">{group.totalCount}</span>
+                    <button type="button" className="workspace-project-pin" aria-label={pinned ? t("sessionList.unpinProject") : t("sessionList.pinProject")}
+                      aria-pressed={pinned} onClick={() => togglePinnedProject(group.rootId)}><PinIcon pinned={pinned} /></button>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", paddingTop: 0 }}>
+                  <div className="workspace-project-sessions" hidden={!!collapsedProjects[group.rootId]}>
                     {rows.map((row) => {
-                      if (row.type === "child-toggle") {
-                        const stateKey = childStateKey(row.parent, group.rootId);
-                        const loadingChild = !!loadingChildren[stateKey];
-                        const hasMoreChildren = !!childrenHasMore[stateKey];
-                        const label = loadingChild
-                          ? t("sessionList.loading")
-                          : row.expanded
-                            ? hasMoreChildren
-                              ? t("sessionList.loadMoreChildren")
-                              : t("common.collapse")
-                            : row.hiddenCount > 0
-                              ? t("sessionList.remainingChildren", { count: row.hiddenCount })
-                              : t("sessionList.expandChildren");
-                        return (
-                          <ToggleRowButton
-                            key={`children-toggle-${group.rootId}-${row.parent.key}`}
-                            loading={loadingChild}
-                            label={label}
-                            showExpandIcon={!loadingChild && (!row.expanded || hasMoreChildren)}
-                            showCollapseIcon={!loadingChild && row.expanded}
-                            marginLeft={SUB_SESSION_ICON_OFFSET}
-                            onClick={() => void handleChildToggle(row, group.sessions, group.rootId)}
-                            onCollapse={() =>
-                              setExpandedChildren((prev) => ({
-                                ...prev,
-                                [childStateKey(row.parent, group.rootId)]: false,
-                              }))
-                            }
-                          />
-                        );
-                      }
+                      if (row.type !== "session") return <ChildGroupRow key={`${row.parent.key}:${row.type}:${row.type === "child-group" ? row.group : "more"}`} row={row}
+                        loading={!!loadingChildren[childStateKey(row.parent, group.rootId)]} onClick={() => void handleChildToggle(row, group.sessions, group.rootId)} />;
                       const session = row.session;
                       const sessionRoot = session.root_id || group.rootId;
                       return (
@@ -1189,12 +957,14 @@ export function MultiProjectSessionList({
                           parentHighlighted={false}
                           highlightQuery=""
                           syncing={isSessionSyncing({ ...session, root_id: sessionRoot }, syncingSessionKeys)}
-                          childCount={childCountByParent.get(session.key) || 0}
+                          depth={row.depth}
                           onSelect={onSelect}
                           onSync={onSync}
                           onPin={onPin}
                           onRename={onRename}
                           onDelete={onDelete}
+                          onScheduledTask={onScheduledTask}
+                          onHandoffPack={onHandoffPack}
                         />
                       );
                     })}
@@ -1245,20 +1015,22 @@ function SessionCard({
   parentHighlighted,
   highlightQuery,
   syncing = false,
-  childCount = 0,
+  depth = 0,
   onSelect,
   onSync,
   onPin,
   onRename,
   onDelete,
-}: {
+  onScheduledTask,
+  onHandoffPack,
+}: SessionMenuActions & {
   session: SessionItem;
   sessionByKey: Map<string, SessionItem>;
   selected: boolean;
   parentHighlighted?: boolean;
   highlightQuery?: string;
   syncing?: boolean;
-  childCount?: number;
+  depth?: number;
   onSelect?: (session: SessionItem) => void;
   onSync?: (session: SessionItem) => Promise<void> | void;
   onPin?: (session: SessionItem, pinned: boolean) => Promise<boolean> | boolean;
@@ -1277,16 +1049,14 @@ function SessionCard({
     : storedName;
   const snippet = (session.search_snippet || "").trim();
   const isSearchResult = !!session.search_match_type;
-  const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(storedName);
   const [saving, setSaving] = useState(false);
   const rowBackground = selected
-    ? "rgba(59, 130, 246, 0.1)"
+    ? "var(--workspace-selected)"
     : parentHighlighted
-      ? "rgba(0,0,0,0.03)"
+      ? "var(--workspace-hover)"
       : "transparent";
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const composingRef = useRef(false);
   const submittingRef = useRef(false);
@@ -1296,17 +1066,6 @@ function SessionCard({
       setDraftName(storedName);
     }
   }, [storedName, editing]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [menuOpen]);
 
   useEffect(() => {
     if (!editing) return;
@@ -1363,7 +1122,10 @@ function SessionCard({
 
   return (
     <div
+      className={`workspace-session-row${isSubagent ? " workspace-child-session" : ""}`}
+      data-session-key={session.key} data-selected={selected} data-root-id={session.root_id}
       style={{
+        background: rowBackground,
         width: "100%",
         display: "flex",
         alignItems: "center",
@@ -1371,16 +1133,17 @@ function SessionCard({
         padding: "2px 0",
         borderRadius: "8px",
         position: "relative",
-        paddingLeft: isSubagent ? "10px" : 0,
+        paddingLeft: `${Math.max(depth, isSubagent ? 1 : 0) * 12 + 4}px`,
+        boxSizing: "border-box",
       }}
     >
       <div
         style={{
           textAlign: "left" as const,
-          padding: editing ? "7px 0 7px 2px" : "7px 4px 7px 2px",
+          padding: editing ? "7px 0 7px 2px" : isSubagent ? "3px 4px 3px 2px" : "7px 4px 7px 2px",
           borderRadius: "8px",
           border: "1px solid transparent",
-          background: rowBackground,
+          background: "transparent",
           flex: 1,
           minWidth: 0,
           display: "flex",
@@ -1405,7 +1168,7 @@ function SessionCard({
               isForkSession ? (
                 <ForkSessionIcon />
               ) : (
-                <SubSessionIcon />
+                session.pending ? <ActivityEmoji emoji="👀" /> : <SubSessionIcon />
               )
             ) : (
               isForkSession ? (
@@ -1466,33 +1229,7 @@ function SessionCard({
                 />
               </span>
             ) : null}
-            {!isSubagent && childCount > 0 ? (
-              <span
-                title={t("sessionList.childCount", { count: childCount })}
-                style={{
-                  position: "absolute",
-                  right: "-7px",
-                  top: "-7px",
-                  minWidth: "14px",
-                  height: "14px",
-                  padding: "0 3px",
-                  borderRadius: "999px",
-                  background: "var(--accent-color)",
-                  border: "1px solid var(--content-bg, #fff)",
-                  color: "#fff",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxSizing: "border-box",
-                  fontSize: "9px",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  letterSpacing: 0,
-                }}
-              >
-                {childCount > 99 ? "99+" : childCount}
-              </span>
-            ) : null}
+
           </span>
         ) : null}
 
@@ -1560,25 +1297,15 @@ function SessionCard({
               padding: 0,
               cursor: "pointer",
               textAlign: "left",
-              color: selected ? "var(--accent-color)" : "var(--text-primary)",
+              color: selected ? "var(--accent-hover)" : "var(--text-primary)",
             }}
-            onMouseEnter={(e) => {
-              const container = e.currentTarget.parentElement;
-              if (container && !selected && !parentHighlighted) {
-                container.style.background = "rgba(0,0,0,0.03)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              const container = e.currentTarget.parentElement;
-              if (container && !selected && !parentHighlighted) {
-                container.style.background = "transparent";
-              }
-            }}
+
           >
             <span
               style={{
                 display: "block",
-                fontSize: "13px",
+                fontSize: isSubagent ? "12px" : "13px",
+                lineHeight: isSubagent ? 1.3 : 1.45,
                 fontWeight: selected ? 600 : 500,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -1586,10 +1313,10 @@ function SessionCard({
               }}
             >
               {renderHighlightedText(displayName, highlightQuery, {
-                color: selected ? "var(--accent-color)" : "var(--text-primary)",
+                color: selected ? "var(--accent-hover)" : "var(--text-primary)",
               })}
             </span>
-            <span className="idea-session-agent" style={{ display: "none" }}>{session.agent === "claude" ? "Claude Code" : session.agent === "codex" ? "Codex" : session.agent || session.type}</span>
+            <span className="idea-session-agent" style={{ display: isSubagent ? "block" : "none", fontSize: "11px", lineHeight: 1.3, color: "var(--text-secondary)", marginTop: "2px" }}>{session.agent === "claude" ? "Claude Code" : session.agent === "codex" ? "Codex" : session.agent || session.type}</span>
             {snippet ? (
               <span
                 style={{
@@ -1713,7 +1440,7 @@ function SessionCard({
                 animation: "spin 0.8s linear infinite",
               }}
             />
-          ) : session.pending ? (
+          ) : session.pending && !isSubagent ? (
             <span
               aria-label={t("sessionList.replying")}
               title={t("sessionList.replying")}
@@ -1732,9 +1459,8 @@ function SessionCard({
           ) : (
             <span
               style={{
-                fontSize: "10px",
+                fontSize: "11px",
                 color: "var(--text-secondary)",
-                opacity: 0.8,
                 whiteSpace: "nowrap",
                 textAlign: "right",
               }}
@@ -1751,192 +1477,9 @@ function SessionCard({
         </div>
       ) : null}
 
-      <div
-        ref={menuRef}
-        style={{ position: "relative", flexShrink: 0, marginLeft: "2px" }}
-      >
-        <button
-          type="button"
-          aria-label={t("sessionList.menu")}
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuOpen((open) => !open);
-          }}
-          style={{
-            width: "28px",
-            height: "28px",
-            borderRadius: "8px",
-            border: "none",
-            background: menuOpen ? "rgba(0, 0, 0, 0.06)" : "transparent",
-            color: "var(--text-secondary)",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            outline: "none",
-            position: "relative",
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="5" r="1.8" />
-            <circle cx="12" cy="12" r="1.8" />
-            <circle cx="12" cy="19" r="1.8" />
-          </svg>
-          {isPinned ? (
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                top: "1px",
-                right: "1px",
-                width: "12px",
-                height: "12px",
-                borderRadius: "999px",
-                background: "var(--menu-bg)",
-                color: selected ? "var(--accent-color)" : "var(--text-secondary)",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                pointerEvents: "none",
-                boxShadow: "0 0 0 1px var(--content-bg, #fff)",
-              }}
-            >
-              <span style={{ width: "9px", height: "9px", display: "inline-flex" }}>
-                <PinIcon pinned />
-              </span>
-            </span>
-          ) : null}
-        </button>
-        {menuOpen ? (
-          <div
-            style={{
-              position: "absolute",
-              top: "calc(100% + 6px)",
-              right: 0,
-              minWidth: "120px",
-              padding: "6px",
-              borderRadius: "10px",
-              border: "1px solid var(--border-color)",
-              background: "var(--menu-bg)",
-              boxShadow: "0 12px 30px rgba(15, 23, 42, 0.14)",
-              zIndex: 20,
-            }}
-          >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                void onPin?.(session, !isPinned);
-              }}
-              style={{
-                ...menuItemStyle,
-                color: "var(--text-primary)",
-              }}
-            >
-              <span style={{ width: "13px", height: "13px", display: "inline-flex" }}>
-                <PinIcon pinned={isPinned} />
-              </span>
-              {isPinned ? t("sessionList.unpin") : t("sessionList.pin")}
-            </button>
-            <button
-              type="button"
-              disabled={syncing}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                void onSync?.(session);
-              }}
-              style={{
-                ...menuItemStyle,
-                color: "var(--text-primary)",
-                opacity: syncing ? 0.55 : 1,
-                cursor: syncing ? "default" : "pointer",
-              }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  fill="currentColor"
-                  d="M19.91 15.51h-4.53a1 1 0 0 0 0 2h2.4A8 8 0 0 1 4 12a1 1 0 0 0-2 0a10 10 0 0 0 16.88 7.23V21a1 1 0 0 0 2 0v-4.5a1 1 0 0 0-.97-.99M12 2a10 10 0 0 0-6.88 2.77V3a1 1 0 0 0-2 0v4.5a1 1 0 0 0 1 1h4.5a1 1 0 0 0 0-2h-2.4A8 8 0 0 1 20 12a1 1 0 0 0 2 0A10 10 0 0 0 12 2"
-                />
-              </svg>
-              {t("sessionList.sync")}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                setDraftName(storedName);
-                setEditing(true);
-              }}
-              style={{
-                ...menuItemStyle,
-                color: "var(--text-primary)",
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-              </svg>
-              {t("sessionList.rename")}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                onDelete?.(session);
-              }}
-              style={{
-                ...menuItemStyle,
-                color: "#dc2626",
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14H6L5 6" />
-                <path d="M10 11v6" />
-                <path d="M14 11v6" />
-                <path d="M9 6V4h6v2" />
-              </svg>
-              {t("common.delete")}
-            </button>
-          </div>
-        ) : null}
-      </div>
+      <SessionMenu session={session} syncing={syncing} onPin={onPin} onSync={onSync} onDelete={onDelete}
+        onScheduledTask={onScheduledTask} onHandoffPack={onHandoffPack}
+        onRename={() => { setDraftName(storedName); setEditing(true); }} />
     </div>
   );
 }
@@ -2083,21 +1626,6 @@ function ForkSessionIcon() {
     </svg>
   );
 }
-
-const menuItemStyle: React.CSSProperties = {
-  width: "100%",
-  border: "none",
-  background: "transparent",
-  borderRadius: "8px",
-  padding: "8px 10px",
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  textAlign: "left",
-  cursor: "pointer",
-  fontSize: "12px",
-  fontWeight: 500,
-};
 
 const inlineActionStyle: React.CSSProperties = {
   width: "24px",

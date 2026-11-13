@@ -381,6 +381,10 @@ export function buildBaseTimeline(
         content,
         timestamp: ex.timestamp,
         agent: ex.agent,
+        model: ex.model,
+        modelDisplayName: ex.model_display_name,
+        effort: ex.effort,
+        fastService: ex.fast_service,
         pendingAck: ex.pending_ack === true,
         seq,
       });
@@ -395,7 +399,9 @@ export function buildBaseTimeline(
     if (role === "agent" || role === "assistant") {
       inferredSeq += 1;
       const seq = Number(ex.seq || 0) > 0 ? Number(ex.seq || 0) : inferredSeq;
-      const auxList = seq ? exchangeAux[String(seq)] || [] : [];
+      // Streaming text has no persisted seq. Its display position can match
+      // an older exchange when history has gaps, so it cannot identify aux.
+      const auxList = Number(ex.seq) > 0 ? exchangeAux[String(ex.seq)] || [] : [];
       out.push(...buildAssistantTimeline({ ...ex, seq }, index, auxList).map(item => withActivityContext(item, ex.agent, sourceTurnKey)));
       continue;
     }

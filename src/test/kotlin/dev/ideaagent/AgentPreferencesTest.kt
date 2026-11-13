@@ -8,6 +8,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AgentPreferencesTest {
+    @Test fun restartContinuesRemoteSetupOnceInTheRequestingProject() {
+        val previous = AgentPreferences()
+        previous.setLocale("zh-CN")
+        previous.continueRemoteAfterRestart("project-a")
+        previous.setAppearance("dark")
+        val restarted = AgentPreferences()
+        restarted.loadState(XmlSerializer.deserialize(XmlSerializer.serialize(previous.getState()), AgentPreferences.Preferences::class.java))
+        assertFalse(restarted.consumeRemoteContinuation("project-b"))
+        assertTrue(restarted.consumeRemoteContinuation("project-a"))
+        assertFalse(restarted.consumeRemoteContinuation("project-a"))
+        assertEquals("zh-CN", restarted.getState().locale)
+        assertEquals("dark", restarted.getState().appearance)
+        assertNull(restarted.getState().remoteSetupProject)
+    }
+
     @Test fun savedLanguageWinsAndSystemLanguageDecidesOtherwise() {
         assertTrue(useEnglish(null, "en"))
         assertFalse(useEnglish(null, "zh"))

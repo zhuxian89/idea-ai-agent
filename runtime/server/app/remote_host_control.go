@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"mindfs/server/internal/api"
-	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/relay"
 	"mindfs/server/internal/remotehost"
 )
@@ -39,7 +38,6 @@ type remoteHostControl struct {
 	client                               *remotehost.Client
 	saved                                remoteProjectPreference
 	projectPath, address, ownerID, token string
-	identity                             e2ee.Config
 	host                                 remotehost.Status
 	hostReachable                        bool
 	projectID                            string
@@ -70,16 +68,10 @@ func newRemoteHostControl(legacy *remoteAccessControl, hostDir, projectPath, add
 	if err != nil {
 		return nil, err
 	}
-	identity, err := e2ee.EnsureConfigAtPath(filepath.Join(filepath.Dir(legacy.path), "remote-host-e2ee.json"), true)
-	if err != nil {
-		return nil, err
-	}
-	c.identity = identity.Config
 	if c.saved.Mode == "host" {
 		if err = legacy.manager.SetEnabled(false); err != nil {
 			return nil, err
 		}
-		legacy.app.E2EE.ReplaceConfig(c.identity)
 	}
 	return c, nil
 }
@@ -118,7 +110,7 @@ func (c *remoteHostControl) allowed() bool { return c.route.Load().(remoteProjec
 func (c *remoteHostControl) registration(enabled bool) remotehost.Registration {
 	return remotehost.Registration{
 		Protocol: remotehost.Protocol, ProjectPath: c.projectPath, Name: filepath.Base(c.projectPath), OwnerID: c.ownerID,
-		Address: c.address, Token: c.token, E2EENodeID: c.identity.NodeID, PairingSecret: c.identity.PairingSecret, Enabled: enabled,
+		Address: c.address, Token: c.token, Enabled: enabled,
 	}
 }
 func (c *remoteHostControl) syncLocked(ctx context.Context) (err error) {
@@ -139,7 +131,7 @@ func (c *remoteHostControl) syncLocked(ctx context.Context) (err error) {
 	if c.saved.MigrationPending && status.Bound {
 		if c.saved.Mode != "host" {
 			// Prepare ownership/readiness without exposing the new entry. Failures here
-			// leave the old connector and old pairing completely usable.
+			// leave the old connector usable.
 			id, prepareErr := c.client.Register(ctx, c.registration(false))
 			if prepareErr != nil {
 				return prepareErr
@@ -153,7 +145,6 @@ func (c *remoteHostControl) syncLocked(ctx context.Context) (err error) {
 				restoreErr := c.legacy.manager.SetEnabled(c.saved.Enabled)
 				return errors.Join(err, restoreErr)
 			}
-			c.legacy.app.E2EE.ReplaceConfig(c.identity)
 		} else if !c.saved.Enabled {
 			next := c.saved
 			next.Enabled = true
@@ -303,11 +294,9 @@ func (c *remoteHostControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := c.host.Status
-	pairing := c.host.PairingSecret
 	legacyMode := c.saved.Mode == ""
 	if legacyMode && !c.saved.MigrationPending {
 		status = c.legacy.manager.Status()
-		pairing = c.legacy.app.E2EE.PairingSecret()
 	}
 	if c.lastError != "" {
 		status.LastError = c.lastError
@@ -323,7 +312,6 @@ func (c *remoteHostControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		relay.Status
 		Enabled          bool                        `json:"enabled"`
 		HostEnabled      bool                        `json:"host_enabled"`
-		PairingSecret    string                      `json:"pairing_secret"`
 		ProjectID        string                      `json:"project_id"`
 		ProjectURL       string                      `json:"project_url"`
 		LegacyMode       bool                        `json:"legacy_mode"`
@@ -332,7 +320,7 @@ func (c *remoteHostControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		HostReachable    bool                        `json:"host_reachable"`
 		ProjectName      string                      `json:"project_name"`
 		Projects         []remotehost.ManagedProject `json:"projects"`
-	}{status, c.saved.Enabled, c.host.Enabled, pairing, c.projectID, projectURL, legacyMode, c.saved.MigrationPending, c.host.Bound, c.hostReachable, filepath.Base(c.projectPath), c.host.Projects})
+	}{status, c.saved.Enabled, c.host.Enabled, c.projectID, projectURL, legacyMode, c.saved.MigrationPending, c.host.Bound, c.hostReachable, filepath.Base(c.projectPath), c.host.Projects})
 }
 func decodeRemoteEnabled(w http.ResponseWriter, r *http.Request) (bool, error) {
 	var input struct {
@@ -350,7 +338,7 @@ func decodeRemoteEnabled(w http.ResponseWriter, r *http.Request) (bool, error) {
 }
 
 // middleware separates the legacy entry from the host-only mounted entry.
-// The host credential is not an IDEA credential and cannot bypass E2EE.
+// The host credential authenticates the local forwarding process.
 func (c *remoteHostControl) middleware(next http.Handler) http.Handler {
 	legacy := remoteAccessMiddleware(c.legacy.manager, next)
 	restricted := remoteBusinessMiddleware(next)

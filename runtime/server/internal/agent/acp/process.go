@@ -433,8 +433,9 @@ func Start(ctx context.Context, agentName, command string, args []string, cwd st
 	}
 	proc.client = &mindfsClient{proc: proc}
 	go streamProcessStderr(proc, stderr)
+	waitCh := proc.waitCh
 	go func() {
-		proc.waitCh <- cmd.Wait()
+		waitCh <- cmd.Wait()
 	}()
 
 	proc.conn = acp.NewClientSideConnection(proc.client, stdin, stdout)

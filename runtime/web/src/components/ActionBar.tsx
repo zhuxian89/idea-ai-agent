@@ -90,6 +90,7 @@ type ActionBarProps = {
   editDraftRequest?: {
     id: number;
     content: string;
+    mode?: "replace" | "append";
   } | null;
   queuedMessages?: QueuedMessageInfo[];
   inputHistory?: string[];
@@ -740,7 +741,8 @@ export function ActionBar({
     if (!editDraftRequest) {
       return;
     }
-    const nextText = editDraftRequest.content || "";
+    const existing = editDraftRequest.mode === "append" ? editorRef.current?.getSerializedText() || "" : "";
+    const nextText = existing ? `${existing}\n\n${editDraftRequest.content}` : editDraftRequest.content;
     editorRef.current?.setText(nextText);
     setSerializedInput(nextText);
     setActiveToken(null);

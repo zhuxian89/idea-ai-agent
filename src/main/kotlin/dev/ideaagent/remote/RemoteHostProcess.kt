@@ -4,6 +4,8 @@ import com.google.gson.JsonParser
 import com.intellij.util.EnvironmentUtil
 import dev.ideaagent.LocalEndpoint
 import dev.ideaagent.agentRuntimeEnvironment
+import dev.ideaagent.BackendMode
+import dev.ideaagent.readBackendMode
 import java.net.HttpURLConnection
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
@@ -51,7 +53,7 @@ internal fun remoteHostProcess(
 
 internal class RemoteHostProtocolException : IllegalStateException("remote_protocol_incompatible")
 
-internal class RunningRemoteHost(val endpoint: java.net.URI, val token: String, val version: String)
+internal class RunningRemoteHost(val endpoint: java.net.URI, val token: String, val version: String, val mode: String = "")
 
 internal fun remoteHostAvailable(dataDir: Path): Boolean = readRunningRemoteHost(dataDir) != null
 
@@ -91,7 +93,7 @@ internal fun readRunningRemoteHost(dataDir: Path): RunningRemoteHost? {
         if (response.get("protocol")?.asString != REMOTE_HOST_PROTOCOL.toString()) {
             throw RemoteHostProtocolException()
         }
-        return RunningRemoteHost(endpoint, token.asString, response.get("runtime_version")?.asString.orEmpty())
+        return RunningRemoteHost(endpoint, token.asString, response.get("runtime_version")?.asString.orEmpty(), descriptor.get("mode")?.asString.orEmpty())
     } finally {
         connection.disconnect()
     }
@@ -99,6 +101,8 @@ internal fun readRunningRemoteHost(dataDir: Path): RunningRemoteHost? {
 
 internal fun ensureRemoteHost(executable: Path, dataDir: Path, pluginVersion: String) {
     val current = readRunningRemoteHost(dataDir)
+    if (current?.mode == "standalone") return
+    check(!Files.exists(dataDir.resolve("installation.json")) || readBackendMode(dataDir.resolve("active-backend.json")) == BackendMode.EMBEDDED) { "Use the installed Local AI Agent service; it is not available for plugin replacement" }
     if (current != null && !needsRemoteHostUpgrade(current.version, pluginVersion)) return
     Files.createDirectories(dataDir)
     java.nio.channels.FileChannel.open(dataDir.resolve("host-upgrade.lock"),
@@ -107,6 +111,8 @@ internal fun ensureRemoteHost(executable: Path, dataDir: Path, pluginVersion: St
         if (lock == null) return // Another IDEA instance is replacing this user's entry.
         lock.use {
             val running = readRunningRemoteHost(dataDir)
+            if (running?.mode == "standalone") return
+            check(!Files.exists(dataDir.resolve("installation.json")) || readBackendMode(dataDir.resolve("active-backend.json")) == BackendMode.EMBEDDED) { "Use the installed Local AI Agent service; it is not available for plugin replacement" }
             if (running != null) {
                 if (!needsRemoteHostUpgrade(running.version, pluginVersion)) return
                 stopRemoteHostForUpgrade(running, dataDir)

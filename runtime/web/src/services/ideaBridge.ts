@@ -1,8 +1,11 @@
 import { restoreIdeaAppearance, setIdeaTheme } from "./appearance";
 export { persistIdeaLocale } from "./ideaPreferences";
 
-export const isIDEManagedProject = true;
-export const isIdeaRuntime = !/^\/n\/[^/]+(?:\/|$)/.test(window.location.pathname || "");
+export const isStandaloneRuntime = document.querySelector('meta[name="local-ai-agent-mode"]')?.getAttribute("content") === "standalone";
+export const isIdeaRuntime = isStandaloneRuntime
+  ? new URLSearchParams(window.location.search).get("ide") === "1"
+  : !/^\/n\/[^/]+(?:\/|$)/.test(window.location.pathname || "");
+export const isIDEManagedProject = !isStandaloneRuntime || isIdeaRuntime;
 export type IdeaContextTarget = "current" | "new";
 const pendingContexts: { text: string; target: IdeaContextTarget }[] = [];
 let receiveContext: ((text: string, target: IdeaContextTarget) => void) | undefined;
@@ -119,9 +122,37 @@ export function compareGitFileInIdea(input: {
 
 /** The shared remote entry starts lazily; ask the IDE to start it when the remote panel opens. */
 export function requestIdeaRemoteHost(): void {
-  postToHost({ action: "remoteAccess" });
+  postToHost({ action: "remoteAccess", updateUI: true });
+}
+
+export function manageIdeaBackend(action: "start" | "restart" | "stop"): void {
+  postToHost({ action: `backend${action[0].toUpperCase()}${action.slice(1)}` });
+}
+
+export function requestBackendMode(): void {
+  postToHost({ action: "backendMode" });
+}
+
+export function selectBackendMode(mode: "embedded" | "standalone"): void {
+  postToHost({ action: "setBackendMode", mode });
+}
+
+export function installIdeaBackend(): void {
+  postToHost({ action: "installBackend" });
+}
+
+export function restartIdeaForRemoteSetup(): void {
+  postToHost({ action: "restartIdea" });
 }
 
 export function refreshIdeaFiles(): void {
   window.ideaAgent?.postMessage({ action: "refresh" });
+}
+
+export function checkIdeaBackendUpdate(): void {
+  postToHost({ action: "checkBackendUpdate" });
+}
+
+export function updateIdeaBackend(): void {
+  postToHost({ action: "updateBackend" });
 }

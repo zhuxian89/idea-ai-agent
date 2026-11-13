@@ -1,48 +1,18 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
-
-	"mindfs/server/app"
 )
 
 var version = "dev"
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:7331", "listen address")
-	noRelayer := flag.Bool("no-relayer", false, "disable relay integration")
-	webPushFlag := flag.Bool("web-push", true, "enable PWA Web Push notifications")
-	configFlag := flag.String("config", "", "mindfs startup config file; command-line flags override file values")
-	agentConfigFlag := flag.String("agent-config", "", "extra agents.json file")
-	notifyScriptFlag := flag.String("notify-script", "", "executable script for notification events; receives JSON payload on stdin")
-	flag.Parse()
-	explicitFlags := visitedFlags(flag.CommandLine)
-	startupCfg, err := loadStartupConfig(*configFlag)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
-	}
-	applyStartupConfig(startupCfg, explicitFlags, addr, noRelayer, webPushFlag, agentConfigFlag, notifyScriptFlag)
-
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
-
-	if err := app.Start(ctx, *addr, app.StartOptions{
-		NoRelayer:       *noRelayer,
-		Version:         version,
-		Args:            os.Args[1:],
-		AgentConfigPath: *agentConfigFlag,
-		WebPushEnabled:  *webPushFlag,
-		NotifyScript:    *notifyScriptFlag,
-	}); err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
+	if err := runCLI(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

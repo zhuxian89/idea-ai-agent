@@ -119,6 +119,16 @@ func (r *Registry) List() []RootInfo {
 	return result
 }
 
+// UseOnly preserves a previously registered project's identity and metadata
+// location while restricting an embedded IDEA runtime to its own project.
+func (r *Registry) UseOnly(info RootInfo) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.dirs = map[string]RootInfo{info.ID: info}
+	r.order = []string{info.ID}
+	return r.saveLocked()
+}
+
 func (r *Registry) Get(id string) (RootInfo, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -137,24 +147,30 @@ func (r *Registry) UpsertWithMetaLocation(root, metaLocation string) (RootInfo, 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now().UTC()
+	for _, id := range r.order {
+		dir := r.dirs[id]
+		if sameRootDirectory(dir.RootPath, root) {
+			dir.UpdatedAt = now
+			r.dirs[id] = dir
+			return dir, r.saveLocked()
+		}
+	}
 	name := filepath.Base(root)
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		return RootInfo{}, errors.New("invalid directory name")
 	}
-	dir, ok := r.dirs[name]
-	if !ok {
-		metaLocation, err := NormalizeMetaLocation(metaLocation)
-		if err != nil {
-			return RootInfo{}, err
-		}
-		dir = NewRootInfo(name, name, root)
-		dir.MetaLocation = metaLocation
-		dir.CreatedAt = now
-		r.order = append(r.order, name)
-	} else if !sameRegistryPath(dir.RootPath, root) {
+	if dir, exists := r.dirs[name]; exists {
 		return RootInfo{}, fmt.Errorf("%w: %q is already managed at %s; rename the directory before adding %s", ErrRootNameConflict, name, dir.RootPath, root)
 	}
+	metaLocation, err := NormalizeMetaLocation(metaLocation)
+	if err != nil {
+		return RootInfo{}, err
+	}
+	dir := NewRootInfo(name, name, root)
+	dir.MetaLocation = metaLocation
+	dir.CreatedAt = now
 	dir.UpdatedAt = now
+	r.order = append(r.order, name)
 	r.dirs[name] = dir
 	return dir, r.saveLocked()
 }

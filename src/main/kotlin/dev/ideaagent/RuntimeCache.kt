@@ -62,18 +62,28 @@ private fun markRuntimeUsed(runtime: Path) {
 
 /**
  * Every plugin update leaves a ~30 MB fingerprint directory behind. Keep the current runtime and the
- * most recently used older ones (another window or the shared remote host may still run from them);
- * delete the rest. Only complete fingerprint directories are touched, never `.install-*` staging
+ * most recently used older ones, plus every runtime still used by a process (including the independent
+ * core). Only complete fingerprint directories are touched, never `.install-*` staging
  * directories of concurrent windows. Best effort: a locked file (Windows) is retried on a later start.
  */
 internal fun pruneRuntimeCache(cacheRoot: Path, current: Path, keepPrevious: Int = 1) {
     runCatching {
+        val runningDirectories = ProcessHandle.allProcesses().use { processes ->
+            processes.toList().mapNotNull { process ->
+                process.info().command().orElse(null)?.let { command ->
+                    // Processes may exit while their executable directory is being resolved.
+                    runCatching { Path.of(command).parent?.toRealPath() }.getOrNull()
+                }
+            }.toSet()
+        }
         val others = Files.list(cacheRoot).use { entries ->
             entries.filter { it != current && Files.isDirectory(it) && FINGERPRINT.matches(it.fileName.toString()) }.toList()
         }.mapNotNull { dir ->
             runCatching { dir to Files.getLastModifiedTime(dir.resolve(COMPLETE_MARKER)) }.getOrNull()
         }.sortedByDescending { it.second }
-        others.drop(keepPrevious).forEach { (dir, _) -> deleteTree(dir) }
+        others.drop(keepPrevious).forEach { (dir, _) ->
+            if (dir.toRealPath() !in runningDirectories) deleteTree(dir)
+        }
     }
 }
 

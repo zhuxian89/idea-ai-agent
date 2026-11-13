@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>远程访问 · 交互设计预览</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23366bdb'/%3E%3Crect x='6' y='7' width='20' height='14' rx='2' fill='none' stroke='white' stroke-width='2'/%3E%3Cpath d='M16 21v5m-5 0h10' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <style>
+    :root { color-scheme: dark; --canvas:#17191d; --panel:#272a30; --surface:#30343b; --hover:#383d46; --line:#414650; --text:#f1f3f7; --muted:#b2b8c4; --quiet:#969eae; --accent:#9bbbff; --primary:#366bdb; --green:#82d4ac; --red:#ffa6a6; --amber:#e7c287; --select:#324363; }
+    [data-theme="light"] { color-scheme:light; --canvas:#e9ecf1; --panel:#fff; --surface:#f4f5f8; --hover:#e9edf4; --line:#d9dde5; --text:#252a34; --muted:#596373; --quiet:#626d7e; --accent:#2858b5; --primary:#3467d2; --green:#22744e; --red:#b12c39; --amber:#835d1b; --select:#edf3ff; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--canvas); color:var(--text); font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    button,select,input { font:inherit; }
+    button { cursor:pointer; }
+    button,select { color:var(--text); }
+    button:disabled { cursor:default; opacity:.55; }
+    button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    ::selection { background:var(--select); color:var(--text); }
+    :root { scrollbar-color:var(--line) var(--canvas); }
+    svg.icon { width:18px; height:18px; stroke:currentColor; stroke-width:1.6; fill:none; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+    .symbols { position:absolute; width:0; height:0; overflow:hidden; }
+    .preview { max-width:1120px; margin:auto; padding:28px 32px 24px; }
+    .preview-heading { display:flex; align-items:center; gap:12px; padding-bottom:24px; }
+    .preview-heading h1 { font-size:18px; font-weight:600; margin:0; }
+    .preview-heading p { margin:2px 0 0; font-size:12px; color:var(--quiet); }
+    .preview-mark { display:grid; place-items:center; width:36px; height:36px; border:1px solid var(--line); border-radius:8px; color:var(--accent); }
+    .theme-button { margin-left:auto; }
+    .preview-controls { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:14px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .preview-controls label { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:12px; }
+    select { border:1px solid var(--line); background:var(--panel); padding:6px 30px 6px 10px; border-radius:6px; }
+    .demo-label { margin-left:auto; color:var(--quiet); font-size:12px; }
+    .stage { min-height:670px; display:flex; justify-content:center; align-items:flex-start; padding:38px 0 26px; }
+    .panel { width:440px; max-width:100%; padding:23px 24px 18px; border:1px solid var(--line); background:var(--panel); border-radius:12px; }
+    .stage.narrow .panel { width:350px; }
+    .panel-header { display:flex; align-items:center; gap:10px; min-height:32px; margin-bottom:24px; }
+    h2 { margin:0; font-size:18px; font-weight:600; line-height:1.5; }
+    h3 { margin:0 0 8px; font-size:18px; font-weight:600; line-height:1.5; }
+    p { margin:0; }
+    .icon-button { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; padding:0; background:transparent; border:0; border-radius:5px; color:var(--muted); }
+    .icon-button:hover { background:var(--hover); color:var(--text); }
+    .close { margin-left:auto; }
+    .status { display:inline-flex; align-items:center; gap:6px; color:var(--green); font-size:12px; white-space:nowrap; }
+    .status::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .status.off { color:var(--muted); }
+    .status.warning { color:var(--amber); }
+    .project { display:flex; align-items:center; justify-content:center; gap:8px; font-size:15px; font-weight:500; }
+    .project svg { color:var(--muted); }
+    .muted { color:var(--muted); font-size:13px; line-height:1.7; }
+    .center { text-align:center; }
+    .home-note { margin:6px 0 0; }
+    .qr-wrap { width:202px; height:202px; background:#fff; border-radius:8px; margin:23px auto 16px; padding:4px; }
+    .qr-wrap img { display:block; width:100%; height:100%; }
+    .scan-label { margin-bottom:20px; font-size:12px; color:var(--muted); }
+    .actions { display:flex; gap:10px; }
+    .button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding:8px 13px; border:1px solid var(--line); border-radius:6px; background:transparent; font-size:13px; line-height:1.5; text-decoration:none; }
+    .button:hover:not(:disabled) { background:var(--hover); }
+    .button.primary { border-color:var(--primary); background:var(--primary); color:#fff; }
+    .button.primary:hover:not(:disabled) { filter:brightness(1.1); }
+    .actions .button { flex:1; }
+    .wide { width:100%; }
+    .link-preview { font-size:11px; color:var(--quiet); text-align:center; margin-top:10px; overflow-wrap:anywhere; }
+    .panel-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--line); padding-top:15px; margin-top:25px; }
+    .panel-footer p { font-size:12px; color:var(--muted); }
+    .text-button { background:transparent; border:0; color:var(--accent); padding:3px 0; font-size:13px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+    .text-button:hover { text-decoration:underline; }
+    .text-button svg { width:15px; height:15px; }
+    .setting-row { display:flex; align-items:center; gap:14px; padding:17px 0; border-bottom:1px solid var(--line); }
+    .setting-row:first-child { padding-top:0; }
+    .setting-body { flex:1; min-width:0; }
+    .setting-label { font-size:13px; font-weight:500; }
+    .setting-value { color:var(--muted); font-size:12px; margin-top:4px; overflow-wrap:anywhere; }
+    .version { font-variant-numeric:tabular-nums; }
+    .release-info { margin-top:8px; font-size:12px; color:var(--accent); }
+    .version-row { flex-wrap:wrap; }
+    .update-note { flex-basis:100%; font-size:12px; color:var(--muted); margin-top:-4px; }
+    .row-link { width:100%; background:none; border:0; border-bottom:1px solid var(--line); padding:18px 0; display:flex; align-items:center; justify-content:space-between; font-size:13px; }
+    .row-link:hover { color:var(--accent); }
+    .row-link span { display:flex; align-items:center; gap:10px; }
+    .row-link > svg { width:15px; color:var(--quiet); }
+    .support { margin-top:22px; color:var(--muted); font-size:12px; }
+    summary { cursor:pointer; width:fit-content; padding:3px 0; }
+    summary:hover { color:var(--text); }
+    .support-content { padding:12px 0 0; }
+    .support-content p { margin-bottom:10px; }
+    .support-content .text-button + .text-button { margin-left:20px; }
+    .danger { color:var(--red); }
+    .setting-foot { margin-top:24px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .setting-foot small { color:var(--quiet); font-size:11px; }
+    .intro { padding:10px 0 6px; }
+    .intro > .muted { margin:8px 0 25px; }
+    .message-icon { width:40px; height:40px; display:grid; place-items:center; border:1px solid var(--line); border-radius:9px; margin-bottom:18px; color:var(--accent); }
+    .message-icon.success { color:var(--green); }
+    .message-icon.warning { color:var(--amber); }
+    .message-icon svg { width:22px; height:22px; }
+    .flow-actions { margin-top:24px; }
+    .flow-actions .text-button { display:flex; margin:12px auto 0; }
+    .detail { margin-top:20px; font-size:12px; color:var(--muted); }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:10px 0 0; padding:12px; background:var(--surface); border-radius:6px; font:11px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    fieldset { padding:0; margin:0; border:0; min-width:0; }
+    legend { font-size:18px; font-weight:600; margin-bottom:6px; padding:0; }
+    .choices { margin-top:23px; display:grid; gap:12px; }
+    .choice { display:flex; align-items:flex-start; gap:12px; padding:16px 13px; border:1px solid var(--line); border-radius:7px; cursor:pointer; }
+    .choice:has(input:checked) { border-color:var(--accent); background:var(--select); }
+    .choice input { margin:4px 0 0; width:15px; height:15px; accent-color:var(--primary); flex-shrink:0; }
+    .choice strong { display:block; font-size:13px; font-weight:500; }
+    .choice small { display:block; color:var(--muted); font-size:12px; margin-top:5px; line-height:1.7; }
+    .progress { height:5px; width:100%; background:var(--surface); border-radius:3px; margin:24px 0 10px; overflow:hidden; }
+    .progress span { display:block; height:100%; background:var(--primary); border-radius:3px; transition:width .3s ease-out; }
+    .progress-note { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+    .project-row { display:flex; align-items:center; gap:12px; width:100%; padding:17px 0; border:0; border-bottom:1px solid var(--line); background:none; text-align:left; }
+    .project-row:hover { color:var(--accent); }
+    .project-row > span { flex:1; }
+    .project-row small { display:block; color:var(--muted); font-size:12px; margin-top:3px; }
+    .project-row > svg:last-child { width:15px; color:var(--quiet); }
+    .closed { text-align:center; padding:70px 20px; color:var(--muted); }
+    .closed p { margin-bottom:18px; }
+    .preview-note { text-align:center; color:var(--quiet); font-size:12px; }
+    .toast { position:fixed; bottom:24px; left:50%; transform:translate(-50%,12px); max-width:calc(100vw - 32px); padding:10px 16px; border:1px solid var(--line); border-radius:7px; background:var(--panel); font-size:13px; opacity:0; visibility:hidden; transition:opacity .15s,transform .15s; z-index:5; }
+    .toast.visible { transform:translate(-50%,0); opacity:1; visibility:visible; }
+    [hidden] { display:none !important; }
+    @media (max-width:600px) { .preview { padding:18px 16px; } .preview-heading { padding-bottom:18px; } .preview-controls { gap:10px 16px; } .demo-label { margin-left:0; flex-basis:100%; } .stage { min-height:0; padding:25px 0; } .panel { padding:20px 20px 17px; } .preview-controls label { gap:7px; } select { max-width:145px; } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none !important; } }
+  </style>
+</head>
+<body>
+<svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="m9 4 1-2h4l1 2 2 1 2 0 2 3-1 2v4l1 2-2 3-2 0-2 1-1 2h-4l-1-2-2-1-2 0-2-3 1-2v-4L3 8l2-3 2 0Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4M8 21h8"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v9M6 5a9 9 0 1 0 12 0"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z"/></symbol>
+  <symbol id="i-warning" viewBox="0 0 24 24"><path d="m12 3 10 17H2Z M12 9v5m0 3v.1"/></symbol>
+</defs></svg>
+<main class="preview">
+  <header class="preview-heading">
+    <span class="preview-mark"><svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg></span>
+    <div><h1>远程访问</h1><p>交互设计预览</p></div>
+    <button class="icon-button theme-button" id="theme" aria-label="切换为浅色"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+  </header>
+  <aside class="preview-controls" aria-label="预览控制">
+    <label>场景<select id="scenario"><option value="home">已连接 · 日常使用</option><option value="setup">首次使用</option><option value="settings">设置与更新</option><option value="stopped">服务未启动</option><option value="failure">启动失败</option><option value="offline">网络连接中断</option><option value="paused">已暂停访问</option></select></label>
+    <label>宽度<select id="width"><option value="normal">常规</option><option value="narrow">窄屏</option></select></label>
+    <span class="demo-label">示例数据 · 安装、登录、更新均为演示</span>
+  </aside>
+  <div class="stage" id="stage"><section class="panel" id="panel" role="region" aria-label="远程访问面板"></section></div>
+  <p class="preview-note">点击面板内的按钮体验流程，也可以从上方直接切换场景。</p>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+  const icon = name => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+  const panel = document.querySelector('#panel');
+  const links = ["https://example.com/remote/idea-ai-agent","https://example.com/remote/project-a","https://example.com/remote/project-b"];
+  const qrSources = ["data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNSAzNSIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNMCAwaDM1djM1SDB6Ii8+PHBhdGggc3Ryb2tlPSIjMTcyMDJiIiBkPSJNMyAzLjVoN20xIDBoMm0yIDBoM20zIDBoMW0zIDBoN00zIDQuNWgxbTUgMGgxbTEgMGgxbTIgMGgxbTQgMGgxbTIgMGgxbTIgMGgxbTUgMGgxTTMgNS41aDFtMSAwaDNtMSAwaDFtMSAwaDJtMSAwaDZtMiAwaDJtMSAwaDFtMSAwaDNtMSAwaDFNMyA2LjVoMW0xIDBoM20xIDBoMW0yIDBoMW0yIDBoMm0yIDBoMm0yIDBoMW0xIDBoMW0xIDBoM20xIDBoMU0zIDcuNWgxbTEgMGgzbTEgMGgxbTEgMGgxbTIgMGgxbTIgMGgxbTEgMGgxbTEgMGgybTIgMGgxbTEgMGgzbTEgMGgxTTMgOC41aDFtNSAwaDFtMyAwaDJtMiAwaDFtNyAwaDFtNSAwaDFNMyA5LjVoN20xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoN00xMiAxMC41aDJtMSAwaDJtMiAwaDFtMyAwaDFNMyAxMS41aDFtMiAwaDdtMSAwaDFtMiAwaDFtMSAwaDJtMSAwaDNtMiAwaDFtMSAwaDNNNiAxMi41aDNtMyAwaDNtMSAwaDRtMiAwaDFtMSAwaDFtMSAwaDJtMSAwaDJNNSAxMy41aDFtMSAwaDFtMSAwaDFtMSAwaDJtMSAwaDFtMSAwaDFtMSAwaDNtMyAwaDFtMiAwaDFtMSAwaDFNMyAxNC41aDFtMSAwaDRtMSAwaDFtMyAwaDFtNCAwaDVtMSAwaDFtMiAwaDFtMiAwaDFNNiAxNS41aDFtMSAwaDJtMyAwaDJtNCAwaDFtMyAwaDFtMSAwaDJtNCAwaDFNNCAxNi41aDVtMyAwaDNtMSAwaDFtMSAwaDJtMSAwaDFtMSAwaDFtMSAwaDdNMyAxNy41aDNtMiAwaDNtMSAwaDFtMiAwaDRtMyAwaDJtMiAwaDJtMSAwaDFtMSAwaDFNNSAxOC41aDFtMiAwaDFtMyAwaDNtMiAwaDFtMSAwaDFtNSAwaDFtMSAwaDFtMSAwaDFtMSAwaDFNNSAxOS41aDFtMSAwaDFtMSAwaDNtMSAwaDFtMSAwaDFtMSAwaDJtMiAwaDNtMiAwaDFtMSAwaDFNMyAyMC41aDFtMSAwaDFtMSAwaDFtMiAwaDNtMSAwaDFtMSAwaDFtMSAwaDFtMiAwaDNtMyAwaDFtMSAwaDJNMyAyMS41aDdtMiAwaDFtMSAwaDFtMyAwaDFtMyAwaDFtMiAwaDRtMiAwaDFNMyAyMi41aDJtNSAwaDFtNCAwaDFtMSAwaDFtMSAwaDFtNCAwaDFtMyAwaDJNMyAyMy41aDJtMiAwaDVtMiAwaDFtMSAwaDJtMSAwaDJtMiAwaDhNMTEgMjQuNWgybTQgMGg1bTEgMGgxbTMgMGgyTTMgMjUuNWg3bTEgMGgxbTUgMGg3bTEgMGgxbTEgMGgyTTMgMjYuNWgxbTUgMGgxbTEgMGgxbTEgMGgxbTEgMGgxbTEgMGgxbTEgMGgybTEgMGgybTMgMGgxbTMgMGgxTTMgMjcuNWgxbTEgMGgzbTEgMGgxbTEgMGg0bTEgMGg0bTIgMGg3bTEgMGgxTTMgMjguNWgxbTEgMGgzbTEgMGgxbTEgMGgzbTIgMGgxbTEgMGgybTEgMGgxbTQgMGgxbTQgMGgxTTMgMjkuNWgxbTEgMGgzbTEgMGgxbTIgMGg0bTIgMGgxbTMgMGgxbTEgMGgxbTEgMGgybTEgMGgzTTMgMzAuNWgxbTUgMGgxbTIgMGgxbTEgMGgxbTEgMGgybTMgMGgxbTIgMGgxbTEgMGg0bTEgMGgxTTMgMzEuNWg3bTEgMGgxbTIgMGgxbTEgMGgxbTEgMGgxbTMgMGg0bTEgMGgxIi8+PC9zdmc+Cg==","data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNSAzNSIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNMCAwaDM1djM1SDB6Ii8+PHBhdGggc3Ryb2tlPSIjMTcyMDJiIiBkPSJNMyAzLjVoN20xIDBoMW0yIDBoMm0xIDBoMW0yIDBoMm0zIDBoN00zIDQuNWgxbTUgMGgxbTMgMGgybTQgMGgxbTIgMGgxbTIgMGgxbTUgMGgxTTMgNS41aDFtMSAwaDNtMSAwaDFtMiAwaDFtMSAwaDFtMSAwaDFtMSAwaDRtMSAwaDFtMSAwaDFtMSAwaDNtMSAwaDFNMyA2LjVoMW0xIDBoM20xIDBoMW0xIDBoMm0xIDBoMW0yIDBoM20xIDBoMW0zIDBoMW0xIDBoM20xIDBoMU0zIDcuNWgxbTEgMGgzbTEgMGgxbTEgMGgzbTEgMGg3bTMgMGgxbTEgMGgzbTEgMGgxTTMgOC41aDFtNSAwaDFtMSAwaDFtMSAwaDVtMSAwaDJtMSAwaDJtMSAwaDFtNSAwaDFNMyA5LjVoN20xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoN00xMSAxMC41aDFtMiAwaDJtMSAwaDJtMSAwaDNNMyAxMS41aDFtMyAwaDFtMSAwaDEwbTEgMGgxbTEgMGgxbTEgMGg1bTIgMGgxTTMgMTIuNWg1bTUgMGgxbTQgMGgxbTUgMGg4TTMgMTMuNWgxbTEgMGgzbTEgMGgzbTMgMGg3bTEgMGgzbTUgMGgxTTMgMTQuNWgybTEgMGgybTIgMGgxbTIgMGgybTEgMGgxbTEgMGgxbTEgMGgxbTEgMGg0bTEgMGgybTEgMGgyTTMgMTUuNWgxbTIgMGg0bTEgMGgybTMgMGgxbTIgMGgybTIgMGgybTUgMGgxTTMgMTYuNWgybTEgMGgxbTMgMGgxbTIgMGgxbTIgMGg0bTEgMGgxbTEgMGgxbTEgMGg3TTUgMTcuNWgxbTEgMGgzbTEgMGg0bTMgMGgxbTEgMGgybTEgMGgxbTQgMGgybTEgMGgxTTMgMTguNWgxbTEgMGgxbTEgMGgxbTIgMGgxbTIgMGgxbTMgMGgxbTEgMGgzbTEgMGg0bTMgMGgyTTMgMTkuNWgxbTEgMGgxbTMgMGgxbTEgMGgzbTEgMGgzbTIgMGgybTEgMGgybTUgMGgxTTMgMjAuNWgzbTEgMGgybTIgMGgxbTMgMGgxbTIgMGg0bTMgMGg0bTEgMGgyTTUgMjEuNWgzbTEgMGgxbTEgMGgxbTMgMGg0bTIgMGgxbTEgMGgxbTEgMGgybTIgMGgxbTEgMGgxTTYgMjIuNWgybTIgMGgxbTEgMGgybTEgMGgybTEgMGgxbTEgMGg0bTEgMGgzbTIgMGgyTTMgMjMuNWg1bTEgMGgybTIgMGgxbTIgMGgxbTMgMGgxbTIgMGg2bTIgMGgxTTExIDI0LjVoMW0xIDBoN20yIDBoMm0zIDBoMW0zIDBoMU0zIDI1LjVoN20xIDBoMW0yIDBoMm0yIDBoM20xIDBoMm0xIDBoMW0xIDBoM20xIDBoMU0zIDI2LjVoMW01IDBoMW0yIDBoMm0xIDBoMW0xIDBoMW0xIDBoMm0xIDBoMm0zIDBoMW0yIDBoMk0zIDI3LjVoMW0xIDBoM20xIDBoMW0xIDBoMW0xIDBoMW0xIDBoNG0xIDBoMW0xIDBoN20xIDBoMU0zIDI4LjVoMW0xIDBoM20xIDBoMW0yIDBoMW0yIDBoMm0xIDBoMm02IDBoMW00IDBoMU0zIDI5LjVoMW0xIDBoM20xIDBoMW0zIDBoMW00IDBoMW01IDBoMW0zIDBoNE0zIDMwLjVoMW01IDBoMW0zIDBoMm01IDBoMW0yIDBoMW00IDBoMW0xIDBoMk0zIDMxLjVoN20xIDBoMW01IDBoMm0xIDBoMW0yIDBoMW0xIDBoNG0xIDBoMSIvPjwvc3ZnPgo=","data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNSAzNSIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNMCAwaDM1djM1SDB6Ii8+PHBhdGggc3Ryb2tlPSIjMTcyMDJiIiBkPSJNMyAzLjVoN20xIDBoNW0xIDBoMW0yIDBoMm0zIDBoN00zIDQuNWgxbTUgMGgxbTIgMGg0bTYgMGgxbTIgMGgxbTUgMGgxTTMgNS41aDFtMSAwaDNtMSAwaDFtMiAwaDJtMSAwaDJtMiAwaDNtMSAwaDFtMSAwaDFtMSAwaDNtMSAwaDFNMyA2LjVoMW0xIDBoM20xIDBoMW0xIDBoMW0xIDBoMW0zIDBoM20xIDBoMW0zIDBoMW0xIDBoM20xIDBoMU0zIDcuNWgxbTEgMGgzbTEgMGgxbTEgMGgybTEgMGg4bTMgMGgxbTEgMGgzbTEgMGgxTTMgOC41aDFtNSAwaDFtMSAwaDFtMSAwaDFtMiAwaDJtMSAwaDJtMSAwaDJtMSAwaDFtNSAwaDFNMyA5LjVoN20xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoMW0xIDBoN00xMSAxMC41aDJtMiAwaDFtMSAwaDJtMSAwaDNNMyAxMS41aDFtMyAwaDFtMSAwaDVtMiAwaDNtMSAwaDFtMSAwaDFtMSAwaDVtMiAwaDFNMyAxMi41aDVtNCAwaDNtMyAwaDFtNSAwaDhNMyAxMy41aDFtMSAwaDFtMiAwaDNtMSAwaDNtMSAwaDZtMSAwaDNtNSAwaDFNMyAxNC41aDFtMiAwaDJtMiAwaDNtMiAwaDJtMSAwaDFtMSAwaDFtMSAwaDRtMSAwaDJtMSAwaDJNMyAxNS41aDFtMyAwaDNtMiAwaDFtMiAwaDJtMiAwaDJtMiAwaDJtNSAwaDFNMyAxNi41aDFtMiAwaDJtMyAwaDJtMSAwaDFtMSAwaDRtMSAwaDFtMSAwaDFtMSAwaDdNMyAxNy41aDVtMSAwaDFtMiAwaDFtMiAwaDFtMiAwaDFtMSAwaDJtMSAwaDFtNCAwaDJtMSAwaDFNMyAxOC41aDJtMSAwaDFtNCAwaDJtMiAwaDFtMSAwaDFtMSAwaDNtMSAwaDRtMyAwaDJNNSAxOS41aDFtMiAwaDJtMiAwaDZtMiAwaDJtMSAwaDJtNSAwaDFNMyAyMC41aDFtMSAwaDJtMSAwaDFtMiAwaDFtMSAwaDFtMSAwaDFtMiAwaDRtMyAwaDRtMSAwaDJNNSAyMS41aDJtMiAwaDFtMSAwaDFtMSAwaDFtMSAwaDRtMiAwaDFtMSAwaDFtMSAwaDJtMiAwaDFtMSAwaDFNNSAyMi41aDFtNCAwaDFtMSAwaDJtMSAwaDJtMSAwaDFtMSAwaDRtMSAwaDNtMiAwaDJNMyAyMy41aDNtMSAwaDFtMSAwaDFtMSAwaDRtMSAwaDFtMyAwaDFtMiAwaDZtMiAwaDFNMTEgMjQuNWgybTEgMGgxbTEgMGg0bTIgMGgybTMgMGgxbTMgMGgxTTMgMjUuNWg3bTEgMGgxbTEgMGgxbTQgMGgzbTEgMGgybTEgMGgxbTEgMGgzbTEgMGgxTTMgMjYuNWgxbTUgMGgxbTIgMGgxbTQgMGgxbTEgMGgybTEgMGgybTMgMGgxbTIgMGgyTTMgMjcuNWgxbTEgMGgzbTEgMGgxbTEgMGgxbTEgMGg2bTEgMGgxbTEgMGg3bTEgMGgxTTMgMjguNWgxbTEgMGgzbTEgMGgxbTIgMGgybTQgMGgybTYgMGgxbTQgMGgxTTMgMjkuNWgxbTEgMGgzbTEgMGgxbTIgMGgxbTQgMGgybTUgMGgxbTMgMGg0TTMgMzAuNWgxbTUgMGgxbTMgMGgxbTEgMGgybTMgMGgxbTIgMGgxbTQgMGgxbTEgMGgyTTMgMzEuNWg3bTEgMGg1bTIgMGgxbTEgMGgxbTIgMGgxbTEgMGg0bTEgMGgxIi8+PC9zdmc+Cg=="];
+  const latestVersion = '0.1.26-standalone.12';
+  const projectNames = ['idea-ai-agent', 'Project A', 'Project B'];
+  const initial = () => ({ view:'home', mode:'standalone', selected:'standalone', installed:true, first:false, connected:true, accessView:'home', failed:false, project:0, version:'0.1.26-standalone.11', update:'idle', progress:0, step:'' });
+  let state = initial();
+  let timer, toastTimer, lastView = 'home';
+  const later = (ms, fn) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
+  const button = (action, text, primary = false, extra = '') => `<button type="button" class="button ${primary ? 'primary' : ''}" data-action="${action}" ${extra}>${text}</button>`;
+  function header(title, status = '', back = '') {
+    return `<header class="panel-header">${back ? `<button class="icon-button" data-action="${back}" aria-label="返回" ${state.update==='updating'?'disabled':''}>${icon('back')}</button>` : ''}<h2>${title}</h2>${status}<button class="icon-button close" data-action="close" aria-label="关闭远程访问" ${state.update==='updating'||state.view==='progress'?'disabled':''}>${icon('close')}</button></header>`;
+  }
+  function showToast(text) {
+    const toast = document.querySelector('#toast');
+    toast.textContent = text; toast.classList.add('visible');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('visible'), 2600);
+  }
+  function visit(view) { clearTimeout(timer); state.view = view; if(['home','paused','stopped','offline','connect'].includes(view)) state.accessView=view; render(); }
+  function footer() {
+    const note = state.view === 'home'
+      ? state.mode === 'standalone' ? '电脑联网时，关闭 IDEA 仍可访问' : '关闭 IDEA 后，远程访问会停止'
+      : state.mode === 'standalone' ? '运行方式：独立后台' : '运行方式：随 IDEA 运行';
+    return `<footer class="panel-footer"><p>${note}</p><button class="text-button" data-action="settings">${icon('settings')}设置</button></footer>`;
+  }
+  function home() {
+    const link=links[state.project];
+    return header('远程访问', '<span class="status">已连接</span>') + `
+      <div class="project">${icon('folder')}<span>${projectNames[state.project]}</span></div>
+      <p class="muted center home-note">进入当前项目，也可切换其他项目</p>
+      <div class="qr-wrap"><img src="${qrSources[state.project]}" alt="示例远程访问二维码"></div>
+      <p class="center scan-label">用手机扫一扫，继续当前会话</p>
+      <div class="actions">${button('open', icon('external')+'打开网页', true)}${button('copy', icon('copy')+'复制链接')}</div>
+      <p class="link-preview" title="${link}">${link.replace('https://','')}</p>${footer()}`;
+  }
+  function settings() {
+    const updating = state.update === 'updating';
+    let updateAction = '<button class="text-button" data-action="check-update">检查更新</button>';
+    let updateInfo = '';
+    if (state.update === 'checking') { updateAction = '<button class="text-button" disabled>检查中…</button>'; }
+    if (state.update === 'available') {
+      updateAction = '<button class="text-button" data-action="update">更新并重启</button>';
+      updateInfo = `<p class="release-info">有新版本 ${latestVersion}</p>`;
+    }
+    if (state.update === 'latest') updateInfo = '<p class="setting-value">已是最新版本</p>';
+    if (updating) {
+      updateAction = '<button class="text-button" disabled>更新中…</button>';
+      updateInfo = `<div class="progress"><span style="width:${state.progress}%"></span></div><p class="setting-value" role="status">${state.step}</p>`;
+    }
+    return header('设置', '', 'return-access') + `
+      <div class="setting-row"><div class="setting-body"><p class="setting-label">运行方式</p><p class="setting-value">${state.mode === 'standalone' ? '独立后台 · 关闭 IDEA 后仍可使用' : '内置服务 · 随 IDEA 运行'}</p></div><button class="text-button" data-action="mode" ${updating?'disabled':''}>更改</button></div>
+      ${state.mode === 'standalone' ? `<div class="setting-row version-row"><div class="setting-body"><p class="setting-label">独立后台</p><p class="setting-value version">${state.version}</p>${updateInfo}</div>${updateAction}${state.update === 'available' ? '<p class="update-note">更新将重启后台和 IDEA，请先结束当前回复。</p>' : ''}</div>` : ''}
+      <button class="row-link" data-action="projects" ${updating?'disabled':''}><span>已加入的项目</span><span class="muted">3 个 ${icon('right')}</span></button>
+      <details class="support"><summary>故障排查</summary><div class="support-content"><p>${({home:'服务运行正常 · 远程已连接',paused:'服务运行正常 · 远程已暂停',stopped:'远程服务未启动',offline:'服务运行正常 · 网络连接中断',connect:'等待完成远程设置'})[state.accessView]}</p>${state.accessView==='stopped'?'<button class="text-button" data-action="start">启动远程服务</button>':`<button class="text-button" data-action="restart-service" ${updating?'disabled':''}>重启远程服务</button><button class="text-button" data-action="stop-service" ${updating?'disabled':''}>停止远程服务</button>`}<p class="setting-value">仅断开远程连接，本地聊天可继续使用。</p></div></details>
+      <div class="setting-foot"><small>更新来源：GitHub Releases</small><button class="text-button ${state.connected?'danger':''}" data-action="${state.connected?'pause':state.accessView==='paused'?'resume':'return-access'}" ${updating?'disabled':''}>${state.connected?'暂停远程访问':state.accessView==='paused'?'开启远程访问':'返回连接设置'}</button></div>`;
+  }
+  function setup() {
+    const switching = !state.first;
+    const next = state.selected === 'standalone' && !state.installed ? '安装并继续' : switching ? '保存并继续' : '使用内置服务';
+    return header(switching ? '更改运行方式' : '远程访问', '', switching ? 'settings' : '') + `
+      <fieldset><legend>${switching ? '远程服务如何运行？' : '选择适合你的运行方式'}</legend><p class="muted">之后可以随时在设置中更改。</p>
+      <div class="choices"><label class="choice"><input type="radio" name="mode" value="embedded" ${state.selected==='embedded'?'checked':''}><span><strong>随 IDEA 运行</strong><small>无需安装。关闭 IDEA 后，远程访问会停止。</small></span></label>
+      <label class="choice"><input type="radio" name="mode" value="standalone" ${state.selected==='standalone'?'checked':''}><span><strong>关闭 IDEA 后仍可使用</strong><small>安装独立后台，统一管理所有项目。</small></span></label></div></fieldset>
+      <div class="flow-actions">${button('choose', next, true, `style="width:100%" ${switching&&state.selected===state.mode?'disabled':''}`)}</div>`;
+  }
+  function message(title, detail, action, actionText, kind = 'monitor', extra = '') {
+    return header('远程访问') + `<div class="intro"><div class="message-icon ${kind==='check'?'success':kind==='warning'?'warning':''}">${icon(kind)}</div><h3>${title}</h3><p class="muted">${detail}</p>${button(action,actionText,true,'style="width:100%"')}${extra}</div>${footer()}`;
+  }
+  function progress() {
+    return header('远程访问') + `<div class="intro"><div class="message-icon">${icon(state.job==='install'?'download':'monitor')}</div><h3>${state.job==='install'?'正在安装独立后台':'正在启动远程服务'}</h3><p class="muted">${state.job==='install'?'安装完成后，重启 IDEA 继续设置。':'连接就绪后，会自动显示访问入口。'}</p><div class="progress" role="progressbar" aria-label="操作进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${state.progress}"><span style="width:${state.progress}%"></span></div><div class="progress-note"><span role="status">${state.step}</span><span>${state.progress}%</span></div></div>`;
+  }
+  function render() {
+    let content;
+    switch (state.view) {
+      case 'home': content = home(); break;
+      case 'settings': content = settings(); break;
+      case 'setup': content = setup(); break;
+      case 'progress': content = progress(); break;
+      case 'restart': content = message('独立后台已安装', '重启 IDEA 后切换到新的运行方式，并自动继续设置远程访问。', 'restart', '重启 IDEA 并继续', 'check', '<div class="flow-actions"><button class="text-button" data-action="close">稍后重启</button></div>'); break;
+      case 'switch-restart': content = message('运行方式已保存', '重启 IDEA 后生效。已有项目和聊天记录会保留。', 'restart', '重启 IDEA 并继续', 'check'); break;
+      case 'connect': content = message('在其他设备继续使用', '首次开启需要登录并连接远程访问。完成后，各设备可继续已有会话。', 'login', '开启远程访问', 'globe'); break;
+      case 'login': content = message('在浏览器中完成登录', '登录完成后，这里会自动显示二维码和访问链接。', 'login-done', '继续登录', 'globe'); break;
+      case 'stopped': content = message(state.failed?'远程服务启动失败':'远程服务未启动', state.failed?'服务未能及时启动。可以重新启动，或展开详情查看原因。':'启动后，即可从其他设备继续使用。本地聊天不受影响。', 'start', state.failed?'重新启动':'启动服务', state.failed?'warning':'power', state.failed?'<details class="detail"><summary>查看启动详情</summary><pre>local data service startup timed out\n请查看独立后台的 core.log。</pre></details>':''); break;
+      case 'offline': content = message('远程连接暂时中断', '请检查电脑的网络。网络恢复后会自动重新连接。', 'reconnect', '检查连接', 'globe', '<details class="detail"><summary>连接详情</summary><pre>无法连接到远程访问服务。\n最近检查：连接超时。</pre></details>'); break;
+      case 'paused': content = message('远程访问已暂停', '其他设备暂时无法访问。本地项目和聊天保持原样。', 'resume', '开启远程访问', 'power'); break;
+      case 'projects': case 'browser': content = header(state.view==='browser'?'选择项目':'已加入的项目','','settings') + `<p class="muted">${state.view==='browser'?'浏览器入口演示：可在这些项目之间切换。':'这些项目可通过同一个远程入口访问。'}</p>` + projectNames.map((name,i)=>`<button class="project-row" data-project="${i}">${icon('folder')}<span>${name}<small>${i===state.project?'当前项目':'可远程访问'}</small></span>${icon('right')}</button>`).join(''); break;
+      case 'closed': content = `<div class="closed">${icon('monitor')}<p>远程访问面板已关闭</p>${button('reopen','重新打开')}</div>`; break;
+    }
+    panel.innerHTML = content;
+  }
+  function checkUpdate() {
+    state.update = 'checking'; render();
+    later(900, () => { state.update = state.version === latestVersion ? 'latest' : 'available'; render(); });
+  }
+  function runJob(job) {
+    state.job = job; state.progress = 18; state.step = job==='install'?'正在下载安装包':'正在启动服务';
+    state.view = 'progress'; render();
+    later(850, () => { state.progress=66; state.step=job==='install'?'正在校验并安装':'正在检查连接'; render();
+      later(850, () => { state.progress=100; state.step='已完成'; render();
+        later(350, () => { if(job==='install') { state.installed=true; visit('restart'); } else { state.connected=true; state.failed=false; visit('home'); } });
+      });
+    });
+  }
+  panel.addEventListener('change', event => {
+    if (event.target.name === 'mode') { state.selected = event.target.value; render(); panel.querySelector(`input[value="${state.selected}"]`).focus(); }
+  });
+  panel.addEventListener('click', async event => {
+    const target = event.target.closest('button');
+    if (!target || target.disabled) return;
+    if (target.dataset.project !== undefined) { state.project=Number(target.dataset.project); visit(state.accessView); return; }
+    switch (target.dataset.action) {
+      case 'home': visit('home'); break;
+      case 'settings': visit('settings'); if (state.mode==='standalone') checkUpdate(); break;
+      case 'close': lastView=state.view; visit('closed'); break;
+      case 'reopen': visit(lastView); if(lastView==='settings'&&state.mode==='standalone') checkUpdate(); break;
+      case 'return-access': visit(state.accessView); break;
+      case 'open': visit('browser'); break;
+      case 'copy': try { await navigator.clipboard.writeText(links[state.project]); showToast('示例链接已复制'); } catch { showToast('复制失败，请选中下方链接复制'); } break;
+      case 'mode': state.selected=state.mode; visit('setup'); break;
+      case 'choose': if(state.selected==='standalone'&&!state.installed) runJob('install'); else if(state.first) { state.mode=state.selected; visit('connect'); } else visit('switch-restart'); break;
+      case 'restart': state.mode=state.selected; state.first=false; state.connected=false; visit('connect'); showToast('演示：IDEA 已重启，继续远程设置'); break;
+      case 'login': visit('login'); break;
+      case 'login-done': state.first=false; state.connected=true; visit('home'); showToast('演示：登录成功，远程访问已连接'); break;
+      case 'start': case 'reconnect': case 'restart-service': runJob('start'); break;
+      case 'stop-service': state.failed=false; state.connected=false; visit('stopped'); break;
+      case 'pause': state.connected=false; visit('paused'); break;
+      case 'resume': state.connected=true; visit('home'); break;
+      case 'paused': visit('paused'); break;
+      case 'projects': visit('projects'); break;
+      case 'check-update': checkUpdate(); break;
+      case 'update': state.update='updating'; state.progress=20; state.step='正在下载新版后台…'; render();
+        later(850, () => { state.progress=70; state.step='正在校验并安装…'; render();
+          later(1000, () => { state.version=latestVersion; state.update='latest'; render(); showToast('演示：后台已更新，IDEA 重启后回到此处'); });
+        }); break;
+    }
+  });
+  document.querySelector('#scenario').addEventListener('change', event => {
+    clearTimeout(timer); clearTimeout(toastTimer); document.querySelector('#toast').classList.remove('visible');
+    state=initial(); state.view=event.target.value;
+    if(state.view==='setup') Object.assign(state,{mode:'embedded',selected:'embedded',installed:false,first:true,connected:false});
+    if(state.view==='failure') Object.assign(state,{view:'stopped',failed:true});
+    if(['stopped','offline','paused'].includes(state.view)) { state.connected=false; state.accessView=state.view; }
+    if(state.view==='setup') state.accessView='connect';
+    render(); if(state.view==='settings') checkUpdate();
+  });
+  document.querySelector('#width').addEventListener('change', event => document.querySelector('#stage').classList.toggle('narrow', event.target.value==='narrow'));
+  document.querySelector('#theme').addEventListener('click', event => {
+    const dark = document.documentElement.dataset.theme==='dark';
+    document.documentElement.dataset.theme=dark?'light':'dark';
+    const control=event.currentTarget; control.innerHTML=icon(dark?'moon':'sun'); control.setAttribute('aria-label',dark?'切换为深色':'切换为浅色');
+  });
+  render();
+</script>
+</body>
+</html>

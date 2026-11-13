@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/relay"
 )
 
@@ -22,7 +21,7 @@ func testHost(t *testing.T) *host {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("IDE_AGENT_DATA_DIR", dir)
-	h, err := newHost(dir, t.TempDir(), e2ee.NewManager(e2ee.Config{Enabled: true, NodeID: "test-host", PairingSecret: "test-host-secret"}))
+	h, err := newHost(dir, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +105,7 @@ func projectBackend(t *testing.T, token string) *httptest.Server {
 }
 func registration(t *testing.T, address, owner string) Registration {
 	t.Helper()
-	return Registration{Protocol: 1, ProjectPath: t.TempDir(), Name: "project", OwnerID: owner, Address: address, Token: "runtime-secret", E2EENodeID: "project-" + owner, PairingSecret: "pair-" + owner, Enabled: true}
+	return Registration{Protocol: 1, ProjectPath: t.TempDir(), Name: "project", OwnerID: owner, Address: address, Token: "runtime-secret", Enabled: true}
 }
 func TestProjectOwnershipPersistenceAndExpiry(t *testing.T) {
 	h := testHost(t)
@@ -156,7 +155,7 @@ func TestProjectOwnershipPersistenceAndExpiry(t *testing.T) {
 	if got := h.projects(); len(got) != 1 || got[0].Availability != "closed" {
 		t.Fatalf("expired list: %+v", got)
 	}
-	reloaded, err := newHost(h.dir, h.staticDir, h.e2ee)
+	reloaded, err := newHost(h.dir, h.staticDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,21 +238,7 @@ func TestProxyPreservesSignedPathAndRevokesOnlySelectedProject(t *testing.T) {
 		t.Fatal("global stop leaves websocket open")
 	}
 }
-func signedRequest(t *testing.T, method, path string, key []byte, client string) *http.Request {
-	t.Helper()
-	req := httptest.NewRequest(method, path, nil)
-	ts := time.Now().UTC().Format(time.RFC3339)
-	proofPath := req.URL.EscapedPath()
-	if req.URL.RawQuery != "" {
-		proofPath += "?" + req.URL.RawQuery
-	}
-	req.Header.Set("X-MindFS-E2EE", "1")
-	req.Header.Set("X-MindFS-Client-ID", client)
-	req.Header.Set("X-MindFS-TS", ts)
-	req.Header.Set("X-MindFS-Proof", e2ee.BuildRequestProof(key, method, proofPath, ts, client))
-	return req
-}
-func TestNodePairingControlsCatalogAndProjectCredentials(t *testing.T) {
+func TestRelayEntryServesCatalogWithoutPairing(t *testing.T) {
 	h := testHost(t)
 	backend := projectBackend(t, "runtime-secret")
 	in := registration(t, backend.URL, "A")
@@ -262,72 +247,33 @@ func TestNodePairingControlsCatalogAndProjectCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := h.publicHandler()
-	noAuth := httptest.NewRecorder()
-	handler.ServeHTTP(noAuth, httptest.NewRequest("GET", "/api/remote/projects", nil))
-	if noAuth.Code != 401 || strings.Contains(noAuth.Body.String(), in.PairingSecret) {
-		t.Fatal(noAuth.Code, noAuth.Body.String())
-	}
-	status := httptest.NewRecorder()
-	handler.ServeHTTP(status, httptest.NewRequest("GET", "/api/relay/status", nil))
-	if !strings.Contains(status.Body.String(), `"remote_host":true`) || strings.Contains(status.Body.String(), "pairing_secret") {
-		t.Fatal(status.Body.String())
-	}
-	// Complete the actual host protocol handshake rather than setting sessions directly.
-	private, public, err := e2ee.GenerateECDHKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
-	input := map[string]any{"client_id": "browser", "node_id": h.e2ee.NodeID(), "client_eph_pk": public, "client_nonce": "nonce", "proto_version": 1, "proof": e2ee.BuildOpenProof(h.e2ee.PairingSecret(), h.e2ee.NodeID(), public, "nonce")}
-	body, _ := json.Marshal(input)
-	opened := httptest.NewRecorder()
-	handler.ServeHTTP(opened, httptest.NewRequest("POST", "/api/e2ee/open", bytes.NewReader(body)))
-	var openedBody struct {
-		Public string `json:"node_eph_pk"`
-		Nonce  string `json:"server_nonce"`
-		Proof  string `json:"server_proof"`
-	}
-	if err = json.Unmarshal(opened.Body.Bytes(), &openedBody); err != nil || opened.Code != 200 {
-		t.Fatal(opened.Code, opened.Body.String(), err)
-	}
-	if !e2ee.VerifyProof(e2ee.BuildAcceptProof(h.e2ee.PairingSecret(), h.e2ee.NodeID(), public, openedBody.Public, "nonce", openedBody.Nonce), openedBody.Proof) {
-		t.Fatal("invalid host proof")
-	}
-	remote, _ := e2ee.DecodePublicKey(openedBody.Public)
-	key, err := e2ee.DeriveKey(h.e2ee.PairingSecret(), h.e2ee.NodeID(), public, openedBody.Public, "nonce", openedBody.Nonce, private, remote)
-	if err != nil {
-		t.Fatal(err)
-	}
 	catalog := httptest.NewRecorder()
-	handler.ServeHTTP(catalog, signedRequest(t, "GET", "/api/remote/projects", key.Transport, "browser"))
-	var envelope e2ee.CipherEnvelope
-	json.Unmarshal(catalog.Body.Bytes(), &envelope)
+	handler.ServeHTTP(catalog, httptest.NewRequest("GET", "/api/remote/projects", nil))
 	var projects struct {
 		Projects []Project `json:"projects"`
 	}
-	if err = e2ee.DecryptJSON(key.Transport, &envelope, &projects); err != nil || len(projects.Projects) != 1 || projects.Projects[0].ProjectID != id {
-		t.Fatal(projects, err)
+	if err = json.Unmarshal(catalog.Body.Bytes(), &projects); err != nil || catalog.Code != 200 || len(projects.Projects) != 1 || projects.Projects[0].ProjectID != id {
+		t.Fatal(catalog.Code, catalog.Body.String(), err)
 	}
-	access := httptest.NewRecorder()
-	handler.ServeHTTP(access, signedRequest(t, "POST", "/api/remote/projects/"+id+"/access", key.Transport, "browser"))
-	json.Unmarshal(access.Body.Bytes(), &envelope)
-	var grant map[string]string
-	if err = e2ee.DecryptJSON(key.Transport, &envelope, &grant); err != nil || grant["pairing_secret"] != in.PairingSecret {
-		t.Fatal(grant, err)
+	status := httptest.NewRecorder()
+	handler.ServeHTTP(status, httptest.NewRequest("GET", "/api/relay/status", nil))
+	if !strings.Contains(status.Body.String(), `"remote_host":true`) || strings.Contains(status.Body.String(), `"e2ee_required":true`) || strings.Contains(status.Body.String(), "pairing_secret") {
+		t.Fatal(status.Body.String())
 	}
-	tampered := signedRequest(t, "GET", "/api/remote/projects", key.Transport, "browser")
-	tampered.URL.RawQuery = "other=project"
-	denied := httptest.NewRecorder()
-	handler.ServeHTTP(denied, tampered)
-	if denied.Code != 401 {
-		t.Fatal("tampered signed request accepted")
+	for _, path := range []string{"/api/e2ee/open", "/api/remote/projects/" + id + "/access"} {
+		out := httptest.NewRecorder()
+		handler.ServeHTTP(out, httptest.NewRequest("POST", path, nil))
+		if out.Code != 404 {
+			t.Fatal(path, out.Code)
+		}
 	}
 	if err = h.setEnabled(false); err != nil {
 		t.Fatal(err)
 	}
-	denied = httptest.NewRecorder()
-	handler.ServeHTTP(denied, signedRequest(t, "GET", "/api/remote/projects", key.Transport, "browser"))
-	if denied.Code != 503 {
-		t.Fatal("disabled host leaked catalog")
+	out := httptest.NewRecorder()
+	handler.ServeHTTP(out, httptest.NewRequest("GET", "/api/remote/projects", nil))
+	if out.Code != 503 {
+		t.Fatal("disabled host served catalog", out.Code)
 	}
 }
 func TestControlCannotBeReachedFromPublicListener(t *testing.T) {
@@ -604,7 +550,7 @@ func TestManagedSharingSurvivesRegistrationRestartAndRevokesConnections(t *testi
 	if response.StatusCode != 404 {
 		t.Fatalf("paused project reachable: %d", response.StatusCode)
 	}
-	restored, err := newHost(h.dir, h.staticDir, h.e2ee)
+	restored, err := newHost(h.dir, h.staticDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -646,7 +592,7 @@ func TestSharingStateLoadsPreviousHostConfig(t *testing.T) {
 	if bytes.Contains(old, []byte("sharing_paused")) {
 		t.Fatal("fixture should represent old config")
 	}
-	restored, err := newHost(h.dir, h.staticDir, h.e2ee)
+	restored, err := newHost(h.dir, h.staticDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -656,7 +602,7 @@ func TestSharingStateLoadsPreviousHostConfig(t *testing.T) {
 	if err = restored.setSharing(id, false); err != nil {
 		t.Fatal(err)
 	}
-	again, err := newHost(h.dir, h.staticDir, h.e2ee)
+	again, err := newHost(h.dir, h.staticDir)
 	if err != nil {
 		t.Fatal(err)
 	}
