@@ -108,7 +108,7 @@ func TestServeFrontendIndexKeepsLocalAssetRefsForDevVersion(t *testing.T) {
 	}
 }
 
-func TestStandaloneModeSurvivesRelayedAssetRewrite(t *testing.T) {
+func TestStandaloneRelayedAssetsStayWithNode(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0700); err != nil {
 		t.Fatal(err)
@@ -120,13 +120,31 @@ func TestStandaloneModeSurvivesRelayedAssetRewrite(t *testing.T) {
 	if err := os.WriteFile(index, []byte(`<html><head><script type="module" src="./assets/main.js"></script></head></html>`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	handler := &HTTPHandler{StaticDir: dir, Version: "0.1.26", Standalone: true}
-	request := httptest.NewRequest("GET", "/", nil)
-	request.Header.Set("X-MindFS-Relayed", "1")
-	response := httptest.NewRecorder()
-	handler.serveFrontendIndex(response, request, dir, index)
-	if !strings.Contains(response.Body.String(), `name="local-ai-agent-mode" content="standalone"`) || !strings.Contains(response.Body.String(), "/mindfs-assets/main.js") {
-		t.Fatal("standalone mode or relayed assets were lost", response.Body.String())
+	if err := os.WriteFile(filepath.Join(dir, "service-worker.js"), []byte(`const PRECACHE = ["./assets/main.js"];`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"0.1.28", "v0.1.29", "0.1.29-local"} {
+		t.Run(version, func(t *testing.T) {
+			handler := &HTTPHandler{StaticDir: dir, Version: version, Standalone: true}
+			for _, resource := range []string{"/", "/service-worker.js", "/assets/main.js"} {
+				request := httptest.NewRequest(http.MethodGet, resource, nil)
+				request.Header.Set("X-MindFS-Relayed", "1")
+				response := httptest.NewRecorder()
+				if !handler.serveStaticAsset(response, request) || response.Code != http.StatusOK {
+					t.Fatalf("%s: status %d", resource, response.Code)
+				}
+				body := response.Body.String()
+				if strings.Contains(body, "/mindfs-assets/") {
+					t.Fatalf("%s points to Relay's shared frontend: %s", resource, body)
+				}
+				if resource != "/assets/main.js" && !strings.Contains(body, "./assets/main.js") {
+					t.Fatalf("%s lost its node-relative asset reference: %s", resource, body)
+				}
+				if resource == "/" && !strings.Contains(body, `name="local-ai-agent-mode" content="standalone"`) {
+					t.Fatal("standalone mode was lost", body)
+				}
+			}
+		})
 	}
 }
 

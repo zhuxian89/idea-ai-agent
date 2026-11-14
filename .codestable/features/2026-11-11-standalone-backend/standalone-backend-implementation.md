@@ -797,3 +797,9 @@ Playwright 读取 1600/1100/390px 的计算字号均一致，中间 main 的全�
 浅色、深色和 390px 手机截图已实际查看。8 组侧栏文字分别检查对比度，选中文字改用现有 accent-hover 后全部达到 4.5:1。运行子代理使用原动态眼睛资产，侧栏缩进和菜单未改变中央宽度。对实施前备份的 AST/文本核对确认：App main 属性、ActionBar 的全部 style 属性、index.css 一致。类型检查及生产构建通过；构建保留现有大文件分块与第三方注释提示。
 
 证据为 `build/reports/remote-workspace-{implementation-checks.json,browser-tests.txt,go-tests.txt,typecheck.txt,build.txt}`，截图目录 `output/playwright/remote-workspace-implemented/`。本轮 10 个新增实现/测试文件显式 Git 跟踪；新包未生成，当前已发布 .23/.13 和运行后台均未更新。下次打包需重新执行根 AGENTS 的两项 SQLite 旧库必检。
+
+## 2026-11-14 独立后台远程资源路由修复
+
+运行中的 0.1.28 在 Relay 请求下将主 JS/CSS 指向全局 `/mindfs-assets/`，两个真实请求均 404；独立模式遗漏了内置项目已有的资源独立豁免。对 Standalone 保留自身相对资源路径，manifest/Apple 图标改为相对链接。相关 API/app 全量与 race、两项旧库迁移、tsc/build、浏览器入口回归、新包隔离 Core 真实 HTTP 与页面加载通过。Go 全量在未改动的 diff 测试挂起约 3 分钟后中止，不计为全量通过。
+
+六平台 0.1.29 包已生成，12 校验文件通过；发布、真实面板升级待完成。细节与完整证据见 [修复记录](../../issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。

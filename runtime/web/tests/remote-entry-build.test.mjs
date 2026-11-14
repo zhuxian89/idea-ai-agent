@@ -43,6 +43,11 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
   });
   // The Relay homepage and plain project links need no browser pairing data.
   await page.goto("https://entry.test/n/N/p/A/");
+  const resourcePaths = await page.locator("script[src], link[href]").evaluateAll(elements =>
+    elements.map(element => new URL(element.getAttribute("src") || element.getAttribute("href"), location.href).pathname));
+  for (const resourcePath of resourcePaths) {
+    assert.ok(resourcePath.startsWith("/n/N/p/A/"), `resource escaped the node: ${resourcePath}`);
+  }
   await expect(page.getByRole("button", { name: "Project A ▾" })).toBeVisible();
   await expect.poll(() => requests.includes("/n/N/p/A/api/dirs")).toBe(true);
   await expect(page.getByRole("dialog")).toHaveCount(0);

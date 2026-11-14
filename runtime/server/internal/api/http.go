@@ -1742,7 +1742,7 @@ func isRelayedRequest(r *http.Request) bool {
 }
 
 func (h *HTTPHandler) shouldRewriteRelayedAssets(r *http.Request) bool {
-	if h.AppContext != nil && h.AppContext.ProjectLocked {
+	if h.Standalone || (h.AppContext != nil && h.AppContext.ProjectLocked) {
 		return false
 	}
 	return isRelayedRequest(r) && isStandardReleaseVersion(h.Version)

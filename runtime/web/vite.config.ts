@@ -215,8 +215,8 @@ function appShellHTMLPlugin() {
     name: "mindfs-app-shell-html",
     transformIndexHtml(html: string) {
       const pwaLinks = [
-        '    <link rel="manifest" href="/manifest.webmanifest" />',
-        '    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
+        '    <link rel="manifest" href="./manifest.webmanifest" />',
+        '    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />',
       ].join("\n");
       const pwaMeta = [
         '    <meta name="apple-mobile-web-app-capable" content="yes" />',
