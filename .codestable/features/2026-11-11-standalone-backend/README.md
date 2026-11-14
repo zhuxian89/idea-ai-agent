@@ -1,16 +1,16 @@
 # 独立后端计划与进度
 
-## 远程页面资源路由修复（2026-11-14，源码与六平台包验证完成，待发布）
+## 远程页面资源路由修复（2026-11-14，0.1.29 已发布，待真实升级验收）
 
 插件 0.1.27 + 独立后台 0.1.28 远程报“版本太老”。已从运行中 Core 与真实节点 HTML 确认：正式版本将主 JS/CSS 改写到 Relay 全局 `/mindfs-assets/`，两个主资源实际均为 404。清缓存不能修正后台返回的地址。新增回归在修复前对 `0.1.28`、`v0.1.29` 均失败，开发版本通过。
 
 独立后台现保留节点内相对资源地址；manifest 与 Apple 图标同步使用相对地址。API/app 全量与 race、旧库迁移两项必检、类型检查、生产构建、浏览器入口回归通过。新包隔离 Core 实际返回的 HTML、JS/CSS、manifest、图标与表情均 HTTP 200；浏览器成功呈现空项目工作区，Relay 状态使用测试夹具。补跑 Go 全量在未改动的 `TestWorkspaceTurnDiffSharedAcrossAgents` 挂起约 3 分钟后人工中止，其他包通过；不计为全量通过。
 
-六平台独立后台 `0.1.29` 已生成，6 个压缩包和 12 个校验文件核对通过；Mac ARM64 实际版本为 `0.1.29`，各平台保留 Antigravity。当前公开版本仍是完整六平台 `0.1.28`；本轮尚未发布或操作真实安装。修复与证据见 [修复记录](../../issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
+六平台独立后台 [0.1.29](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.29) 已发布（源码 `60f2c61`，24 个资产，正式版本）；6 个压缩包和 12 个校验文件核对通过，305 个网页文件跨平台逐字节一致。Mac ARM64 实际版本为 `0.1.29`，各平台保留 Antigravity。GitHub 资产大小与摘要已核对，24 个公开资产匿名下载均 HTTP 200 且 SHA-256 与本地一致。插件继续使用 `0.1.27`；用户在面板升级后台到 `0.1.29` 后刷新远程页面，真实升级验收待完成。修复与证据见 [修复记录](../../issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
 
-更新于 2026-11-14。新增内置 Antigravity CLI（源码与测试完成，未打包）。Windows 更新修复及相关回归通过，0.1.27 Windows x64 插件已重打并替换 GitHub Release，匿名下载校验通过；用户反馈“完美解决了”，本次实际更新故障验收通过。修复源码、测试与交接记录随本次提交同步至 `main`；全新 Windows 环境首次安装及自启动注册待实机验收。
+更新于 2026-11-14。Antigravity 已接入并发布，用户确认内置后台可用。Windows 更新修复已由用户验收。当前待验收为独立后台 0.1.28 → 0.1.29 的面板升级及远程页面恢复；全新 Windows 环境首次安装及自启动注册仍待实机验收。
 
-## 内置 Antigravity CLI（2026-11-14，源码与测试完成，未打包）
+## 内置 Antigravity CLI（2026-11-14，已发布）
 
 Google Antigravity CLI（`agy`，ACP 协议）已作为内置 agent 加入 `runtime/agents.json` 末尾，与 codex 一样由项目提供，不开放用户自行添加；末尾位置不改变现有默认 agent。安装/更新命令取自官方脚本原文（下载核对，未执行）。图标、显示名、未登录时的"需要登录"识别已同步。
 
@@ -18,9 +18,9 @@ Google Antigravity CLI（`agy`，ACP 协议）已作为内置 agent 加入 `runt
 
 **既有失败（非本次引入）：** 设置 `IDE_AGENT_UPGRADE_TEST_RUNTIME` 后，`RemoteHostTest` 与 `RuntimeCacheTest` 各 1 条在未改动的 HEAD 上同样失败（测试临时可执行文件 `Permission denied`；插件包缺少 `idea-agent-darwin-arm64`）。本次未修复。
 
-**独立后台 0.1.28（已发布）：** 源码提交 `038fe16` 已推送 `main`；GitHub [standalone-v0.1.28](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.28) 仅含 macOS arm64 包 `local-ai-agent-0.1.28-macos-arm64.tar.gz`（SHA-256 `3433caa6cf356aa58806c5a0b13c349e856bd73e38287f7888fa1dd2380acb02`），匿名下载校验一致。插件“检查更新”可从 0.1.27 升级到 0.1.28。其他平台未发布，仍为 0.1.27。插件 `0.1.27-local` 包内容已是最新，未出 local.2。
+**发布状态：** Antigravity 已随重打的插件 `0.1.27` 和完整六平台独立后台 `0.1.28` 发布，用户确认内置后台可用。最新独立后台为上方的 `0.1.29` 远程页面修复版。
 
-**安装包：** Mac 插件测试包 `build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip`（SHA-256 `76a2470967d760c3c6c545c27ff49904f92810bceb5d5d800b36472e2c85ccaa`），已生成，**未安装**到本机（IDEA 与 local-ai-agent 后台运行中，需用户确认）。Windows 包与独立包未生成。
+**早期本地测试包：** `build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip`。后续已重打五个平台的正式插件 ZIP，并发布完整六平台独立后台，见当前交付。
 
 **尚未完成：** 真实登录后的对话、工具调用与权限确认未验证；官方文档未给出登录步骤，未添加登录链接。实现与证据见 [implementation](standalone-backend-implementation.md#内置-antigravity-cli-接入2026-11-14源码与测试完成未打包)。
 
@@ -40,13 +40,13 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 全部 197 个工作区改动文件（含原 11 个未跟踪文件）已提交为 `fd897a2`；远端安装入口提交 `5718d70` 已正常合并，`0b95c3a` 已推送 main，原本地 8 个提交全部保留。前端类型检查与 Git 空白检查通过。本轮同步源码与交接资料，未重新打包；已发布标签和程序包保持原样。
 
-## 当前交付：0.1.27
+## 当前交付：插件 0.1.27 / 独立后台 0.1.29
 
-插件与独立后台统一 `0.1.27`，已发布至 GitHub，未发布插件市场。未代操作真实安装或重启。
+插件 `0.1.27` 与独立后台 `0.1.29` 已发布至 GitHub，未发布插件市场。真实安装与重启由用户在面板操作。
 
 - [插件包](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)：Windows x64/ARM64、Mac Apple Silicon/Intel 及通用 ZIP，共 5 包。
-- [独立后台与安装脚本](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.27)：Windows/macOS/Linux x64 与 ARM64 六平台；macOS/Linux 另有单文件安装器，Windows 和 Unix 均提供固定版本在线脚本。
-- [Windows x64 插件直接下载](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.27/idea-ai-agent-0.1.27-windows-amd64.zip)。本地目录 `build/releases/0.1.27/` 和 `build/standalone/0.1.27/`。
+- [独立后台与安装脚本](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.29)：Windows/macOS/Linux x64 与 ARM64 六平台；macOS/Linux 另有单文件安装器，Windows 和 Unix 均提供在线脚本。
+- [Windows x64 插件直接下载](https://github.com/zhuxian89/idea-ai-agent/releases/download/v0.1.27/idea-ai-agent-0.1.27-windows-amd64.zip)。本地目录 `build/releases/0.1.27/` 和 `build/standalone/0.1.29/`。
 
 首次发布时：310 项前端、97 项 Kotlin、Go 后端全量、11 项安装脚本及两项旧库必检通过；11 个程序包的 304 网页文件一致，5 插件包的 142 个 class 一致；架构、版本、指南与安装器一致性、原生 ARM64 签名通过。30 个公开资产匿名 HTTP 200 且 SHA-256 与本地一致；前端和新旧插件真实查询类在六个平台均发现 `0.1.27`。报告 `build/reports/release-0.1.27-*.json` / `.log`。本次 Windows x64 重打后的验证与 class 变化见顶部记录。
 
@@ -60,7 +60,7 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 ## 固定安装入口修正（已完成）
 
-固定入口已发布到 main（提交 `5718d70`），macOS/Linux：`https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/install.sh`；Windows：同目录 `install.ps1`。每次运行自动读取 `scripts/standalone/version.txt`，目前为 `0.1.27`；指定版本参数仍可使用。后续发布后台时同步发布该版本元数据，用户安装/升级命令保持不变。
+固定入口已发布到 main（提交 `5718d70`），macOS/Linux：`https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/install.sh`；Windows：同目录 `install.ps1`。每次运行自动读取 `scripts/standalone/version.txt`，本轮随发布更新为 `0.1.29`；指定版本参数仍可使用。后续发布后台时同步发布该版本元数据，用户安装/升级命令保持不变。
 
 在线附件默认锁版已移除并更新 `.27` 的两脚本及各自校验文件（4 资产）；固定 URL/版本标记均匿名 HTTP 200 且与源码一致，4 在线资产 HTTP 200/哈希一致。12 项安装脚本测试无跳过，覆盖 Shell/PowerShell 同一脚本连续读取新版本；真实固定入口均选中 `.27` 并下载、校验、解压真实 Mac ARM64/Windows x64 包，最后安装调用用桩截断，未操作本机服务。证据 `build/reports/stable-installer-*.json` / `.log`。指南和 Release 说明已使用固定地址。
 
@@ -319,7 +319,7 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 ## 安装包
 
-当前仅使用顶部链接的 `0.1.27` 插件与独立后台。校验和见 [SHA256SUMS.txt](SHA256SUMS.txt)，安装步骤见 [独立服务指南](../../../docs/standalone.md)。历史过渡包已按用户要求清理，历史验证证据继续保留。
+当前使用顶部链接的 `0.1.27` 插件与 `0.1.29` 独立后台。新版独立包校验和由各 Release 资产同名 `.sha256` 文件提供；[SHA256SUMS.txt](SHA256SUMS.txt) 保留首次 0.1.27 发布归档。安装步骤见 [独立服务指南](../../../docs/standalone.md)。
 
 ## 未提交代码审查（2026-11-12）
 
@@ -359,8 +359,8 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 ## 下一步
 
-0. Antigravity 内置接入：在已登录的 agy 上验证 `session/new`、对话、工具调用与权限确认；决定是否打包，打包后核对安装包内 `agents.json` 含 antigravity 条目。另：`RemoteHostTest`、`RuntimeCacheTest` 在设置升级运行时后的既有失败待升级链路负责人处理。
-1. 用户从 GitHub 安装 `0.1.27` 插件，在远程设置自行升级后台到 `0.1.27`；验证 Windows 实机安装、插件升级和最新界面。
+0. Antigravity 已打包发布且用户确认内置可用；登录后完整对话、工具调用及权限确认的自动化验证仍待补充。另：`RemoteHostTest`、`RuntimeCacheTest` 在设置升级运行时后的既有失败待升级链路负责人处理。
+1. 保持插件 `0.1.27`，用户在远程设置升级后台到 `0.1.29` 并刷新远程页面，完成本次资源路由修复的真实验收；Windows 全新安装仍待实机验证。
 2. 聊天运行时与远程包资源归属的生命周期修订仍待确认，当前升级仍会停止共享 Core；普通停止远程已由用户实测通过。
 3. 真实后台和插件的安装、升级与重启继续由用户操作，不用手动脚本绕过面板升级验收。
 

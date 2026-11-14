@@ -28,9 +28,12 @@ tags: [standalone, relay, frontend, release]
 - 从 0.1.29 Mac ARM64 包启动隔离 Core，通过模拟节点前缀的 HTTP 代理访问；主 HTML/JS/CSS、manifest、Apple 图标、Agent 图标和表情均 HTTP 200。浏览器显示空项目工作区；Relay 状态接口使用测试夹具，未连接真实 Gateway。初始无 Gateway 的 503 和现有 `/api/relay/tips` 404 保留在日志中，不计入资源成功断言。
 - 补跑 `go test -p 2 ./server/... -count=1` 在未改动的 `TestWorkspaceTurnDiffSharedAcrossAgents` 挂起约 3 分钟后人工 SIGQUIT 中止，堆栈位于 `turn_diff_agents_test.go:128`；其余包通过。本轮不宣称 Go 全量通过。
 - 六平台压缩包均包含 Antigravity 与修正后的 HTML；6 个压缩包、4 个单文件 Shell 安装器、2 个在线安装脚本对应的 12 个 SHA-256 全部一致。Mac ARM64 二进制实际输出 `0.1.29`，六平台程序架构正确。
+- 24 个公开资产均匿名下载 HTTP 200，SHA-256 全部与本地一致。实际前端版本选择函数读取公开 GitHub Releases 后，六个平台均选中 `0.1.29`。
 
-证据：`build/reports/standalone-relay-assets-{go,migration,browser,package,go-all,race}.log`、`standalone-relay-assets-packages.json`、`standalone-relay-assets-http.json`；截图 `output/playwright/standalone-relay-assets-0.1.29.png`。
+证据：`build/reports/standalone-relay-assets-{go,migration,browser,package,package-final,go-all,race}.log`、`standalone-relay-assets-{packages,http,public,updater}.json`；截图 `output/playwright/standalone-relay-assets-0.1.29.png`。
 
 ## 交付状态
 
-独立后台 0.1.29 六平台包已生成，待发布；真实后台更新和远程刷新由用户在插件面板操作。插件继续使用 0.1.27。
+源码 `60f2c61` 已推送。独立后台 [0.1.29](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.29) 六平台、24 个资产已发布，标题为 `0.1.29`，非草稿、非预发布；插件仍是 GitHub 的 Latest。GitHub 资产大小与 SHA-256 摘要匹配本地，24 个公开资产匿名下载均 HTTP 200 且 SHA-256 与本地一致。在线版本元数据更新为 0.1.29。Mac ARM64 压缩包 SHA-256：`bfde7574f9aa49671bfdfce7cf36535150cb4c1dbc73840c872dda8dff00d516`。
+
+真实后台更新和远程刷新由用户在插件面板操作。插件继续使用 0.1.27；本轮未更换用户运行中的 Core/Gateway。

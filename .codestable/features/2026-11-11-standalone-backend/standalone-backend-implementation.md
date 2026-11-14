@@ -802,4 +802,4 @@ Playwright 读取 1600/1100/390px 的计算字号均一致，中间 main 的全�
 
 运行中的 0.1.28 在 Relay 请求下将主 JS/CSS 指向全局 `/mindfs-assets/`，两个真实请求均 404；独立模式遗漏了内置项目已有的资源独立豁免。对 Standalone 保留自身相对资源路径，manifest/Apple 图标改为相对链接。相关 API/app 全量与 race、两项旧库迁移、tsc/build、浏览器入口回归、新包隔离 Core 真实 HTTP 与页面加载通过。Go 全量在未改动的 diff 测试挂起约 3 分钟后中止，不计为全量通过。
 
-六平台 0.1.29 包已生成，12 校验文件通过；发布、真实面板升级待完成。细节与完整证据见 [修复记录](../../issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
+源码 `60f2c61` 已推送，六平台 0.1.29 的 24 个资产已发布；12 校验文件通过，305 个网页文件跨平台相同，程序构建的 VCS 修订为 `60f2c61` 且无脏标记。GitHub 资产摘要与大小核对通过，24 个公开资产匿名下载均 HTTP 200 且 SHA-256 与本地一致。在线版本元数据更新为 0.1.29；真实面板升级待用户操作。细节与完整证据见 [修复记录](../../issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
