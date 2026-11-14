@@ -3,6 +3,7 @@ import { useI18n } from '../i18n';
 import { AgentIcon } from './AgentIcon';
 import type { AgentModelInfo, AgentStatus } from '../services/agents';
 import { discoverAgentModels, testAgentConnection } from '../services/agentConnectionTest';
+import { agentDisplayName } from '../services/agentSetup';
 import './AgentConnectionTest.css';
 
 export function AgentConnectionTest({ agent, onClose }: { agent: AgentStatus; onClose: () => void }) {
@@ -21,7 +22,7 @@ export function AgentConnectionTest({ agent, onClose }: { agent: AgentStatus; on
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const [refresh, setRefresh] = useState(0);
-  const displayName = agent.name === 'claude' ? 'Claude Code' : agent.name === 'codex' ? 'Codex' : agent.name;
+  const displayName = agentDisplayName(agent.name);
 
   useEffect(() => {
     dialog.current?.showModal();

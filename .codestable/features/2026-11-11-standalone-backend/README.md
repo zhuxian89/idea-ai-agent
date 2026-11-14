@@ -1,6 +1,18 @@
 # 独立后端计划与进度
 
-更新于 2026-11-13。Windows 更新修复及相关回归通过，0.1.27 Windows x64 插件已重打并替换 GitHub Release，匿名下载校验通过；用户反馈“完美解决了”，本次实际更新故障验收通过。修复源码、测试与交接记录随本次提交同步至 `main`；全新 Windows 环境首次安装及自启动注册待实机验收。
+更新于 2026-11-14。新增内置 Antigravity CLI（源码与测试完成，未打包）。Windows 更新修复及相关回归通过，0.1.27 Windows x64 插件已重打并替换 GitHub Release，匿名下载校验通过；用户反馈“完美解决了”，本次实际更新故障验收通过。修复源码、测试与交接记录随本次提交同步至 `main`；全新 Windows 环境首次安装及自启动注册待实机验收。
+
+## 内置 Antigravity CLI（2026-11-14，源码与测试完成，未打包）
+
+Google Antigravity CLI（`agy`，ACP 协议）已作为内置 agent 加入 `runtime/agents.json` 末尾，与 codex 一样由项目提供，不开放用户自行添加；末尾位置不改变现有默认 agent。安装/更新命令取自官方脚本原文（下载核对，未执行）。图标、显示名、未登录时的"需要登录"识别已同步。
+
+**验证范围（源码层）：** 新增 Go 4 条、前端 4 条回归；Go 全量、前端 314/314、`tsc`、`vite build` 通过；Kotlin 全量 99 条中 0 失败，4 条跳过（2 条需 Windows，2 条需升级运行时）；旧库迁移门禁通过。真实 `agy` 识别为已安装，未登录时 API 返回的 `error` 为 `Authentication required`，界面归类为"需要登录"。Windows 运行时 PATH 已补 `LOCALAPPDATA\agy\bin`。变异测试确认守卫与 Windows 路径断言会失败。
+
+**既有失败（非本次引入）：** 设置 `IDE_AGENT_UPGRADE_TEST_RUNTIME` 后，`RemoteHostTest` 与 `RuntimeCacheTest` 各 1 条在未改动的 HEAD 上同样失败（测试临时可执行文件 `Permission denied`；插件包缺少 `idea-agent-darwin-arm64`）。本次未修复。
+
+**安装包：** Mac 插件测试包 `build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip`（SHA-256 `76a2470967d760c3c6c545c27ff49904f92810bceb5d5d800b36472e2c85ccaa`），已生成，**未安装**到本机（IDEA 与 local-ai-agent 后台运行中，需用户确认）。Windows 包与独立包未生成。
+
+**尚未完成：** 真实登录后的对话、工具调用与权限确认未验证；官方文档未给出登录步骤，未添加登录链接。实现与证据见 [implementation](standalone-backend-implementation.md#内置-antigravity-cli-接入2026-11-14源码与测试完成未打包)。
 
 ## Windows 更新修复（2026-11-13，已重打发布）
 
@@ -337,6 +349,7 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 ## 下一步
 
+0. Antigravity 内置接入：在已登录的 agy 上验证 `session/new`、对话、工具调用与权限确认；决定是否打包，打包后核对安装包内 `agents.json` 含 antigravity 条目。另：`RemoteHostTest`、`RuntimeCacheTest` 在设置升级运行时后的既有失败待升级链路负责人处理。
 1. 用户从 GitHub 安装 `0.1.27` 插件，在远程设置自行升级后台到 `0.1.27`；验证 Windows 实机安装、插件升级和最新界面。
 2. 聊天运行时与远程包资源归属的生命周期修订仍待确认，当前升级仍会停止共享 Core；普通停止远程已由用户实测通过。
 3. 真实后台和插件的安装、升级与重启继续由用户操作，不用手动脚本绕过面板升级验收。

@@ -1,3 +1,59 @@
+# 内置 Antigravity CLI 接入（2026-11-14，源码与测试完成，未打包）
+
+范围：把 Google Antigravity CLI（命令 `agy`，ACP 协议）作为内置 agent 随 `runtime/agents.json` 提供，与 codex 同样由项目主动提供，不开放用户自行添加。本节只记录源码与测试结果；安装包未生成，安装包内 `agents.json` 尚未同步。
+
+## 核实依据
+
+- 本机 `agy` 版本 1.5.8，`agy acp` 为 ACP stdio 服务。ACP 协议版本为 1，与 `acp-go-sdk` 的 `ProtocolVersionNumber` 一致。
+- 空 HOME 下 `initialize` 成功；`session/new` 返回 `-32000 Authentication required`，即未登录时如实报错。`authMethods` 为 Google 登录、Gemini Enterprise 登录、API Key、Agent Platform 四种。
+- 官方安装脚本 `https://antigravity.google/cli/install.sh` 与 `install.ps1` 已下载到独立临时目录只读核对（未执行）。脚本从 `antigravity-cli-auto-updater` 下载清单，校验 SHA-512，安装到 `~/.local/bin/agy` 或 `%LOCALAPPDATA%\agy\bin\agy.exe`，并会后台自更新。
+- 官方文档页未写明 `agy update` 与登录流程，因此：不写登录链接，只在 brief 中提示需先在 agy 中登录。
+- 搜索摘要与官方文档页抓取结果在安装命令上不一致（文档页未写安装命令），因此最终以下载并阅读的官方脚本为准；registry 中的地址与该脚本来源一致。
+- `agy install` 子命令只配置 PATH 与 shell 设置（`agy help install` 原文），不是下载器；脚本在下载二进制后会调用它。
+
+## 变更
+
+- `runtime/agents.json`：新增 `antigravity` 条目，置于列表末尾。安装命令 darwin/linux 用 `install.sh`，windows 用 `install.ps1`；更新命令 `agy update`；`versionArgs` 为 `--version`；`protocol` 为 `acp`；`args` 为 `["acp"]`；`configBackup` 为空。
+- 置于末尾的原因：web 的默认 agent 逻辑取第一个 `available` 的 agent，若排在 codex 前，已安装并登录 agy 的用户会被改变默认选择。
+- `runtime/web/public/assets/agents/antigravity.png`：由 Antigravity.app 的 `icon.icns` 导出 256px PNG。
+- `src/main/kotlin/dev/ideaagent/RuntimeProcess.kt`：Windows 运行时 PATH 追加 `%LOCALAPPDATA%\agy\bin`（官方 `install.ps1` 的安装位置）。未追加此项时，即使 agy 已安装，应用也找不到它，状态会一直显示未安装。缺少 `LOCALAPPDATA` 时不追加，避免拼出错误路径。
+- `src/test/kotlin/dev/ideaagent/RuntimeProcessTest.kt`：`windowsSearchIncludesNewNativeAndNpmInstallations` 增加该路径断言。
+- `runtime/web/src/components/AgentIcon.tsx`：新增图标映射与名称分支（名字含 `antigravity`）。
+- `runtime/web/src/services/agentSetup.ts`：`agentDisplayName` 增加 `antigravity` → `Antigravity`。
+- `AgentSelector.tsx`、`AgentConnectionTest.tsx`、`IdeaAgentSettings.tsx`、`SessionList.tsx`：原先各自内联的 claude/codex 显示名三元式改为统一调用 `agentDisplayName`。`SessionList` 保留原 fallback：无 agent 时显示 `session.type`。
+
+## 验证
+
+- 新增 Go 测试 `runtime/server/internal/agent/shipped_antigravity_test.go`（4 条）：读取随包 `agents.json` 而非 testdata，断言命令、协议、参数、版本参数、安装/更新命令存在；断言 antigravity 不在首位；未安装时报告未安装；安装后只执行 `--version`、不启动 `agy acp`（脚本记录调用参数以证明）。
+- 变异测试：把 antigravity 移到首位，顺序守卫测试失败；已恢复，与备份逐字节一致。
+- 新增前端测试 `runtime/web/tests/agent-icon-antigravity.test.mjs`（4 条）：图标渲染为 `antigravity.png` 而非首字母回退；既有 agent 图标映射不变；真实 agy 错误 JSON `{"code":-32000,"message":"Authentication required"}` 归类为 `login`、无关错误归类为 `error`；显示名正确。
+- 变异测试：删除图标分支后，图标测试失败；已恢复逐字节一致。
+- Kotlin：`RuntimeProcessTest` 5/5 通过（JBR 21，`IntelliJ IDEA.app/Contents/jbr`）。变异测试：将 `LOCALAPPDATA` 项替换为 `null`（保证可编译）后，`windowsSearchIncludesNewNativeAndNpmInstallations` 因 `assertTrue` 失败，源码已恢复并重跑通过。
+- Kotlin 全量（JBR 21，`./gradlew test`）：24 个套件、99 个测试，0 失败、0 错误、4 个跳过。跳过均为环境条件：`WindowsStandaloneInstallerCommandTest` 2 条需要 Windows；`RemoteHostTest`、`RuntimeCacheTest` 各 1 条需要 `IDE_AGENT_UPGRADE_TEST_RUNTIME`。
+- 设置 `IDE_AGENT_UPGRADE_TEST_RUNTIME` 后，`RemoteHostTest.unversionedHostIsReplacedWithNewAssetsAndItsIdentityIsPreserved` 与 `RuntimeCacheTest.runningCoreResourcesSurviveUpdatesAndArePrunedAfterExit` 各失败 1 条。在未改动的 HEAD（`c4d7a16`，临时 worktree，已清理）上以相同方式复现，属既有问题，与本次改动无关：前者为测试临时目录中可执行文件 `Permission denied`，后者为插件包不含 `idea-agent-darwin-arm64`。本次未修复，留待升级链路负责人处理。
+- 旧库迁移门禁（AGENTS.md）：`go test ./server/internal/kanban -count=1` 通过；`go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1` 通过。本次未改持久化代码。
+- 排查记录：第一次变异是删除整行，导致语法错误，Gradle 在 `compileKotlin` 失败，并非断言失败；已识别并改用可编译的变异，未据此下结论。
+- 真实端到端：临时测试经 `Prober.ProbeOne` 对真实 `agy` 探测（隔离 HOME），结果 `installed=true`、`version=1.5.8`、`protocol=acp`、`available=false`，未误报可用。临时测试文件已删除。
+- 公开字段核对：`ProbeError` 的 JSON 标签为 `-`，不对外输出；`normalizeStatus` 会把它复制到公开的 `error` 字段。用真实 `agy` 经同步探测后执行 `setStatus`（与应用存储路径一致），API 返回的 `error` 为 `{"code":-32000,"message":"Authentication required"}`，与前端测试 fixture 完全一致。前端 `agentErrorMessage` 解析出 `message`，`agentSetupState` 归类为 `login`，界面显示"需要登录"。
+- 时序注意：曾尝试经 `probeConfiguredAgents` 读取存储状态，但该调用异步写入，读取时拿到的是 `probe_pending: true` 的占位状态且无 `error`，该结果不代表最终状态，已弃用，以同步探测为准。
+- 结果：Go `agent` 包全部通过；`go test ./...` 全量通过；前端 `node --test tests/*.test.mjs` 314/314 通过；`tsc --noEmit` 通过；`vite build` 通过，产物包含 `assets/agents/antigravity.png`，service worker 预缓存包含该文件；`gofmt` 与 `go vet` 对新测试文件无输出。
+- `agy update` 核对：将 agy 复制到临时目录，在隔离 HOME 下运行 `update`，输出"已是最新版本"（1.5.8）；用户已安装的 `~/.local/bin/agy` 未被运行或修改，修改时间保持不变。`agy update` 在存在新版本时的真实行为未验证。
+
+## 旧库与持久化
+
+本次未修改任何持久化表结构、查询字段或读写模型，不涉及 `task_store.go` 迁移，因此不需要旧库升级用例。
+
+## 未完成与风险
+
+- 安装包：Mac 插件测试包 `build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip` 已生成（15,198,820 字节，SHA-256 `76a2470967d760c3c6c545c27ff49904f92810bceb5d5d800b36472e2c85ccaa`）。打包前门禁通过：kanban 全量、`-race` 旧库迁移、agent 注册表测试。打包命令 `IDEA_AGENT_JAVA_HOME=<IDEA JBR 21> node scripts/package-plugin.mjs local mac --version 0.1.27-local --verify`，Gradle test 与 verifyPluginProjectConfiguration 随打包执行并通过。包内核对：插件版本 `0.1.27-local`，`agents.json` 含 antigravity（command agy，protocol acp，args [acp]），web 含 `assets/agents/antigravity.png`，运行时 `idea-agent-darwin-arm64` 存在。
+- 未安装到本机：当时 IDEA 2025.1 插件为 `0.1.26-local.26`，本机 `local-ai-agent` 后台运行中，替换需用户确认。Windows 包与独立包未生成。
+- 真实登录后的 `session/new`、对话、工具调用与权限确认尚未验证；需要用户在已登录的 agy 上测试，或在明确授权后由我进行。
+- 登录链接缺失：官方文档未给出可靠的登录步骤地址，未编造。
+- 安装会修改 shell 配置：官方脚本调用 `agy install`，它会在 shell 配置文件末尾追加 `export PATH="$HOME/.local/bin:$PATH"` 并写入注释（隔离 HOME 的 `.zshrc` 验证）。应用的"安装"按钮执行的就是这条脚本，因此用户点击安装时 shell 配置会被改动。这是官方安装器行为，不是本次代码添加；需要在用户可见的文案或文档中说明。
+- 更新检查未接入：`agents.json` 的 `updateCheck` 只支持固定 URL，未找到 agy 可用于查询最新版本的公开地址（官方文档未给出），因此未配置。结果是界面不会显示 agy 的"可更新"提示（`update_check_supported` 为 false），`agy update` 仅作为更新命令保留。
+- `agy` 会在后台自更新，`updateCommands` 中的 `agy update` 在更新可用时执行的行为未在真实环境中验证。
+- 验证过程产生的临时文件位于 `/tmp`（agy 副本、隔离 HOME、构建输出与日志），均未写入仓库；仓库中无残留测试文件。
+
 # Windows .27 插件重打与发布（2026-11-13，已发布）
 
 源码同步：用户授权 push，Windows 下载与日志修复、两项新增回归、Windows 测试环境及 SQLite 连接清理修正、三份交接资料共 9 文件随本次提交同步至 `main`。提交前 `git fetch origin` 确认本地与远端均为 `cb1ea91`，无分叉；Git 空白检查通过。相关回归、包核对和用户实测采用本节记录的结果。

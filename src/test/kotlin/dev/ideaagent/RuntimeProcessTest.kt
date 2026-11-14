@@ -92,12 +92,14 @@ class RuntimeProcessTest {
 
     @Test fun windowsSearchIncludesNewNativeAndNpmInstallations() {
         val shell = mapOf("Path" to "C:\\custom\\bin;C:\\Windows\\System32",
-            "USERPROFILE" to "C:\\Users\\user with spaces", "APPDATA" to "C:\\Users\\user with spaces\\AppData\\Roaming")
+            "USERPROFILE" to "C:\\Users\\user with spaces", "APPDATA" to "C:\\Users\\user with spaces\\AppData\\Roaming",
+            "LOCALAPPDATA" to "C:\\Users\\user with spaces\\AppData\\Local")
         val environment = agentRuntimeEnvironment(shell, "Windows 11", "C:\\ignored")
         val paths = environment.getValue("Path").split(';')
         assertEquals("C:\\custom\\bin", paths.first())
         assertTrue(paths.contains("C:\\Users\\user with spaces\\.local\\bin"))
         assertTrue(paths.contains("C:\\Users\\user with spaces\\AppData\\Roaming\\npm"))
+        assertTrue(paths.contains("C:\\Users\\user with spaces\\AppData\\Local\\agy\\bin"))
         assertFalse(environment.containsKey("PATH"))
     }
 

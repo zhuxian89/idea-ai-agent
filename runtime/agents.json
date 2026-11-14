@@ -493,6 +493,24 @@
           "~/.codebuddy/settings.json"
         ]
       }
+    },
+    {
+      "name": "antigravity",
+      "brief": "Google Antigravity 的命令行 agent（agy），通过 ACP 接入；使用前需先在 agy 中完成登录。",
+      "installCommands": [
+        { "os": ["darwin", "linux"], "command": "curl -fsSL https://antigravity.google/cli/install.sh | bash" },
+        { "os": "windows", "command": "irm https://antigravity.google/cli/install.ps1 | iex" }
+      ],
+      "updateCommands": [
+        { "os": ["darwin", "linux", "windows"], "command": "agy update" }
+      ],
+      "versionArgs": ["--version"],
+      "command": "agy",
+      "protocol": "acp",
+      "args": [
+        "acp"
+      ],
+      "configBackup": {}
     }
   ],
   "relayBaseURL": "https://relay.20260310.best",

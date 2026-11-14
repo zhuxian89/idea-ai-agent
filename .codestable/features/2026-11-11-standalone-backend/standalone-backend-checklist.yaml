@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+  - id: builtin-antigravity-acp
+    description: 内置 Antigravity CLI（agy）为 ACP agent，随 runtime/agents.json 提供，放在列表末尾不改变默认 agent；安装/更新命令取自官方 install.sh/install.ps1 原文（已下载核对，未执行）；图标、显示名、登录状态识别同步。Windows 运行时 PATH 补充 LOCALAPPDATA\agy\bin（官方安装位置）。源码与测试完成：Go agent 包全量、全量 Go 测试、前端 314/314、tsc、vite 构建、Kotlin 全量 99 条中 0 失败（4 条环境跳过）、旧库迁移门禁通过；升级运行时下 RemoteHostTest/RuntimeCacheTest 各 1 条失败已在 HEAD 复现，属既有问题；新增 4 条 Go 注册表/安装探测回归、4 条前端回归，并用真实 agy 验证 Prober 识别为已安装、未登录时如实报 Authentication required。变异测试确认守卫与 Windows 路径断言会失败。Mac 插件测试包已生成：build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip，SHA-256 76a2470967d760c3c6c545c27ff49904f92810bceb5d5d800b36472e2c85ccaa；包内插件版本 0.1.27-local，agents.json 含 antigravity，web 含 antigravity.png，Mac arm64 运行时存在；打包时 Gradle test 与 verifyPluginProjectConfiguration 通过。未安装到本机（IDEA 与 local-ai-agent 后台运行中，待用户确认）。Windows 包、独立包未生成；真实登录后的 session/new 与对话待验证
+    status: done
   - id: windows-update-source-push
     description: 用户授权 push，本次提交同步 Windows 下载跳转与日志编码修复、两项新增回归、Windows 测试环境/SQLite 清理修正及三份交接资料共 9 文件；提交前 fetch 确认 main 与 origin/main 一致，Git 空白检查通过，既有回归和用户实测结果见相应步骤
     status: done

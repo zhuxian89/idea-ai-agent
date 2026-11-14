@@ -7,6 +7,7 @@ type AgentIconProps = {
 };
 
 const ICON_URLS: Record<string, { src: string; alt: string }> = {
+  antigravity: { src: appPath('/assets/agents/antigravity.png'), alt: 'Antigravity' },
   augment: { src: appPath('/assets/agents/augment.svg'), alt: 'Augment' },
   codex: { src: appPath('/assets/agents/codex.svg'), alt: 'Codex' },
   claude: { src: appPath('/assets/agents/claude.svg'), alt: 'Claude' },
@@ -117,7 +118,9 @@ export function AgentIcon({ agentName, ...props }: AgentIconProps) {
   const width = style.width ?? props.width ?? 16;
   const height = style.height ?? props.height ?? 16;
   let icon: { src: string; alt: string } | null = null;
-  if (lowerAgentName.includes('augment')) {
+  if (lowerAgentName.includes('antigravity')) {
+    icon = ICON_URLS.antigravity;
+  } else if (lowerAgentName.includes('augment')) {
     icon = ICON_URLS.augment;
   } else if (lowerAgentName.includes('cursor')) {
     icon = ICON_URLS.cursor;

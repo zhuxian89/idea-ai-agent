@@ -10,7 +10,7 @@ const helpLinks: Record<string, { install: string; login: string; ccSwitch?: boo
 
 export const CC_SWITCH_URL = 'https://github.com/farion1231/cc-switch';
 export const agentHelpLinks = (name: string) => helpLinks[name];
-export const agentDisplayName = (name: string) => name === 'claude' ? 'Claude Code' : name === 'codex' ? 'Codex' : name;
+export const agentDisplayName = (name: string) => name === 'claude' ? 'Claude Code' : name === 'codex' ? 'Codex' : name === 'antigravity' ? 'Antigravity' : name;
 
 export function agentErrorMessage(error?: string): string {
   const raw = (error || '').trim();

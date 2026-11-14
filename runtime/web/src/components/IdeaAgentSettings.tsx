@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { checkAgentUpdate, type AgentStatus } from "../services/agents";
+import { agentDisplayName } from "../services/agentSetup";
 import { APPEARANCE_CHANGE_EVENT, getAppearanceMode, setAppearanceMode, type AppearanceMode } from "../services/appearance";
 import { getActiveVoiceProvider, sendVoice } from "../services/voiceInput";
 import { AgentIcon } from "./AgentIcon";
@@ -70,7 +71,7 @@ export function IdeaAgentSettings(props: Props) {
       const updatingAvailable = updateCheck.phase === "available";
       const updateCommands = agent.update_commands || [];
       return <article className={`idea-agent-card${props.probingAgent === agent.name ? " idea-agent-card-restarting" : ""}`} key={agent.name} data-agent={agent.name}>
-        <div className="idea-agent-title"><AgentIcon agentName={agent.name} style={{ width: 18, height: 18 }} /><h2>{agent.name === "claude" ? "Claude Code" : agent.name === "codex" ? "Codex" : agent.name}</h2><span className={agent.installed ? "idea-detected" : "idea-undetected"}>{t(agent.installed ? "agentConfig.detected" : "agentConfig.notDetected")}</span></div>
+        <div className="idea-agent-title"><AgentIcon agentName={agent.name} style={{ width: 18, height: 18 }} /><h2>{agentDisplayName(agent.name)}</h2><span className={agent.installed ? "idea-detected" : "idea-undetected"}>{t(agent.installed ? "agentConfig.detected" : "agentConfig.notDetected")}</span></div>
         {agent.version ? <p className="idea-agent-version">{agent.version}</p> : null}
         {!agent.installed || unavailable || probing ? <AgentSetupGuide key={agent.name} agent={agent}
           showTitle={false} probing={!!probing} disabled={props.busy || (!!props.probingAgent && props.probingAgent !== agent.name)}

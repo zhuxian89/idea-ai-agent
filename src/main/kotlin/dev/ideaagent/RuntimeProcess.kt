@@ -31,7 +31,9 @@ internal fun agentRuntimeEnvironment(
         val pathKey = shellEnvironment.keys.firstOrNull { it.equals("PATH", ignoreCase = true) } ?: "Path"
         val home = (shellEnvironment["USERPROFILE"] ?: userHome).trimEnd('\\', '/')
         val extra = listOfNotNull("$home\\.local\\bin",
-            shellEnvironment["APPDATA"]?.trimEnd('\\', '/')?.let { "$it\\npm" })
+            shellEnvironment["APPDATA"]?.trimEnd('\\', '/')?.let { "$it\\npm" },
+            // Antigravity's official Windows installer places agy.exe under LOCALAPPDATA\agy\bin.
+            shellEnvironment["LOCALAPPDATA"]?.trimEnd('\\', '/')?.let { "$it\\agy\\bin" })
         val paths = (shellEnvironment[pathKey].orEmpty().split(';').filter { it.isNotBlank() } + extra)
             .distinctBy { it.lowercase() }
         return shellEnvironment + (pathKey to paths.joinToString(";"))

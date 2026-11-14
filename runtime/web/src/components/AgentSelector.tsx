@@ -14,7 +14,7 @@ import { AgentSetupGuide } from "./AgentSetupGuide";
 import { AgentSelectorRow } from "./AgentSelectorRow";
 import { AgentConnectionTest } from "./AgentConnectionTest";
 import { AgentModelRefresh } from "./AgentModelRefresh";
-import { agentSetupState, agentSetupStatusKey } from "../services/agentSetup";
+import { agentDisplayName, agentSetupState, agentSetupStatusKey } from "../services/agentSetup";
 
 type AgentSelectorProps = {
   agent: string;
@@ -532,7 +532,7 @@ export function AgentSelector({
         {showLabel ? (
           <span className="idea-agent-selector-label">
             <span className="idea-agent-selector-model">
-              {agent === "claude" ? "Claude Code" : agent === "codex" ? "Codex" : agent} · {model || t("agent.defaultModel")}
+              {agentDisplayName(agent)} · {model || t("agent.defaultModel")}
             </span>
             {selectedEffortLabel ? (
               <span className="idea-agent-selector-effort">

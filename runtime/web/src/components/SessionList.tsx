@@ -6,6 +6,7 @@ import "./workspaceSidebar.css";
 import { AgentIcon } from "./AgentIcon";
 import { ModeIcon } from "./ModeIcon";
 import { useI18n, type Locale } from "../i18n";
+import { agentDisplayName } from "../services/agentSetup";
 
 export type SessionType = "chat" | "plugin" | "command";
 
@@ -1316,7 +1317,7 @@ function SessionCard({
                 color: selected ? "var(--accent-hover)" : "var(--text-primary)",
               })}
             </span>
-            <span className="idea-session-agent" style={{ display: isSubagent ? "block" : "none", fontSize: "11px", lineHeight: 1.3, color: "var(--text-secondary)", marginTop: "2px" }}>{session.agent === "claude" ? "Claude Code" : session.agent === "codex" ? "Codex" : session.agent || session.type}</span>
+            <span className="idea-session-agent" style={{ display: isSubagent ? "block" : "none", fontSize: "11px", lineHeight: 1.3, color: "var(--text-secondary)", marginTop: "2px" }}>{session.agent ? agentDisplayName(session.agent) : session.type}</span>
             {snippet ? (
               <span
                 style={{
