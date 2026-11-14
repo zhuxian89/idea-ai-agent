@@ -10,6 +10,8 @@ Google Antigravity CLI（`agy`，ACP 协议）已作为内置 agent 加入 `runt
 
 **既有失败（非本次引入）：** 设置 `IDE_AGENT_UPGRADE_TEST_RUNTIME` 后，`RemoteHostTest` 与 `RuntimeCacheTest` 各 1 条在未改动的 HEAD 上同样失败（测试临时可执行文件 `Permission denied`；插件包缺少 `idea-agent-darwin-arm64`）。本次未修复。
 
+**独立后台 0.1.28（已发布）：** 源码提交 `038fe16` 已推送 `main`；GitHub [standalone-v0.1.28](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.28) 仅含 macOS arm64 包 `local-ai-agent-0.1.28-macos-arm64.tar.gz`（SHA-256 `3433caa6cf356aa58806c5a0b13c349e856bd73e38287f7888fa1dd2380acb02`），匿名下载校验一致。插件“检查更新”可从 0.1.27 升级到 0.1.28。其他平台未发布，仍为 0.1.27。插件 `0.1.27-local` 包内容已是最新，未出 local.2。
+
 **安装包：** Mac 插件测试包 `build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip`（SHA-256 `76a2470967d760c3c6c545c27ff49904f92810bceb5d5d800b36472e2c85ccaa`），已生成，**未安装**到本机（IDEA 与 local-ai-agent 后台运行中，需用户确认）。Windows 包与独立包未生成。
 
 **尚未完成：** 真实登录后的对话、工具调用与权限确认未验证；官方文档未给出登录步骤，未添加登录链接。实现与证据见 [implementation](standalone-backend-implementation.md#内置-antigravity-cli-接入2026-11-14源码与测试完成未打包)。
