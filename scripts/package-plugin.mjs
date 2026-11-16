@@ -309,6 +309,15 @@ function validatePackage(archive, version, expectedTargets) {
   const pluginJar = `idea-ai-agent/lib/idea-ai-agent-${version}.jar`;
   if (!zip.names.includes(pluginJar)) throw new Error(`${path.basename(archive)} does not contain ${pluginJar}`);
   const plugin = readZip(zip.read(pluginJar), pluginJar);
+  if (expectedTargets.some(target => target.goos === 'windows')) {
+    const installer = plugin.read('installers/install.ps1');
+    if (!installer.equals(readFileSync(path.join(root, 'scripts/install.ps1')))) {
+      throw new Error(`${path.basename(archive)} contains a stale Windows installer`);
+    }
+    if (!installer.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))) {
+      throw new Error(`${path.basename(archive)} Windows installer must use UTF-8 with BOM for PowerShell 5.1`);
+    }
+  }
   const pluginXml = plugin.read('META-INF/plugin.xml').toString('utf8');
   const packagedVersion = pluginXml.match(/<version>([^<]+)<\/version>/)?.[1];
   if (packagedVersion !== version) throw new Error(`${path.basename(archive)} contains plugin version ${packagedVersion || '(missing)'}`);

@@ -1,4 +1,4 @@
-param([string]$Prefix = "", [switch]$DeferStart)
+﻿param([string]$Prefix = "", [switch]$DeferStart)
 $ErrorActionPreference = "Stop"
 $Source = $PSScriptRoot
 $SourceExecutable = Join-Path $Source "local-ai-agent.exe"

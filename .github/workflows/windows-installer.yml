@@ -1,0 +1,59 @@
+name: Windows installer
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/install.ps1'
+      - 'scripts/standalone/*.ps1'
+      - 'scripts/standalone/download-redirect.test.mjs'
+      - '.github/workflows/windows-installer.yml'
+permissions:
+  contents: read
+jobs:
+  windows-powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare candidate from the published Windows plugin
+        shell: python
+        run: |
+          import io, json, pathlib, urllib.request, zipfile
+          request = urllib.request.Request('https://api.github.com/repos/zhuxian89/idea-ai-agent/releases/latest', headers={'User-Agent':'installer-validation'})
+          release = json.load(urllib.request.urlopen(request))
+          name = 'idea-ai-agent-' + release['tag_name'].removeprefix('v') + '-windows-amd64.zip'
+          asset = next(a for a in release['assets'] if a['name'] == name)
+          original = urllib.request.urlopen(asset['browser_download_url']).read()
+          installer = pathlib.Path('scripts/install.ps1').read_bytes()
+          assert installer.startswith(b'\xef\xbb\xbf')
+          out = pathlib.Path('build/installer-validation')
+          out.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(out / 'candidate.zip', 'w') as target:
+            jars = [n for n in source.namelist() if n.startswith('idea-ai-agent/lib/idea-ai-agent-') and n.endswith('.jar')]
+            assert len(jars) == 1
+            for entry in source.infolist():
+              data = source.read(entry.filename)
+              if entry.filename == jars[0]:
+                buffer = io.BytesIO()
+                with zipfile.ZipFile(io.BytesIO(data)) as jar, zipfile.ZipFile(buffer, 'w') as patched:
+                  for item in jar.infolist():
+                    patched.writestr(item, installer if item.filename == 'installers/install.ps1' else jar.read(item.filename))
+                data = buffer.getvalue()
+              target.writestr(entry, data)
+      - name: Verify final candidate with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          & ./scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip ./build/installer-validation/candidate.zip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify PowerShell 7 redirects
+        shell: pwsh
+        run: |
+          $env:INSTALL_TEST_POWERSHELL = (Get-Process -Id $PID).Path
+          node --test scripts/standalone/download-redirect.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-windows-plugin
+          path: build/installer-validation/candidate.zip

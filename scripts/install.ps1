@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Version = "",
     [string]$Prefix = "",
@@ -25,7 +25,7 @@ function Get-HttpsContent {
             throw "Refusing a non-HTTPS download location: $current"
         }
         # Windows PowerShell 5.1 会把禁用自动跳转的 302 响应变成错误，直接读取 HTTP 响应以保留 Location。
-        $request = [System.Net.HttpWebRequest]::Create($current)
+        $request = [System.Net.WebRequest]::CreateHttp([System.Uri]$current)
         $request.AllowAutoRedirect = $false
         $response = $request.GetResponse()
         try {

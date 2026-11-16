@@ -21,18 +21,28 @@ function run(command, script, args) {
 const runtimes = process.env.INSTALL_TEST_POWERSHELL ? [process.env.INSTALL_TEST_POWERSHELL]
   : process.platform === "win32" ? ["powershell.exe", "pwsh"] : ["pwsh"];
 
-for (const runtime of runtimes) test(`PowerShell download redirects and errors: ${runtime}`, async t => {
+for (const runtime of runtimes) for (const encoding of ["native", "windows-936"]) test(`PowerShell download redirects and errors: ${runtime} (${encoding})`, async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "standalone-redirect-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const script = path.join(directory, "download.ps1");
-  const source = await readFile(new URL("../install.ps1", import.meta.url), "utf8");
+  const sourcePath = process.env.INSTALL_TEST_ONLINE_SCRIPT || new URL("../install.ps1", import.meta.url);
+  const source = await readFile(sourcePath, "utf8");
   const functionStart = source.indexOf("function Get-HttpsContent {");
   const functionEnd = source.indexOf("\n$Architecture =", functionStart);
   assert.ok(functionStart >= 0 && functionEnd > functionStart);
-  await writeFile(script, `param([string]$Uri, [string]$OutFile, [switch]$RequireHttps)
+  const original = path.join(directory, "installer.ps1");
+  await writeFile(original, source);
+  const downloadFunction = encoding === "native" ? source.slice(functionStart, functionEnd) : `
+$reader = [IO.StreamReader]::new('${original.replace(/'/g, "''")}', [Text.Encoding]::GetEncoding(936), $true)
+try { $source = $reader.ReadToEnd() } finally { $reader.Dispose() }
+$start = $source.IndexOf('function Get-HttpsContent {')
+$end = $source.IndexOf([char]10 + '$Architecture =', $start)
+. ([scriptblock]::Create($source.Substring($start, $end - $start)))
+`;
+  await writeFile(script, `\uFEFFparam([string]$Uri, [string]$OutFile, [switch]$RequireHttps)
 $ErrorActionPreference = 'Stop'
 $AllowInsecure = -not $RequireHttps
-${source.slice(functionStart, functionEnd)}
+${downloadFunction}
 $result = Get-HttpsContent -Uri $Uri -OutFile $OutFile
 if (-not $OutFile) { Write-Output $result.Content }
 `);
