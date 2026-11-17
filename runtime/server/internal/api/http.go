@@ -1577,10 +1577,6 @@ func (h *HTTPHandler) handleFrontend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if h.shouldRewriteRelayedAssets(r) {
-		w.Write([]byte(rewriteRelayedFrontendContent(indexHTML)))
-		return
-	}
 	w.Write([]byte(renderFallbackFrontend(indexHTML, frontendAssetMissingNotice(r.URL.Path))))
 }
 
@@ -1616,10 +1612,6 @@ func (h *HTTPHandler) serveStaticAsset(w http.ResponseWriter, r *http.Request) b
 			h.serveFrontendIndex(w, r, staticDir, assetPath)
 			return true
 		}
-		if h.shouldRewriteRelayedAssets(r) && shouldRewriteRelayedStaticAsset(cleanPath) {
-			serveRewrittenStaticAsset(w, r, assetPath)
-			return true
-		}
 		http.ServeFile(w, r, assetPath)
 		return true
 	}
@@ -1653,11 +1645,6 @@ func (h *HTTPHandler) serveFrontendIndex(w http.ResponseWriter, r *http.Request,
 	}
 	if h.Standalone {
 		content = []byte(strings.Replace(string(content), "<head>", `<head><meta name="local-ai-agent-mode" content="standalone">`, 1))
-	}
-	if h.shouldRewriteRelayedAssets(r) {
-		content = []byte(rewriteRelayedFrontendContent(string(content)))
-	}
-	if h.Standalone || h.shouldRewriteRelayedAssets(r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(content)
 		return
@@ -1735,68 +1722,6 @@ func applyStaticCacheHeaders(w http.ResponseWriter, cleanPath string) {
 	if strings.HasPrefix(cleanPath, "assets/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	}
-}
-
-func isRelayedRequest(r *http.Request) bool {
-	return strings.TrimSpace(r.Header.Get("X-MindFS-Relayed")) == "1"
-}
-
-func (h *HTTPHandler) shouldRewriteRelayedAssets(r *http.Request) bool {
-	if h.Standalone || (h.AppContext != nil && h.AppContext.ProjectLocked) {
-		return false
-	}
-	return isRelayedRequest(r) && isStandardReleaseVersion(h.Version)
-}
-
-func isStandardReleaseVersion(version string) bool {
-	version = strings.TrimSpace(version)
-	if version == "" {
-		return false
-	}
-	version, _ = strings.CutPrefix(version, "v")
-	parts := strings.Split(version, ".")
-	if len(parts) != 3 {
-		return false
-	}
-	for _, part := range parts {
-		if part == "" {
-			return false
-		}
-		for _, ch := range part {
-			if ch < '0' || ch > '9' {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func shouldRewriteRelayedStaticAsset(cleanPath string) bool {
-	switch cleanPath {
-	case "index.html", "service-worker.js":
-		return true
-	default:
-		return false
-	}
-}
-
-func rewriteRelayedFrontendContent(content string) string {
-	return strings.ReplaceAll(content, "./assets/", "/mindfs-assets/")
-}
-
-func serveRewrittenStaticAsset(w http.ResponseWriter, r *http.Request, assetPath string) {
-	content, err := os.ReadFile(assetPath)
-	if err != nil {
-		http.ServeFile(w, r, assetPath)
-		return
-	}
-	switch filepath.Base(assetPath) {
-	case "index.html":
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	case "service-worker.js":
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-	}
-	w.Write([]byte(rewriteRelayedFrontendContent(string(content))))
 }
 
 func pathForStaticAsset(requestPath string) string {

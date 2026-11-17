@@ -29,6 +29,15 @@ import {
   useRelatedFileStats,
 } from "../hooks/useRelatedFileStats";
 
+const NEAR_BOTTOM_DISTANCE = 120;
+
+function distanceFromSessionBottom(container: HTMLElement) {
+  const viewportGap = window.visualViewport
+    ? window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop
+    : 0;
+  return Math.max(0, container.scrollHeight - container.clientHeight - container.scrollTop - viewportGap);
+}
+
 type SessionItem = {
   key?: string;
   session_key?: string;
@@ -1028,7 +1037,9 @@ function SessionViewerInner({
     if (!(event.target instanceof Element) || !event.target.closest("[data-activity-reading]")) return;
     readingActivityRef.current = true;
     shouldStickToBottomRef.current = false;
-    setShowJumpToLatest(true);
+    if (scrollRef.current) {
+      setShowJumpToLatest(distanceFromSessionBottom(scrollRef.current) > NEAR_BOTTOM_DISTANCE);
+    }
   };
   const viewportStickFrameRef = useRef<number | null>(null);
 
@@ -1116,6 +1127,7 @@ function SessionViewerInner({
     if (shouldStickToBottomRef.current) {
       stickSessionToBottom("auto");
     }
+    setShowJumpToLatest(distanceFromSessionBottom(container) > NEAR_BOTTOM_DISTANCE);
   }, [sessionKey, timeline, isStreaming, streamVersion, slashCommandResult]);
 
   useEffect(() => {
@@ -1161,12 +1173,8 @@ function SessionViewerInner({
     }
     let lastScrollTop = el.scrollTop;
     const updateStickiness = () => {
-      const viewportGap = window.visualViewport
-        ? window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop
-        : 0;
-      const rawDistanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop;
-      const distanceFromBottom = Math.max(0, rawDistanceFromBottom - viewportGap);
-      const isNearBottom = distanceFromBottom < 40;
+      const distanceFromBottom = distanceFromSessionBottom(el);
+      const isNearBottom = distanceFromBottom <= NEAR_BOTTOM_DISTANCE;
       const movedUp = el.scrollTop < lastScrollTop;
       const movedDown = el.scrollTop > lastScrollTop;
       if (isNearBottom) {
@@ -1179,7 +1187,7 @@ function SessionViewerInner({
       } else if (movedDown && distanceFromBottom < 200) {
         shouldStickToBottomRef.current = true;
       }
-      setShowJumpToLatest(!shouldStickToBottomRef.current);
+      setShowJumpToLatest(!isNearBottom);
       lastScrollTop = el.scrollTop;
     };
     updateStickiness();

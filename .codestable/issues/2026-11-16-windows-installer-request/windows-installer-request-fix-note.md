@@ -29,4 +29,4 @@ tags: [windows, powershell, utf8, installer]
 
 插件运行 JAR 内嵌脚本。已装旧插件需要下载修正后的 Windows ZIP，通过 IDEA“从磁盘安装插件”重新安装并重启 IDEA，之后再检查独立后台更新；同版本不会自动提示插件升级。Windows x64 包为 `build/releases/0.1.27/idea-ai-agent-0.1.27-windows-amd64.zip`，SHA-256 `749f7a30cebcdcdc4058bb2b2416d00383646d564644ff5ebb39b35b4277801d`。
 
-真实用户 IDEA 更新、计划任务及服务启动待用户验收。本轮未安装、停止或重启用户服务。源码聚焦提交 `a3663ae67caaab898f6932833bb2d8a600135b99`；交接记录及 AGENTS 门禁同步更新。
+用户已确认本次 Windows 更新恢复；全新安装、计划任务和登录自启仍待单独验收。本轮未安装、停止或重启用户服务。源码聚焦提交 `a3663ae67caaab898f6932833bb2d8a600135b99`；交接记录及 AGENTS 门禁同步更新。

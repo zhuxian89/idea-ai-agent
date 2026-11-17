@@ -1,14 +1,73 @@
 # 独立后端计划与进度
 
-## 远程页面资源路由修复（2026-11-14，0.1.29 已发布，待真实升级验收）
+## 剩余源码统一同步（2026-11-17）
+
+用户授权将剩余 27 个文件统一提交并推送至 `origin/main`，包括模型选择器连续设置与默认值、滚回底部判断、远程资源路径清理、相关测试及 AGENTS/交接记录。提交前重新验证：前端回归 14/14、0 跳过，类型检查与后端 API 全量通过；本轮未重打包或操作运行服务。日志 `build/reports/source-sync-20261117-{web,typecheck,api}.log`。
+
+## Windows 安装修复经验归档（2026-11-16，已完成）
+
+用户已确认本次修复后 Windows 更新恢复。根 `AGENTS.md` 已补齐两次故障的根因与验证缺口，并要求每次发布 Windows 可用包（含通用插件）都验证最终 ZIP 内脚本：UTF-8 BOM、真实 PowerShell 5.1 下载/摘要、公开附件复核。补充可直接执行的验证命令，以及同版本插件需从磁盘重装的交付要求。首次安装、计划任务和登录自启仍按各自实际验证结果记录。本轮文档检查通过。
+
+## Windows 安装请求属性错误（2026-11-16，已修复发布，用户确认更新恢复）
+
+用户升级 0.1.30 在下载阶段报 `AllowAutoRedirect` 属性不存在。公开 Windows 插件内嵌脚本与当前 `scripts/install.ps1` 一致，插件使用自身 JAR 内安装脚本，不会因独立包更换而更新。已证实无 BOM UTF-8 的中文注释被 Windows ANSI 936 误读后吞掉请求赋值行。两份安装器统一 UTF-8 BOM，使用 CreateHttp；本机定向安装/下载 8/8、0 跳过。真实 Windows PowerShell 5.1.26100.33648 从最终插件 ZIP 解出脚本，GitHub 0.1.30 下载/摘要校验通过，默认/ANSI936 两项下载回归 2/2，PowerShell7 同为 2/2、0 跳过；两项旧库门禁通过。Windows 双架构及通用插件 0.1.27、Windows 独立后台 0.1.30 安装器与校验已替换。10 项公开下载字节/摘要核对通过，其余 20 项资产 ID/digest 保留。发布后 Windows 5.1 CI 再次通过，真实公开插件在线发现独立后台 0.1.30，六平台版本选择通过。已装旧插件需先从磁盘重装修正的同版本 0.1.27；用户已确认本次更新恢复；首次安装、计划任务和登录自启仍待单独验收。见 [修复记录](../../issues/2026-11-16-windows-installer-request/windows-installer-request-fix-note.md)。见 [故障记录](../../issues/2026-11-16-windows-installer-request/windows-installer-request-report.md)。
+
+## Windows 0.1.30 与 0.1.29 下架（2026-11-16，已完成）
+
+用户要求补发 Windows 独立后台 0.1.30，并删除 0.1.29 Release。Windows amd64/arm64、Intel Mac/Linux 其余五平台已构建、验证并上传；[0.1.30 Release](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.30) 现共 24 项资产，全部匿名下载 HTTP 200、字节与本地/GitHub 摘要一致，原 Mac ARM64 六项资产 ID 与摘要未变。两项旧库门禁、24 组合资源 HTTP、类型检查、选择器/滚动和包内资源回归通过；首次入口临时目录 ENOENT 后稳定 dist 复跑通过。安装脚本 3 通过、4 PowerShell 环境跳过。真实插件 JAR 在线发现 Windows 0.1.30、确认 0.1.29 可升级，六平台前端/Kotlin 选择均为 0.1.30。Windows EXE 实机启动/升级待验收。
+
+公开默认版本已更新到 0.1.30，提交 `4d1025c315d148aae24d988f4cfb84c1be1adee0` 仅含 `scripts/standalone/version.txt`，固定 raw URL 实际返回 0.1.30。0.1.29 Release 及 24 项附件已删除，Release API 与原附件 URL 全部 404；源码标签保留，插件 Latest 仍为 v0.1.27。下架后再次确认真实插件 Windows 更新与六平台选择通过。证据 `build/reports/standalone30-all-public-verification.json`、`standalone29-withdrawal-verification.json`、`standalone30-after-withdrawal-verification.json`。未安装或重启真实服务。
+
+补齐前的更新检测核对：Windows 当时返回 0.1.29，是因为 0.1.30 只有 Mac ARM64 包；上述补发完成后 Windows 已可发现 0.1.30，显示标题不参与版本选择。
+
+## Release 标题区分（2026-11-16，已完成）
+
+用户确认继续同仓库独立发版。22 条历史 Release 已统一为 `IDEA 插件 <版本>`（19 条）/ `独立后台 <版本>`（3 条），后续发版沿用此规则。插件标签仍为 `v<版本>`，独立后台仍为 `standalone-v<版本>`；标签、正文、发布日期、发布状态与附件 ID/名称/大小/摘要/下载地址均核对未变，Latest 仍为插件 `v0.1.27`。真实插件 JAR 在线发现独立后台 0.1.30，前端及 Kotlin 六平台版本选择通过。证据 `build/reports/release-titles-20261116-{verification,update-discovery}.json`，发布规范见 [独立服务指南](../../../docs/standalone.md#构建与发布约定)。
+
+## 滚回底部修复与同版本替换（2026-11-14，已发布）
+
+距底部 120px 内隐藏按钮，底部阅读工具活动不再误显示；阅读时新内容保留滚动位置，返回底部附近恢复跟随。六个浏览器场景及相邻 30 项测试通过，两项旧库迁移门禁通过。已重打插件 0.1.27 与独立后台 0.1.30，包内检查通过，GitHub 四项归档/安装器及校验资产已替换。六个公开附件匿名下载 HTTP 200，字节与本地及 GitHub 摘要一致；真实插件确认发现 0.1.30 并可从 0.1.29 更新。首次下载遇 TLS 连接失败，复跑通过。见 [修复记录](../../issues/2026-11-14-session-bottom-scroll/session-bottom-scroll-fix-note.md)。
+
+## Mac 独立后台 0.1.30 发布（2026-11-14，已完成）
+
+已公开发布 [standalone-v0.1.30](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.30)，包含 Mac ARM64 归档、单文件安装器、在线安装入口与对应校验文件，共六项资产。Kotlin/前端按平台选择最高可用版本：Mac ARM64 为 0.1.30，其余五平台仍为 0.1.29。固定脚本默认版本仍保留 0.1.29。本轮未安装或重启真实后台；若已安装首次构建的 0.1.30，需下载替换后的单文件安装器重装，同版本不会提示更新。
+
+## Mac 配套打包（2026-11-14，已完成，独立包已发布）
+
+用户指定先生成 macOS Apple Silicon：独立后台 `0.1.30`、插件保持 `0.1.27`。包含模型选择器连续设置、滚回底部修复与资源改写清理。
+
+- 插件：`build/local-packages/idea-ai-agent-0.1.27-macos-arm64.zip`。
+- 独立后台单文件安装器：`build/standalone/0.1.30/local-ai-agent-0.1.30-macos-arm64.sh`；同目录提供 `.tar.gz`。三个包各有 `.sha256`。
+- 两项 kanban 旧库必检、类型检查/生产构建、插件配置验证通过；Kotlin 99 项中 95 通过、4 环境跳过（2 项 Windows、2 项需升级运行时），0 失败。资源 24 组合 HTTP 回归通过。
+- 解包核对 ARM64、插件 0.1.27/独立程序 0.1.30、305 个网页文件逐字节一致及校验和。隔离运行包内内置/独立后台，本地/转发四入口各 87 项 HTML/Service Worker/缓存及引用资源均 HTTP 200，资源字节与安装包一致；包内网页的本地/节点/项目及 JS/CSS 失败浏览器回归通过。
+
+报告：`build/reports/mac-30-27-verification.json`、`build/reports/standalone30-public-verification.json`。独立包已发布并完成公开下载与真实插件发现核对；插件 ZIP 已在本地重打。未安装或重启真实程序。
+
+## 模型选择器连续设置（2026-11-14，已纳入 Mac 配套包）
+
+远程聊天选择器沿用选择后关闭的分支，插件已关闭该行为；同一 Agent 切换模型还会重置思考强度与 Fast。现统一保留选择面板，点击 Agent 名称即可展开选项，同一 Agent 换模型保留兼容的设置。新会话与切换 Agent 默认使用首个模式、high（模型支持时）与 Fast 关闭，已有会话保留显式设置。远程菜单改用视口定位，避免手机窄屏左侧越界。
+
+旧实现的默认值回归失败已确认；修复后相关 16/16、类型检查与生产构建通过。浏览器覆盖 375px 触屏远程、1280px 桌面远程和 420px 插件，验证连续选择、发送参数、已有会话恢复和深浅色截图。已纳入上述 Mac 插件 0.1.27/独立后台 0.1.30 本地包，实际运行页面待更新配套后台。见 [修复记录](../../issues/2026-11-14-agent-selector-interaction/agent-selector-interaction-fix-note.md)。
+
+## 故障版本 0.1.28 已下架（2026-11-14）
+
+已删除 GitHub `standalone-v0.1.28` Release 及全部 24 个附件，避免继续下载存在远程资源路由故障的版本。Release API 与 24 个原下载地址均返回 404；源码标签保留供追溯。独立后台 `0.1.29` 和插件 `0.1.27` 的发布元数据及附件保持原样，线上默认安装版本为 `0.1.29`。证据：`build/reports/standalone-0.1.28-withdrawal.json`。
+
+## 旧资源改写清理（2026-11-14，源码与验证完成，未打包发布）
+
+用户确认 0.1.29 已修复远程访问，并要求删除遗留改写逻辑、在项目内强调本次故障。本轮删除资源改写及六个专用辅助函数，清理前端旧路径例外；资源错误提示改为实际加载失败并附资源 URL。根 `AGENTS.md` 新增长期约束，`attention.md` 提供必读入口。
+
+扩大后的回归先在原实现确认失败：默认正式模式仍改写到 Relay 公共路径，缺文件时还会跳过缺失提示。清理后，默认/内置/独立三种模式、四种版本、本地/远程共 24 组合的实际 HTTP 回归通过，检查 HTML、Service Worker、JS/CSS 的引用及响应。API/app/remotehost 三包测试和 vet、前端 6/6（含生产构建、节点/项目/本地入口、阻断主 JS/CSS 后的错误提示）与类型检查通过。证据见 `build/reports/relay-assets-cleanup-*`。本轮尚未打包、发布或更换运行程序。
+
+## 远程页面资源路由修复（2026-11-14，0.1.29 已发布，用户已确认恢复）
 
 插件 0.1.27 + 独立后台 0.1.28 远程报“版本太老”。已从运行中 Core 与真实节点 HTML 确认：正式版本将主 JS/CSS 改写到 Relay 全局 `/mindfs-assets/`，两个主资源实际均为 404。清缓存不能修正后台返回的地址。新增回归在修复前对 `0.1.28`、`v0.1.29` 均失败，开发版本通过。
 
 独立后台现保留节点内相对资源地址；manifest 与 Apple 图标同步使用相对地址。API/app 全量与 race、旧库迁移两项必检、类型检查、生产构建、浏览器入口回归通过。新包隔离 Core 实际返回的 HTML、JS/CSS、manifest、图标与表情均 HTTP 200；浏览器成功呈现空项目工作区，Relay 状态使用测试夹具。补跑 Go 全量在未改动的 `TestWorkspaceTurnDiffSharedAcrossAgents` 挂起约 3 分钟后人工中止，其他包通过；不计为全量通过。
 
-六平台独立后台 [0.1.29](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.29) 已发布（源码 `60f2c61`，24 个资产，正式版本）；6 个压缩包和 12 个校验文件核对通过，305 个网页文件跨平台逐字节一致。Mac ARM64 实际版本为 `0.1.29`，各平台保留 Antigravity。GitHub 资产大小与摘要已核对，24 个公开资产匿名下载均 HTTP 200 且 SHA-256 与本地一致。插件继续使用 `0.1.27`；用户在面板升级后台到 `0.1.29` 后刷新远程页面，真实升级验收待完成。修复与证据见 [修复记录](../../issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
+六平台独立后台 [0.1.29](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.29) 已发布（源码 `60f2c61`，24 个资产，正式版本）；6 个压缩包和 12 个校验文件核对通过，305 个网页文件跨平台逐字节一致。Mac ARM64 实际版本为 `0.1.29`，各平台保留 Antigravity。GitHub 资产大小与摘要已核对，24 个公开资产匿名下载均 HTTP 200 且 SHA-256 与本地一致。插件继续使用 `0.1.27`；随后按用户授权通过官方脚本在本机更新并重启后台，用户已确认远程页面恢复。修复与证据见 [修复记录](../../issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
 
-更新于 2026-11-14。Antigravity 已接入并发布，用户确认内置后台可用。Windows 更新修复已由用户验收。当前待验收为独立后台 0.1.28 → 0.1.29 的面板升级及远程页面恢复；全新 Windows 环境首次安装及自启动注册仍待实机验收。
+更新于 2026-11-14。Antigravity 已接入并发布，用户确认内置后台可用。Windows 更新修复与 0.1.29 远程资源修复已由用户验收。本轮清理遗留逻辑的验证独立记录；全新 Windows 环境首次安装及自启动注册仍待实机验收。
 
 ## 内置 Antigravity CLI（2026-11-14，已发布）
 
@@ -18,7 +77,7 @@ Google Antigravity CLI（`agy`，ACP 协议）已作为内置 agent 加入 `runt
 
 **既有失败（非本次引入）：** 设置 `IDE_AGENT_UPGRADE_TEST_RUNTIME` 后，`RemoteHostTest` 与 `RuntimeCacheTest` 各 1 条在未改动的 HEAD 上同样失败（测试临时可执行文件 `Permission denied`；插件包缺少 `idea-agent-darwin-arm64`）。本次未修复。
 
-**发布状态：** Antigravity 已随重打的插件 `0.1.27` 和完整六平台独立后台 `0.1.28` 发布，用户确认内置后台可用。最新独立后台为上方的 `0.1.29` 远程页面修复版。
+**发布状态：** Antigravity 已随重打的插件 `0.1.27` 和完整六平台独立后台 `0.1.28` 发布，用户确认内置后台可用。`0.1.28` 因远程资源故障已下架，最新独立后台为保留 Antigravity 的 `0.1.29` 修复版。
 
 **早期本地测试包：** `build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip`。后续已重打五个平台的正式插件 ZIP，并发布完整六平台独立后台，见当前交付。
 
@@ -42,7 +101,7 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 ## 当前交付：插件 0.1.27 / 独立后台 0.1.29
 
-插件 `0.1.27` 与独立后台 `0.1.29` 已发布至 GitHub，未发布插件市场。真实安装与重启由用户在面板操作。
+插件 `0.1.27` 与独立后台 `0.1.29` 已发布至 GitHub，未发布插件市场。本机后台已按用户授权通过官方脚本更新并重启至 `0.1.29`，用户确认远程页面恢复；插件继续使用 `0.1.27`。
 
 - [插件包](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)：Windows x64/ARM64、Mac Apple Silicon/Intel 及通用 ZIP，共 5 包。
 - [独立后台与安装脚本](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.29)：Windows/macOS/Linux x64 与 ARM64 六平台；macOS/Linux 另有单文件安装器，Windows 和 Unix 均提供在线脚本。
@@ -52,7 +111,7 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 旧插件和后台过渡测试 Release 共 11 个、本地过渡文件或目录共 84 项已删除；保留市场正式版本 `0.1.26` 及更早包，28 个本地正式文件哈希未变。GitHub 旧测试标签作为源码引用保留，测试安装包与 Release 已删除。用户要求所有发布标题只显示版本号，历史与新版本统一整理；包和更新说明保留。
 
-独立模式网页来自后台，需在远程设置升级后台至 `0.1.27` 才能显示最新界面。Windows 实机安装升级及本版真实 IDEA 接入仍由用户验收。此前 `.26/.18`、`.16` 等版本是历史验证记录，相关过程和证据保存在 implementation；下载入口已统一到本版本。
+独立模式网页来自后台，当前发布版为 `0.1.29`。Windows 全新环境首次安装及自启动注册仍待实机验收。此前 `.26/.18`、`.16` 等版本是历史验证记录，相关过程和证据保存在 implementation；下载入口已统一到本版本。
 
 ## 市场历史版本补录（已完成）
 
@@ -319,7 +378,7 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 ## 安装包
 
-当前使用顶部链接的 `0.1.27` 插件与 `0.1.29` 独立后台。新版独立包校验和由各 Release 资产同名 `.sha256` 文件提供；[SHA256SUMS.txt](SHA256SUMS.txt) 保留首次 0.1.27 发布归档。安装步骤见 [独立服务指南](../../../docs/standalone.md)。
+插件版本为 `0.1.27`，六平台独立后台均为 `0.1.30`；0.1.29 Release 已下架。新版独立包校验和由各 Release 资产同名 `.sha256` 文件提供；[SHA256SUMS.txt](SHA256SUMS.txt) 保留首次 0.1.27 发布归档。安装步骤见 [独立服务指南](../../../docs/standalone.md)。
 
 ## 未提交代码审查（2026-11-12）
 
@@ -360,7 +419,7 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 ## 下一步
 
 0. Antigravity 已打包发布且用户确认内置可用；登录后完整对话、工具调用及权限确认的自动化验证仍待补充。另：`RemoteHostTest`、`RuntimeCacheTest` 在设置升级运行时后的既有失败待升级链路负责人处理。
-1. 保持插件 `0.1.27`，用户在远程设置升级后台到 `0.1.29` 并刷新远程页面，完成本次资源路由修复的真实验收；Windows 全新安装仍待实机验证。
+1. 资源改写清理、模型选择器连续设置、默认值及滚回底部修复已纳入 Mac 插件 0.1.27 与六平台独立后台 0.1.30；公开下载、默认安装版本及插件更新发现验证完成，0.1.29 已下架。Windows EXE 启动、升级与全新安装仍待实机验证。
 2. 聊天运行时与远程包资源归属的生命周期修订仍待确认，当前升级仍会停止共享 Core；普通停止远程已由用户实测通过。
 3. 真实后台和插件的安装、升级与重启继续由用户操作，不用手动脚本绕过面板升级验收。
 

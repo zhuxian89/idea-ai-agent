@@ -1,11 +1,50 @@
 feature: 2026-11-11-standalone-backend
 status: in_progress
 entrypoint: README.md
-current_step: standalone-relay-assets-acceptance
+current_step: windows-installer-device-acceptance
 steps:
-  - id: standalone-relay-assets-fix
-    description: 独立后台正式版本误将自身 JS/CSS 改写到 Relay 全局 mindfs-assets，运行中 0.1.28 与真实节点 HTML 已确认，两项主资源均 404；修复前回归正式版本失败。独立后台保留节点内资源地址，PWA 链接同步改为相对路径。API/app 全量与 race、两项旧库门禁、tsc/build、浏览器入口回归与新包隔离 Core 资源 HTTP 200/工作区显示通过。Go 全量在未改动的 TestWorkspaceTurnDiffSharedAcrossAgents 挂起约 3 分钟后人工中止，其余包通过，不能计为全量通过。源码 60f2c61，六平台 0.1.29 与 24 个资产已发布，GitHub 摘要/大小与本地一致，24 个公开资产匿名下载均 HTTP 200 且 SHA-256 与本地一致；版本元数据同步至 0.1.29，用户真实面板升级待完成。
+  - id: remaining-source-sync
+    description: 用户授权剩余 27 文件统一提交并推送 origin/main，包含选择器/滚动/资源清理及测试和项目文档。提交前前端 14/14、0 跳过，类型检查与后端 API 全量通过；未重新打包或操作真实服务。
+    status: done
+  - id: windows-installer-lessons-agents
+    description: 用户确认本次 Windows 更新恢复后，补齐根 AGENTS 的已确认根因、测试读取方式缺口和每次 Windows 可用包发布门禁；记录 UTF-8 BOM、最终 ZIP 内脚本、真实 Windows 5.1、公开附件复核、同版本插件重装及验证命令。本轮文档检查通过。
+    status: done
+  - id: windows-installer-request
+    description: 已用 .NET ANSI 936 复现无 BOM UTF-8 注释吞掉请求赋值行。两份安装器改用 UTF-8 BOM、请求使用 CreateHttp，打包检查最终脚本字节；本机安装/下载 8/8、0 跳过。真实 Windows 5.1 最终插件 ZIP 公网下载/摘要校验及两种读取回归 2/2、PowerShell7 2/2、旧库双门禁通过；10 项正式附件已替换并匿名核对，其余 20 项 ID/digest 保留，发布后 Windows 5.1 再次通过；用户已确认本次 Windows 更新恢复。
+    status: done
+  - id: windows-installer-device-acceptance
+    description: 用户已确认本次修复后 Windows 更新恢复；全新安装、计划任务与登录自启仍待单独验收。自动化已覆盖最终包脚本的真实 Windows 5.1 下载与摘要。
     status: in_progress
+  - id: windows30-and-withdraw29
+    description: Windows 双架构及 Intel Mac/Linux 包已构建、包内验证并上传，0.1.30 共 24 项资产，全部匿名下载 HTTP 200 与本地/GitHub 摘要一致，原 Mac 六项 ID/摘要保留。旧库双门禁、资源矩阵、类型、交互及包内资源通过；临时入口 ENOENT 后稳定 dist 复跑通过。安装脚本 3 通过/4 PowerShell 跳过。默认版本已公开切至 0.1.30（仅 version.txt 单文件提交 4d1025c），0.1.29 Release 及 24 项附件已下架且原 URL 全部 404，源码标签和插件 Latest v0.1.27 保留。下架后真实插件在线发现 Windows 0.1.30，前端/Kotlin 六平台均选择 0.1.30。未安装真实服务，Windows EXE 实机验收待完成。
+    status: done
+  - id: windows-update-version-check
+    description: 用户反馈改标题后 Windows 仅检查到独立后台 0.1.29；在线核对 0.1.30 仅有 Mac ARM64 归档，Windows amd64/arm64 包及校验仍在 0.1.29。检测结果符合按平台选择完整附件的规则，未改源码或重新打包。
+    status: done
+  - id: release-title-separation
+    description: 用户确认同仓库保留独立后台/插件两条发布线；22 条历史标题已统一为 IDEA 插件 <版本>（19 条）/ 独立后台 <版本>（3 条），后续规则已写入 docs/standalone.md。标签、正文、日期、状态和全部附件元数据保持原样，Latest 仍为插件 v0.1.27；真实插件 JAR 在线发现独立后台 0.1.30，前端/Kotlin 六平台选择通过。证据 build/reports/release-titles-20261116-{verification,update-discovery}.json。
+    status: done
+  - id: session-bottom-scroll-repackage
+    description: 距底部 120px 内隐藏按钮，阅读暂停和按钮可见性分开；六个触屏/桌面场景及相邻 30 项测试通过，旧库全量与迁移 race 通过。已重打插件 0.1.27 与独立后台 0.1.30，包内资源检查通过，GitHub 四项资产已替换。首次匿名下载遇 GitHub TLS 连接失败，复跑六个附件 HTTP 200、字节与本地及 GitHub 摘要一致，真实插件发现 0.1.30。未安装真实程序；已装首次 0.1.30 时需手动同版重装。
+    status: done
+  - id: mac-standalone30-github-release
+    description: Mac ARM64 独立后台 0.1.30 已公开发布，加入滚动修复后按用户授权替换同版资产。六个公开附件匿名下载与本地/GitHub digest 一致；真实插件 JAR 确认 0.1.29 可更新至 0.1.30，前端及 Kotlin 六平台选择正确。固定版本元数据保留 0.1.29，未操作真实安装。报告 build/reports/standalone30-public-verification.json。
+    status: done
+  - id: mac-plugin27-standalone30-package
+    description: 用户指定仅 Mac ARM64，独立后台 0.1.30、插件保持 0.1.27。已加入选择器及滚动修复重新打包，SHA-256 校验通过。两项 kanban 旧库检查、资源 24 组合 HTTP、类型/生产构建、插件配置通过；Kotlin 95 通过/4 环境跳过/0 失败。解包核对 ARM64、版本、305 网页逐字节一致；包内后台内置/独立×本地/转发四入口各 87 项资源 HTTP 200，字节与包一致；包内网页浏览器入口与资源失败回归通过。报告 build/reports/mac-30-27-verification.json。独立包已替换 GitHub，未安装；固定脚本默认仍 0.1.29。
+    status: done
+  - id: agent-selector-continuous-settings
+    description: 统一远程与插件连续选择交互；首项模式、high 与 Fast 关闭作为新会话/切换 Agent 默认，同一 Agent 换模型保留兼容设置，已有会话保留显式设置。远程菜单启用视口定位，修复窄屏越界。旧实现默认值回归已确认失败；修复后相关 16/16、类型检查与生产构建通过，375px 触屏远程/1280px 桌面远程/420px 插件连续选择与实际发送参数、深浅色截图通过。初轮夹具 undefined/null 断言及菜单外点击位置已修正；已纳入重打 Mac 插件 0.1.27 与公开独立后台 0.1.30。日志 build/reports/agent-selector-{regression,build}.log。
+    status: done
+  - id: standalone-0.1.28-withdrawal
+    description: 下架存在远程资源故障的 standalone-v0.1.28 Release 及全部 24 个附件；Release API 和 24 个原下载地址均确认 HTTP 404，源码标签保留供追溯。0.1.29 与插件 0.1.27 的发布元数据及附件保持原样，线上默认安装版本仍为 0.1.29。证据 build/reports/standalone-0.1.28-withdrawal.json。
+    status: done
+  - id: relay-asset-rewrite-removal
+    description: 用户确认 0.1.29 远程恢复，并授权删除遗留资源改写、强调本次故障。扩大回归在改动前复现默认正式模式错误改写及缺文件无提示；现已删除六个专用辅助函数和所有资源改写分支、前端旧路径例外，资源错误提示包含实际 URL。AGENTS.md 与 attention.md 已加入长期约束；三种模式、四种版本、本地/远程共 24 组合实际 HTTP 回归通过，API/app/remotehost 三包测试和 vet、前端 6/6（含生产构建、入口与错误提示）及类型检查通过。证据 build/reports/relay-assets-cleanup-*；本轮未打包、发布或更换运行程序。
+    status: done
+  - id: standalone-relay-assets-fix
+    description: 独立后台正式版本误将自身 JS/CSS 改写到 Relay 全局 mindfs-assets，运行中 0.1.28 与真实节点 HTML 已确认，两项主资源均 404；修复前回归正式版本失败。独立后台保留节点内资源地址，PWA 链接同步改为相对路径。API/app 全量与 race、两项旧库门禁、tsc/build、浏览器入口回归与新包隔离 Core 资源 HTTP 200/工作区显示通过。Go 全量在未改动的 TestWorkspaceTurnDiffSharedAcrossAgents 挂起约 3 分钟后人工中止，其余包通过，不能计为全量通过。源码 60f2c61，六平台 0.1.29 与 24 个资产已发布，GitHub 摘要/大小与本地一致，24 个公开资产匿名下载均 HTTP 200 且 SHA-256 与本地一致；版本元数据同步至 0.1.29，随后按用户授权通过官方脚本在本机更新并重启，用户已确认远程页面恢复。
+    status: done
   - id: builtin-antigravity-acp
     description: 内置 Antigravity CLI（agy）为 ACP agent，随 runtime/agents.json 提供，放在列表末尾不改变默认 agent；安装/更新命令取自官方 install.sh/install.ps1 原文（已下载核对，未执行）；图标、显示名、登录状态识别同步。Windows 运行时 PATH 补充 LOCALAPPDATA\agy\bin（官方安装位置）。源码与测试完成：Go agent 包全量、全量 Go 测试、前端 314/314、tsc、vite 构建、Kotlin 全量 99 条中 0 失败（4 条环境跳过）、旧库迁移门禁通过；升级运行时下 RemoteHostTest/RuntimeCacheTest 各 1 条失败已在 HEAD 复现，属既有问题；新增 4 条 Go 注册表/安装探测回归、4 条前端回归，并用真实 agy 验证 Prober 识别为已安装、未登录时如实报 Authentication required。变异测试确认守卫与 Windows 路径断言会失败。Mac 插件测试包已生成：build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip，SHA-256 76a2470967d760c3c6c545c27ff49904f92810bceb5d5d800b36472e2c85ccaa；包内插件版本 0.1.27-local，agents.json 含 antigravity，web 含 antigravity.png，Mac arm64 运行时存在；打包时 Gradle test 与 verifyPluginProjectConfiguration 通过。未安装到本机（IDEA 与 local-ai-agent 后台运行中，待用户确认）。Windows 包、独立包未生成；真实登录后的 session/new 与对话待验证
     status: done

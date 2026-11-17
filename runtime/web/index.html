@@ -51,7 +51,7 @@
     <div id="root"></div>
     <script>
       (function () {
-        var notice = "版本太老，请重新安装最新版 mindfs";
+        var notice = "页面资源加载失败，请刷新页面重试。";
         var shown = false;
         function isRelayNodePage() {
           return /^\/n\/[^/]+(?:\/|$)/.test(window.location.pathname);
@@ -69,21 +69,21 @@
           if (parsed.origin !== window.location.origin) {
             return false;
           }
-          return /^\/(?:mindfs-assets|assets)\/index-[^/]+\.(?:js|css)$/i.test(parsed.pathname);
+          return /^\/n\/[^/]+(?:\/p\/[^/]+)?\/assets\/index-[^/]+\.(?:js|css)$/i.test(parsed.pathname);
         }
-        function showNotice() {
+        function showNotice(url) {
           if (shown || !isRelayNodePage()) {
             return;
           }
           shown = true;
-          window.alert(notice);
+          window.alert(notice + "\n" + url);
         }
         window.addEventListener("error", function (event) {
           var target = event.target;
           if (!target || target === window || !isMainAsset(target.src || target.href)) {
             return;
           }
-          showNotice();
+          showNotice(target.src || target.href);
         }, true);
       })();
     </script>

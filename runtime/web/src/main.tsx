@@ -49,7 +49,6 @@ function mindFSAssetPath(raw: string): string {
     const pathname = url.pathname;
     const knownAsset =
       pathname.startsWith("/assets/") ||
-      pathname.startsWith("/mindfs-assets/") ||
       pathname === "/favicon.svg" ||
       pathname === "/manifest.webmanifest" ||
       pathname === "/apple-touch-icon.png" ||

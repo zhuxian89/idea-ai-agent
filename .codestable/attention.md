@@ -12,6 +12,8 @@
 
 ### 路径与目录约定
 
+- 网页资源随内置/独立后台各自安装包发布；远程资源保留节点/项目路径，禁止改写到 Relay 的 `/mindfs-assets/` 公共路径。见根 `AGENTS.md` 与 [故障记录](issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
+
 ### 环境变量与凭证
 
 ### 其他

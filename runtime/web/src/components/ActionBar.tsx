@@ -580,7 +580,7 @@ export function ActionBar({
     const defaults = getAgentDefaults(preferred);
     setAgent(preferred.name);
     setModel(defaults.model);
-    setAgentMode("");
+    setAgentMode(defaults.mode);
     setEffort(defaults.effort);
     setFastService(defaults.fastService);
   }, [agent, agents, currentSession]);
@@ -589,18 +589,20 @@ export function ActionBar({
   // must never silently replace the user's current model with the default.
 
   const selectedAgent = agents.find((item) => item.name === agent);
+  const selectedDefaults = getAgentDefaults(selectedAgent, model);
   const permissionChoices = compactWorkbench ? nativePermissionChoices(selectedAgent) : [];
-  const effectiveAgentMode = agentMode || permissionChoices[0]?.id || "";
+  const effectiveAgentMode = agentMode || selectedDefaults.mode || permissionChoices[0]?.id || "";
   const selectedModelInfo =
     (selectedAgent?.models ?? []).find((item) => item.id === model)
     || (selectedAgent?.models ?? []).find(
-      (item) => item.id === (getAgentDefaults(selectedAgent).model || selectedAgent?.current_model_id),
+      (item) => item.id === (selectedAgent?.default_model_id || selectedAgent?.current_model_id),
     );
   const availableEfforts = selectedModelInfo?.efforts ?? selectedAgent?.efforts ?? [];
-  const isCodexEffortAgent = selectedAgent?.name === "codex";
   const supportsEffort =
     availableEfforts.length > 0 && !!selectedModelInfo?.supportEffort;
   const supportsServiceTier = !!selectedAgent?.supports_fast_service;
+  const effectiveEffort = effort || selectedDefaults.effort;
+  const effectiveFastService = fastService || selectedDefaults.fastService;
   const planModeActive = (!!currentSession?.plan_mode || pendingPlanMode) && mode !== "command";
   const planSessionKey = currentSession?.key || currentSession?.session_key || "";
   const planRootId = currentSession?.root_id || currentRootId || "";
@@ -614,9 +616,9 @@ export function ActionBar({
       return;
     }
     if (effort && !availableEfforts.includes(effort)) {
-      setEffort(getAgentDefaults(selectedAgent).effort);
+      setEffort(selectedDefaults.effort);
     }
-  }, [supportsEffort, effort, availableEfforts, selectedAgent, isCodexEffortAgent]);
+  }, [supportsEffort, effort, availableEfforts, selectedDefaults.effort]);
 
   useEffect(() => {
     if (!supportsServiceTier) {
@@ -955,8 +957,8 @@ export function ActionBar({
         mode === "command" ? "" : agent,
         model || undefined,
         effectiveAgentMode || undefined,
-        supportsEffort ? effort || undefined : undefined,
-        supportsServiceTier ? fastService : undefined,
+        supportsEffort ? effectiveEffort || undefined : undefined,
+        supportsServiceTier ? effectiveFastService : undefined,
         mode === "command" ? shell || undefined : undefined,
       );
       editorRef.current?.clear();
@@ -990,7 +992,7 @@ export function ActionBar({
         requestAnimationFrame(() => editorRef.current?.focus());
       }
     }
-  }, [voiceBusy, serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effort, supportsServiceTier, fastService, shell, t, compactWorkbench, selectedAgent?.installed]);
+  }, [voiceBusy, serializedInput, pendingAttachments, isConnected, sending, mode, agent, currentRootId, planSessionKey, planRootId, onSetPlanMode, isMobile, model, effectiveAgentMode, onSendMessage, supportsEffort, effectiveEffort, supportsServiceTier, effectiveFastService, shell, t, compactWorkbench, selectedAgent?.installed]);
 
   const handleCancel = useCallback(async () => {
     const sessionKey = currentSession?.key;
@@ -1135,7 +1137,7 @@ export function ActionBar({
     const defaults = getAgentDefaults(nextAgent);
     setAgent(nextAgent.name);
     setModel(defaults.model);
-    setAgentMode("");
+    setAgentMode(defaults.mode);
     setEffort(defaults.effort);
     setFastService(defaults.fastService);
     syncedSessionSignatureRef.current = "";
@@ -1830,20 +1832,22 @@ export function ActionBar({
                     agent={agent}
                     model={model}
                     mode={effectiveAgentMode}
-                    effort={effort}
+                    effort={effectiveEffort}
                     agents={agents}
                     onAgentChange={(nextAgent, nextModel) => {
                       const nextStatus = agents.find((item) => item.name === nextAgent);
-                      const defaults = getAgentDefaults(nextStatus);
+                      const defaults = getAgentDefaults(nextStatus, nextModel);
                       setAgent(nextAgent);
                       setModel(nextModel || defaults.model);
-                      if (nextAgent !== agent) setAgentMode("");
-                      setEffort(defaults.effort);
-                      setFastService(defaults.fastService);
+                      if (nextAgent !== agent) {
+                        setAgentMode(defaults.mode);
+                        setEffort(defaults.effort);
+                        setFastService(defaults.fastService);
+                      }
                     }}
                     onModeChange={(nextAgentMode) => setAgentMode(nextAgentMode || "")}
                     onEffortChange={(nextEffort) => setEffort(nextEffort || "")}
-                    fastService={fastService}
+                    fastService={effectiveFastService}
                     onFastServiceChange={(nextFastService) => setFastService(nextFastService || "")}
                     onAgentRestart={async (targetAgent) => {
                       await probeAgent(targetAgent);
@@ -1864,9 +1868,9 @@ export function ActionBar({
                     showLabel={compactWorkbench}
                     showChevron={compactWorkbench}
                     stableLayout={compactWorkbench}
-                    viewportMenu={compactWorkbench}
+                    viewportMenu
                     allowDefaultModel={compactWorkbench}
-                    closeOnSelect={!compactWorkbench}
+                    closeOnSelect={false}
                     defaultExpandOptions
                     onboardingId="agent-selector"
                     />

@@ -81,4 +81,19 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
   await expect.poll(() => requests.includes("/api/dirs")).toBe(true);
   await expect(page.getByRole("navigation", { name: "Remote project" })).toHaveCount(0);
   assert.deepEqual(errors, []);
+
+  const notices = [];
+  page.on("dialog", dialog => {
+    notices.push(dialog.message());
+    void dialog.dismiss();
+  });
+  for (const [index, extension] of ["js", "css"].entries()) {
+    const pattern = `**/assets/index-*.${extension}`;
+    await page.route(pattern, route => route.abort());
+    await page.goto("https://entry.test/n/N/");
+    await expect.poll(() => notices.length).toBe(index + 1);
+    assert.match(notices[index], /^页面资源加载失败，请刷新页面重试。\n/);
+    assert.match(notices[index], new RegExp(`/n/N/assets/index-[^/]+\\.${extension}$`));
+    await page.unroute(pattern);
+  }
 });

@@ -141,9 +141,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   const pathname = normalizedPathname(url.pathname);
-  if (pathname.startsWith("/mindfs-assets/")) {
-    return;
-  }
   if (pathname.startsWith("/api/") || pathname === "/api" || pathname === "/ws" || pathname === "/health") {
     return;
   }

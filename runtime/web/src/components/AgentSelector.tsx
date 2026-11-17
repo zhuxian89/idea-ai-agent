@@ -15,6 +15,7 @@ import { AgentSelectorRow } from "./AgentSelectorRow";
 import { AgentConnectionTest } from "./AgentConnectionTest";
 import { AgentModelRefresh } from "./AgentModelRefresh";
 import { agentDisplayName, agentSetupState, agentSetupStatusKey } from "../services/agentSetup";
+import { getAgentDefaults } from "../services/agentDefaults";
 
 type AgentSelectorProps = {
   agent: string;
@@ -97,7 +98,7 @@ export function AgentSelector({
   viewportMenu = false,
   stableLayout = false,
   allowDefaultModel = false,
-  closeOnSelect = true,
+  closeOnSelect = false,
 }: AgentSelectorProps) {
   const { t } = useI18n();
   const selectedAgentStatus = agents.find((item) => item.name === agent);
@@ -119,7 +120,7 @@ export function AgentSelector({
   const showSelectedEffort =
     selectedEfforts.length > 0 && !!selectedModelStatus?.supportEffort;
   const selectedEffort = showSelectedEffort
-    ? effort || selectedAgentStatus?.default_effort || "auto"
+    ? effort || getAgentDefaults(selectedAgentStatus, model).effort
     : "";
   const selectedEffortLabel = selectedEffort;
   const [isOpen, setIsOpen] = useState(false);
@@ -178,26 +179,21 @@ export function AgentSelector({
   );
   const displayedMode = useMemo(() => {
     if (!submenuAgentStatus) return "";
-    const fallbackMode = submenuAgentStatus.current_mode_id || "";
+    const fallbackMode = getAgentDefaults(submenuAgentStatus).mode;
     return submenuAgentStatus.name === agent
       ? mode || fallbackMode
       : fallbackMode;
   }, [submenuAgentStatus, agent, mode]);
-  const submenuIsCodex = submenuAgentStatus?.name === "codex";
   const submenuSupportsEffort = useMemo(
     () => submenuEfforts.length > 0 && !!submenuSelectedModel?.supportEffort,
     [submenuEfforts, submenuSelectedModel],
   );
   const submenuSupportsServiceTier =
     !!submenuAgentStatus?.supports_fast_service;
-  const fallbackEffort = submenuAgentStatus?.default_effort || "";
-  const displayedEffort = submenuIsCodex
-    ? effort || fallbackEffort || "Auto"
-    : effort || fallbackEffort || "Auto";
-  const fallbackFastService = submenuAgentStatus?.default_fast_service || "";
+  const submenuDefaults = getAgentDefaults(submenuAgentStatus, submenuSelectedModel?.id);
+  const displayedEffort = (submenuAgentStatus?.name === agent ? effort : "") || submenuDefaults.effort;
   const fastModeEnabled =
-    (submenuAgentStatus?.name === agent ? fastService : fallbackFastService) ===
-    "on";
+    submenuAgentStatus?.name === agent && fastService === "on";
   const buttonTitle = useMemo(() => {
     if (showUnavailableWarning) {
       return t("agent.currentUnavailable", { name: agent });

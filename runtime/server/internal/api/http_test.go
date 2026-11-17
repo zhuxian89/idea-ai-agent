@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -45,126 +47,88 @@ func TestPathForStaticAssetCleansURLPaths(t *testing.T) {
 	}
 }
 
-func TestServeFrontendIndexRewritesRelayedAssetRefsForReleaseVersion(t *testing.T) {
-	staticDir := t.TempDir()
-	if err := os.Mkdir(filepath.Join(staticDir, "assets"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	indexPath := filepath.Join(staticDir, "index.html")
-	content := `<!doctype html><script type="module" src="./assets/index-test.js"></script><link rel="stylesheet" href="./assets/index-test.css">`
-	if err := os.WriteFile(indexPath, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(staticDir, "assets", "index-test.js"), []byte("console.log('ok')"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(staticDir, "assets", "index-test.css"), []byte("body{}"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	handler := &HTTPHandler{StaticDir: staticDir, Version: "v0.3.5"}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("X-MindFS-Relayed", "1")
-	resp := httptest.NewRecorder()
-
-	handler.serveFrontendIndex(resp, req, staticDir, indexPath)
-
-	body := resp.Body.String()
-	if strings.Contains(body, "./assets/") {
-		t.Fatalf("body still contains local assets path: %s", body)
-	}
-	if !strings.Contains(body, "/mindfs-assets/index-test.js") || !strings.Contains(body, "/mindfs-assets/index-test.css") {
-		t.Fatalf("body missing relayed asset paths: %s", body)
-	}
-}
-
-func TestServeFrontendIndexKeepsLocalAssetRefsForDevVersion(t *testing.T) {
-	staticDir := t.TempDir()
-	if err := os.Mkdir(filepath.Join(staticDir, "assets"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	indexPath := filepath.Join(staticDir, "index.html")
-	content := `<!doctype html><script type="module" src="./assets/index-test.js"></script>`
-	if err := os.WriteFile(indexPath, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(staticDir, "assets", "index-test.js"), []byte("console.log('ok')"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	handler := &HTTPHandler{StaticDir: staticDir, Version: "v0.3.5-9-g92b8c85-dirty"}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("X-MindFS-Relayed", "1")
-	resp := httptest.NewRecorder()
-
-	handler.serveFrontendIndex(resp, req, staticDir, indexPath)
-
-	body := resp.Body.String()
-	if !strings.Contains(body, "./assets/index-test.js") {
-		t.Fatalf("body should keep local asset path for dev version: %s", body)
-	}
-	if strings.Contains(body, "/mindfs-assets/") {
-		t.Fatalf("body should not contain relayed asset path for dev version: %s", body)
-	}
-}
-
-func TestStandaloneRelayedAssetsStayWithNode(t *testing.T) {
+func TestFrontendAssetsStayWithBackend(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "assets", "main.js"), []byte("// test"), 0600); err != nil {
-		t.Fatal(err)
+	files := map[string]string{
+		"index.html":            `<html><head><script type="module" src="./assets/index-test.js"></script><link rel="stylesheet" href="./assets/index-test.css"></head></html>`,
+		"service-worker.js":     `const PRECACHE = ["./assets/index-test.js", "./assets/index-test.css"];`,
+		"assets/index-test.js":  "console.log('backend assets')",
+		"assets/index-test.css": "body{}",
 	}
-	index := filepath.Join(dir, "index.html")
-	if err := os.WriteFile(index, []byte(`<html><head><script type="module" src="./assets/main.js"></script></head></html>`), 0600); err != nil {
-		t.Fatal(err)
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.WriteFile(filepath.Join(dir, "service-worker.js"), []byte(`const PRECACHE = ["./assets/main.js"];`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for _, version := range []string{"0.1.28", "v0.1.29", "0.1.29-local"} {
-		t.Run(version, func(t *testing.T) {
-			handler := &HTTPHandler{StaticDir: dir, Version: version, Standalone: true}
-			for _, resource := range []string{"/", "/service-worker.js", "/assets/main.js"} {
-				request := httptest.NewRequest(http.MethodGet, resource, nil)
-				request.Header.Set("X-MindFS-Relayed", "1")
-				response := httptest.NewRecorder()
-				if !handler.serveStaticAsset(response, request) || response.Code != http.StatusOK {
-					t.Fatalf("%s: status %d", resource, response.Code)
-				}
-				body := response.Body.String()
-				if strings.Contains(body, "/mindfs-assets/") {
-					t.Fatalf("%s points to Relay's shared frontend: %s", resource, body)
-				}
-				if resource != "/assets/main.js" && !strings.Contains(body, "./assets/main.js") {
-					t.Fatalf("%s lost its node-relative asset reference: %s", resource, body)
-				}
-				if resource == "/" && !strings.Contains(body, `name="local-ai-agent-mode" content="standalone"`) {
-					t.Fatal("standalone mode was lost", body)
-				}
+	for _, mode := range []struct {
+		name       string
+		context    *AppContext
+		standalone bool
+	}{
+		{name: "default"},
+		{name: "embedded", context: &AppContext{ProjectLocked: true}},
+		{name: "standalone", standalone: true},
+	} {
+		for _, version := range []string{"0.1.29", "v0.1.29", "0.1.29-local", "idea-0.1.0"} {
+			for _, relayed := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/relayed=%t", mode.name, version, relayed), func(t *testing.T) {
+					handler := &HTTPHandler{StaticDir: dir, Version: version, Standalone: mode.standalone, AppContext: mode.context}
+					server := httptest.NewServer(http.HandlerFunc(handler.handleFrontend))
+					defer server.Close()
+					for _, resource := range []string{"/", "/service-worker.js", "/assets/index-test.js", "/assets/index-test.css"} {
+						request, err := http.NewRequest(http.MethodGet, server.URL+resource, nil)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if relayed {
+							request.Header.Set("X-MindFS-Relayed", "1")
+						}
+						response, err := server.Client().Do(request)
+						if err != nil {
+							t.Fatal(err)
+						}
+						content, err := io.ReadAll(response.Body)
+						response.Body.Close()
+						if err != nil {
+							t.Fatal(err)
+						}
+						if response.StatusCode != http.StatusOK {
+							t.Fatalf("%s: status %d", resource, response.StatusCode)
+						}
+						body := string(content)
+						if strings.Contains(body, "/mindfs-assets/") {
+							t.Fatalf("%s points to Relay's shared frontend: %s", resource, body)
+						}
+						if resource == "/" {
+							for _, asset := range []string{"./assets/index-test.js", "./assets/index-test.css"} {
+								if !strings.Contains(body, asset) {
+									t.Fatalf("index lost its backend asset reference %s: %s", asset, body)
+								}
+							}
+							if mode.standalone && !strings.Contains(body, `name="local-ai-agent-mode" content="standalone"`) {
+								t.Fatal("standalone mode was lost", body)
+							}
+						} else if want := files[strings.TrimPrefix(resource, "/")]; body != want {
+							t.Fatalf("%s content = %q, want %q", resource, body, want)
+						}
+					}
+				})
 			}
-		})
+		}
 	}
 }
 
-func TestIsStandardReleaseVersion(t *testing.T) {
-	tests := []struct {
-		version string
-		want    bool
-	}{
-		{version: "v0.3.5", want: true},
-		{version: "0.3.5", want: true},
-		{version: "v0.3.5-9-g92b8c85-dirty", want: false},
-		{version: "dev", want: false},
-		{version: "", want: false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.version, func(t *testing.T) {
-			if got := isStandardReleaseVersion(tt.version); got != tt.want {
-				t.Fatalf("isStandardReleaseVersion(%q) = %v, want %v", tt.version, got, tt.want)
-			}
-		})
+func TestRelayedFrontendWithoutAssetsReportsMissingFiles(t *testing.T) {
+	handler := &HTTPHandler{Version: "0.1.29"}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Header.Set("X-MindFS-Relayed", "1")
+	response := httptest.NewRecorder()
+	handler.handleFrontend(response, request)
+	if !strings.Contains(response.Body.String(), "frontend assets missing: web/index.html") {
+		t.Fatal("missing frontend files were not reported", response.Body.String())
 	}
 }
 
