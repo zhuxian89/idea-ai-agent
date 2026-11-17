@@ -1,5 +1,13 @@
 # 独立后端计划与进度
 
+## 独立后台 0.1.31 / 插件 0.1.27 全平台重打（2026-11-17，已发布，公开复核通过）
+
+已按用户要求重新 pull 至 `8b562ec`，纳入不同路径同名项目独立 ID、远程“移除项目”按钮及 Windows 打包入口修正。重新生成并替换 [独立后台 0.1.31](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.31) 六平台共 24 项附件，以及 [插件 0.1.27](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27) 四平台/通用 ZIP 和总校验共 6 项附件；全部 30 项匿名下载 HTTP 200，字节与本地、GitHub digest 一致。两条源码标签已对齐构建提交 `8b562ec`，旧标签 SHA 保存在 `build/reports/release31-27/source-tags-before.json`；插件仍为 Latest。固定安装入口默认 0.1.31，公开脚本与源码一致且 PowerShell 为 UTF-8 BOM。真实公开插件 JAR 在线发现 0.1.31，前端/Kotlin 六平台均选 31，Windows 0.1.30 可升级。
+
+新源码旧库全量/迁移 race、API 全量、前端 19/19、同名/迁移/重命名 Go 定向 37 通过（1 个 Windows 专项在 Mac 跳过）；类型/生产构建/插件配置、Kotlin 95 通过/4 环境跳过、安装器 8/8 通过。各包 305 个网页文件与同一 dist 一致，内置/独立 × 本地/转发四入口各 87 项资源实际 HTTP 200、字节匹配。最终候选已在真实 Windows PowerShell 5.1 通过（CI 44058656096），发布后真实 Windows 5.1 再次通过（CI 44059387321），下载并校验本次新公开后台。迁移用例首轮在 macOS 路径别名断言失败，仅修正测试后复跑通过；旧源码候选已弃用。
+
+已装旧构建 31/27 时需手动重装同版本，插件从磁盘重装后重启 IDEA。本轮未操作用户真实安装、服务或 JetBrains Marketplace。证据见 `build/reports/release31-27/` 与 [implementation](standalone-backend-implementation.md)。
+
 ## 剩余源码统一同步（2026-11-17）
 
 用户授权将剩余 27 个文件统一提交并推送至 `origin/main`，包括模型选择器连续设置与默认值、滚回底部判断、远程资源路径清理、相关测试及 AGENTS/交接记录。提交前重新验证：前端回归 14/14、0 跳过，类型检查与后端 API 全量通过；本轮未重打包或操作运行服务。日志 `build/reports/source-sync-20261117-{web,typecheck,api}.log`。

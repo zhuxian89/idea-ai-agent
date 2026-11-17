@@ -183,7 +183,8 @@ func TestStandaloneMigrationReportsInvalidSourceAndPreservesSameNames(t *testing
 		if roots := registry.List(); len(roots) != 2 || roots[0].ID == roots[1].ID || roots[0].Name != roots[1].Name {
 			t.Fatalf("migration merged same-name projects: %+v", roots)
 		}
-		if imported, found := fs.FindRootByPath(registry.List(), migrated.Projects["old"]); !found || imported.RootPath != second {
+		expected, exists := fs.FindRootByPath(registry.List(), second)
+		if imported, found := fs.FindRootByPath(registry.List(), migrated.Projects["old"]); !exists || !found || imported.ID != expected.ID {
 			t.Fatalf("legacy project link points to the wrong directory: %+v", migrated.Projects)
 		}
 		if after, _ := registry.Get(before.ID); before != after {

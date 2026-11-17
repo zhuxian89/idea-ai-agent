@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
+  - id: release31-plugin27-rebuild
+    description: 再次 pull 至 8b562ec 后重打并发布六平台独立 31（24 资产）、全部插件 27（6 资产）；30 项匿名下载/字节/SHA/GitHub digest 通过，两标签对齐构建提交，Latest 为插件27，固定入口默认31。新源码旧库双门禁/API/类型构建/配置/前端19项/同名迁移等Go37项通过（1 Windows专项在Mac跳过），Kotlin95通过4环境跳过，安装器8项无跳过；各包305网页一致，四入口各87项HTTP200。真实Windows5.1精确候选CI44058656096和发布后CI44059387321通过；公开插件在线发现31，六平台前端/Kotlin选择31。macOS路径别名只修测试断言后复跑通过，旧候选弃用；同版已安装需手动重装，未操作真实服务或Marketplace。证据 build/reports/release31-27/。
+    status: done
   - id: remaining-source-sync
     description: 用户授权剩余 27 文件统一提交并推送 origin/main，包含选择器/滚动/资源清理及测试和项目文档。提交前前端 14/14、0 跳过，类型检查与后端 API 全量通过；未重新打包或操作真实服务。
     status: done
@@ -61,8 +64,8 @@ steps:
     description: 2026-11-17 本机独立后台已升级为 0.1.27-local.1（安装包 SHA-256 5DC1E2B3…8A3DB，已运行版本与包内 exe 哈希一致，旧报错文本已不在新 exe 中）；用户确认 Z 和 D 两份同名项目均可打开。尚未核对各自会话历史的数据隔离；插件仍优先连接独立后台，插件与独立后台解耦待单独处理；本地测试版本未上传 GitHub
     status: done
   - id: remote-project-remove-button
-    description: 2026-11-17 远程网页「移除项目」按钮自 6d6d9e8（2026-11-10 重构）后缺失，服务端 DELETE /api/dirs 仍可用；恢复按钮，仅独立后台/远程项目显示，IDEA 管理项目隐藏（isIDEManagedProject）。源码改动：DefaultListView 新增可选 onRemoveRoot，App.tsx 恢复 handleRemoveCurrentRoot（确认后 DELETE /api/dirs）。验证：typecheck 通过、生产构建通过、新增 tests/project-remove-button.test.mjs 3/3 通过、既有 project-tree-refresh 与 agent-lifecycle-restart 通过。2026-11-17 默认独立后台版本改为 0.1.31（scripts/standalone/version.txt），本机 windows-amd64 本地包已覆盖安装（exe SHA-256 CEB4BEA8…59728，与包内一致，服务 401 鉴权响应正常）；已发布 GitHub standalone-v0.1.31（非 latest，仅 windows-amd64 zip + sha256，SHA-256 14c0af4e8d041aeedfab90d8b8e925f9f6eeb692c9bc5e960478e0905c349ec8，匿名下载与校验通过）；Release 标签指向 main（1a73aef），而包由未提交的工作区源码构建，待提交并推送后需核对源码与标签一致
-    status: in_progress
+    description: 2026-11-17 远程网页「移除项目」按钮自 6d6d9e8（2026-11-10 重构）后缺失，服务端 DELETE /api/dirs 仍可用；恢复按钮，仅独立后台/远程项目显示，IDEA 管理项目隐藏（isIDEManagedProject）。源码改动：DefaultListView 新增可选 onRemoveRoot，App.tsx 恢复 handleRemoveCurrentRoot（确认后 DELETE /api/dirs）。验证：typecheck 通过、生产构建通过、新增 tests/project-remove-button.test.mjs 3/3 通过、既有 project-tree-refresh 与 agent-lifecycle-restart 通过。2026-11-17 默认独立后台版本改为 0.1.31（scripts/standalone/version.txt），本机 windows-amd64 本地包已覆盖安装（exe SHA-256 CEB4BEA8…59728，与包内一致，服务 401 鉴权响应正常）；已发布 GitHub standalone-v0.1.31（非 latest，仅 windows-amd64 zip + sha256，SHA-256 14c0af4e8d041aeedfab90d8b8e925f9f6eeb692c9bc5e960478e0905c349ec8，匿名下载与校验通过）；Release 标签指向 main（1a73aef），而包由未提交的工作区源码构建，后续已提交推送并于全平台重打时将标签对齐 8b562ec，公开包和更新发现通过
+    status: done
   - id: windows-update-source-push
     description: 用户授权 push，本次提交同步 Windows 下载跳转与日志编码修复、两项新增回归、Windows 测试环境/SQLite 清理修正及三份交接资料共 9 文件；提交前 fetch 确认 main 与 origin/main 一致，Git 空白检查通过，既有回归和用户实测结果见相应步骤
     status: done

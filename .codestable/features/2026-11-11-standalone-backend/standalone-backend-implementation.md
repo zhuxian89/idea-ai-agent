@@ -1,3 +1,48 @@
+# 全平台 31/27 正式发布复核（2026-11-17，通过）
+
+按最终候选清单替换 `standalone-v0.1.31` 全部 24 项附件（六平台压缩包、Unix 单文件安装器、在线入口及校验文件）和 `v0.1.27` 全部 6 项附件（四平台/通用 ZIP、SHA256SUMS）。30 项附件匿名重新下载均 HTTP 200，逐字节等于本地最终包，SHA-256 与清单、GitHub digest/size/state 一致；各自校验文件通过。标题为“独立后台 0.1.31”及“IDEA 插件 0.1.27”，Latest 保留插件27，Release 说明已更新并移除旧28链接。
+
+使用旧标签 SHA 作为 `--force-with-lease` 条件，仅将本次重打的两个源码标签对齐生产构建提交 `8b562eccf371d6e73f1237392ff95a96ade33b91`。原标签 `standalone-v0.1.31` 为 `1a73aef39c0e46d95bd27c027abfa008526de708`，`v0.1.27` 为 `7c6e3c09c7ac5e97f64fbfee1939b3fb5087d710`；前后记录 `release31-27/source-tags-{before,after}.json`。本轮另提交的 macOS 测试断言和交接文档不改变生产源码。
+
+发布后 [CI 44059387321](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44059387321) 再次用精确候选验证：真实 PowerShell 5.1.26100.33648 从插件脚本下载新公开 Windows x64 31 包，SHA-256 为 `e1663cf84e9576f225095856d0da2d3930e3cce12271ac47598f06d003400934`；默认/ANSI936 回归 2/2、PowerShell7 2/2，均无跳过，x64 EXE 实际版本正确。日志 `release31-27/windows-public-after.log`。发布前 CI 44058656096 的 artifact 已下载，candidate.zip 与本地及公开 Windows x64 插件逐字节一致，SHA-256 为 `f2f3607f199376fb6fe3d7af2fd6bc131e3de03e84998f40a32c64b3f0441ae8`（`release31-27/windows-artifact-verification.json`）。此前新源码发布前 CI 为 44058656096；旧源码的 CI 不用于本轮交付。
+
+从新公开 Windows 插件解出真实 Kotlin JAR，在线发现31，确认30可更新；前端和 Kotlin 六平台全部选择31。固定 raw 两份在线入口及独立安装器与源码一致，PowerShell 有 UTF-8 BOM，默认版本为31。报告 `release31-27/{public-verification,discovery-verification,fixed-entrypoints-verification}.json`。
+
+发布与复核完成后，核对 ID 和六项候选附件，仅删除本任务临时草稿 `validation-31-27-20261117`，正式 Release 保留。
+
+已安装旧构建31/27需手动重装，同版不会再提示更新；插件从磁盘重装后重启IDEA。本轮不执行用户真实安装、不停止/重启真实服务、不发布 JetBrains Marketplace。
+
+# 新源码最终候选 Windows 门禁（2026-11-17，通过）
+
+基于 `8b562ec` 重新构建全部安装包，所有 Go 程序的 `vcs.revision` 均核对为该提交；六个独立归档、五个插件 ZIP、305 个网页文件及全部 30 项资产校验通过。新源码前端 19/19、Go 同名/迁移/重命名定向 37 通过及 1 个 Windows 专项在 Mac 跳过；API 全量、kanban 全量和旧库迁移 race 通过。包内内置/独立 × 本地/转发四入口各 87 项资源 HTTP 200、字节一致。
+
+精确候选 CI [44058656096](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44058656096) 成功：三个 Windows 可用插件和双架构独立 ZIP 按最终 SHA 清单下载，包内脚本与源码逐字节一致且含 UTF-8 BOM；真实 PowerShell 5.1.26100.33648 默认读取插件脚本，下载当前公开 31 包及摘要成功，默认/ANSI936 回归 2/2、PowerShell7 2/2，均无跳过；候选 x64 EXE 实际返回 `Local AI Agent 0.1.31`。发布后另跑同一候选验证新公开后台字节。日志 `build/reports/release31-27/windows-candidate-new-source.log`。
+
+# Mac 迁移夹具路径别名修正（2026-11-17）
+
+新源码 Go 定向首轮 fs/usecase 通过，app 仅 TestStandaloneMigrationReportsInvalidSourceAndPreservesSameNames/same_name_at_another_path 失败。迁移后的 /private/var/folders 路径与 t.TempDir 的 /var/folders 指向同一物理目录，原用例直接比较 RootPath 字符串误报。将测试期望改为用既有 FindRootByPath 查找 second 对应身份，再比较迁移旧链接实际指向的 ID；仍能识别旧链接指向另一目录的真实错误。只改测试断言，生产实现不变。首次输出摘录 `release31-27/go-project-regressions-first-failure.log`，修正后复跑定向检查。
+
+# 重新 pull 0.1.31 功能源码（2026-11-17）
+
+核对原公开 31 包发现其同名项目/移除按钮改动尚未进入本地源码，用户要求重新 pull。fetch 后 main 新增 935431f、b171b54、30a3a10、8b562ec 四提交，已快进到 8b562ec，保留并合并双方交接记录。新增源码包含完整同名 ID/元数据兼容回归、网页移除入口、Node22 Windows cmd/bat 包装调用及默认 0.1.31。旧候选所有产物和通过状态作废，重新重打/验证后才能替换正式附件；原公开包未动。
+
+旧候选 CI 44049919482 在修正草稿可见权限后成功，证明传递链与 Windows5.1 入口可运行；该结果不沿用到新源码。重新构建会生成新 SHA 清单并重新上传精确候选。临时保存与合入资料在 `.git/update-backups/release31-source-*`。
+
+# 候选 CI 草稿读取失败（2026-11-17）
+
+首次精确候选验证 44049446988 在 gh release download 阶段报 release not found，未执行任何 PowerShell 安装脚本。草稿确实存在且本地可下载；GitHub 的草稿仅对有仓库 push 权限的身份可见，原 GITHUB_TOKEN contents:read 不可见。将此验证工作流权限改为 contents:write，使其可读取本仓库草稿；未使用个人令牌，正式附件未替换。失败日志 `release31-27/windows-candidate-first-failure.log`，修正后重新运行。
+
+# 31/27 全平台包与本地验证（2026-11-17，通过）
+
+两项 kanban 旧库门禁通过。插件四平台和通用包重建完成，类型检查、生产构建、插件配置验证通过；Kotlin 95 通过、4 个环境条件跳过、0 失败。安装器下载/在线安装/隔离包安装回归 8/8、0 跳过。独立后台以 LOCAL_AI_AGENT_VERSION=0.1.31 重建六平台，网页复用本次插件生成的同一 dist。
+
+`release31-27/verify-packages.py` 核对全部 30 项待发布资产：独立程序链接版本/GOOS/GOARCH、插件 0.1.27、各包 305 网页文件逐字节一致、agents.json 与 task_template、安装脚本与源码一致（PowerShell 为 UTF-8 BOM）、离线 sh payload 和摘要均通过，清单 `release31-27/release-manifest.json`。包内内置/独立后台、本地/转发四入口各 87 项 HTML/Service Worker/缓存及引用资源 HTTP 200、字节匹配；包内网页本地/节点/项目入口及实际 JS/CSS 失败提示通过，报告 `release31-27-verification.json`。全部进程与数据使用临时目录。
+
+CI 新增精确候选输入，提交 `d71dec3ff3d7df46e7155259a22c9cd6d87bcfe2` 已推送，默认流程 Windows5.1 验证成功（44048798570）。最终 Windows 双架构/通用插件与双架构独立 ZIP 原字节上传到临时草稿用于 CI；按本地 SHA 清单核对后验证包内脚本、默认读取与真实公网下载/摘要，并运行候选 x64 EXE 的 -version。正式附件尚未替换。
+
+# 全平台 31/27 重打启动（2026-11-17）
+
+用户明确授权独立后台 0.1.31 全平台和插件 0.1.27 重打并替换 GitHub Release。远端 standalone-v0.1.31 当前只有 Windows x64 ZIP/校验两项，在线默认仍 0.1.30；插件 Latest 为 v0.1.27。原 Release 元数据保存在 `build/reports/release31-27/*-before.json`。本轮重新验证和构建，最终 Windows 候选将通过草稿附件送入真实 PowerShell5.1 CI，验证通过后才替换正式附件；不操作用户真实安装。
 # 同名项目与 Windows .27 独立后台重打（2026-11-17）
 
 用户要求同时保留使用 Z:、D: 两份同名项目，并授权运行相关回归、重打 Windows x64 独立后台和替换 GitHub 0.1.27 对应包。任务起点工作区干净，基线 `c4d7a1606b7c015325c43a4359a70f7bd5f7bfca`。本轮源码未提交，真实安装待用户操作。
