@@ -62,6 +62,7 @@ type DefaultListViewProps = {
   enableGitHistoryToggle?: boolean;
   onToggleGitHistory?: () => void;
   onOpenScheduledAgentTasks?: () => void;
+  onRemoveRoot?: () => void;
 };
 
 function formatCompactTime(value?: string): string {
@@ -257,6 +258,7 @@ export function DefaultListView({
   enableGitHistoryToggle = true,
   onToggleGitHistory,
   onOpenScheduledAgentTasks,
+  onRemoveRoot,
 }: DefaultListViewProps) {
   const { t } = useI18n();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -648,6 +650,46 @@ export function DefaultListView({
                       </svg>
                       <span>{t("directory.scheduledTasks")}</span>
                     </button>
+
+                    {onRemoveRoot ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onRemoveRoot();
+                          setIsMenuOpen(false);
+                        }}
+                        style={{
+                          width: "100%",
+                          border: "none",
+                          background: "transparent",
+                          color: "#dc2626",
+                          borderRadius: "8px",
+                          padding: "8px 10px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                        }}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.2a2 2 0 0 1 1.4.58l1.82 1.84A2 2 0 0 0 13.84 6H20a2 2 0 0 1 2 2z" />
+                          <path d="M9 14h6" />
+                        </svg>
+                        <span>{t("directory.removeProject")}</span>
+                      </button>
+                    ) : null}
 
                     <div
                       style={{

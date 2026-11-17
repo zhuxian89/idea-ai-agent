@@ -3770,6 +3770,37 @@ export function App({ onGoHome }: AppProps) {
     replaceURLState,
   ]);
 
+  const handleRemoveCurrentRoot = useCallback(async () => {
+    const rootID = currentRootIdRef.current;
+    if (!rootID) {
+      return;
+    }
+    const rootInfo = managedRootByIdRef.current[rootID];
+    const rootPath = rootInfo?.root_path || "";
+    if (!rootPath) {
+      reportError("root.delete_failed", t("root.missingPathRemove"));
+      return;
+    }
+    if (!window.confirm(t("root.confirmRemove", { name: rootID }))) {
+      return;
+    }
+    try {
+      await apiProtectedJSON<any>(
+        appURL("/api/dirs", new URLSearchParams({ path: rootPath })),
+        {
+          method: "DELETE",
+        },
+      );
+      clearRootScopedClientState(rootID, { removeLastRoot: true });
+      await refreshManagedRoots();
+    } catch (err) {
+      reportError(
+        "root.delete_failed",
+        String((err as Error)?.message || t("root.removeFailed")),
+      );
+    }
+  }, [clearRootScopedClientState, refreshManagedRoots, t]);
+
   const applyManagedRootRename = useCallback(
     (oldRootID: string, rootPayload: ManagedRootPayload | null | undefined) => {
       const oldID = String(oldRootID || "").trim();
@@ -7037,6 +7068,7 @@ export function App({ onGoHome }: AppProps) {
         }
         enableGitHistoryToggle={false}
         onOpenScheduledAgentTasks={() => { setScheduledAgentSession(null); setScheduledAgentDialogOpen(true); }}
+        onRemoveRoot={isIDEManagedProject ? undefined : handleRemoveCurrentRoot}
         onItemClick={(e) =>
           e.is_dir
             ? actionHandlers.open_dir({ path: e.path })
