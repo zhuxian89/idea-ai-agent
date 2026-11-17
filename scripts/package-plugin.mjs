@@ -115,13 +115,18 @@ function nextLocalVersion(baseVersion) {
   return `${baseVersion}-local.${highest + 1}`;
 }
 
+// Node 22.12+ refuses to spawn .cmd/.bat shims without a shell (EINVAL), so Windows wrappers go through cmd.exe.
+function needsShell(command) {
+  return /\.(cmd|bat)$/i.test(command);
+}
+
 function run(command, args, options = {}) {
   console.log(`\n> ${path.basename(command)} ${args.join(' ')}`);
   const result = spawnSync(command, args, {
     cwd: options.cwd || root,
     env: options.env || process.env,
     stdio: 'inherit',
-    shell: false,
+    shell: needsShell(command),
   });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${path.basename(command)} exited with ${result.status}`);
@@ -132,7 +137,7 @@ function capture(command, args, options = {}) {
     cwd: options.cwd || root,
     env: options.env || process.env,
     encoding: 'utf8',
-    shell: false,
+    shell: needsShell(command),
   });
 }
 
