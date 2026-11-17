@@ -48,6 +48,21 @@ steps:
   - id: builtin-antigravity-acp
     description: 内置 Antigravity CLI（agy）为 ACP agent，随 runtime/agents.json 提供，放在列表末尾不改变默认 agent；安装/更新命令取自官方 install.sh/install.ps1 原文（已下载核对，未执行）；图标、显示名、登录状态识别同步。Windows 运行时 PATH 补充 LOCALAPPDATA\agy\bin（官方安装位置）。源码与测试完成：Go agent 包全量、全量 Go 测试、前端 314/314、tsc、vite 构建、Kotlin 全量 99 条中 0 失败（4 条环境跳过）、旧库迁移门禁通过；升级运行时下 RemoteHostTest/RuntimeCacheTest 各 1 条失败已在 HEAD 复现，属既有问题；新增 4 条 Go 注册表/安装探测回归、4 条前端回归，并用真实 agy 验证 Prober 识别为已安装、未登录时如实报 Authentication required。变异测试确认守卫与 Windows 路径断言会失败。Mac 插件测试包已生成：build/local-packages/idea-ai-agent-0.1.27-local-macos-arm64.zip，SHA-256 76a2470967d760c3c6c545c27ff49904f92810bceb5d5d800b36472e2c85ccaa；包内插件版本 0.1.27-local，agents.json 含 antigravity，web 含 antigravity.png，Mac arm64 运行时存在；打包时 Gradle test 与 verifyPluginProjectConfiguration 通过。未安装到本机（IDEA 与 local-ai-agent 后台运行中，待用户确认）。Windows 包、独立包未生成；真实登录后的 session/new 与对话待验证
     status: done
+  - id: same-name-project-identity
+    description: 2026-11-17 不同路径同名项目分配独立 ID，保留原身份、元数据、顺序和显示名称；修复网页添加、移除、重命名、Git worktree 和自动发现；完整任务 Review PASS，code-simplifier 无进一步安全简化
+    status: done
+  - id: same-name-project-regressions
+    description: fs 定向 9 通过/1 符号链接跳过，app 定向 13 通过/1 符号链接跳过，rename usecase 2/2；kanban 全量和旧库迁移 race 通过；较大范围 watcher 超时及 usecase 清理/技能干扰在原生产代码复现，具体证据见 implementation
+    status: done
+  - id: same-name-windows-package-release
+    description: 已重打并替换 standalone-v0.1.27 Windows x64 ZIP 与其 sha256，原包已备份；320 条目仅 EXE 内容变化，304 网页不变；架构/版本/原生 PowerShell 5.1 匿名下载/哈希通过，SHA-256 ff1b843712674d428c96eab3b3abd0e509b4131fd2cbc76cc1ad9ed040e884f9；其余 22 资产及 Release 元数据不变；同版后台需用户手动覆盖安装，源码未提交
+    status: done
+  - id: same-name-project-user-acceptance
+    description: 2026-11-17 本机独立后台已升级为 0.1.27-local.1（安装包 SHA-256 5DC1E2B3…8A3DB，已运行版本与包内 exe 哈希一致，旧报错文本已不在新 exe 中）；用户确认 Z 和 D 两份同名项目均可打开。尚未核对各自会话历史的数据隔离；插件仍优先连接独立后台，插件与独立后台解耦待单独处理；本地测试版本未上传 GitHub
+    status: done
+  - id: remote-project-remove-button
+    description: 2026-11-17 远程网页「移除项目」按钮自 6d6d9e8（2026-11-10 重构）后缺失，服务端 DELETE /api/dirs 仍可用；恢复按钮，仅独立后台/远程项目显示，IDEA 管理项目隐藏（isIDEManagedProject）。源码改动：DefaultListView 新增可选 onRemoveRoot，App.tsx 恢复 handleRemoveCurrentRoot（确认后 DELETE /api/dirs）。验证：typecheck 通过、生产构建通过、新增 tests/project-remove-button.test.mjs 3/3 通过、既有 project-tree-refresh 与 agent-lifecycle-restart 通过。2026-11-17 默认独立后台版本改为 0.1.31（scripts/standalone/version.txt），本机 windows-amd64 本地包已覆盖安装（exe SHA-256 CEB4BEA8…59728，与包内一致，服务 401 鉴权响应正常）；已发布 GitHub standalone-v0.1.31（非 latest，仅 windows-amd64 zip + sha256，SHA-256 14c0af4e8d041aeedfab90d8b8e925f9f6eeb692c9bc5e960478e0905c349ec8，匿名下载与校验通过）；Release 标签指向 main（1a73aef），而包由未提交的工作区源码构建，待提交并推送后需核对源码与标签一致
+    status: in_progress
   - id: windows-update-source-push
     description: 用户授权 push，本次提交同步 Windows 下载跳转与日志编码修复、两项新增回归、Windows 测试环境/SQLite 清理修正及三份交接资料共 9 文件；提交前 fetch 确认 main 与 origin/main 一致，Git 空白检查通过，既有回归和用户实测结果见相应步骤
     status: done

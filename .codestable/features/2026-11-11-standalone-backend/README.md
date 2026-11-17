@@ -59,6 +59,17 @@
 
 扩大后的回归先在原实现确认失败：默认正式模式仍改写到 Relay 公共路径，缺文件时还会跳过缺失提示。清理后，默认/内置/独立三种模式、四种版本、本地/远程共 24 组合的实际 HTTP 回归通过，检查 HTML、Service Worker、JS/CSS 的引用及响应。API/app/remotehost 三包测试和 vet、前端 6/6（含生产构建、节点/项目/本地入口、阻断主 JS/CSS 后的错误提示）与类型检查通过。证据见 `build/reports/relay-assets-cleanup-*`。本轮尚未打包、发布或更换运行程序。
 
+## 不同目录同名项目（2026-11-17）
+
+Z:、D: 中同名项目可同时登记：原项目 ID、顺序和元数据位置保留，新目录冲突时分配带路径摘要的独立 ID，显示名称仍为目录名。重新打开按物理路径复用，移除与重命名按实际身份处理；网页添加、Git worktree 注册和自动发现使用同一分配规则。
+
+定向 fs 回归 9 通过/1 跳过，app 13 通过/1 跳过，重命名 usecase 2/2 通过；两项跳过均因 Windows 无符号链接权限。kanban 全量与旧库迁移 race 必检通过。完整任务兼容审查 `Review: PASS`；code-simplifier 检查无进一步安全简化，未追加源码改写。较大范围 fs 测试在既有 watcher 并发用例超时，usecase 全量受 SQLite 清理和宿主技能目录干扰失败；均已用原生产代码复现代表问题，详见 [修复记录](../../issues/2026-11-17-same-name-projects/same-name-projects-fix-note.md)。
+
+用户授权仅重打 Windows x64 独立后台并替换同版资产。[新 Windows x64 后台包](https://github.com/zhuxian89/idea-ai-agent/releases/download/standalone-v0.1.27/local-ai-agent-0.1.27-windows-amd64.zip)已发布，SHA-256 为 `ff1b843712674d428c96eab3b3abd0e509b4131fd2cbc76cc1ad9ed040e884f9`。320 个 ZIP 条目仅 EXE 内容变化，304 个网页文件及其他内容逐字节一致；其他 22 个资产的 ID、digest、大小和更新时间以及 Release 元数据均保持原值。报告 `build/reports/same-name-0.1.27-{package,release-verification,public-download}.json`。
+## 远程移除按钮与独立后台 0.1.31（2026-11-17）
+
+网页端恢复「移除项目」按钮，仅对独立后台/远程项目显示；IDEA 管理项目保持隐藏。默认独立后台版本为 0.1.31，已发布 GitHub `standalone-v0.1.31`（仅 Windows x64 zip 与 sha256）。
+
 ## 远程页面资源路由修复（2026-11-14，0.1.29 已发布，用户已确认恢复）
 
 插件 0.1.27 + 独立后台 0.1.28 远程报“版本太老”。已从运行中 Core 与真实节点 HTML 确认：正式版本将主 JS/CSS 改写到 Relay 全局 `/mindfs-assets/`，两个主资源实际均为 404。清缓存不能修正后台返回的地址。新增回归在修复前对 `0.1.28`、`v0.1.29` 均失败，开发版本通过。

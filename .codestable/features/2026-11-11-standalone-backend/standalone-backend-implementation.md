@@ -1,3 +1,38 @@
+# 同名项目与 Windows .27 独立后台重打（2026-11-17）
+
+用户要求同时保留使用 Z:、D: 两份同名项目，并授权运行相关回归、重打 Windows x64 独立后台和替换 GitHub 0.1.27 对应包。任务起点工作区干净，基线 `c4d7a1606b7c015325c43a4359a70f7bd5f7bfca`。本轮源码未提交，真实安装待用户操作。
+
+## 实现与兼容审查
+
+`fs.NewRootInfoForPath` 先按物理目录复用旧身份；新项目无冲突沿用 basename，冲突时使用规范化路径 SHA-256 前 12 位，Windows 对路径和 ID 忽略大小写。分配时检查 home 元数据归属，保留有数据但未登记的目录，移除后重新添加可找回该路径已有 home 历史。`Name` 仍为目录名，旧 registry JSON 的字段和缺省值不变。
+
+`Registry.UpsertWithMetaLocation` 在原互斥锁内分配身份，保留旧记录顺序和元数据；Remove 按物理目录定位，Rename 用实际新 ID 移动 home 元数据并保留回滚。网页添加、Git worktree 与自动发现提前准备元数据时也使用分配后的 ID，避免同名 home 目录混用。原 `.mindfs` 优先规则、home 路径归属检查、物理路径冲突与非法输入处理保留。
+
+完整任务正确性与兼容审查 `Review: PASS`，对照任务起点完整生产差异及测试变化，追踪 Kotlin `StandaloneBackend.kt:71` 返回的 root_id 和网页 `App.tsx` 的 managedRootById/session root_id 消费者。单个新目录仍为 basename；两份同名目录拥有不同 ID 和相同 Name；重复打开保留原 ID、位置及历史；移除/重命名不改另一条记录，旧迁移链接继续按路径查找。数据库结构、JSON 字段及协议不变。code-simplifier 检查无进一步安全简化，未新增简化改动，最终源码差异与空白检查通过。
+
+## 回归结果
+
+全部测试使用临时目录和数据库。
+
+- fs 定向 9 个顶层用例通过、1 个因 Windows 缺符号链接权限跳过；涵盖 project/home 同名隔离、重载、重复打开、旧 JSON、移除后重加、重命名、Windows 大小写。日志 `build/reports/same-name-0.1.27-fs-targeted.log`。
+- app 定向 13 个顶层用例通过、1 个同样因符号链接权限跳过（31.652 秒）；覆盖 control/browser × project/home、旧链接迁移、Git worktree 与自动发现。日志 `same-name-0.1.27-app-final.jsonl`。首轮旧拒绝同名断言及 Unix-only 临时目录夹具失败后，已更新授权行为与 Windows 测试环境；首轮日志 `same-name-0.1.27-app.log`。
+- usecase 重命名及失败回滚 2/2 通过，日志 `same-name-0.1.27-usecase-targeted.log`。
+- 打包必检 `go test ./server/internal/kanban -count=1` 通过（9.819 秒）；`go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1` 通过（4.216 秒）。日志分别为 `same-name-0.1.27-kanban.log`、`same-name-0.1.27-migration-race.log`。race 仅在命令进程设置 CGO/本机 gcc，未修改全局环境。
+
+较大范围测试未通过，证据独立保留：fs 全量在未改动的 `TestSharedFileWatcherConcurrentWatchDirAndEvents` 等待 10 分钟后超时，使用原 `c4d7a16` 生产代码 overlay 重跑该项，20 秒超时复现（`same-name-0.1.27-watcher-baseline.log`）。usecase 全量因 session-list.db 未关闭造成 Windows TempDir 清理失败，另有技能搜索受真实 USERPROFILE 技能目录干扰；原代码 overlay 的 `TestGetSessionContextWindowFallsBackToPersistedValue` 和 `TestSkillCandidateProviderSearch` 同样失败（`same-name-0.1.27-usecase-baseline-final.log`）。未将这些失败算作回归通过。
+
+## 打包与发布状态
+
+原 `standalone-v0.1.27` Windows ZIP 和独立 sha256 已备份于 `build/release-backups/same-name-0.1.27/`，实时 Release 元数据保存为 `release-before.json`。原 ZIP SHA-256 `d9892e891e06bb5166949837f68f2a0e94ff467fd71082285787bd0934c64327` 已核对。
+
+`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath '-ldflags=-s -w -X main.version=0.1.27'` 成功，以原 ZIP 为底包仅替换新 EXE；320 条目列表和属性一致，除 EXE 外全部条目内容（含 304 网页文件、安装器和说明）逐字节一致。PE AMD64 与 `-version` 的 `Local AI Agent 0.1.27` 通过。新 ZIP 15,618,966 字节，SHA-256 `ff1b843712674d428c96eab3b3abd0e509b4131fd2cbc76cc1ad9ed040e884f9`；包内 EXE 与本轮构建字节一致，独立校验文件沿用原格式。报告 `build/reports/same-name-0.1.27-package.json`。
+
+已按顺序用 `gh release upload --clobber` 替换 ZIP 与其 `.sha256`，新资产 ID 为 `758057183`、`758058945`。实时核对其他 22 个后台资产 ID/digest/大小/更新时间不变，Release 的标题 `独立后台 0.1.27`、正文、标签、目标提交及发布状态保持原值；报告 `same-name-0.1.27-release-verification.json`，原始元数据 `same-name-0.1.27-release-after.json`。
+
+Windows PowerShell `5.1.26100.9818` 使用当前下载函数从公开 URL 匿名重新下载 ZIP 与校验文件，SHA-256 和本地产物一致，校验文件字节一致；报告/日志 `same-name-0.1.27-public-download.json` / `.log`。运行前仅在工具进程临时移除继承的 PSModulePath，结束后恢复；脚本只执行下载，未安装或重启服务。
+
+同版覆盖后，当前 0.1.27 后台不会通过版本比较再次触发更新。用户需退出全部 IDEA，下载并解压新后台包，在包目录执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1` 手动覆盖一次，然后重新打开两份同名项目。
+
 # 剩余源码提交前验证（2026-11-17）
 
 用户明确授权将剩余本地修改提交并推送。范围共 27 个文件，包括 13 个代码/测试文件与 14 个项目文档，Windows 安装器源码此前已在远端。本轮统一纳入模型选择器连续设置/默认值、滚回底部按钮、后台配套资源路径及相应回归、AGENTS 和交接记录，保留原有修复，不增加新功能。
