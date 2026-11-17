@@ -792,15 +792,14 @@ func (s *Service) AddManagedDir(_ context.Context, in AddManagedDirInput) (AddMa
 	if root, found := fs.FindRootByPath(s.Registry.ListRoots(), abs); found {
 		return AddManagedDirOutput{Dir: root}, nil
 	}
-	if err := ensureManagedDirNameAvailable(s.Registry, abs); err != nil {
-		return AddManagedDirOutput{}, err
-	}
-	name := filepath.Base(abs)
-	location, err := fs.MetaLocationForNewRoot(abs, preferredNewProjectMetaLocation(s.Registry))
+	pending, err := fs.NewRootInfoForPath(s.Registry.ListRoots(), abs)
 	if err != nil {
 		return AddManagedDirOutput{}, err
 	}
-	pending := fs.NewRootInfo(name, name, abs)
+	location, err := pending.MetaLocationForNewRoot(preferredNewProjectMetaLocation(s.Registry))
+	if err != nil {
+		return AddManagedDirOutput{}, err
+	}
 	pending.MetaLocation = location
 	if _, err := pending.EnsureMetaDir(); err != nil {
 		return AddManagedDirOutput{}, err
@@ -810,20 +809,6 @@ func (s *Service) AddManagedDir(_ context.Context, in AddManagedDirInput) (AddMa
 		return AddManagedDirOutput{}, err
 	}
 	return AddManagedDirOutput{Dir: dir}, nil
-}
-
-func ensureManagedDirNameAvailable(registry Registry, path string) error {
-	name := filepath.Base(filepath.Clean(path))
-	for _, existing := range registry.ListRoots() {
-		if existing.ID != name {
-			continue
-		}
-		if sameManagedDirPath(existing.RootPath, path) {
-			return nil
-		}
-		return fmt.Errorf("%w:\n\t%q is already managed at %s;\n\trename the directory before adding %s", fs.ErrRootNameConflict, name, existing.RootPath, path)
-	}
-	return nil
 }
 
 func sameManagedDirPath(a, b string) bool {
@@ -906,9 +891,6 @@ func createManagedDir(registry Registry, name string) (string, error) {
 	cleanRootPath := filepath.Clean(rootPath)
 	for _, existing := range registry.ListRoots() {
 		existingPath := filepath.Clean(existing.RootPath)
-		if existing.ID == trimmed && existingPath != cleanRootPath {
-			return "", errors.New("root name already exists")
-		}
 		if existingPath == cleanRootPath {
 			return "", errors.New("root already exists")
 		}
@@ -1005,9 +987,6 @@ func (s *Service) RenameManagedDir(_ context.Context, in RenameManagedDirInput) 
 	for _, existing := range s.Registry.ListRoots() {
 		if existing.ID == rootID {
 			continue
-		}
-		if existing.ID == nextName {
-			return RenameManagedDirOutput{}, fmt.Errorf("%w: %q is already managed at %s", fs.ErrRootNameConflict, nextName, existing.RootPath)
 		}
 		if sameManagedDirPath(existing.RootPath, newPath) {
 			return RenameManagedDirOutput{}, errors.New("root path already exists")

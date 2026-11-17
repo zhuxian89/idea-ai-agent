@@ -480,8 +480,11 @@ func autoAddExternalProjectRoots(registry *fs.Registry, prefs *preferences.Store
 		if prefs != nil {
 			location = prefs.NewProjectMetaLocation()
 		}
-		rootID := filepath.Base(filepath.Clean(projectPath))
-		pending := fs.NewRootInfo(rootID, rootID, projectPath)
+		pending, err := fs.NewRootInfoForPath(registry.List(), projectPath)
+		if err != nil {
+			log.Printf("[startup/projects] auto add skipped path=%s err=%v", projectPath, err)
+			continue
+		}
 		pending.MetaLocation = location
 		if _, err := pending.EnsureMetaDir(); err != nil {
 			log.Printf("[startup/projects] auto add metadata skipped path=%s err=%v", projectPath, err)

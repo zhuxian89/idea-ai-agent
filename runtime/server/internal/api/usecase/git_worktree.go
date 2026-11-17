@@ -256,11 +256,14 @@ func (s *Service) CreateGitWorktree(ctx context.Context, in CreateGitWorktreeInp
 	if !in.Register {
 		return CreateGitWorktreeOutput{Dir: fs.NewRootInfo(name, name, targetPath)}, nil
 	}
-	location, err := fs.MetaLocationForNewRoot(targetPath, preferredNewProjectMetaLocation(s.Registry))
+	pending, err := fs.NewRootInfoForPath(s.Registry.ListRoots(), targetPath)
 	if err != nil {
 		return CreateGitWorktreeOutput{}, err
 	}
-	pending := fs.NewRootInfo(name, name, targetPath)
+	location, err := pending.MetaLocationForNewRoot(preferredNewProjectMetaLocation(s.Registry))
+	if err != nil {
+		return CreateGitWorktreeOutput{}, err
+	}
 	pending.MetaLocation = location
 	if _, err := pending.EnsureMetaDir(); err != nil {
 		return CreateGitWorktreeOutput{}, err

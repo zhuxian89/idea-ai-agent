@@ -147,7 +147,7 @@ func TestStandaloneImportsRemoteEnabledStateWithoutOverwritingSettings(t *testin
 	}
 }
 
-func TestStandaloneMigrationReportsInvalidSourceAndNameConflicts(t *testing.T) {
+func TestStandaloneMigrationReportsInvalidSourceAndPreservesSameNames(t *testing.T) {
 	t.Run("invalid source", func(t *testing.T) {
 		dir := t.TempDir()
 		if err := os.WriteFile(filepath.Join(dir, "projects.json"), []byte("{invalid"), 0600); err != nil {
@@ -162,6 +162,8 @@ func TestStandaloneMigrationReportsInvalidSourceAndNameConflicts(t *testing.T) {
 	})
 	t.Run("same name at another path", func(t *testing.T) {
 		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir)
 		first, second := filepath.Join(dir, "a", "project"), filepath.Join(dir, "b", "project")
 		for _, path := range []string{first, second} {
 			if err := os.MkdirAll(path, 0700); err != nil {
@@ -174,8 +176,15 @@ func TestStandaloneMigrationReportsInvalidSourceAndNameConflicts(t *testing.T) {
 			t.Fatal(err)
 		}
 		writePreviousRemoteProjects(t, dir, true, previousRemoteProjectFixture{ID: "old", Path: second, Enabled: true})
-		if _, err := migrateStandaloneProjects(dir, registry); err == nil || !strings.Contains(err.Error(), "already managed") {
-			t.Fatal("project conflict was not reported", err)
+		migrated, err := migrateStandaloneProjects(dir, registry)
+		if err != nil {
+			t.Fatal("same-name project migration failed", err)
+		}
+		if roots := registry.List(); len(roots) != 2 || roots[0].ID == roots[1].ID || roots[0].Name != roots[1].Name {
+			t.Fatalf("migration merged same-name projects: %+v", roots)
+		}
+		if imported, found := fs.FindRootByPath(registry.List(), migrated.Projects["old"]); !found || imported.RootPath != second {
+			t.Fatalf("legacy project link points to the wrong directory: %+v", migrated.Projects)
 		}
 		if after, _ := registry.Get(before.ID); before != after {
 			t.Fatal("existing project overwritten by import")

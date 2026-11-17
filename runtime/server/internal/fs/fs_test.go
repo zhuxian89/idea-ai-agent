@@ -2,7 +2,6 @@ package fs
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +11,11 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
-func TestRegistryUpsertRejectsSameNameDifferentPath(t *testing.T) {
+func TestRegistryUpsertAllowsSameNameDifferentPath(t *testing.T) {
+	originalHome := userHomeDir
+	home := t.TempDir()
+	userHomeDir = func() (string, error) { return home, nil }
+	t.Cleanup(func() { userHomeDir = originalHome })
 	registry := NewRegistry(filepath.Join(t.TempDir(), "registry.json"))
 	first := filepath.Join(t.TempDir(), "project")
 	second := filepath.Join(t.TempDir(), "project")
@@ -35,9 +38,15 @@ func TestRegistryUpsertRejectsSameNameDifferentPath(t *testing.T) {
 		t.Fatalf("same-path Upsert RootPath = %q, want %q", again.RootPath, created.RootPath)
 	}
 
-	_, err = registry.Upsert(second)
-	if !errors.Is(err, ErrRootNameConflict) {
-		t.Fatalf("different-path Upsert error = %v, want ErrRootNameConflict", err)
+	other, err := registry.Upsert(second)
+	if err != nil {
+		t.Fatalf("different-path Upsert returned error: %v", err)
+	}
+	if other.ID == created.ID || other.Name != created.Name || other.RootPath != second {
+		t.Fatalf("same-name directories need separate identities: first=%+v second=%+v", created, other)
+	}
+	if created.ID != "project" || len(registry.List()) != 2 {
+		t.Fatalf("existing identity or registry size changed: %+v", registry.List())
 	}
 }
 

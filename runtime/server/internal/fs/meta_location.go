@@ -109,11 +109,21 @@ func (r RootInfo) ensureHomeMetaIdentity() error {
 // MetaLocationForNewRoot applies the add-time precedence rule: an existing
 // project-local .mindfs directory always wins over the user's default.
 func MetaLocationForNewRoot(rootPath, preferred string) (string, error) {
+	root, err := NewRootInfoForPath(nil, rootPath)
+	if err != nil {
+		return "", err
+	}
+	return root.MetaLocationForNewRoot(preferred)
+}
+
+// MetaLocationForNewRoot uses the allocated ID so same-name projects also have
+// separate home metadata directories.
+func (r RootInfo) MetaLocationForNewRoot(preferred string) (string, error) {
 	preferred, err := NormalizeMetaLocation(preferred)
 	if err != nil {
 		return "", err
 	}
-	local := filepath.Join(filepath.Clean(rootPath), metaDirName)
+	local := filepath.Join(filepath.Clean(r.RootPath), metaDirName)
 	_, lstatErr := os.Lstat(local)
 	if lstatErr == nil {
 		info, statErr := os.Stat(local)
@@ -128,8 +138,7 @@ func MetaLocationForNewRoot(rootPath, preferred string) (string, error) {
 	if !os.IsNotExist(lstatErr) {
 		return "", lstatErr
 	}
-	rootID := filepath.Base(filepath.Clean(rootPath))
-	homeDir, homeErr := homeMetaDir(rootID)
+	homeDir, homeErr := homeMetaDir(r.ID)
 	if homeErr != nil {
 		if preferred == MetaLocationHome {
 			return "", homeErr
@@ -139,7 +148,7 @@ func MetaLocationForNewRoot(rootPath, preferred string) (string, error) {
 	identityPayload, identityErr := os.ReadFile(filepath.Join(homeDir, homeMetaIdentityFile))
 	if identityErr == nil {
 		var identity homeMetaIdentity
-		if json.Unmarshal(identityPayload, &identity) == nil && sameProjectIdentityPath(identity.RootPath, rootPath) {
+		if json.Unmarshal(identityPayload, &identity) == nil && sameProjectIdentityPath(identity.RootPath, r.RootPath) {
 			return MetaLocationHome, nil
 		}
 	}

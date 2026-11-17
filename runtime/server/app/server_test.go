@@ -106,7 +106,13 @@ func TestAutoAddExternalProjectRootsSkipsGitWorktrees(t *testing.T) {
 	}
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("HOME", filepath.Join(workspace, "home"))
-	t.Setenv("TMPDIR", filepath.Join(workspace, "tmp"))
+	t.Setenv("USERPROFILE", filepath.Join(workspace, "home"))
+	tempRoot := filepath.Join(workspace, "tmp")
+	mkdirAll(t, tempRoot)
+	// Windows 的 os.TempDir 读取 TMP/TEMP，让测试项目与被排除的临时目录分开。
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, tempRoot)
+	}
 
 	registry := fs.NewRegistry(filepath.Join(workspace, "registry.json"))
 	autoAddExternalProjectRoots(registry, nil)

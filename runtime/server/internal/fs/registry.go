@@ -3,7 +3,6 @@ package fs
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -147,6 +146,7 @@ func (r *Registry) UpsertWithMetaLocation(root, metaLocation string) (RootInfo, 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now().UTC()
+	roots := make([]RootInfo, 0, len(r.order))
 	for _, id := range r.order {
 		dir := r.dirs[id]
 		if sameRootDirectory(dir.RootPath, root) {
@@ -154,24 +154,21 @@ func (r *Registry) UpsertWithMetaLocation(root, metaLocation string) (RootInfo, 
 			r.dirs[id] = dir
 			return dir, r.saveLocked()
 		}
+		roots = append(roots, dir)
 	}
-	name := filepath.Base(root)
-	if name == "" || name == "." || name == string(filepath.Separator) {
-		return RootInfo{}, errors.New("invalid directory name")
-	}
-	if dir, exists := r.dirs[name]; exists {
-		return RootInfo{}, fmt.Errorf("%w: %q is already managed at %s; rename the directory before adding %s", ErrRootNameConflict, name, dir.RootPath, root)
-	}
-	metaLocation, err := NormalizeMetaLocation(metaLocation)
+	dir, err := NewRootInfoForPath(roots, root)
 	if err != nil {
 		return RootInfo{}, err
 	}
-	dir := NewRootInfo(name, name, root)
+	metaLocation, err = NormalizeMetaLocation(metaLocation)
+	if err != nil {
+		return RootInfo{}, err
+	}
 	dir.MetaLocation = metaLocation
 	dir.CreatedAt = now
 	dir.UpdatedAt = now
-	r.order = append(r.order, name)
-	r.dirs[name] = dir
+	r.order = append(r.order, dir.ID)
+	r.dirs[dir.ID] = dir
 	return dir, r.saveLocked()
 }
 
@@ -204,17 +201,21 @@ func (r *Registry) Remove(root string) (RootInfo, error) {
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		return RootInfo{}, errors.New("invalid directory name")
 	}
-	dir, ok := r.dirs[name]
-	if !ok {
+	var dir RootInfo
+	for _, id := range r.order {
+		if candidate := r.dirs[id]; sameRootDirectory(candidate.RootPath, cleaned) {
+			dir = candidate
+			break
+		}
+	}
+	if dir.ID == "" {
 		return RootInfo{}, errors.New("root not found")
 	}
-	if filepath.Clean(dir.RootPath) != cleaned {
-		return RootInfo{}, errors.New("root not found")
-	}
-	delete(r.dirs, name)
+	// 同名项目的 ID 可能带路径摘要，只按真实目录移除目标记录。
+	delete(r.dirs, dir.ID)
 	nextOrder := make([]string, 0, len(r.order))
 	for _, id := range r.order {
-		if id != name {
+		if id != dir.ID {
 			nextOrder = append(nextOrder, id)
 		}
 	}
@@ -243,8 +244,18 @@ func (r *Registry) Rename(id, name, rootPath string) (RootInfo, error) {
 	if !ok {
 		return RootInfo{}, errors.New("root not found")
 	}
-	if existing, exists := r.dirs[name]; exists && existing.ID != id {
-		return RootInfo{}, fmt.Errorf("%w: %q is already managed at %s", ErrRootNameConflict, name, existing.RootPath)
+	roots := make([]RootInfo, 0, len(r.dirs)-1)
+	for _, existing := range r.dirs {
+		if existing.ID != id {
+			roots = append(roots, existing)
+		}
+	}
+	next, err := NewRootInfoForPath(roots, rootPath)
+	if err != nil {
+		return RootInfo{}, err
+	}
+	if _, exists := r.dirs[next.ID]; exists && next.ID != id {
+		return RootInfo{}, errors.New("root path already exists")
 	}
 
 	previousDirs := make(map[string]RootInfo, len(r.dirs))
@@ -252,20 +263,20 @@ func (r *Registry) Rename(id, name, rootPath string) (RootInfo, error) {
 		previousDirs[key] = value
 	}
 	previousOrder := append([]string(nil), r.order...)
-	rollbackMeta, err := renameHomeMeta(dir, name, filepath.Clean(rootPath))
+	rollbackMeta, err := renameHomeMeta(dir, next.ID, filepath.Clean(rootPath))
 	if err != nil {
 		return RootInfo{}, err
 	}
 
-	dir.ID = name
+	dir.ID = next.ID
 	dir.Name = name
 	dir.RootPath = filepath.Clean(rootPath)
 	dir.UpdatedAt = time.Now().UTC()
 	delete(r.dirs, id)
-	r.dirs[name] = dir
+	r.dirs[dir.ID] = dir
 	for i, item := range r.order {
 		if item == id {
-			r.order[i] = name
+			r.order[i] = dir.ID
 			break
 		}
 	}

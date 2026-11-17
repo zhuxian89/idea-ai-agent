@@ -144,3 +144,96 @@ func TestStandaloneReusesExistingAliasIdentityAndHistory(t *testing.T) {
 		})
 	}
 }
+
+func TestStandaloneSameNameProjectsKeepSeparateHistories(t *testing.T) {
+	for _, location := range []string{fs.MetaLocationProject, fs.MetaLocationHome} {
+		for _, entry := range []string{"control", "browser"} {
+			t.Run(location+"/"+entry, func(t *testing.T) {
+				base := t.TempDir()
+				t.Setenv("HOME", base)
+				t.Setenv("USERPROFILE", base)
+				// 用不同父目录模拟不同盘符，所有记录和元数据都保留在临时目录。
+				var original []fs.RootInfo
+				for _, parent := range []string{"Z", "D"} {
+					path := filepath.Join(base, parent, "project")
+					if err := os.MkdirAll(path, 0700); err != nil {
+						t.Fatal(err)
+					}
+					path, err := filepath.EvalSymlinks(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					root, err := fs.NewRootInfoForPath(original, path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					root.MetaLocation = location
+					if _, err := root.EnsureMetaDir(); err != nil {
+						t.Fatal(err)
+					}
+					if err := root.WriteMetaFile("history.jsonl", []byte(parent+" conversation\n")); err != nil {
+						t.Fatal(err)
+					}
+					original = append(original, root)
+				}
+				registry := fs.NewRegistry(filepath.Join(base, "registry.json"))
+				services := &api.AppContext{Dirs: registry}
+				control := &standaloneControl{services: services, token: strings.Repeat("a", 64)}
+				open := func(path string) string {
+					t.Helper()
+					input, err := json.Marshal(map[string]string{"path": path})
+					if err != nil {
+						t.Fatal(err)
+					}
+					req := httptest.NewRequest("POST", "/control/open-project", bytes.NewReader(input))
+					req.Header.Set("Authorization", "Bearer "+control.token)
+					response := httptest.NewRecorder()
+					control.ServeHTTP(response, req)
+					var opened struct {
+						RootID string `json:"root_id"`
+					}
+					if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &opened) != nil || opened.RootID == "" {
+						t.Fatalf("open %s: %d %s", path, response.Code, response.Body.String())
+					}
+					return opened.RootID
+				}
+				if id := open(original[0].RootPath); id != original[0].ID {
+					t.Fatalf("existing identity changed: %s", id)
+				}
+				service := &usecase.Service{Registry: services}
+				if entry == "control" {
+					if id := open(original[1].RootPath); id != original[1].ID {
+						t.Fatalf("same-name control identity changed: %s", id)
+					}
+				} else {
+					added, err := service.AddManagedDir(nil, usecase.AddManagedDirInput{Path: original[1].RootPath})
+					if err != nil || added.Dir.ID != original[1].ID {
+						t.Fatalf("same-name browser add: %+v, %v", added, err)
+					}
+				}
+				for i, root := range original {
+					if open(root.RootPath) != root.ID {
+						t.Fatal("reopen changed project identity")
+					}
+					added, err := service.AddManagedDir(nil, usecase.AddManagedDirInput{Path: root.RootPath})
+					if err != nil || added.Dir.ID != root.ID || added.Dir.MetaDir() != root.MetaDir() || added.Dir.MetaLocation != location {
+						t.Fatalf("browser reopen changed metadata: %+v, %v", added, err)
+					}
+					data, err := added.Dir.ReadMetaFile("history.jsonl")
+					if err != nil || string(data) != []string{"Z conversation\n", "D conversation\n"}[i] {
+						t.Fatalf("project history changed: %q, %v", data, err)
+					}
+				}
+				if roots := registry.List(); len(roots) != 2 || roots[0].ID == roots[1].ID || roots[0].Name != roots[1].Name {
+					t.Fatalf("same-name projects did not stay separate: %+v", roots)
+				}
+				if _, err := service.RemoveManagedDir(nil, usecase.RemoveManagedDirInput{Path: original[1].RootPath}); err != nil {
+					t.Fatal(err)
+				}
+				if roots := registry.List(); len(roots) != 1 || roots[0].ID != original[0].ID {
+					t.Fatalf("remove changed the other project: %+v", roots)
+				}
+			})
+		}
+	}
+}
