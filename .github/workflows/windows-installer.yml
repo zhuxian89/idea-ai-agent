@@ -17,7 +17,8 @@ on:
       - 'scripts/standalone/download-redirect.test.mjs'
       - '.github/workflows/windows-installer.yml'
 permissions:
-  contents: read
+  # GitHub only exposes draft releases to identities with repository push access.
+  contents: write
 jobs:
   windows-powershell:
     runs-on: windows-latest
