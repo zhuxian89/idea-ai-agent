@@ -1,6 +1,15 @@
 name: Windows installer
 on:
   workflow_dispatch:
+    inputs:
+      candidate_release:
+        description: Draft release containing the exact packages to verify
+        required: false
+        default: ''
+      standalone_version:
+        description: Standalone version for the public download check
+        required: false
+        default: ''
   push:
     paths:
       - 'scripts/install.ps1'
@@ -18,6 +27,7 @@ jobs:
         with:
           node-version: '22'
       - name: Prepare candidate from the published Windows plugin
+        if: ${{ inputs.candidate_release == '' }}
         shell: python
         run: |
           import io, json, pathlib, urllib.request, zipfile
@@ -42,11 +52,65 @@ jobs:
                     patched.writestr(item, installer if item.filename == 'installers/install.ps1' else jar.read(item.filename))
                 data = buffer.getvalue()
               target.writestr(entry, data)
+      - name: Download exact release candidates
+        if: ${{ inputs.candidate_release != '' }}
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RELEASE: ${{ inputs.candidate_release }}
+          STANDALONE_VERSION: ${{ inputs.standalone_version }}
+        run: |
+          import hashlib, io, json, os, pathlib, shutil, subprocess, zipfile
+          out = pathlib.Path('build/installer-validation')
+          out.mkdir(parents=True, exist_ok=True)
+          version = os.environ['STANDALONE_VERSION']
+          names = ['idea-ai-agent-0.1.27-windows-amd64.zip', 'idea-ai-agent-0.1.27-windows-arm64.zip', 'idea-ai-agent-0.1.27.zip', 'release-manifest.json']
+          names += [f'local-ai-agent-{version}-windows-{arch}.zip' for arch in ['amd64', 'arm64']]
+          command = ['gh', 'release', 'download', os.environ['CANDIDATE_RELEASE'], '--repo', os.environ['GITHUB_REPOSITORY'], '--dir', str(out)]
+          for name in names:
+            command += ['--pattern', name]
+          subprocess.run(command, check=True)
+          manifest = json.loads((out / 'release-manifest.json').read_text())
+          installer = pathlib.Path('scripts/install.ps1').read_bytes()
+          assert installer.startswith(b'\xef\xbb\xbf')
+          for name in names:
+            if name == 'release-manifest.json':
+              continue
+            data = (out / name).read_bytes()
+            assert hashlib.sha256(data).hexdigest() == manifest[name], name
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+              assert archive.testzip() is None
+              if name.startswith('idea-ai-agent'):
+                jars = [n for n in archive.namelist() if n.startswith('idea-ai-agent/lib/idea-ai-agent-') and n.endswith('.jar')]
+                assert len(jars) == 1
+                with zipfile.ZipFile(io.BytesIO(archive.read(jars[0]))) as jar:
+                  assert jar.read('installers/install.ps1') == installer, name
+              else:
+                key = name[:-4] + '/install.ps1'
+                packaged = archive.read(key)
+                assert packaged == pathlib.Path('scripts/standalone/install.ps1').read_bytes(), name
+                assert packaged.startswith(b'\xef\xbb\xbf')
+                archive.extractall(out)
+            print('Verified exact candidate SHA-256 and packaged installer:', name, manifest[name])
+          shutil.copyfile(out / names[0], out / 'candidate.zip')
       - name: Verify final candidate with Windows PowerShell 5.1
         shell: powershell
+        env:
+          STANDALONE_VERSION: ${{ inputs.standalone_version }}
         run: |
-          & ./scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip ./build/installer-validation/candidate.zip
+          & ./scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip ./build/installer-validation/candidate.zip -Version $env:STANDALONE_VERSION
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:STANDALONE_VERSION) {
+            Get-ChildItem ./build/installer-validation/local-ai-agent-*/install.ps1 | ForEach-Object {
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors) | Out-Null
+              if ($errors) { throw ($errors | Out-String) }
+            }
+            $executable = "./build/installer-validation/local-ai-agent-$env:STANDALONE_VERSION-windows-amd64/local-ai-agent.exe"
+            $version = & $executable -version
+            if ($LASTEXITCODE -ne 0 -or $version -ne "Local AI Agent $env:STANDALONE_VERSION") { throw "Unexpected Windows executable version: $version" }
+            Write-Host "Verified candidate Windows executable: $version"
+          }
       - name: Verify PowerShell 7 redirects
         shell: pwsh
         run: |
