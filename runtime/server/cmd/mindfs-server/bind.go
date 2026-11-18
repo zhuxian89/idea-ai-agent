@@ -48,6 +48,5 @@ func printRemoteBinding(ctx context.Context, client *remotehost.Client, output i
 	query := url.Values{"code": {status.PendingCode}}
 	link := strings.TrimRight(status.RelayBaseURL, "/") + "/bind?" + query.Encode()
 	fmt.Fprintf(output, "Open this link on your phone or computer to sign in and bind this server:\n%s\n", link)
-	fmt.Fprintln(output, "Run this command again to check the connection.")
 	return nil
 }

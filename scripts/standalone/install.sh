@@ -41,8 +41,8 @@ if [ "$defer_start" = --defer-start ]; then
 else
   "$prefix/local-ai-agent" -no-browser
   printf 'Local AI Agent installed and started: %s\n' "$prefix"
-  if [ "$(uname -s)" = Linux ]; then
+  if [ "$(uname -s)" = Linux ] && ! "$prefix/local-ai-agent" -bind; then
     bind_path=$(printf '%s' "$prefix/local-ai-agent" | sed "s/'/'\"'\"'/g")
-    printf "For remote access, run:\n  '%s' -bind\n" "$bind_path"
+    printf "To retry remote binding, run:\n  '%s' -bind\n" "$bind_path" >&2
   fi
 fi
