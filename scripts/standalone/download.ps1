@@ -96,5 +96,6 @@ try {
     & $PowerShell @InstallArguments
     if ($LASTEXITCODE -ne 0) { throw "Local AI Agent installation failed." }
 } finally {
-    Remove-Item -LiteralPath $WorkDir -Recurse -Force
+    # A temp file held by a virus scanner must not replace the installation error with a cleanup error.
+    Remove-Item -LiteralPath $WorkDir -Recurse -Force -ErrorAction SilentlyContinue
 }

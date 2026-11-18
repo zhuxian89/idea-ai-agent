@@ -49,13 +49,13 @@ async function fixture(t) {
   return { directory, files, requests, base, env };
 }
 
-async function archive(f, version, target, powershell = false) {
+async function archive(f, version, target, powershell = false, omit = []) {
   const bundle = `local-ai-agent-${version}-${target}`;
   const directory = path.join(f.directory, bundle);
   await mkdir(path.join(directory, "web"), { recursive: true });
   await mkdir(path.join(directory, "licenses"));
   for (const name of ["agents.json", "task_template.json", "LICENSE", "NOTICE.md", "web/index.html", "licenses/test.txt"]) {
-    await writeFile(path.join(directory, name), version);
+    if (!omit.includes(name)) await writeFile(path.join(directory, name), version);
   }
   if (powershell) {
     await writeFile(path.join(directory, "install.ps1"), `param([string]$Prefix = $env:INSTALL_TEST_PREVIOUS_DIR, [switch]$DeferStart)
@@ -72,6 +72,7 @@ if ($DeferStart) { Set-Content -LiteralPath (Join-Path $Prefix 'deferred.txt') -
 if [ "$1" = -installation-dir ]; then printf '%s\\n' "\${INSTALL_TEST_PREVIOUS_DIR:-}"; exit; fi
 printf '%s\\n' "$1" >> "$INSTALL_TEST_TRACE"
 if [ "$1" = -stop ] && [ "\${INSTALL_TEST_STOP_FAIL:-0}" = 1 ]; then exit 9; fi
+if [ "$1" = -install ] && [ "\${INSTALL_TEST_INSTALL_FAIL:-0}" = 1 ]; then exit 8; fi
 `, { mode: 0o755 });
   }
   const filename = bundle + (powershell ? ".zip" : ".tar.gz");
@@ -122,11 +123,54 @@ test("Shell: download, register, update, and retain the installed version on fai
   const stopFailed = await install("1.0.2", { ...f.env, INSTALL_TEST_STOP_FAIL: "1" });
   assert.notEqual(stopFailed.code, 0);
   assert.equal(await readFile(path.join(prefix, "web/index.html"), "utf8"), "1.0.1");
-  assert.equal(await readFile(trace, "utf8"), "-stop\n-stop-core\n-install\n-no-browser\n-stop\n-stop-core\n-install\n-no-browser\n-stop\n");
+  // A failed stop still ends with the previous service running.
+  const afterStop = "-stop\n-stop-core\n-install\n-no-browser\n-stop\n-stop-core\n-install\n-no-browser\n-stop\n-no-browser\n";
+  assert.equal(await readFile(trace, "utf8"), afterStop);
 
   const notFound = await install("9.9.9");
   assert.notEqual(notFound.code, 0);
-  assert.equal(await readFile(trace, "utf8"), "-stop\n-stop-core\n-install\n-no-browser\n-stop\n-stop-core\n-install\n-no-browser\n-stop\n");
+  assert.equal(await readFile(trace, "utf8"), afterStop);
+});
+
+test("Shell: a failed copy keeps the previous installation and restarts it", async t => {
+  const f = await fixture(t);
+  const platform = process.platform === "darwin" ? "macos" : "linux";
+  const target = `${platform}-${process.arch === "x64" ? "amd64" : process.arch}`;
+  const prefix = path.join(f.directory, "installation");
+  const trace = path.join(f.directory, "calls.txt");
+  f.env.INSTALL_TEST_TRACE = trace;
+  const install = version => run("sh", ["scripts/install.sh", "--version", version, "--prefix", prefix], f.env);
+
+  await archive(f, "1.0.0", target);
+  assert.equal((await install("1.0.0")).code, 0);
+  const binary = await readFile(path.join(prefix, "local-ai-agent"), "utf8");
+  await writeFile(trace, "");
+
+  await archive(f, "1.0.1", target, false, ["NOTICE.md"]);
+  const failed = await install("1.0.1");
+  assert.notEqual(failed.code, 0);
+  assert.equal(await readFile(path.join(prefix, "web/index.html"), "utf8"), "1.0.0");
+  assert.equal(await readFile(path.join(prefix, "NOTICE.md"), "utf8"), "1.0.0");
+  assert.equal(await readFile(path.join(prefix, "local-ai-agent"), "utf8"), binary);
+  await assert.rejects(readFile(path.join(prefix, ".upgrade/web/index.html")), { code: "ENOENT" });
+  assert.equal(await readFile(trace, "utf8"), "-stop\n-stop-core\n-no-browser\n");
+});
+
+test("Shell: a first installation that fails to register can be retried", async t => {
+  const f = await fixture(t);
+  const platform = process.platform === "darwin" ? "macos" : "linux";
+  const target = `${platform}-${process.arch === "x64" ? "amd64" : process.arch}`;
+  const prefix = path.join(f.directory, "installation");
+  f.env.INSTALL_TEST_TRACE = path.join(f.directory, "calls.txt");
+  await archive(f, "1.0.0", target);
+  const install = env => run("sh", ["scripts/install.sh", "--version", "1.0.0", "--prefix", prefix, "--defer-start"], env);
+
+  const failed = await install({ ...f.env, INSTALL_TEST_INSTALL_FAIL: "1" });
+  assert.notEqual(failed.code, 0);
+  await assert.rejects(readFile(path.join(prefix, "local-ai-agent")), { code: "ENOENT" });
+  const retried = await install(f.env);
+  assert.equal(retried.code, 0, retried.output);
+  assert.equal(await readFile(path.join(prefix, "web/index.html"), "utf8"), "1.0.0");
 });
 
 test("Shell: resolve standalone version metadata before selecting the platform archive", async t => {

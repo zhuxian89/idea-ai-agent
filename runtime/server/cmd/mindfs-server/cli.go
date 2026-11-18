@@ -117,10 +117,11 @@ func runCLI(args []string) error {
 		return err
 	}
 	if *install {
-		if err := backend.RecordInstallation(dir, executable); err != nil {
+		// The record marks the installation as finished, so it follows a successful registration.
+		if err := backend.InstallLoginServices(dir, executable); err != nil {
 			return err
 		}
-		return backend.InstallLoginServices(dir, executable)
+		return backend.RecordInstallation(dir, executable)
 	}
 	if *stopCore {
 		return stopLocalCore(coreCtx, dir)
@@ -276,8 +277,8 @@ func runCLI(args []string) error {
 			childArgs = append(childArgs, project)
 		}
 		serviceArgs := childArgs
-		if runtime.GOOS == "linux" && flags.NArg() == 0 {
-			// A plain start after an upgrade reuses the installed systemd invocation.
+		if flags.NArg() == 0 {
+			// A plain start after an upgrade reuses the options the installed job was registered with.
 			overrides := visitedFlags(flags)
 			delete(overrides, "no-browser")
 			delete(overrides, "restart")

@@ -141,12 +141,15 @@ func StartLoginService(ctx context.Context, dir, kind, executable string, args [
 	} else if err != nil {
 		return true, err
 	}
-	args, err = loginServiceArguments(dir, kind, args)
-	if err != nil {
-		return true, err
-	}
-	if err := s.write(dir, executable, args); err != nil {
-		return true, err
+	// Without arguments the job keeps the options it was registered with.
+	if args != nil {
+		args, err = loginServiceArguments(dir, kind, args)
+		if err != nil {
+			return true, err
+		}
+		if err := s.write(dir, executable, args); err != nil {
+			return true, err
+		}
 	}
 	if exec.CommandContext(ctx, "/bin/launchctl", "print", s.target).Run() != nil {
 		return true, launchctl(ctx, "bootstrap", fmt.Sprintf("gui/%d", os.Getuid()), s.path)

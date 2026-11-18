@@ -85,6 +85,9 @@ func (s linuxService) write(dir, kind, executable string, args []string, install
 	}
 	envFile := filepath.Join(dir, "systemd-"+kind+".env")
 	if installing {
+		if err := os.MkdirAll(filepath.Join(dir, "logs"), 0700); err != nil {
+			return false, err
+		}
 		if err := writeServiceEnvironment(envFile, dir); err != nil {
 			return false, err
 		}
@@ -110,7 +113,19 @@ func (s linuxService) write(dir, kind, executable string, args []string, install
 
 // systemd exposes Environment= through D-Bus. Keep the installation's paths,
 // proxy URLs and Agent credentials in an owner-readable EnvironmentFile instead.
+// A reinstall from a session that lacks one of these variables keeps the value saved
+// earlier: after a boot the service has no shell to read it from again.
 func writeServiceEnvironment(file, dir string) error {
+	previous, err := os.ReadFile(file)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	saved := map[string]string{}
+	for _, line := range strings.Split(string(previous), "\n") {
+		if key, _, ok := strings.Cut(line, "="); ok {
+			saved[key] = line
+		}
+	}
 	var env bytes.Buffer
 	put := func(key, value string) {
 		escaped := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(value)
@@ -123,6 +138,8 @@ func writeServiceEnvironment(file, dir string) error {
 	} {
 		if value, ok := os.LookupEnv(key); ok {
 			put(key, value)
+		} else if line, ok := saved[key]; ok {
+			env.WriteString(line + "\n")
 		}
 	}
 	put("IDE_AGENT_REMOTE_HOST_DIR", dir)

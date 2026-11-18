@@ -17,6 +17,13 @@ import java.util.zip.ZipOutputStream
 class StandaloneInstallerTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    @Test fun failureTextSurvivesBytesThatAreNotUtf8() {
+        val log = temporary.newFile("install.log").toPath()
+        Files.write(log, "SHA-256 verification failed ".toByteArray() + byteArrayOf(0xB0.toByte(), 0xA1.toByte()) + " tail\n".toByteArray())
+        val text = installLogTail(log)
+        assertTrue(text, text.startsWith("SHA-256 verification failed") && text.endsWith("tail"))
+    }
+
     @Test fun bundledInstallerVerifiesDownloadsReportsFailureAndReusesAnInstallation() {
         val targetVersion = "0.1.26-standalone.42"
         val base = temporary.root.toPath()

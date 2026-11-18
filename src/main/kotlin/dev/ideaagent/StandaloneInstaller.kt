@@ -31,6 +31,9 @@ internal fun isInstalled(dir: Path): Boolean = try {
     standaloneExecutable(dir) != null
 } catch (_: IllegalArgumentException) { false }
 
+/** 日志可能混入非 UTF-8 字节；严格解码抛出的异常会盖掉真正的安装错误，所以按替换字符解码。 */
+internal fun installLogTail(log: Path): String = String(Files.readAllBytes(log), Charsets.UTF_8).takeLast(8000).trim()
+
 internal fun windowsStandaloneInstallCommand(script: Path, version: String, deferStart: Boolean): List<String> {
     val quote = { value: String -> "'${value.replace("'", "''")}'" }
     val invocation = "& ${quote(script.toString())} -Version ${quote(version)}" +
@@ -92,7 +95,7 @@ internal class StandaloneInstaller {
                             child.destroyForcibly().waitFor()
                             error("Installation timed out. See $log")
                         }
-                        check(child.exitValue() == 0) { Files.readString(log).takeLast(8000).trim() }
+                        check(child.exitValue() == 0) { installLogTail(log) }
                         check(standaloneExecutable(dir) != null) { "Installer finished without registering the standalone service. See $log" }
                         if (update) check(installedStandaloneVersion(dir) == target) { "The installed service version did not change. See $log" }
                     } finally { Files.deleteIfExists(script) }

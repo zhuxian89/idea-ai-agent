@@ -102,12 +102,15 @@ func StartLoginService(ctx context.Context, dir, kind, executable string, args [
 	} else if err != nil {
 		return true, err
 	}
-	args, err := loginServiceArguments(dir, kind, args)
-	if err != nil {
-		return true, err
-	}
-	if err := writeScheduledTask(dir, kind, executable, args); err != nil {
-		return true, err
+	// Without arguments the task keeps the options it was registered with.
+	if args != nil {
+		args, err := loginServiceArguments(dir, kind, args)
+		if err != nil {
+			return true, err
+		}
+		if err := writeScheduledTask(dir, kind, executable, args); err != nil {
+			return true, err
+		}
 	}
 	return true, runScheduledTask(ctx, dir, kind, "start")
 }
