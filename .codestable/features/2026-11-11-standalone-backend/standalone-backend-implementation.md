@@ -24,9 +24,9 @@ Debian 13 ARM64 隔离 Relay 验证了新装显示 URL、等待确认时再次�
 
 **未验证**：Windows PowerShell 5.1 没有运行过修改后的 `install.ps1` 和 `download.ps1`，按 AGENTS.md 在真实 5.1 验证前不得替换公开附件。Linux 真机 systemd 没有复跑修改后的环境文件与暂存逻辑。没有生成安装包，修复内容不在任何已发布版本里。`StandaloneRelease.kt` 取“全部 Release 中最高版本”，Linux 预发布 0.1.36 至 0.1.38 会被 Linux 上的插件视为可更新版本，而脚本默认仍是 0.1.35，是否保留待用户决定，本轮没有改。
 
-## 独立后台 0.1.39 测试版发布（2026-11-18）
+## 独立后台 0.1.39 正式发布（2026-11-18）
 
-三个平台统一升到 0.1.39，包含安装审查的全部修复，已作为 [预发布](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.39) 公开，标签指向提交 `a37b956`。默认正式版仍是 0.1.35，`version.txt` 未改，测试时用 `--version 0.1.39`（PowerShell 用 `-Version 0.1.39`）。公开包从该提交的独立克隆构建，程序构建信息为 `vcs.modified=false`。先前工作区构建的本地测试包作废。
+三个平台统一升到 0.1.39，包含安装审查的全部修复，已作为[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.39)发布，标签指向提交 `a37b956`。`scripts/standalone/version.txt` 改为 0.1.39，两条固定安装命令不指定版本时默认安装 0.1.39；仓库的 latest 标记仍留给插件发布 v0.1.27，既有 Windows 工作流依赖它。0.1.35 的发布没有下架。公开包从该提交的独立克隆构建，程序构建信息为 `vcs.modified=false`。先前工作区构建的本地测试包作废。
 
 | 包 | SHA-256 |
 |---|---|
@@ -43,7 +43,7 @@ Debian 13 ARM64 隔离 Relay 验证了新装显示 URL、等待确认时再次�
 
 **公开入口端到端**：macOS arm64 通过固定在线入口 `--version 0.1.39` 在临时 HOME 新装并再次升级，端口不变，注销后 launchd 无遗留。macOS、Linux 失败升级恢复此前分别在临时 HOME 和 Alpine 容器验证。
 
-**未验证**：真实 Windows 机器上的登录自启（CI 只验证了任务注册与服务启动）和 Windows ARM64、macOS amd64、Linux amd64 的实际运行（只核对了架构）；Linux 真机 systemd 没有用 0.1.39 复跑开机自启。0.1.39 预发布公开后，插件检测升级取所有发布中的最高版本，macOS、Windows 用户的插件会把 0.1.39 当作可更新版本，是否改成只取正式版仍待决定。
+**未验证**：真实 Windows 机器上的登录自启（CI 只验证了任务注册与服务启动）和 Windows ARM64、macOS amd64、Linux amd64 的实际运行（只核对了架构）；Linux 真机 systemd 没有用 0.1.39 复跑开机自启。插件检测升级取所有发布中的最高版本，Linux 预发布 0.1.36 至 0.1.38 也会被当作可更新版本，是否改成只取正式版仍待决定。
 
 # Linux 服务器开机自启（2026-11-18）
 
