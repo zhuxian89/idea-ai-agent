@@ -2,106 +2,112 @@
 
 ## 当前工作交接
 
-独立后端正在开发，接手前先读
+独立后台接手前先读
 [独立后端计划与进度](.codestable/features/2026-11-11-standalone-backend/README.md)，
-再按其中的下一步继续。该入口汇总已确认决策、当前实现、验证状态和安装包版本。
-每完成一个步骤、遇到测试失败或结束一轮工作时，同步更新交接入口与 checklist；
-实现细节和验证证据写入 implementation。源码完成、验证通过和安装包生成分别记录，
+再按其中的待验证事项继续。每完成一个步骤、遇到测试失败或结束一轮工作时，同步更新交接入口与 checklist；
+验证证据写入 implementation。源码完成、验证通过和安装包生成分别记录，
 后续代码有改动时重新标明待验证范围，不沿用旧版本的全通过结论。
 
-## Windows 安装脚本与发布验证（2026-11-16）
+提交和推送只在用户明确要求时进行。默认直接在 `main` 分支开发；发包用临时分支（见下节）。
 
-此前 Windows 更新在下载 GitHub 包时出现 `MaximumRedirectExceeded`，
-安装日志又因 GBK/UTF-8 不一致被二次解码错误覆盖，界面只显示 `Input length = 1`。
-修复下载跳转处理和日志输出编码后，用户确认更新成功。
-本次 `AllowAutoRedirect` 错误已证实由无 BOM UTF-8 被 Windows ANSI 936 误读引起：中文注释吞掉下一行请求赋值，随后对空对象设置属性。
-用户已确认本次修复后更新恢复。此前测试抽取 UTF-8 函数在 PowerShell 7 中运行，
-没有覆盖 Windows 5.1 读取最终脚本的方式；打包时又跳过了 PowerShell 测试。
-后续必须验证用户实际执行的包内脚本，不能沿用源码或其他运行时的通过结论。
+## 独立版发包规则
 
-- 插件从自身 JAR 的 `installers/install.ps1` 解出临时脚本执行，不从独立后台附件加载脚本。固定在线入口 `scripts/install.ps1` 通过 `irm | iex` 调用 UTF-8 BOM 的 `scripts/standalone/download.ps1`。插件打包时将后者原样写入 JAR。修改下载脚本后需同步发布固定在线入口使用的脚本，并重打受影响的插件包、更新校验和；只替换独立后台不能修复已安装插件的内嵌脚本。发布前核对公开插件包内的脚本与修复源码一致。
-- Windows 包内执行的 PowerShell 脚本统一 UTF-8 BOM，不转为 GBK；PowerShell 5.1 需要 BOM 识别 UTF-8。固定在线入口使用 ASCII，读取下载脚本后移除字符串开头的 BOM。`.gitattributes` 固定 `.ps1` 的 LF 换行。打包检查最终 JAR 内脚本与源码逐字节一致且有 BOM。
-- 插件实际调用 `powershell.exe`（Windows PowerShell 5.1）。每次生成或替换 Windows 可用安装包（含通用插件包），即使没有修改安装器，也必须从最终插件 ZIP 提取脚本，在真实 Windows 5.1 验证后才能发布；PowerShell 7、macOS 或 Windows 交叉编译不能替代。缺少环境或测试跳过时不得替换正式附件或记为验证通过。验证真实 GitHub 下载、相对及连续重定向、二进制内容和 SHA-256 校验，保留逐跳 HTTPS 校验和校验成功后才安装的顺序。
-- 修改安装器后，同步核对 Windows 双架构与通用插件 ZIP、Windows 独立 ZIP、在线入口及各自校验文件。发布后重新下载公开附件，核对包内脚本、SHA-256 与已验证产物一致。同版本替换插件时，明确告知用户需从磁盘重装并重启 IDEA；已装插件不会因独立后台附件更新而获得新脚本。
-- Windows 安装进程须在加载脚本前统一 UTF-8 输出，与插件读取日志的编码一致。安装失败应展示原始下载或执行错误，不能让日志解码异常覆盖原因。
-- 首次安装与更新共用下载脚本，但首次安装使用 `-DeferStart`。分别验证安装参数与流程；临时安装桩通过不能记为真实计划任务注册、登录自启或重启接入已通过。
-- 属性不存在时先复现实际请求类型、脚本读取编码和完整报错；不要仅凭属性名断定 PowerShell 版本或跳转是根因。请求使用 `WebRequest.CreateHttp([Uri]$current)`，保留逐跳校验；不通过增加等待时间或重试掩盖错误。
+独立后台与插件独立发版，Release 标签为 `standalone-v<版本>`。
 
-最终插件包的 Windows 5.1 验证命令（版本与路径替换为本次产物）：
+**只保留一个正式版。** 新版本验证通过并成为默认安装版本后，下架所有旧的独立后台 Release（含测试预发布）：
+先把旧 Release 的元数据快照（`gh release view --json ...`）存到 `build/reports/`，再 `gh release delete <标签> --yes`，
+不加 `--cleanup-tag`，Git 标签保留。插件 Release（`v<版本>`）不动。
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip <最终插件ZIP路径> -Version <独立后台版本>
-```
+- **版本号**：内容有变化就升版本，不复用已公开的版本号。测试版发为预发布，不改 `scripts/standalone/version.txt`；
+  用户确认成为正式版后才改 `version.txt`（固定安装命令的默认版本），同时 Release 取消预发布。
+- **latest 标记**：独立后台 Release 不占仓库的 latest 标记（`--latest=false`），latest 留给插件 Release，
+  `.github/workflows/windows-installer.yml` 依赖 `releases/latest` 取插件包。
+- **构建**：从发布提交的干净克隆构建（Go 构建信息 `vcs.modified=false`），不用有未提交改动的工作区。
+  前端依赖用 `corepack pnpm install --frozen-lockfile`，不用 `npm ci`（锁文件是 pnpm 的，npm 会装出不同版本导致类型检查失败）。
+  设置 `LOCAL_AI_AGENT_VERSION=<版本>`，对六个目标运行 `node scripts/package-standalone.mjs <目标>`，
+  目标为 `linux-amd64`、`linux-arm64`、`windows-amd64`、`windows-arm64`、`macos-arm64`、`macos-amd64`；
+  第一个目标构建前端，其余加 `--skip-web`。
+- **附件**：24 个，均上传到同一个 Release——六个压缩包（macOS、Linux 为 `.tar.gz`，Windows 为 `.zip`）、
+  macOS 与 Linux 四个自解压 `.sh`、在线入口 `install.sh` 与 `install.ps1`，每个都带 `.sha256`。
+- **发布前验证**（对最终压缩包，不是对源码）：校验文件全部通过；程序架构与平台一致；包内 `install.sh`、`install.ps1`
+  与源码逐字节一致，PowerShell 脚本有 UTF-8 BOM；网页 305 个文件且无 `/mindfs-assets/` 引用；
+  自解压安装器的内嵌归档与对应压缩包一致；在线入口与 `scripts/install.sh`、`scripts/standalone/download.ps1` 一致。
+  在临时 HOME 与临时前缀中端到端：新装、同包升级、故意缺文件的升级失败后自动恢复。**不得碰用户已装的服务。**
+- **Windows 真机门槛**：Windows 包必须在真实 Windows PowerShell 5.1 验证后才能发布，macOS、PowerShell 7 与交叉编译不能替代。
+  做法：把验证提交推到分支 `standalone-<版本>`（不要直接推 `main`），建草稿 Release
+  （`gh release create standalone-v<版本> --draft --prerelease --target <提交> --notes-file ...`，文件列表用 bash 数组，zsh 不会按换行拆分），
+  `Windows standalone package` 工作流（`.github/workflows/windows-standalone-package.yml`，需要 `contents: write` 才能读草稿）
+  会下载草稿里的 Windows x64 包并运行 `scripts/standalone/verify-windows-standalone-package.ps1`；
+  同一推送也会触发 `Windows installer` 工作流。两者都通过后才能继续。真实登录自启仍需实机，按实际结果记录。
+- **发布顺序**：分支验证通过 → 快进合并并推送 `main`（此时 `version.txt` 不变）→ 发布草稿（`gh release edit --draft=false`）
+  → 匿名重新下载全部附件与构建产物逐字节比较 → 用公开在线入口在临时 HOME 里安装验证 → 需要时再改 `version.txt` 并下架旧版 → 删除临时分支。
+- **在线入口缓存**：`raw.githubusercontent.com` 推送后会有约 10 分钟缓存，期间读到的新旧内容会摇摆。
+  改 `version.txt` 后要等连续多次读到新值再验证默认安装。
+- **发布说明必须写安装方法**：macOS 与 Linux 的 `curl ... | sh` 命令、Windows 的 `irm ... | iex` 命令、默认安装目录、
+  升级方式（重复执行同一命令，或在 IDEA 远程面板更新）、Linux 绑定链接与开机自启、手动安装方法，再加本版更新内容。
+  标题用“独立后台 <版本>”。
+- 修改 Windows 安装脚本或下载脚本后，固定在线入口使用的脚本随 `main` 立即生效，必须先通过上面的 5.1 验证再推送 `main`。
 
-该入口验证包内脚本、真实下载与摘要；首次安装、计划任务和登录自启按各自实际结果记录。
-本次发布前后 Windows CI 均通过，用户随后确认更新恢复，证据见
+## Windows 安装脚本
+
+插件实际调用 `powershell.exe`（Windows PowerShell 5.1），固定在线入口 `scripts/install.ps1` 通过 `irm | iex`
+调用 UTF-8 BOM 的 `scripts/standalone/download.ps1`。插件从自身 JAR 的 `installers/install.ps1` 解出临时脚本执行，
+不从独立后台附件加载脚本，所以只替换独立后台不能修复已安装插件的内嵌脚本。
+
+- Windows 包内执行的 PowerShell 脚本统一 UTF-8 BOM，不转 GBK；`.gitattributes` 固定 `.ps1` 为 LF。
+  在线入口用 ASCII，读取下载脚本后去掉开头的 BOM。打包检查最终 JAR 或压缩包内脚本与源码逐字节一致且有 BOM。
+  根因：无 BOM 的 UTF-8 被 Windows ANSI 936 误读，中文注释吞掉下一行赋值，随后对空对象设属性。
+- 每次生成或替换 Windows 可用安装包（含通用插件包），即使没有修改安装器，也必须从最终包提取脚本，在真实 5.1 验证后才能发布。
+  缺少环境或测试跳过时不得替换正式附件或记为验证通过。验证真实 GitHub 下载、相对及连续重定向、二进制内容和 SHA-256，
+  保留逐跳 HTTPS 校验和“校验成功后才安装”的顺序。请求使用 `WebRequest.CreateHttp([Uri]$current)`。
+- 安装进程在加载脚本前统一 UTF-8 输出，与插件读取日志的编码一致。安装失败要展示原始下载或执行错误，
+  不能让日志解码异常或清理错误覆盖原因（插件按替换字符解码日志，清理临时目录用 `-ErrorAction SilentlyContinue`）。
+- 升级先把新文件复制到安装目录的 `.upgrade` 暂存再逐项换入；失败时清理暂存并重启原后台，原有文件不受影响。
+  首次安装用 `-DeferStart`，失败后必须能直接重试（`-install` 注册成功后才写安装记录，延迟启动失败时删除已复制的程序）。
+  首次安装与升级分别验证；临时安装桩通过不能记为真实计划任务注册、登录自启或重启接入已通过。
+- 属性不存在等错误，先复现实际请求类型、脚本读取编码和完整报错，不要仅凭属性名断定版本或跳转是根因；不用增加等待或重试掩盖错误。
+- 最终插件包的 5.1 验证命令：
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip <插件ZIP> -Version <独立后台版本>`。
+  同版本替换插件时要告知用户需从磁盘重装并重启 IDEA。
+
+回归入口：`scripts/standalone/` 下的 `download-redirect.test.mjs`、`install.test.mjs`、`install-recovery.test.mjs`、
+`package-install.test.mjs`、`verify-windows-plugin-installer.ps1`、`verify-windows-standalone-package.ps1`，
+`.github/workflows/windows-installer.yml`、`windows-standalone-package.yml`，以及 `StandaloneInstallerTest.kt`、
+`WindowsStandaloneInstallerCommandTest.kt`。故障记录见
 [UTF-8 安装修复记录](.codestable/issues/2026-11-16-windows-installer-request/windows-installer-request-fix-note.md)。
 
-回归入口：`scripts/standalone/download-redirect.test.mjs`、
-`scripts/standalone/install.test.mjs`、`scripts/standalone/verify-windows-plugin-installer.ps1`、
-`.github/workflows/windows-installer.yml`、`StandaloneInstallerTest.kt` 与
-`WindowsStandaloneInstallerCommandTest.kt`。
-历史证据见 [Windows 更新修复记录](.codestable/features/2026-11-11-standalone-backend/standalone-backend-implementation.md#windows-27-插件重打与发布2026-11-13已发布)，
-当前故障见 [Windows 下载请求属性错误](.codestable/issues/2026-11-16-windows-installer-request/windows-installer-request-report.md)。
+## 网页资源必须随对应后台发布
 
-## 网页资源必须随对应后台发布（2026-11-14）
+独立后台 0.1.28 曾把自身 JS/CSS 指向 Relay 的 `/mindfs-assets/`，Relay 没有对应文件，远程页面 404 却提示“版本太老”。
 
-独立后台 0.1.28 曾沿用 MindFS 的资源改写逻辑，把自身 JS/CSS 指向
-Relay 的 `/mindfs-assets/`。Relay 没有对应构建文件，远程页面返回 404，
-却弹出“版本太老，请重新安装最新版 mindfs”。0.1.29 修复后用户确认恢复。
-磁盘文件齐全、前端构建成功，都不能替代实际远程资源请求验证。
+- 内置和独立后台的 HTML、JS/CSS、图标、manifest 和 Service Worker 缓存资源必须来自各自配套安装包；经 Relay 访问时保留节点或项目路径。
+- 不依赖 Relay 部署相同版本的前端，不得把资源改写到 `/mindfs-assets/` 等 Relay 公共路径，也不加这类 fallback。保留 Relay 的 HTTP/WebSocket 转发；后台发版不要求改动共享 Relay。
+- 修改资源路径、构建或打包时，验证正式与开发版本、内置与独立模式、本地与远程入口；检查实际返回的 HTML、Service Worker 引用和资源 HTTP 响应，磁盘文件齐全或构建成功都不能替代。
+- 资源加载失败要报告实际失败的资源；只有版本兼容检查有明确证据时才提示版本过旧。
 
-- 内置、独立后台的 HTML、JS/CSS、图标、manifest 和 Service Worker 缓存资源必须来自各自配套安装包；经 Relay 访问时保留节点或项目路径。
-- 本项目不依赖 Relay 部署相同版本的前端。不得按正式版/开发版或后台模式将资源改写到 `/mindfs-assets/` 等 Relay 公共路径，也不增加这类 fallback。
-- 保留 Relay 的 HTTP/WebSocket 转发功能；后台独立发版不要求修改、部署或删除共享 Relay 服务。
-- 修改资源路径、构建或打包时，验证正式/开发版本、内置/独立模式以及本地/远程入口；检查实际返回的 HTML、Service Worker 引用及资源 HTTP 响应，不能只检查磁盘。
-- 资源加载失败应报告实际失败资源；只有版本兼容检查有明确证据时才提示版本过旧。
+回归入口：`runtime/server/internal/api/http_test.go` 的 `TestFrontendAssetsStayWithBackend`、`runtime/web/tests/remote-entry-build.test.mjs`。
+记录见 [远程资源路由故障记录](.codestable/issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
 
-回归入口：`runtime/server/internal/api/http_test.go` 的
-`TestFrontendAssetsStayWithBackend` 与
-`runtime/web/tests/remote-entry-build.test.mjs`。
-原因、修复和验证见
-[远程资源路由故障记录](.codestable/issues/2026-11-14-standalone-relay-assets/standalone-relay-assets-fix-note.md)。
+## 数据库升级必须兼容旧库
 
-## 数据库升级必须兼容旧库（2026-10-23）
+旧项目 `.mindfs/tasks/task-kanban.db` 的 `tasks` 表缺 `template_snapshot_json`，新版启动报
+`no such column`。`CREATE TABLE IF NOT EXISTS` 不会更新已有表结构，新建库测试通过不等于升级兼容。
+修复在 `runtime/server/internal/kanban/task_store.go` 的 `TaskStore.migrate()`，不要删除这条迁移。
 
-### 已发生的问题
+- 修改持久化表结构、查询字段或读写模型时，必须同时检查已发布版本的旧库升级路径，新库建表与旧库迁移都要覆盖。
+- 新增字段提供幂等迁移和适合历史数据的默认值或回填，在依赖它的查询、索引和读写之前执行；重复启动不报错、不覆盖已有值。
+- 不得删除用户数据库、删表重建、清空任务或要求重装来规避兼容问题，不得吞掉数据库错误制造启动成功的假象。
+- 必须有旧库回归测试：缺列旧库可读写、重复迁移成功、已有字段与任务/阶段/事件保留、新库正常；表结构再变化时继续补对应旧结构用例。
+- 迁移测试只用临时数据库，不拿用户真实项目数据库做破坏性验证。
+- 任务加载失败报告 `task.load_failed` 并保留诊断，不误报为 `file.write_failed`。
 
-旧项目的 `.mindfs/tasks/task-kanban.db` 中，`tasks` 表缺少
-`template_snapshot_json`，新版启动加载任务时出现：
-
-```text
-SQL logic error: no such column: template_snapshot_json (1)
-```
-
-根因是查询已引用新字段，但迁移仅在新建表时声明字段，没有给已有表补列。
-**`CREATE TABLE IF NOT EXISTS` 不会更新已有表结构。不能把新建数据库测试通过当成升级兼容通过。**
-
-修复位于 `runtime/server/internal/kanban/task_store.go` 的 `TaskStore.migrate()`：
-幂等添加 `template_snapshot_json TEXT NOT NULL DEFAULT ''`，保留已有字段内容。
-空字符串与当前任务插入逻辑一致，不伪造历史快照。不要删除这条旧库迁移。
-
-### 后续修改的硬约束
-
-- 修改持久化表结构、查询字段或读写模型时，必须同时检查已发布版本的旧库升级路径；新库建表与旧库迁移都要覆盖。
-- 新增字段必须提供幂等迁移及适合历史数据的默认值或回填方案，在依赖该字段的查询、索引及业务读写之前执行。重复启动不能报错或覆盖已有值。
-- 不得通过删除用户数据库、删表重建、清空任务或要求用户重新安装来规避兼容问题；不得吞掉数据库错误制造启动成功的假象。
-- 必须增加旧库回归测试：缺列旧库可读写、重复迁移成功、已有字段值与任务/阶段/事件保留、新库仍正常。后续表结构变化继续补充对应旧结构用例，不能只保留本次字段测试。
-- 迁移测试仅使用临时数据库，不得直接拿用户真实项目数据库做破坏性验证。
-- 任务加载失败应报告 `task.load_failed`，保留诊断信息；不得误报为 `file.write_failed`。
-
-### 每次版本打包前必检
-
-在 `runtime/` 目录执行并确认通过：
+每次版本打包前在 `runtime/` 执行并确认通过：
 
 ```sh
 go test ./server/internal/kanban -count=1
 go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1
 ```
 
-现有回归测试：`runtime/server/internal/kanban/task_store_migration_test.go`。
-涉及其他数据库时，另跑相应模块的迁移回归测试。迁移测试失败或升级路径未经验证，不得宣称版本可交付。
-打包成功、前端测试通过或只验证新库，都不能替代旧库升级验证；交付时明确说明迁移验证结果。
-
-详细修复记录见
-[启动数据库报错与活动状态误导修复](.codestable/issues/2026-10-23-task-migration-activity-status/task-migration-activity-status-fix-note.md)。
+回归测试在 `runtime/server/internal/kanban/task_store_migration_test.go`；涉及其他数据库时另跑对应模块的迁移测试。
+迁移验证失败或未做，不得宣称版本可交付；交付时说明迁移验证结果。
+记录见 [启动数据库报错与活动状态误导修复](.codestable/issues/2026-10-23-task-migration-activity-status/task-migration-activity-status-fix-note.md)。

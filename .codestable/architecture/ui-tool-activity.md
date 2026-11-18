@@ -130,14 +130,14 @@ Codex 0.154 的 rollout `custom_tool_call exec` 与 app-server 内层 commandExe
 ## 7. 相关文档
 
 - [能力定义](../requirements/compact-tool-activity.md)
-- [F1 验收](../features/2026-09-14-activity-compact-rows/activity-compact-rows-acceptance.md)
-- [F2 设计](../features/2026-09-14-activity-native-facts/activity-native-facts-design.md)
-- [F2 验收](../features/2026-09-14-activity-native-facts/activity-native-facts-acceptance.md)
-- [F3 验收](../features/2026-09-14-activity-semantic-summaries/activity-semantic-summaries-acceptance.md)
-- [F4 验收](../features/2026-09-14-activity-history-parity/activity-history-parity-acceptance.md)
-- [F5 验收](../features/2026-09-14-activity-detail-lifecycle/activity-detail-lifecycle-acceptance.md)
-- [F6 验收](../features/2026-09-14-activity-segment-grouping/activity-segment-grouping-acceptance.md)
-- [后续规划](../roadmap/tool-activity-experience/tool-activity-experience-roadmap.md)
+- F1 验收
+- F2 设计
+- F2 验收
+- F3 验收
+- F4 验收
+- F5 验收
+- F6 验收
+- 后续规划
 
 ## 8. 变更日志
 

@@ -12,7 +12,7 @@
 
 ## 2026-10-29 多项目入口 Windows 本地测试包
 
-- 用户授权复核、直接修复并打 Windows 测试包；完成 [本轮审查](../.codestable/audits/2026-10-29-remote-project-hub-review/index.md)，4 项发现均已修复。
+- 用户授权复核、直接修复并打 Windows 测试包；完成 本轮审查，4 项发现均已修复。
 - 交付 `build/local-packages/idea-ai-agent-0.1.25-local.1-windows-amd64.zip`，12,395,565 字节（约 11.8 MiB）。SHA-256：`59797fe44b6c6179389b538d6ca4bc46b7cc81627a3886e64dac61c8d4e36f7f`。
 - `package-plugin.mjs local win --verify` 通过 TypeScript、Vite、Gradle 测试和配置检查；Kotlin 71/71。ZIP CRC、295 个条目无重复、版本 `0.1.25-local.1`、since-build 241、唯一 Windows x64 PE 程序校验通过；278 个前端文件逐一与最新 dist 比对一致，共享 RemoteHost Kotlin 类已打入 JAR。
 - 后端全量、相关 race、前端 260/260、最新 runtime 完整冒烟均通过；打包前 kanban 全包及 `TestTaskStoreSnapshotMigration` race 通过，仅临时数据库。真实双项目单 Connector 连续 20 次通过。
@@ -25,7 +25,7 @@
 - 真实 RemoteHost + 两个项目子进程通过测试 Relay 建立唯一 Connector；关闭 A 后 B 的原 WS 仍能加密收发。单实例竞争、崩溃恢复、旧授权迁移、项目撤销及全局关闭均有自动回归。
 - 最新构建的完整 `smoke-runtime.mjs` 通过，含启动鉴权、模型发现、回答、会话切换、IDE 原生入口、设置探测失败/恢复、安装 API、消息去重、队列清空和后台完成。旧菜单脚本失配已修复。
 - 复核修复项目目录慢网请求重叠和旧响应覆盖；连续 20 次双项目真实子进程测试通过，修正测试 stream 复用和本机 CLI 隔离。Windows/macOS 实际 IDEA 多窗口、手机公网 Relay 和真实付费 Agent 联调待验收。用户已授权本地 Windows 包；未 push 或上传市场，0.1.25 正式产物未变。
-- [实现清单、验证证据与待项](../.codestable/features/2026-10-29-remote-project-hub/remote-project-hub-implementation.md)。
+- 实现清单、验证证据与待项。
 
 ## 0.1.25 远程访问发布（2026-10-29）
 
