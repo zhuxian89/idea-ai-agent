@@ -15,6 +15,11 @@
 
 .file-editor-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .file-editor-actions:empty { display: none; }
+.remote-file-modes { display: inline-flex; align-items: center; gap: 2px; margin-right: auto; }
+.remote-file-modes button { padding: 3px 10px; min-height: 28px; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.remote-file-modes button[aria-pressed="true"] { background: var(--selection-bg); color: var(--accent-color); font-weight: 600; }
+.remote-file-modes button:focus-visible { outline: 2px solid var(--accent-color); }
+.remote-html-preview { display: block; flex: 1; width: 100%; min-height: 0; border: 0; background: white; }
 .file-editor-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 28px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
 .file-editor-icon-button > svg { width: 18px; height: 18px; flex-shrink: 0; }
 .file-editor-icon-button:hover:not(:disabled) { background: var(--border-color); color: var(--text-primary); }

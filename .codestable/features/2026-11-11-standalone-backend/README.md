@@ -1,5 +1,13 @@
 # 独立后端计划与进度
 
+## 独立后台 0.1.32 与 Windows x64 插件测试包（2026-11-18，准备构建）
+
+独立后台准备发布六平台 0.1.32，Windows x64 插件测试包保持 0.1.27。包内网页、旧库迁移与 Windows PowerShell 5.1 验证按本次产物重新执行。
+
+## 远程单文件 HTML 预览（2026-11-18，本地源码已验证）
+
+远程打开 HTML 默认显示源码，点同一行的「预览」即可查看网页和内嵌动画。用截图中的 `pelican-bike.html` 验证了 Chromium、WebKit 的渲染与切换，也验证了编辑保存后的预览。本轮未生成安装包。[实现与验证](standalone-backend-implementation.md#远程单文件-html-预览2026-11-18)
+
 ## 独立后台 0.1.31 / 插件 0.1.27 全平台重打（2026-11-17，已发布，公开复核通过）
 
 已按用户要求重新 pull 至 `8b562ec`，纳入不同路径同名项目独立 ID、远程“移除项目”按钮及 Windows 打包入口修正。重新生成并替换 [独立后台 0.1.31](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.31) 六平台共 24 项附件，以及 [插件 0.1.27](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27) 四平台/通用 ZIP 和总校验共 6 项附件；全部 30 项匿名下载 HTTP 200，字节与本地、GitHub digest 一致。两条源码标签已对齐构建提交 `8b562ec`，旧标签 SHA 保存在 `build/reports/release31-27/source-tags-before.json`；插件仍为 Latest。固定安装入口默认 0.1.31，公开脚本与源码一致且 PowerShell 为 UTF-8 BOM。真实公开插件 JAR 在线发现 0.1.31，前端/Kotlin 六平台均选 31，Windows 0.1.30 可升级。

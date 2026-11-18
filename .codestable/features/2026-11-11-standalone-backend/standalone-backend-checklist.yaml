@@ -3,6 +3,12 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
+  - id: standalone-32-windows-plugin-test
+    description: 发布六平台独立后台 0.1.32，交付 0.1.27 Windows x64 插件测试包。
+    status: in_progress
+  - id: remote-single-file-html-preview
+    description: 远程 HTML 源码与预览切换已实现。Chromium、WebKit 手机宽度实测原始骑行动画和源码返回，两者均通过编辑保存与预览内点击验证。仅完成本地源码与网页构建验证。
+    status: done
   - id: release31-plugin27-rebuild
     description: 再次 pull 至 8b562ec 后重打并发布六平台独立 31（24 资产）、全部插件 27（6 资产）；30 项匿名下载/字节/SHA/GitHub digest 通过，两标签对齐构建提交，Latest 为插件27，固定入口默认31。新源码旧库双门禁/API/类型构建/配置/前端19项/同名迁移等Go37项通过（1 Windows专项在Mac跳过），Kotlin95通过4环境跳过，安装器8项无跳过；各包305网页一致，四入口各87项HTTP200。真实Windows5.1精确候选CI44058656096和发布后CI44059387321通过；公开插件在线发现31，六平台前端/Kotlin选择31。macOS路径别名只修测试断言后复跑通过，旧候选弃用；同版已安装需手动重装，未操作真实服务或Marketplace。证据 build/reports/release31-27/。
     status: done

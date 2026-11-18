@@ -27,11 +27,11 @@ irm https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/insta
 指定版本或目录：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/install.sh | sh -s -- --version 0.1.31 --prefix "$HOME/Applications/LocalAIAgent"
+curl -fsSL https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/install.sh | sh -s -- --version 0.1.32 --prefix "$HOME/Applications/LocalAIAgent"
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/install.ps1))) -Version 0.1.31 -Prefix "$env:LOCALAPPDATA\Programs\LocalAIAgent"
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/install.ps1))) -Version 0.1.32 -Prefix "$env:LOCALAPPDATA\Programs\LocalAIAgent"
 ```
 
 更新时对同一目录重新执行安装脚本。下载和校验成功后，安装程序停止远程入口和本地数据服务，再替换程序与网页资源。升级程序会中断当前连接，聊天记录保留。安装完成后自动启动；macOS / Windows 自动更新自启配置，原端口保留。以后安装或升级都使用同一个脚本地址，自动获取最新版本；需要指定版本时传入 `--version` 或 `-Version`。
@@ -54,7 +54,7 @@ Windows：
 
 程序启动后台服务并打开浏览器。同一个服务管理所有项目，IDEA 从 A 项目进入时定位到 A；浏览器可以切换其他已添加的项目。退出 IDEA 后，服务继续运行。
 
-配套插件版本为 `0.1.27`，独立后台安装示例使用 `0.1.31`；两者分别发版。各平台可用安装包见 [独立后台 0.1.31 Release](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.31)。从 `.3` 升级时先退出 IDEA，再运行包内安装脚本。未安装独立版时，插件继续使用原内置后端。安装后，即使远程入口停止、启动失败或认证失败，插件仍可连接本地数据服务；错误和启停操作显示在远程面板内。
+配套插件版本为 `0.1.27`，独立后台安装示例使用 `0.1.32`；两者分别发版。各平台可用安装包见 [独立后台 0.1.32 Release](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.32)。从 `.3` 升级时先退出 IDEA，再运行包内安装脚本。未安装独立版时，插件继续使用原内置后端。安装后，即使远程入口停止、启动失败或认证失败，插件仍可连接本地数据服务；错误和启停操作显示在远程面板内。
 
 远程服务未启动时，面板只提供启动操作和折叠详情，启动成功后才展示远程连接入口。首页保留二维码、打开网页、复制链接与设置；运行方式、后台更新、项目和故障排查都在设置中。
 
@@ -77,7 +77,7 @@ Windows：
 macOS / Linux 下载对应平台的 `.sh` 安装文件，运行一次即可完成解压、安装或升级及后台启动。macOS 同时配置登录自启和异常退出恢复：
 
 ```sh
-sh ./local-ai-agent-0.1.31-macos-arm64.sh
+sh ./local-ai-agent-0.1.32-macos-arm64.sh
 ```
 
 已有安装自动沿用原目录；可通过第一个参数指定安装目录。
@@ -165,7 +165,7 @@ On first startup, it imports previously shared projects from the plugin's unifie
 
 Remote access uses the existing Relay with no cloud update or changes to other clients. IDEA and the standalone backend remove browser pairing and separate project authorization; node URLs directly access shared projects.
 
-The fixed installer URLs above detect the platform, read the latest published version and download its standalone package, verify SHA-256, and install it in a fixed user directory. Reuse the same URL for installation and upgrades; an explicit version is optional. They support version and directory selection. Updates reuse the registered directory and start the service automatically. macOS registers user LaunchAgents and Windows registers tasks for the current user; both start at sign-in and recover after abnormal exits. The companion plugin uses version 0.1.27, and the standalone installation examples use 0.1.31; they are released independently. Available platform packages are listed in the [standalone 0.1.31 Release](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.31). Quit IDEA before upgrading from .3. IDEA starts or reuses the local data service independently of remote access. Remote errors and controls stay in the remote panel. Without a standalone installation, it uses the embedded backend.
+The fixed installer URLs above detect the platform, read the latest published version and download its standalone package, verify SHA-256, and install it in a fixed user directory. Reuse the same URL for installation and upgrades; an explicit version is optional. They support version and directory selection. Updates reuse the registered directory and start the service automatically. macOS registers user LaunchAgents and Windows registers tasks for the current user; both start at sign-in and recover after abnormal exits. The companion plugin uses version 0.1.27, and the standalone installation examples use 0.1.32; they are released independently. Available platform packages are listed in the [standalone 0.1.32 Release](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.32). Quit IDEA before upgrading from .3. IDEA starts or reuses the local data service independently of remote access. Remote errors and controls stay in the remote panel. Without a standalone installation, it uses the embedded backend.
 
 The first visit to Remote access offers Built-in or Standalone service. Selecting Standalone checks its installation and running state. If it is missing, click Install and continue: the plugin downloads, verifies and installs it, with progress and errors shown in the panel. Current chats keep running.
 

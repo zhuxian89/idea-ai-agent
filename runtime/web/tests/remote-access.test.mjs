@@ -30,6 +30,7 @@ test("remote panel and browser editing", async t => {
       import { RemoteFileViewer } from "./src/components/remote/RemoteFileViewer";
       import { FileEditStore } from "./src/services/fileEditing";
       const files = ["first.ts", "second.ts"].map(path => ({root:"project", path, name:path, content:"const count = 1;", revision:"original", size:16, encoding:"utf-8", ext:".ts"}));
+      if (window.previewFixture) files[0] = window.previewFixture;
       const store = new FileEditStore({load:async (root,path)=>files.find(f=>f.path===path), save: async (root,path,content,revision)=>{
         if (window.conflict) throw new Error("file_edit_conflict");
         window.saved = {content,revision}; return {...files.find(f=>f.path===path),content,revision:"saved"};
@@ -493,6 +494,61 @@ test("remote panel and browser editing", async t => {
     await expect(page.getByRole("link",{name:"Open browser"})).toHaveCount(0);
     connected=true;await page.getByRole("button",{name:"Check connection",exact:true}).click();
     await expect(page.getByRole("link",{name:"Open browser"})).toBeVisible();
+  });
+  const html = '<!doctype html><style>button{color:rgb(4, 82, 108)}</style><button disabled>开始</button><script>const button = document.querySelector("button"); button.onclick = () => button.textContent = "完成"; button.disabled = false;</script>';
+  const htmlFile = {root:"project", path:"demo.HTM", name:"demo.HTM", content:html, size:Buffer.byteLength(html), encoding:"utf-8", truncated:false};
+  async function openHtml(file) {
+    const page = await pageFor(390, true);
+    await page.evaluate(file => { window.previewFixture = file; }, file);
+    await page.addScriptTag({content:bundle.outputFiles[0].text});
+    return page;
+  }
+  await t.test("single-file HTML switches in place and runs inline CSS and scripts on mobile", async () => {
+    const page = await openHtml(htmlFile);
+    const source = page.getByRole("button", {name:"Source", exact:true});
+    const preview = page.getByRole("button", {name:"Preview", exact:true});
+    const fileRequests = [];
+    page.on("request", request => { if (request.url().includes("/api/file")) fileRequests.push(request.url()); });
+    await expect(source).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("code")).toContainText("<!doctype html>");
+    await preview.click();
+    await expect(preview).toHaveAttribute("aria-pressed", "true");
+    const frame = page.locator("iframe");
+    await expect(frame).toHaveAttribute("sandbox", "allow-scripts");
+    const action = frame.contentFrame().getByRole("button");
+    await expect(action).toHaveCSS("color", "rgb(4, 82, 108)");
+    await action.press("Enter");
+    await expect(action).toHaveText("完成");
+    assert.equal(await action.evaluate(() => window.origin), "null");
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await source.click();
+    await expect(frame).toHaveCount(0);
+    await expect(page.locator("code")).toBeVisible();
+    assert.deepEqual(fileRequests, []);
+    await preview.click();
+    await page.getByRole("button", {name:"Second file"}).click();
+    await expect(preview).toHaveCount(0);
+    await expect(frame).toHaveCount(0);
+    await page.getByRole("button", {name:"First file"}).click();
+    await expect(source).toHaveAttribute("aria-pressed", "true");
+  });
+  await t.test("a partial HTML source requests the whole remote file and can retry after a read error", async () => {
+    const page = await openHtml({...htmlFile, content:html.slice(-12)});
+    await page.route("**/api/file?**", route => {
+      const url = new URL(route.request().url());
+      assert.equal(url.pathname, "/n/node/api/file");
+      assert.equal(url.searchParams.get("read"), "full");
+      assert.equal(url.searchParams.get("path"), htmlFile.path);
+      assert.equal(url.searchParams.get("root"), htmlFile.root);
+      return route.fulfill({contentType:"application/json", body:JSON.stringify({file:htmlFile})});
+    });
+    await page.route("**/api/file?**", route => route.fulfill({status:404}), {times:1});
+    const preview = page.getByRole("button", {name:"Preview", exact:true});
+    await preview.click();
+    await expect(page.getByRole("alert")).toContainText("404");
+    await page.getByRole("button", {name:"Source", exact:true}).click();
+    await preview.click();
+    await expect(page.frameLocator("iframe").getByRole("button", {name:"开始"})).toBeVisible();
   });
   await t.test("editing retains drafts across navigation and conflict; save uses original revision", async () => {
     const page = await pageFor(900,true);

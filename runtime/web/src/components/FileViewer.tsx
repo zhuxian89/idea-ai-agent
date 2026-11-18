@@ -42,6 +42,7 @@ type RelatedSession = {
 
 type FileViewerProps = {
   file?: FilePayload | null;
+  previewContent?: React.ReactNode;
   onSessionClick?: (sessionKey: string) => void;
   onPathClick?: (path: string) => void;
   onFileClick?: (path: string) => void;
@@ -131,7 +132,7 @@ function Breadcrumbs({ root, path, onPathClick }: { root?: string; path: string;
   );
 }
 
-export function FileViewer({ file, onSessionClick, onPathClick, onFileClick, onSelectionChange, initialScrollTop = 0, onScrollTopChange, isVisible = true }: FileViewerProps) {
+export function FileViewer({ file, previewContent, onSessionClick, onPathClick, onFileClick, onSelectionChange, initialScrollTop = 0, onScrollTopChange, isVisible = true }: FileViewerProps) {
   const { t } = useI18n();
   const [isDownloading, setIsDownloading] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -246,11 +247,12 @@ export function FileViewer({ file, onSessionClick, onPathClick, onFileClick, onS
     });
   }, [file, onSelectionChange, lineSelectionEnabled, usesMarkdownViewer]);
 
+  const previewActive = !!previewContent;
   useEffect(() => {
     if (!onSelectionChange) {
       return;
     }
-    if (!file || file.encoding === "binary" || file.mime?.startsWith("image/")) {
+    if (previewActive || !file || file.encoding === "binary" || file.mime?.startsWith("image/")) {
       onSelectionChange(null);
       return;
     }
@@ -262,7 +264,7 @@ export function FileViewer({ file, onSessionClick, onPathClick, onFileClick, onS
       document.removeEventListener("selectionchange", handleSelectionChange);
       onSelectionChange(null);
     };
-  }, [file, onSelectionChange, updateSelection]);
+  }, [file, onSelectionChange, updateSelection, previewActive]);
 
   const [downloadToast, setDownloadToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -466,7 +468,8 @@ export function FileViewer({ file, onSessionClick, onPathClick, onFileClick, onS
         </div>
       </header>
 
-      <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflow: documentPreviewKind === "powerpoint" ? "hidden" : "auto", position: "relative", WebkitOverflowScrolling: "touch" }}>
+      {previewContent}
+      <div hidden={previewActive} ref={scrollRef} style={{ flex: 1, minHeight: 0, overflow: documentPreviewKind === "powerpoint" ? "hidden" : "auto", position: "relative", WebkitOverflowScrolling: "touch" }}>
         <div style={{ minWidth: "100%", height: documentPreviewKind === "powerpoint" ? "100%" : undefined, display: "block", background: "transparent" }}>
           {documentPreviewKind ? (
             <DocumentViewer key={`${file.root || ""}:${file.path}`} path={file.path} root={file.root} kind={documentPreviewKind} />
