@@ -20,7 +20,7 @@ func TestLinuxServiceReinstall(t *testing.T) {
 	if _, err := service.write(dir, "gateway", first, options, false); err != nil {
 		t.Fatal(err)
 	}
-	second := filepath.Join(dir, "install with spaces")
+	second := filepath.Join(dir, "user's install")
 	if _, err := service.write(dir, "gateway", second, []string{"-foreground"}, true); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestLinuxServiceReinstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{unitQuote(":" + second), unitQuote(options[2]), "Restart=on-failure", "WantedBy=default.target"} {
+	for _, want := range []string{unitQuote(":/usr/bin/env") + " " + unitQuote(second), unitQuote(options[2]), "Restart=on-failure", "WantedBy=default.target"} {
 		if !bytes.Contains(unit, []byte(want)) {
 			t.Fatalf("missing %q in unit", want)
 		}

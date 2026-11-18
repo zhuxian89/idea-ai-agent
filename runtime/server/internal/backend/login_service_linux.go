@@ -66,6 +66,8 @@ func (s linuxService) write(dir, kind, executable string, args []string, install
 		// Preserve the saved invocation when -install updates the executable.
 		_, line, found := strings.Cut(string(previous), "\nExecStart=")
 		line, _, _ = strings.Cut(line, "\n")
+		// 0.1.37 puts the executable first; newer units launch it through env.
+		line = strings.TrimPrefix(line, unitQuote(":/usr/bin/env")+" ")
 		binary, err := strconv.QuotedPrefix(line)
 		if !found || err != nil {
 			return false, fmt.Errorf("invalid ExecStart in %s", s.file)
@@ -76,7 +78,8 @@ func (s linuxService) write(dir, kind, executable string, args []string, install
 	var unit bytes.Buffer
 	fmt.Fprintf(&unit, "[Unit]\nDescription=Local AI Agent %s\n\n[Service]\n", kind)
 	// ':' disables systemd's shell-style dollar expansion in executable arguments.
-	fmt.Fprintf(&unit, "ExecStart=%s %s\nRestart=on-failure\nRestartSec=2s\n", unitQuote(":"+executable), arguments)
+	// systemd rejects quotes in the executable name, but accepts them in argv.
+	fmt.Fprintf(&unit, "ExecStart=%s %s %s\nRestart=on-failure\nRestartSec=2s\n", unitQuote(":/usr/bin/env"), unitQuote(executable), arguments)
 	if strings.ContainsAny(dir, "\r\n") {
 		return false, errors.New("systemd service directory contains a newline")
 	}
@@ -234,7 +237,14 @@ func UnloadLoginService(ctx context.Context, dir, kind string) error {
 	} else if err != nil {
 		return err
 	}
-	return systemctl(ctx, "stop", s.name)
+	err = systemctl(ctx, "stop", s.name)
+	// systemctl stop returns 5 for an unloaded unit, including a rejected
+	// 0.1.37 ExecStart. An upgrade can now replace that unit.
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 5 {
+		return nil
+	}
+	return err
 }
 
 func RemoveLoginService(ctx context.Context, dir, kind string) error {
