@@ -1,3 +1,9 @@
+# Linux 独立后台 0.1.36 测试版（2026-11-18）
+
+基于源码提交 `a2929f3` 从干净 checkout 交叉构建 Linux amd64 与 arm64。旧库 Kanban 全量及迁移 race、Go API 全量与配置导入导出专项 race、网页类型检查及生产构建通过。解包核对 ELF 架构、嵌入版本、Go 源码提交、安装器、Agent 定义，以及两个包各 305 个网页文件。单文件安装器内嵌 tar.gz 与公开压缩包一致。
+
+[预发布](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.36) 的 10 个附件匿名下载 HTTP 200，逐项比对本地和 GitHub SHA-256。固定在线安装入口指定 0.1.36 后在两个模拟 Linux 架构下完成真实下载、校验和解包，安装步骤由测试桩接管。默认正式版仍为 0.1.35，真实 Linux 安装与功能验收待用户测试。验证记录位于 `build/reports/release36-linux/`。
+
 # 导入 Agent 备份后直接切换（2026-11-18）
 
 ## 按 Agent 导出当前配置（2026-11-18）

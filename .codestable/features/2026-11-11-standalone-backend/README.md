@@ -1,8 +1,12 @@
 # 独立后端计划与进度
 
+## Linux 独立后台 0.1.36 测试版（2026-11-18）
+
+[Linux 0.1.36 测试版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.36) 已公开，支持 x64 与 ARM64。固定安装命令加 `--version 0.1.36` 即可安装；默认正式版为 0.1.35。10 个公开附件已下载校验，Linux 实机安装与使用待验收。
+
 ## 按 Agent 导出当前配置（2026-11-18，源码完成）
 
-文件侧栏的「导出 Agent 配置」支持多选已安装的 Agent，只有一个时自动勾选。点击导出即下载一个带配置文件和密钥的 JSON。已移除「添加 Agent 配置」入口。目标节点可通过「导入 Agent 配置」打开 JSON 并使用导入的配置。窄屏 Chromium 已完成两节点验证，尚未打包发布。[实现与验证](standalone-backend-implementation.md#按-agent-导出当前配置2026-11-18)
+文件侧栏的「导出 Agent 配置」支持多选已安装的 Agent，只有一个时自动勾选。点击导出即下载一个带配置文件和密钥的 JSON。已移除「添加 Agent 配置」入口。目标节点可通过「导入 Agent 配置」打开 JSON 并使用导入的配置。窄屏 Chromium 已完成两节点验证，已纳入 Linux 0.1.36 测试版。[实现与验证](standalone-backend-implementation.md#按-agent-导出当前配置2026-11-18)
 
 ## 导入 Agent 备份后直接切换（2026-11-18，源码完成）
 
@@ -10,7 +14,7 @@
 
 ## 独立后台 0.1.35 正式发布（2026-11-18）
 
-[独立后台 0.1.35](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.35) 是当前唯一公开的独立后台 Release，包含 Agent 配置导出与导入。两条固定安装命令在六个平台都选择 0.1.35，24 个公开附件和 Windows PowerShell 5.1 验证通过，已下架 0.1.34。[构建与发布证据](standalone-backend-implementation.md#独立后台-0135-正式发布2026-11-18)
+[独立后台 0.1.35](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.35) 是当前默认安装的独立后台正式版，包含 Agent 配置导出与导入。两条固定安装命令在六个平台都选择 0.1.35，24 个公开附件和 Windows PowerShell 5.1 验证通过，已下架 0.1.34。[构建与发布证据](standalone-backend-implementation.md#独立后台-0135-正式发布2026-11-18)
 
 ## Agent 配置导出与导入（2026-11-18，随 0.1.35 发布）
 

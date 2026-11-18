@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
+  - id: linux-36-agent-config-prerelease
+    description: Linux 0.1.36 已公开。x64 和 ARM64 安装器、压缩包及校验文件已复核，固定安装入口指定版本后校验通过。默认版为 0.1.35，待 Linux 实机验收。
+    status: done
   - id: export-current-agent-configs
     description: 直接多选已安装的 Agent，导出当前配置与密钥。一个 Agent 自动勾选，移除添加配置入口，兼容 v1 导入和覆盖确认。双节点 Chromium 验证通过，待发版。
     status: done
