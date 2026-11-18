@@ -42,12 +42,20 @@ export function parseConfigArchive(text: string): ConfigArchive {
   }
   // MindFS archives may include settings outside Agent configuration.
   const sections: ConfigArchive["sections"] = {};
+  let hasEmptyBackups = false;
   for (const { id } of CONFIG_CATEGORIES) {
     if (Object.prototype.hasOwnProperty.call(data.sections, id)) {
-      if (data.sections[id] === null) throw new Error("configTransfer.invalidFile");
-      sections[id] = data.sections[id];
+      const section = data.sections[id];
+      if (section === null) throw new Error("configTransfer.invalidFile");
+      if (id === "agent_backups" && isRecord(section) &&
+          (section.manifest === null || (Array.isArray(section.manifest) && section.manifest.length === 0))) {
+        hasEmptyBackups = true;
+        continue;
+      }
+      sections[id] = section;
     }
   }
+  if (hasEmptyBackups && !Object.keys(sections).length) throw new Error("configTransfer.emptyBackups");
   return { format: CONFIG_ARCHIVE_FORMAT, version: 1, created_at: data.created_at, platform: data.platform, sections };
 }
 

@@ -1,6 +1,11 @@
 import type { Messages } from "../types";
 
 export const enUS = {
+  "configTransfer.exportAgent": "Export Agent configuration",
+  "configTransfer.importAgent": "Import Agent configuration",
+  "configTransfer.exportAction": "Export",
+  "configTransfer.currentHint": "The file includes the current configuration and plaintext credentials of the selected Agents. Store it securely.",
+  "configTransfer.emptyCurrent": "No exportable configuration was found for {agent}.",
   "configTransfer.title": "Config export and import",
   "configTransfer.export": "Export",
   "configTransfer.import": "Import",
@@ -18,6 +23,8 @@ export const enUS = {
   "configTransfer.invalidFile": "Choose a configuration JSON exported by MindFS or Local AI Agent.",
   "configTransfer.tooLarge": "The settings file is too large. Maximum size: about 32 MB.",
   "configTransfer.emptyFile": "This file contains no supported Agent configurations.",
+  "configTransfer.emptyBackups": "This file contains no Agent configuration. Export it again on the source node.",
+  "configTransfer.noBackupsToExport": "This node has no Agent configuration backups. Save a backup first or clear this option.",
   "configTransfer.category.providers": "API providers",
   "configTransfer.description.providers": "Names, endpoints, protocols and models. Excludes API keys; does not activate provider settings in Agents.",
   "configTransfer.category.api_keys": "API keys",
@@ -29,6 +36,8 @@ export const enUS = {
   "configTransfer.close": "Close",
   "configTransfer.confirmOverwrite": "Some configurations already exist. Overwrite them and continue importing?",
   "configTransfer.imported": "Configuration imported. Switch to an imported backup or provider when ready.",
+  "configTransfer.useBackup": "Switch {agent} to “{name}”",
+  "configTransfer.agentNotInstalled": "Install {agent} on this node before switching to this backup.",
   "remote.unsavedFileLeave": "This project has unsaved file changes. Discard them and switch projects? Cancel to continue editing.",
   "remote.unsavedAttachmentsLeave": "This project has unsent attachments or a draft that could not be saved. Discard them and switch projects?",
   "remote.openFile": "Open file",

@@ -7,7 +7,14 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"mindfs/server/internal/apperr"
 )
+
+var errNoTransferBackups = &apperr.Error{
+	Code:    "config.no_agent_backups",
+	Message: "No saved Agent configuration backups",
+}
 
 type transferBackups struct {
 	Manifest []agentConfigManifestEntry `json:"manifest"`
@@ -20,6 +27,9 @@ func exportTransferBackups() (transferBackups, error) {
 	var err error
 	if backup.Manifest, err = readAgentConfigManifest(); err != nil {
 		return backup, err
+	}
+	if len(backup.Manifest) == 0 {
+		return backup, errNoTransferBackups
 	}
 	if backup.Env, err = readAgentEnvBackups(); err != nil {
 		return backup, err
@@ -66,6 +76,9 @@ func importTransferBackups(plan *configImportPlan, raw []byte) error {
 	var backup transferBackups
 	if err := decodeTransfer(raw, &backup); err != nil {
 		return err
+	}
+	if len(backup.Manifest) == 0 {
+		return errNoTransferBackups
 	}
 	manifest, err := readAgentConfigManifest()
 	if err != nil {
@@ -141,6 +154,7 @@ func importTransferBackups(plan *configImportPlan, raw []byte) error {
 		} else {
 			manifest = append(manifest, entry)
 		}
+		plan.backups = append(plan.backups, importedAgentBackup{ID: entry.ID, Agent: entry.Agent, Name: entry.Name})
 	}
 	if len(usedFiles) != len(backup.Files) {
 		return errors.New("unreferenced backup files")

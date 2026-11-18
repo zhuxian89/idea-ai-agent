@@ -3,6 +3,12 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
+  - id: export-current-agent-configs
+    description: 直接多选已安装的 Agent，导出当前配置与密钥。一个 Agent 自动勾选，移除添加配置入口，兼容 v1 导入和覆盖确认。双节点 Chromium 验证通过，待发版。
+    status: done
+  - id: agent-backup-import-switch
+    description: 在 0.1.35 复现空备份导入成功及非空 Codex 备份在 Claude 下列表为空。源码已拒绝空备份，导入完成直接打开并选中正确 Agent 的备份，缺少 Agent 时提示安装。窄屏 Chromium 两节点切换写入、Go API 全量与竞态、前端检查通过，待发版。
+    status: done
   - id: standalone-35-config-transfer-release
     description: 六平台独立后台 0.1.35 已发布。24 个公开附件、两个固定入口的六平台选版、Windows PowerShell 5.1 发布前后、旧库迁移和最终包跨节点导入导出验证通过。0.1.34 Release 已下架。
     status: done

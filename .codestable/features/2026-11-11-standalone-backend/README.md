@@ -1,5 +1,13 @@
 # 独立后端计划与进度
 
+## 按 Agent 导出当前配置（2026-11-18，源码完成）
+
+文件侧栏的「导出 Agent 配置」支持多选已安装的 Agent，只有一个时自动勾选。点击导出即下载一个带配置文件和密钥的 JSON。已移除「添加 Agent 配置」入口。目标节点可通过「导入 Agent 配置」打开 JSON 并使用导入的配置。窄屏 Chromium 已完成两节点验证，尚未打包发布。[实现与验证](standalone-backend-implementation.md#按-agent-导出当前配置2026-11-18)
+
+## 导入 Agent 备份后直接切换（2026-11-18，源码完成）
+
+导入成功后显示备份名称和所属 Agent，点击可打开切换页并选中这份备份。目标缺少对应 Agent 时显示安装提示，空备份文件会明确提示重新导出。0.1.35 的空备份成功提示和跨 Agent 空列表均在隔离环境复现。窄屏 Chromium 已验证导入、切换并写入目标配置，待发版。[实现与验证](standalone-backend-implementation.md#导入-agent-备份后直接切换2026-11-18)
+
 ## 独立后台 0.1.35 正式发布（2026-11-18）
 
 [独立后台 0.1.35](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.35) 是当前唯一公开的独立后台 Release，包含 Agent 配置导出与导入。两条固定安装命令在六个平台都选择 0.1.35，24 个公开附件和 Windows PowerShell 5.1 验证通过，已下架 0.1.34。[构建与发布证据](standalone-backend-implementation.md#独立后台-0135-正式发布2026-11-18)

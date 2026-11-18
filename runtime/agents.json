@@ -76,6 +76,7 @@
       "configBackup": {
         "fileSources": [
           "~/.gemini/.env",
+          "~/.gemini/oauth_creds.json",
           "~/.gemini/settings.json"
         ],
         "envKeys": [
@@ -128,6 +129,7 @@
       "command": "claude",
       "protocol": "claude-sdk",
       "configBackup": {
+        "fileSources": ["~/.claude/settings.json", "~/.claude/.credentials.json"],
         "envKeys": [
           "ANTHROPIC_AUTH_TOKEN",
           "ANTHROPIC_BASE_URL",
@@ -231,7 +233,9 @@
       "args": [
         "--acp"
       ],
-      "configBackup": {}
+      "configBackup": {
+        "envKeys": ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]
+      }
     },
     {
       "name": "kimi",
@@ -248,7 +252,9 @@
       "args": [
         "acp"
       ],
-      "configBackup": {}
+      "configBackup": {
+        "fileSources": ["~/.kimi/config.toml"]
+      }
     },
     {
       "name": "kiro",
@@ -325,7 +331,9 @@
       "args": [
         "--acp"
       ],
-      "configBackup": {}
+      "configBackup": {
+        "fileSources": ["~/.qwen/settings.json", "~/.qwen/oauth_creds.json"]
+      }
     },
     {
       "name": "qoder",
@@ -420,6 +428,7 @@
       "configBackup": {
         "fileSources": [
           "~/.hermes/auth.json",
+          "~/.hermes/.env",
           "~/.hermes/config.yaml"
         ]
       }

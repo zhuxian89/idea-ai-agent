@@ -11,6 +11,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/gorilla/websocket v1.5.1
 	github.com/hashicorp/yamux v0.1.2
+	github.com/pelletier/go-toml/v2 v2.2.2
 	github.com/roasbeef/claude-agent-sdk-go v0.0.0-20260423113330-380f586b1dc2
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3

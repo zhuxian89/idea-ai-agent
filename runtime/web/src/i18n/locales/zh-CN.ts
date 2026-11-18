@@ -1,4 +1,9 @@
 export const zhCN = {
+  "configTransfer.exportAgent": "导出 Agent 配置",
+  "configTransfer.importAgent": "导入 Agent 配置",
+  "configTransfer.exportAction": "导出",
+  "configTransfer.currentHint": "文件包含所选 Agent 的当前配置和明文密钥，请妥善保管。",
+  "configTransfer.emptyCurrent": "没有找到 {agent} 的可导出配置。",
   "configTransfer.title": "配置导出与导入",
   "configTransfer.export": "导出配置",
   "configTransfer.import": "导入配置",
@@ -16,6 +21,8 @@ export const zhCN = {
   "configTransfer.invalidFile": "请选择 MindFS 或 Local AI Agent 导出的配置 JSON。",
   "configTransfer.tooLarge": "配置文件过大，最大约 32 MB。",
   "configTransfer.emptyFile": "文件中没有可导入的 Agent 配置。",
+  "configTransfer.emptyBackups": "文件中没有 Agent 配置。请在来源节点重新导出。",
+  "configTransfer.noBackupsToExport": "此节点还没有 Agent 配置备份。请先保存备份，或取消勾选此项。",
   "configTransfer.category.providers": "API 供应商资料",
   "configTransfer.description.providers": "名称、接口地址、协议与模型列表；不含 API Key，不自动写入 Agent 生效配置。",
   "configTransfer.category.api_keys": "API Key",
@@ -27,6 +34,8 @@ export const zhCN = {
   "configTransfer.close": "关闭",
   "configTransfer.confirmOverwrite": "部分配置已存在，是否覆盖并导入？",
   "configTransfer.imported": "配置已导入。需要使用时，可在 Agent 配置切换中选择。",
+  "configTransfer.useBackup": "切换到 {agent} 的「{name}」",
+  "configTransfer.agentNotInstalled": "请先在此节点安装 {agent}，再切换这份备份。",
   "remote.unsavedFileLeave": "当前项目有未保存的文件修改。确定放弃修改并切换项目？取消可继续编辑。",
   "remote.unsavedAttachmentsLeave": "当前项目有尚未发送的附件，或草稿无法保存。确定放弃这些内容并切换项目？",
 

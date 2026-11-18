@@ -24,6 +24,7 @@ import {
 import { useI18n, type Locale, type MessageKey } from "../i18n";
 import { useRefreshSpin } from "../hooks";
 import { ConfigTransferDialog } from "./ConfigTransferDialog";
+import type { ImportedAgentBackup } from "../services/configTransfer";
 import { AgentMenuList } from "./AgentMenuList";
 import { AgentIcon } from "./AgentIcon";
 import { AgentSelector } from "./AgentSelector";
@@ -31,13 +32,10 @@ import { SymlinkBadge } from "./SymlinkBadge";
 import { RelayLocalServicesDialog } from "./RelayLocalServicesDialog";
 import { fetchAgentCatalog, fetchAgents, probeAgent as requestAgentProbe, type AgentStatus } from "../services/agents";
 import {
-  createAgentAPIProvider,
-  createAgentConfigBackup,
   deleteAgentAPIProvider,
   deleteAgentConfigBackup,
   fetchAgentAPIProviders,
   fetchAgentConfigBackups,
-  fetchAgentConfigDefaults,
   switchAgentAPIProvider,
   switchAgentConfig,
   type AgentAPIProvider,
@@ -182,22 +180,10 @@ type FileTreeProps = {
   onGoHome?: () => void;
 };
 
-type AgentConfigFlow = "backup" | "switch";
 type AgentConfigStep = "agent" | "details" | "confirm";
-type AgentConfigAddTab = "backup" | "api";
 type AgentConfigSwitchTab = "backup" | "api_provider";
 type AgentConfigSwitchSelection = { type: "backup" | "api_provider"; id: string };
 type AgentLifecycleCommandAction = "install" | "update";
-
-function isAgentConfigBackupConflict(error: unknown): boolean {
-  const maybeError = error as { status?: unknown; message?: unknown; payload?: { error?: unknown; message?: unknown } } | null;
-  if (!maybeError) {
-    return false;
-  }
-  const status = typeof maybeError.status === "number" ? maybeError.status : 0;
-  const message = String(maybeError.payload?.error || maybeError.payload?.message || maybeError.message || "");
-  return status === 409 || message === "backup already exists";
-}
 
 const fileTreeMenuButtonStyle: React.CSSProperties = {
   width: "100%",
@@ -511,110 +497,12 @@ function OnboardingGuideIcon() {
   );
 }
 
-function AgentConfigLineEditor({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
-  const refs = React.useRef<Array<HTMLTextAreaElement | null>>([]);
-  const lines = value.length > 0 ? value.split("\n") : [""];
-
-  const emitLines = React.useCallback((nextLines: string[]) => {
-    onChange(nextLines.join("\n"));
-  }, [onChange]);
-
-  React.useLayoutEffect(() => {
-    for (const node of refs.current) {
-      if (!node) {
-        continue;
-      }
-      node.style.height = "auto";
-      node.style.height = `${node.scrollHeight}px`;
-    }
-  }, [lines]);
-
-  return (
-    <div style={agentConfigLineEditorStyle}>
-      {lines.map((line, index) => (
-        <textarea
-          key={index}
-          ref={(node) => {
-            refs.current[index] = node;
-          }}
-          value={line}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            const nextLines = [...lines];
-            if (nextValue.includes("\n")) {
-              nextLines.splice(index, 1, ...nextValue.split(/\r?\n/));
-            } else {
-              nextLines[index] = nextValue;
-            }
-            emitLines(nextLines);
-          }}
-          onKeyDown={(event) => {
-            const target = event.currentTarget;
-            if (event.key === "Enter") {
-              event.preventDefault();
-              const before = line.slice(0, target.selectionStart);
-              const after = line.slice(target.selectionEnd);
-              const nextLines = [...lines];
-              nextLines.splice(index, 1, before, after);
-              emitLines(nextLines);
-              window.setTimeout(() => refs.current[index + 1]?.focus(), 0);
-              return;
-            }
-            if (event.key === "Backspace" && target.selectionStart === 0 && target.selectionEnd === 0 && index > 0) {
-              event.preventDefault();
-              const previous = lines[index - 1] || "";
-              const nextLines = [...lines];
-              nextLines.splice(index - 1, 2, previous + line);
-              emitLines(nextLines);
-              window.setTimeout(() => {
-                const previousNode = refs.current[index - 1];
-                previousNode?.focus();
-                previousNode?.setSelectionRange(previous.length, previous.length);
-              }, 0);
-              return;
-            }
-            if (event.key === "Delete" && target.selectionStart === line.length && target.selectionEnd === line.length && index < lines.length - 1) {
-              event.preventDefault();
-              const nextLines = [...lines];
-              nextLines.splice(index, 2, line + (lines[index + 1] || ""));
-              emitLines(nextLines);
-              window.setTimeout(() => {
-                const node = refs.current[index];
-                node?.focus();
-                node?.setSelectionRange(line.length, line.length);
-              }, 0);
-            }
-          }}
-          placeholder={lines.length === 1 && !line ? placeholder : ""}
-          rows={1}
-          style={agentConfigLineTextAreaStyle}
-        />
-      ))}
-    </div>
-  );
-}
-
 function AgentConfigPopover({
-  flow,
   step,
   agents,
   selectedAgent,
-  addTab,
   switchTab,
-  backupName,
-  fileSourcesBody,
-  envBody,
-  apiProviderName,
-  apiProviderBaseURL,
-  apiProviderAPIKey,
+
   backups,
   apiProviders,
   selectedBackupID,
@@ -625,36 +513,22 @@ function AgentConfigPopover({
   restartResult,
   error,
   onChooseAgent,
-  onAddTabChange,
   onSwitchTabChange,
-  onBackupNameChange,
-  onFileSourcesChange,
-  onEnvBodyChange,
-  onAPIProviderNameChange,
-  onAPIProviderBaseURLChange,
-  onAPIProviderAPIKeyChange,
+
   onSelectedBackupChange,
   onSelectedAPIProviderChange,
   onDeleteBackup,
   onDeleteAPIProvider,
-  onSave,
   onSwitch,
   onRestartAgent,
   onConfirm,
   onCancel,
 }: {
-  flow: AgentConfigFlow;
   step: AgentConfigStep;
   agents: AgentStatus[];
   selectedAgent: string;
-  addTab: AgentConfigAddTab;
   switchTab: AgentConfigSwitchTab;
-  backupName: string;
-  fileSourcesBody: string;
-  envBody: string;
-  apiProviderName: string;
-  apiProviderBaseURL: string;
-  apiProviderAPIKey: string;
+
   backups: AgentConfigBackup[];
   apiProviders: AgentAPIProvider[];
   selectedBackupID: string;
@@ -665,34 +539,21 @@ function AgentConfigPopover({
   restartResult: null | boolean;
   error: string;
   onChooseAgent: (name: string) => void;
-  onAddTabChange: (tab: AgentConfigAddTab) => void;
   onSwitchTabChange: (tab: AgentConfigSwitchTab) => void;
-  onBackupNameChange: (value: string) => void;
-  onFileSourcesChange: (value: string) => void;
-  onEnvBodyChange: (value: string) => void;
-  onAPIProviderNameChange: (value: string) => void;
-  onAPIProviderBaseURLChange: (value: string) => void;
-  onAPIProviderAPIKeyChange: (value: string) => void;
+
   onSelectedBackupChange: (value: string) => void;
   onSelectedAPIProviderChange: (value: string) => void;
   onDeleteBackup: (id: string) => void;
   onDeleteAPIProvider: (id: string) => void;
-  onSave: () => void;
   onSwitch: () => void;
   onRestartAgent?: (agentName: string) => void | Promise<void>;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
-  const agentTitle = flow === "backup"
-    ? t("agentConfig.chooseBackupAgent")
-    : t("agentConfig.chooseSwitchAgent");
-  const confirmButtonLabel = flow === "backup" ? t("agentConfig.continueBackup") : t("agentConfig.continueSwitch");
   const selectedAgentStatus = agents.find((item) => item.name === selectedAgent);
   const supportsAPIProvider = Boolean(selectedAgentStatus?.supports_api_provider_switch);
-  const addTabs: AgentConfigAddTab[] = supportsAPIProvider ? ["backup", "api"] : ["backup"];
   const switchTabs: AgentConfigSwitchTab[] = supportsAPIProvider ? ["backup", "api_provider"] : ["backup"];
-  const effectiveAddTab: AgentConfigAddTab = supportsAPIProvider ? addTab : "backup";
   const effectiveSwitchTab: AgentConfigSwitchTab = supportsAPIProvider ? switchTab : "backup";
   return (
     <div
@@ -710,7 +571,7 @@ function AgentConfigPopover({
     >
       {step === "agent" ? (
         <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>
-          {agentTitle}
+          {t("agentConfig.chooseSwitchAgent")}
         </div>
       ) : null}
       {step === "agent" ? (
@@ -727,7 +588,7 @@ function AgentConfigPopover({
               renderEnd={(agent) => {
                 const name = String(agent.last_config_selection?.name || "").trim();
                 const restarting = agent.name === restartingAgent;
-                if (flow !== "switch" || !onRestartAgent) {
+                if (!onRestartAgent) {
                   if (!name) {
                     return null;
                   }
@@ -805,103 +666,7 @@ function AgentConfigPopover({
               {t("common.cancel")}
             </button>
             <button type="button" disabled={busy} onClick={onConfirm} style={agentConfigPrimaryButtonStyle(busy)}>
-              {confirmButtonLabel}
-            </button>
-          </div>
-        </>
-      ) : flow === "backup" ? (
-        <>
-          {addTabs.length > 1 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-              {addTabs.map((tab) => {
-                const active = effectiveAddTab === tab;
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onAddTabChange(tab)}
-                    style={{
-                      border: "1px solid var(--border-color)",
-                      background: active ? "var(--selection-bg)" : "transparent",
-                      color: active ? "var(--accent-color)" : "var(--text-primary)",
-                      borderRadius: "8px",
-                      padding: "7px 8px",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      cursor: busy ? "default" : "pointer",
-                    }}
-                  >
-                    {tab === "backup" ? t("agentConfig.backup") : t("agentConfig.apiProvider")}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-          {effectiveAddTab === "backup" ? (
-            <>
-              <div style={agentConfigFieldStyle}>
-                <label style={agentConfigLabelStyle}>{t("agentConfig.backupName")}</label>
-                <input
-                  value={backupName}
-                  onChange={(event) => onBackupNameChange(event.target.value)}
-                  placeholder="work"
-                  style={agentConfigInputStyle}
-                />
-              </div>
-              <div style={agentConfigFieldStyle}>
-                <label style={agentConfigLabelStyle}>{t("agentConfig.fileSources")}</label>
-                <AgentConfigLineEditor
-                  value={fileSourcesBody}
-                  onChange={onFileSourcesChange}
-                  placeholder={t("agentConfig.fileSourcePlaceholder")}
-                />
-              </div>
-              <div style={agentConfigFieldStyle}>
-                <label style={agentConfigLabelStyle}>{t("agentConfig.env")}</label>
-                <AgentConfigLineEditor
-                  value={envBody}
-                  onChange={onEnvBodyChange}
-                  placeholder={t("agentConfig.envPlaceholder")}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={agentConfigFieldStyle}>
-                <label style={agentConfigLabelStyle}>{t("agentConfig.providerName")}</label>
-                <input
-                  value={apiProviderName}
-                  onChange={(event) => onAPIProviderNameChange(event.target.value)}
-                  style={agentConfigInputStyle}
-                />
-              </div>
-              <div style={agentConfigFieldStyle}>
-                <label style={agentConfigLabelStyle}>Base URL</label>
-                <input
-                  value={apiProviderBaseURL}
-                  onChange={(event) => onAPIProviderBaseURLChange(event.target.value)}
-                  style={agentConfigInputStyle}
-                />
-              </div>
-              <div style={agentConfigFieldStyle}>
-                <label style={agentConfigLabelStyle}>API Key</label>
-                <input
-                  value={apiProviderAPIKey}
-                  type="password"
-                  onChange={(event) => onAPIProviderAPIKeyChange(event.target.value)}
-                  placeholder="sk-..."
-                  style={agentConfigInputStyle}
-                />
-              </div>
-            </>
-          )}
-          <div style={agentConfigActionRowStyle}>
-            <button type="button" disabled={busy} onClick={onCancel} style={agentConfigSecondaryButtonStyle(busy)}>
-              {t("common.cancel")}
-            </button>
-            <button type="button" disabled={busy} onClick={onSave} style={agentConfigPrimaryButtonStyle(busy)}>
-              {effectiveAddTab === "backup" ? t("common.save") : t("agentConfig.validateAndSave")}
+              {t("agentConfig.continueSwitch")}
             </button>
           </div>
         </>
@@ -1211,58 +976,6 @@ function AgentLifecyclePopover({
   );
 }
 
-const agentConfigFieldStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "6px",
-};
-
-const agentConfigLabelStyle: React.CSSProperties = {
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "var(--text-secondary)",
-};
-
-const agentConfigInputStyle: React.CSSProperties = {
-  width: "100%",
-  borderRadius: "8px",
-  border: "1px solid var(--border-color)",
-  background: "transparent",
-  color: "var(--text-primary)",
-  fontSize: "12px",
-  padding: "8px 10px",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const agentConfigLineEditorStyle: React.CSSProperties = {
-  ...agentConfigInputStyle,
-  minHeight: "42px",
-  maxHeight: "260px",
-  overflow: "auto",
-  padding: "6px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px",
-};
-
-const agentConfigLineTextAreaStyle: React.CSSProperties = {
-  width: "100%",
-  border: "none",
-  borderRadius: "6px",
-  background: "rgba(148, 163, 184, 0.16)",
-  color: "var(--text-primary)",
-  fontSize: "12px",
-  padding: "4px 8px",
-  outline: "none",
-  boxSizing: "border-box",
-  minHeight: "28px",
-  resize: "none",
-  lineHeight: "20px",
-  overflow: "hidden",
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-};
-
 const agentConfigHintStyle: React.CSSProperties = {
   borderRadius: "8px",
   padding: "8px 10px",
@@ -1425,19 +1138,12 @@ export function FileTree({
     bootstrapService.canUseProtectedAPI(),
   );
   const [activeRelayTipIndex, setActiveRelayTipIndex] = React.useState(0);
-  const [configTransferOpen, setConfigTransferOpen] = React.useState(false);
-  const [agentConfigFlow, setAgentConfigFlow] = React.useState<AgentConfigFlow | null>(null);
+  const [transferMode, setTransferMode] = React.useState<"export" | "import" | null>(null);
+  const [configSwitchOpen, setConfigSwitchOpen] = React.useState(false);
   const [agentConfigStep, setAgentConfigStep] = React.useState<AgentConfigStep>("agent");
   const [agentConfigAgents, setAgentConfigAgents] = React.useState<AgentStatus[]>([]);
   const [agentConfigAgent, setAgentConfigAgent] = React.useState("");
-  const [agentConfigAddTab, setAgentConfigAddTab] = React.useState<AgentConfigAddTab>("backup");
   const [agentConfigSwitchTab, setAgentConfigSwitchTab] = React.useState<AgentConfigSwitchTab>("backup");
-  const [agentConfigName, setAgentConfigName] = React.useState("");
-  const [agentConfigFileSourcesBody, setAgentConfigFileSourcesBody] = React.useState("");
-  const [agentConfigEnvBody, setAgentConfigEnvBody] = React.useState("");
-  const [agentAPIProviderName, setAgentAPIProviderName] = React.useState("");
-  const [agentAPIProviderBaseURL, setAgentAPIProviderBaseURL] = React.useState("");
-  const [agentAPIProviderAPIKey, setAgentAPIProviderAPIKey] = React.useState("");
   const [agentConfigBackups, setAgentConfigBackups] = React.useState<AgentConfigBackup[]>([]);
   const [agentAPIProviders, setAgentAPIProviders] = React.useState<AgentAPIProvider[]>([]);
   const [selectedAgentConfigID, setSelectedAgentConfigID] = React.useState("");
@@ -1878,7 +1584,7 @@ export function FileTree({
 
   React.useEffect(() => {
     if (agentMenuRequest === null) return;
-    setAgentConfigFlow(null);
+    setConfigSwitchOpen(false);
     setAgentLifecycleOpen(false);
     setIsAppearanceMenuOpen(false);
     setIsLocaleMenuOpen(false);
@@ -1922,61 +1628,43 @@ export function FileTree({
     };
   }, [isMenuOpen]);
 
-  const chooseAgentForConfig = React.useCallback(async (agentName: string, flow = agentConfigFlow, agents = agentConfigAgents) => {
+  const chooseAgentForConfig = React.useCallback(async (agentName: string, agents = agentConfigAgents, backupID?: string) => {
     setAgentConfigAgent(agentName);
     setAgentConfigError("");
     setAgentConfigBusy(true);
     try {
       const selectedAgent = agents.find((item) => item.name === agentName);
       const supportsAPIProvider = Boolean(selectedAgent?.supports_api_provider_switch);
-      if (flow === "backup") {
-        const defaults = await fetchAgentConfigDefaults(agentName);
-        setAgentConfigName("");
-        setAgentConfigFileSourcesBody((defaults.file_sources || []).join("\n"));
-        setAgentConfigEnvBody((defaults.env_keys || []).map((key) => `${key}=`).join("\n"));
-        setAgentAPIProviderName("");
-        setAgentAPIProviderBaseURL("");
-        setAgentAPIProviderAPIKey("");
-        setAgentConfigAddTab("backup");
-        setAgentConfigStep("details");
-      } else {
-        const [backups, providers] = await Promise.all([
-          fetchAgentConfigBackups(agentName),
-          supportsAPIProvider ? fetchAgentAPIProviders(agentName) : Promise.resolve([]),
-        ]);
-        setAgentConfigBackups(backups);
-        setAgentAPIProviders(providers);
-        setSelectedAgentConfigID("");
-        const preferredProvider = providers.find((provider) => agentConfigPreferredProviderIDs.includes(provider.id));
-        setSelectedAgentAPIProviderID(preferredProvider?.id || "");
-        setAgentConfigSwitchSelection(preferredProvider ? { type: "api_provider", id: preferredProvider.id } : null);
-        setAgentConfigSwitchTab(supportsAPIProvider && selectedAgent?.last_config_selection?.type === "api_provider" ? "api_provider" : "backup");
-        if (supportsAPIProvider && agentConfigPreferredProviderIDs.length > 0) {
-          setAgentConfigSwitchTab("api_provider");
-        }
-        setAgentConfigStep("details");
-      }
+      const [backups, providers] = await Promise.all([
+        fetchAgentConfigBackups(agentName),
+        supportsAPIProvider ? fetchAgentAPIProviders(agentName) : Promise.resolve([]),
+      ]);
+      setAgentConfigBackups(backups);
+      setAgentAPIProviders(providers);
+      const preferredBackup = backups.find((backup) => backup.id === backupID);
+      setSelectedAgentConfigID(preferredBackup?.id || "");
+      const preferredProvider = preferredBackup ? undefined : providers.find((provider) => agentConfigPreferredProviderIDs.includes(provider.id));
+      setSelectedAgentAPIProviderID(preferredProvider?.id || "");
+      setAgentConfigSwitchSelection(preferredBackup ? { type: "backup", id: preferredBackup.id }
+        : preferredProvider ? { type: "api_provider", id: preferredProvider.id } : null);
+      const showProviders = !preferredBackup && supportsAPIProvider &&
+        (selectedAgent?.last_config_selection?.type === "api_provider" || agentConfigPreferredProviderIDs.length > 0);
+      setAgentConfigSwitchTab(showProviders ? "api_provider" : "backup");
+      setAgentConfigStep("details");
     } catch (error) {
       setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.loadConfigFailed"));
     } finally {
       setAgentConfigBusy(false);
     }
-  }, [agentConfigAgents, agentConfigFlow, agentConfigPreferredProviderIDs, t]);
+  }, [agentConfigAgents, agentConfigPreferredProviderIDs, t]);
 
-  const openAgentConfigFlow = React.useCallback((flow: AgentConfigFlow, agentName?: string) => {
-	setIdleReleaseOpen(false);
+  const openAgentConfigFlow = React.useCallback((backup?: ImportedAgentBackup) => {
+    setIdleReleaseOpen(false);
     setAgentLifecycleOpen(false);
-    setAgentConfigFlow(flow);
+    setConfigSwitchOpen(true);
     setAgentConfigStep("agent");
     setAgentConfigAgent("");
-    setAgentConfigAddTab("backup");
     setAgentConfigSwitchTab("backup");
-    setAgentConfigName("");
-    setAgentConfigFileSourcesBody("");
-    setAgentConfigEnvBody("");
-    setAgentAPIProviderName("");
-    setAgentAPIProviderBaseURL("");
-    setAgentAPIProviderAPIKey("");
     setAgentConfigBackups([]);
     setAgentAPIProviders([]);
     setSelectedAgentConfigID("");
@@ -1992,7 +1680,11 @@ export function FileTree({
       .then((items) => {
         const installed = items.filter((item) => item.installed);
         setAgentConfigAgents(installed);
-        if (agentName) return chooseAgentForConfig(agentName, flow, installed);
+        if (backup) {
+          const installedAgent = installed.find((agent) => agent.name === backup.agent);
+          if (installedAgent) return chooseAgentForConfig(installedAgent.name, installed, backup.id);
+          setAgentConfigError(t("configTransfer.agentNotInstalled", { agent: backup.agent }));
+        }
       })
       .catch((error) => {
         setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.loadAgentFailed"));
@@ -2001,8 +1693,8 @@ export function FileTree({
   }, [chooseAgentForConfig, t]);
 
   const openSessionNaming = React.useCallback(() => {
-	setIdleReleaseOpen(false);
-    setAgentConfigFlow(null);
+    setIdleReleaseOpen(false);
+    setConfigSwitchOpen(false);
     setAgentLifecycleOpen(false);
     setRelayServicesOpen(false);
     setIsMenuOpen(false);
@@ -2042,7 +1734,7 @@ export function FileTree({
   }, [sessionNamingAgent, sessionNamingBusy, sessionNamingModel, t]);
 
   const openIdleSessionResourceRelease = React.useCallback(() => {
-    setAgentConfigFlow(null);
+    setConfigSwitchOpen(false);
     setAgentLifecycleOpen(false);
     setRelayServicesOpen(false);
     setSessionNamingOpen(false);
@@ -2086,17 +1778,10 @@ export function FileTree({
       .map((id) => String(id || "").trim())
       .filter(Boolean);
     setAgentLifecycleOpen(false);
-    setAgentConfigFlow("switch");
+    setConfigSwitchOpen(true);
     setAgentConfigStep("agent");
     setAgentConfigAgent("");
-    setAgentConfigAddTab("backup");
     setAgentConfigSwitchTab("api_provider");
-    setAgentConfigName("");
-    setAgentConfigFileSourcesBody("");
-    setAgentConfigEnvBody("");
-    setAgentAPIProviderName("");
-    setAgentAPIProviderBaseURL("");
-    setAgentAPIProviderAPIKey("");
     setAgentConfigBackups([]);
     setAgentAPIProviders([]);
     setSelectedAgentConfigID("");
@@ -2119,7 +1804,7 @@ export function FileTree({
   }, [agentConfigSwitchRequest?.nonce, t]);
 
   const closeAgentConfigFlow = React.useCallback(() => {
-    setAgentConfigFlow(null);
+    setConfigSwitchOpen(false);
     setAgentConfigStep("agent");
     setAgentConfigError("");
     setAgentConfigConfirmMessage("");
@@ -2142,7 +1827,7 @@ export function FileTree({
   }, [t]);
 
   const openAgentLifecycleFlow = React.useCallback(() => {
-    setAgentConfigFlow(null);
+    setConfigSwitchOpen(false);
     setAgentLifecycleOpen(true);
     setIsMenuOpen(false);
     loadAgentLifecycleCatalog();
@@ -2170,7 +1855,7 @@ export function FileTree({
   }, [agentConfigRestartingAgent, agentLifecycleAgents, agentRestartResultAgent, t]);
 
   React.useEffect(() => {
-    if (agentSettingsOnly || !agentConfigFlow || agentConfigStep !== "agent") {
+    if (agentSettingsOnly || !configSwitchOpen || agentConfigStep !== "agent") {
       return;
     }
     const handlePointerDown = (event: MouseEvent) => {
@@ -2180,7 +1865,7 @@ export function FileTree({
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [agentSettingsOnly, agentConfigFlow, agentConfigStep, closeAgentConfigFlow]);
+  }, [agentSettingsOnly, configSwitchOpen, agentConfigStep, closeAgentConfigFlow]);
 
   React.useEffect(() => {
     if (agentSettingsOnly || !agentLifecycleOpen) {
@@ -2283,65 +1968,6 @@ export function FileTree({
     setAgentProbingAgent("");
     setAgentProbeAcceptedAgent("");
   }, [agentLifecycleAgents, agentProbeAcceptedAgent, agentProbingAgent]);
-
-  const saveAgentConfigBackup = React.useCallback(async (overwrite = false) => {
-    if (!agentConfigName.trim()) {
-      setAgentConfigError(t("agentConfig.backupNameRequired"));
-      return;
-    }
-    const fileSources = agentConfigFileSourcesBody.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const envLines = agentConfigEnvBody.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    setAgentConfigBusy(true);
-    setAgentConfigError("");
-    try {
-      await createAgentConfigBackup({
-        agent: agentConfigAgent,
-        name: agentConfigName.trim(),
-        fileSources,
-        envLines,
-        overwrite,
-      });
-      closeAgentConfigFlow();
-    } catch (error) {
-      if (isAgentConfigBackupConflict(error) && !overwrite) {
-        setAgentConfigConfirmMessage(t("agentConfig.backupExistsOverwrite"));
-        setAgentConfigStep("confirm");
-        return;
-      }
-      setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.saveBackupFailed"));
-    } finally {
-      setAgentConfigBusy(false);
-    }
-  }, [agentConfigAgent, agentConfigEnvBody, agentConfigFileSourcesBody, agentConfigName, closeAgentConfigFlow, t]);
-
-  const saveAgentAPIProvider = React.useCallback(async () => {
-    if (!agentAPIProviderName.trim()) {
-      setAgentConfigError(t("agentConfig.providerNameRequired"));
-      return;
-    }
-    if (!agentAPIProviderBaseURL.trim()) {
-      setAgentConfigError(t("agentConfig.baseURLRequired"));
-      return;
-    }
-    if (!agentAPIProviderAPIKey.trim()) {
-      setAgentConfigError(t("agentConfig.apiKeyRequired"));
-      return;
-    }
-    setAgentConfigBusy(true);
-    setAgentConfigError("");
-    try {
-      await createAgentAPIProvider({
-        name: agentAPIProviderName.trim(),
-        baseUrl: agentAPIProviderBaseURL.trim(),
-        apiKey: agentAPIProviderAPIKey.trim(),
-      });
-      closeAgentConfigFlow();
-    } catch (error) {
-      setAgentConfigError(error instanceof Error ? error.message : t("agentConfig.saveProviderFailed"));
-    } finally {
-      setAgentConfigBusy(false);
-    }
-  }, [agentAPIProviderAPIKey, agentAPIProviderBaseURL, agentAPIProviderName, closeAgentConfigFlow, t]);
 
   const runAgentConfigSwitch = React.useCallback(async (confirmOverwrite = false) => {
     if (!agentConfigSwitchSelection) {
@@ -2616,7 +2242,7 @@ export function FileTree({
     </ul>
   );
 
-  const agentConfiguration = agentConfigFlow ? (
+  const agentConfiguration = configSwitchOpen ? (
           <div
             ref={agentConfigPopoverRef}
             style={{
@@ -2628,18 +2254,10 @@ export function FileTree({
             }}
           >
             <AgentConfigPopover
-              flow={agentConfigFlow}
               step={agentConfigStep}
               agents={agentConfigAgents}
               selectedAgent={agentConfigAgent}
-              addTab={agentConfigAddTab}
               switchTab={agentConfigSwitchTab}
-              backupName={agentConfigName}
-              fileSourcesBody={agentConfigFileSourcesBody}
-              envBody={agentConfigEnvBody}
-              apiProviderName={agentAPIProviderName}
-              apiProviderBaseURL={agentAPIProviderBaseURL}
-              apiProviderAPIKey={agentAPIProviderAPIKey}
               backups={agentConfigBackups}
               apiProviders={agentAPIProviders}
               selectedBackupID={selectedAgentConfigID}
@@ -2652,14 +2270,7 @@ export function FileTree({
               onChooseAgent={(name) => {
                 void chooseAgentForConfig(name);
               }}
-              onAddTabChange={setAgentConfigAddTab}
               onSwitchTabChange={setAgentConfigSwitchTab}
-              onBackupNameChange={setAgentConfigName}
-              onFileSourcesChange={setAgentConfigFileSourcesBody}
-              onEnvBodyChange={setAgentConfigEnvBody}
-              onAPIProviderNameChange={setAgentAPIProviderName}
-              onAPIProviderBaseURLChange={setAgentAPIProviderBaseURL}
-              onAPIProviderAPIKeyChange={setAgentAPIProviderAPIKey}
               onSelectedBackupChange={selectAgentConfigBackup}
               onSelectedAPIProviderChange={selectAgentAPIProvider}
               onDeleteBackup={(id) => {
@@ -2668,22 +2279,11 @@ export function FileTree({
               onDeleteAPIProvider={(id) => {
                 void deleteSelectedAgentAPIProvider(id);
               }}
-              onSave={() => {
-                if (agentConfigAddTab === "api") {
-                  void saveAgentAPIProvider();
-                  return;
-                }
-                void saveAgentConfigBackup();
-              }}
               onSwitch={() => {
                 void runAgentConfigSwitch(false);
               }}
-              onRestartAgent={agentConfigFlow === "switch" ? restartAgentFromConfigList : undefined}
+              onRestartAgent={restartAgentFromConfigList}
               onConfirm={() => {
-                if (agentConfigFlow === "backup") {
-                  void saveAgentConfigBackup(true);
-                  return;
-                }
                 void runAgentConfigSwitch(true);
               }}
               onCancel={closeAgentConfigFlow}
@@ -2845,33 +2445,23 @@ export function FileTree({
 
                 <button
                   type="button"
-                  onClick={() => openAgentConfigFlow("backup")}
-                  style={fileTreeMenuButtonStyle}
-                >
-                  <ConfigArchiveIcon />
-                  <span>{t("fileTree.addAgentConfig")}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openAgentConfigFlow("switch")}
+                  onClick={() => openAgentConfigFlow()}
                   style={fileTreeMenuButtonStyle}
                 >
                   <ConfigSwitchIcon />
                   <span>{t("fileTree.switchAgentConfig")}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfigTransferOpen(true);
+                {(["export", "import"] as const).map(mode => (
+                  <button key={mode} type="button" style={fileTreeMenuButtonStyle} onClick={() => {
+                    setTransferMode(mode);
                     setIsMenuOpen(false);
                     closeAgentConfigFlow();
                     closeAgentLifecycleFlow();
-                  }}
-                  style={fileTreeMenuButtonStyle}
-                >
-                  <ConfigArchiveIcon />
-                  <span>{t("configTransfer.title")}</span>
-                </button>
+                  }}>
+                    <ConfigArchiveIcon />
+                    <span>{t(mode === "export" ? "configTransfer.exportAgent" : "configTransfer.importAgent")}</span>
+                  </button>
+                ))}
                 <button
                   type="button"
                   onClick={openAgentLifecycleFlow}
@@ -3268,9 +2858,12 @@ export function FileTree({
 
         </div>
         {agentConfiguration}
-        {configTransferOpen && (
+        {transferMode && (
           <div style={{ position: "absolute", top: "calc(100% + 6px)", left: "8px", right: "3px", zIndex: 40 }}>
-            <ConfigTransferDialog onClose={() => setConfigTransferOpen(false)} />
+            <ConfigTransferDialog key={transferMode} mode={transferMode} onClose={() => setTransferMode(null)} onUseBackup={(backup) => {
+              setTransferMode(null);
+              openAgentConfigFlow(backup);
+            }} />
           </div>
         )}
         {idleReleaseOpen ? (

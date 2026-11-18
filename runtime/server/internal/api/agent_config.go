@@ -391,25 +391,67 @@ func switchAgentConfig(req agentConfigSwitchRequest, app *AppContext) (agentConf
 	if len(entry.Sources) == 0 && len(entry.EnvKeys) == 0 {
 		return agentConfigManifestEntry{}, false, errors.New("backup has no config content")
 	}
+	var env map[string]string
+	if len(entry.EnvKeys) > 0 {
+		envBackups, err := readAgentEnvBackups()
+		if err != nil {
+			return agentConfigManifestEntry{}, false, err
+		}
+		lines, ok := envBackups[entry.ID]
+		if !ok {
+			return agentConfigManifestEntry{}, false, errors.New("environment backup not found")
+		}
+		parsedEnv, _, err := envLinesToMap(lines)
+		if err != nil {
+			return agentConfigManifestEntry{}, false, err
+		}
+		env = parsedEnv
+	}
 	needsConfirm := false
+	var localCodexDir string
+	if entry.Agent == "codex" && env["CODEX_HOME"] == "" {
+		var cfg agent.Config
+		if app != nil && app.GetAgentPool() != nil {
+			cfg = app.GetAgentPool().Config()
+		} else {
+			cfg, err = agent.LoadConfig("")
+			if err != nil {
+				return agentConfigManifestEntry{}, false, err
+			}
+		}
+		def, _ := cfg.GetAgent("codex")
+		localCodexDir = codexConfigHome(def.Env)
+		if dir := def.Env["CODEX_HOME"]; dir != "" {
+			if env == nil {
+				env = map[string]string{}
+			}
+			env["CODEX_HOME"] = dir
+		}
+	}
 	destinations := make([]string, len(entry.Sources))
 	for i, source := range entry.Sources {
 		sourcePath, err := expandUserPath(source.SourcePath)
 		if err != nil {
 			return agentConfigManifestEntry{}, false, err
 		}
-		destinations[i] = sourcePath
 		if strings.HasPrefix(source.SourcePath, "~/") {
 			// Imported files declare portable destinations. Show them before any write.
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return agentConfigManifestEntry{}, false, err
 			}
+			if localCodexDir != "" && isPortableCodexFile(source.SourcePath) {
+				sourcePath = filepath.Join(localCodexDir, filepath.Base(sourcePath))
+				entry.Sources[i].SourcePath = sourcePath
+				// This directory comes from the target runtime, never from the imported file.
+				home = localCodexDir
+			}
 			if err := checkTransferPath(home, sourcePath); err != nil {
 				return agentConfigManifestEntry{}, false, err
 			}
 			needsConfirm = true
 		}
+		destinations[i] = sourcePath
 		if _, err := os.Stat(sourcePath); err == nil {
 			needsConfirm = true
 		} else if !os.IsNotExist(err) {
@@ -427,22 +469,6 @@ func switchAgentConfig(req agentConfigSwitchRequest, app *AppContext) (agentConf
 		if err := copyFile(filepath.Join(configRoot, filepath.FromSlash(source.BackupPath)), destinations[i]); err != nil {
 			return agentConfigManifestEntry{}, false, err
 		}
-	}
-	var env map[string]string
-	if len(entry.EnvKeys) > 0 {
-		envBackups, err := readAgentEnvBackups()
-		if err != nil {
-			return agentConfigManifestEntry{}, false, err
-		}
-		lines, ok := envBackups[entry.ID]
-		if !ok {
-			return agentConfigManifestEntry{}, false, errors.New("environment backup not found")
-		}
-		parsedEnv, _, err := envLinesToMap(lines)
-		if err != nil {
-			return agentConfigManifestEntry{}, false, err
-		}
-		env = parsedEnv
 	}
 	if err := updateAgentEnvConfig(entry.Agent, env); err != nil {
 		return agentConfigManifestEntry{}, false, err

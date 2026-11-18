@@ -2,10 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"mindfs/server/internal/agent"
 )
 
 func transferTestConfigDir(t *testing.T) string {
@@ -13,6 +16,7 @@ func transferTestConfigDir(t *testing.T) string {
 	dir := t.TempDir()
 	t.Setenv("IDE_AGENT_DATA_DIR", dir)
 	t.Setenv("MINDFS_AGENTS_CONFIG", "")
+	t.Setenv("CODEX_HOME", "")
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
 	return dir
@@ -99,7 +103,7 @@ func TestAgentConfigurationTransferRoundTrip(t *testing.T) {
 	}
 	req := configImportRequest{Archive: archive, Categories: []string{"agent_backups", "custom_agents", "providers", "api_keys"}}
 	result, err := importAgentConfiguration(req)
-	if err != nil || !result.NeedsConfirm {
+	if err != nil || !result.NeedsConfirm || len(result.Backups) != 0 {
 		t.Fatalf("expected matching provider to require a choice: %+v, %v", result, err)
 	}
 	if items, err := readAgentConfigManifest(); err != nil || len(items) != 0 {
@@ -109,6 +113,9 @@ func TestAgentConfigurationTransferRoundTrip(t *testing.T) {
 	result, err = importAgentConfiguration(req)
 	if err != nil || result.NeedsConfirm || !result.RestartRequired {
 		t.Fatalf("import: %+v, %v", result, err)
+	}
+	if len(result.Backups) != 1 || result.Backups[0] != (importedAgentBackup{ID: backup.ID, Agent: "codex", Name: "portable"}) {
+		t.Fatalf("expected the imported backup to be available for switching: %+v", result.Backups)
 	}
 	items, err := readAgentConfigManifest()
 	if err != nil || len(items) != 1 || items[0].ID != backup.ID {
@@ -139,6 +146,23 @@ func TestAgentConfigurationTransferRoundTrip(t *testing.T) {
 	}
 	if data, err := os.ReadFile(targetFile); err != nil || string(data) != "model = 'example'" {
 		t.Fatalf("imported config was not written to destination home: %v", err)
+	}
+}
+
+func TestAgentConfigurationTransferRejectsEmptyBackupArchive(t *testing.T) {
+	dir := transferTestConfigDir(t)
+	if _, err := exportAgentConfiguration(map[string]bool{"agent_backups": true}); !errors.Is(err, errNoTransferBackups) {
+		t.Fatalf("exported an empty backup: %v", err)
+	}
+	req := configImportRequest{Categories: []string{"agent_backups"}, Archive: configArchive{
+		Format: transferFormat, Version: 1,
+		Sections: map[string]json.RawMessage{"agent_backups": json.RawMessage(`{"manifest":[],"env":{},"files":{}}`)},
+	}}
+	if _, err := importAgentConfiguration(req); !errors.Is(err, errNoTransferBackups) {
+		t.Fatalf("accepted an empty backup archive: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "agents-config")); !os.IsNotExist(err) {
+		t.Fatal("empty import wrote backup data")
 	}
 }
 
@@ -192,5 +216,76 @@ func TestAgentConfigurationTransferRejectsAmbiguousProvider(t *testing.T) {
 	providers, err := readAgentAPIProviders()
 	if err != nil || len(providers) != 1 || providers[0].Name != "Local" || providers[0].BaseURL != "https://local.example" {
 		t.Fatalf("ambiguous import modified providers: %v, %v", providers, err)
+	}
+}
+
+func TestCurrentAgentConfigExportAndSwitch(t *testing.T) {
+	source := transferTestConfigDir(t)
+	codexDir := filepath.Join(source, "alt-codex")
+	t.Setenv("CODEX_HOME", codexDir)
+	t.Setenv("CUSTOM_PROVIDER_TOKEN", "test-provider-secret")
+	t.Setenv("OPENAI_API_KEY", "inherited")
+	t.Setenv("UNRELATED_SECRET", "private-other")
+	const config = "[model_providers.demo]\nenv_key = 'CUSTOM_PROVIDER_TOKEN'\n"
+	const auth = `{"OPENAI_API_KEY":"fixture-from-disk"}`
+	transferTestWrite(t, filepath.Join(codexDir, "config.toml"), config)
+	transferTestWrite(t, filepath.Join(codexDir, "auth.json"), auth)
+	cfg := agent.Config{Agents: []agent.Definition{
+		{Name: "codex", Env: map[string]string{"OPENAI_API_KEY": "configured"}},
+		{Name: "claude", Env: map[string]string{"ANTHROPIC_AUTH_TOKEN": "test-claude"}},
+		{Name: "other", Env: map[string]string{"PRIVATE": "private-other"}},
+		{Name: "empty"},
+	}}
+	for _, names := range [][]string{nil, {"codex", "empty"}, {"codex", "codex"}, {"missing"}} {
+		if result, err := exportCurrentAgentConfigs(cfg, names); err == nil || result != nil {
+			t.Fatalf("unexpected successful export for %v", names)
+		}
+	}
+	raw, err := exportCurrentAgentConfigs(cfg, []string{"codex", "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, excluded := range []string{source, "private-other", "inherited"} {
+		if strings.Contains(string(raw), excluded) {
+			t.Fatal("archive includes unrelated environment or source paths")
+		}
+	}
+	if _, err := os.Stat(filepath.Join(source, "agents-config")); !os.IsNotExist(err) {
+		t.Fatal("export modified source backups")
+	}
+	var archive configArchive
+	if err := json.Unmarshal(raw, &archive); err != nil {
+		t.Fatal(err)
+	}
+	target := transferTestConfigDir(t)
+	targetCodexDir := filepath.Join(target, "target-codex")
+	t.Setenv("CODEX_HOME", targetCodexDir)
+	req := configImportRequest{Archive: archive, Categories: []string{"agent_backups"}}
+	result, err := importAgentConfiguration(req)
+	if err != nil || result.NeedsConfirm || len(result.Backups) != 2 {
+		t.Fatalf("import: %+v, %v", result, err)
+	}
+	if repeat, err := importAgentConfiguration(req); err != nil || !repeat.NeedsConfirm {
+		t.Fatalf("expected overwrite confirmation: %+v, %v", repeat, err)
+	}
+	for _, backup := range result.Backups {
+		if _, _, err := switchAgentConfig(agentConfigSwitchRequest{ID: backup.ID, ConfirmOverwrite: true}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for file, want := range map[string]string{"config.toml": config, "auth.json": auth} {
+		got, err := os.ReadFile(filepath.Join(targetCodexDir, file))
+		if err != nil || string(got) != want {
+			t.Fatalf("%s was not restored: %v", file, err)
+		}
+	}
+	applied, err := agent.LoadConfig("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex, _ := applied.GetAgent("codex")
+	claude, _ := applied.GetAgent("claude")
+	if codex.Env["CUSTOM_PROVIDER_TOKEN"] != "test-provider-secret" || codex.Env["OPENAI_API_KEY"] != "configured" || claude.Env["ANTHROPIC_AUTH_TOKEN"] != "test-claude" {
+		t.Fatal("selected agents' credentials were not restored")
 	}
 }

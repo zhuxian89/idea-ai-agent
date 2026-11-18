@@ -36,14 +36,22 @@ type configImportRequest struct {
 }
 
 type configImportResult struct {
-	NeedsConfirm    bool `json:"needs_confirm"`
-	RestartRequired bool `json:"restart_required"`
+	NeedsConfirm    bool                  `json:"needs_confirm"`
+	RestartRequired bool                  `json:"restart_required"`
+	Backups         []importedAgentBackup `json:"backups,omitempty"`
+}
+
+type importedAgentBackup struct {
+	ID    string `json:"id"`
+	Agent string `json:"agent"`
+	Name  string `json:"name"`
 }
 
 type configImportPlan struct {
 	files      map[string][]byte
 	overwrites bool
 	restart    bool
+	backups    []importedAgentBackup
 }
 
 func (p *configImportPlan) put(path string, value any) error {
@@ -92,20 +100,30 @@ func transferSelection(categories []string) (map[string]bool, error) {
 func (h *HTTPHandler) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	var req struct {
+		Agents     []string `json:"agents"`
 		Categories []string `json:"categories"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid export request"))
 		return
 	}
-	selected, err := transferSelection(req.Categories)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, err)
-		return
-	}
 	agentConfigMu.Lock()
 	defer agentConfigMu.Unlock()
-	result, err := exportAgentConfiguration(selected)
+	var result json.RawMessage
+	var err error
+	if req.Agents != nil {
+		if len(req.Categories) != 0 {
+			err = errors.New("select agents or legacy categories")
+		} else {
+			result, err = exportCurrentAgentConfigs(h.AppContext.GetAgentPool().Config(), req.Agents)
+		}
+	} else {
+		var selected map[string]bool
+		selected, err = transferSelection(req.Categories)
+		if err == nil {
+			result, err = exportAgentConfiguration(selected)
+		}
+	}
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -114,12 +132,9 @@ func (h *HTTPHandler) handleConfigExport(w http.ResponseWriter, r *http.Request)
 }
 
 func exportAgentConfiguration(selected map[string]bool) (json.RawMessage, error) {
-	archive := configArchive{
-		Format: transferFormat, Version: 1, Platform: runtime.GOOS,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339), Sections: map[string]json.RawMessage{},
-	}
+	sections := map[string]json.RawMessage{}
 	if selected["providers"] || selected["api_keys"] {
-		if err := exportTransferProviders(archive.Sections, selected); err != nil {
+		if err := exportTransferProviders(sections, selected); err != nil {
 			return nil, err
 		}
 	}
@@ -128,18 +143,26 @@ func exportAgentConfiguration(selected map[string]bool) (json.RawMessage, error)
 		if err != nil {
 			return nil, err
 		}
-		archive.Sections["agent_backups"], err = json.Marshal(files)
+		sections["agent_backups"], err = json.Marshal(files)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if selected["custom_agents"] {
-		if err := exportTransferCustomAgents(archive.Sections); err != nil {
+		if err := exportTransferCustomAgents(sections); err != nil {
 			return nil, err
 		}
 	}
-	if len(archive.Sections) == 0 {
+	if len(sections) == 0 {
 		return nil, errors.New("no selected configuration exists on this node")
+	}
+	return marshalConfigArchive(sections)
+}
+
+func marshalConfigArchive(sections map[string]json.RawMessage) (json.RawMessage, error) {
+	archive := configArchive{
+		Format: transferFormat, Version: 1, Platform: runtime.GOOS,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339), Sections: sections,
 	}
 	data, err := json.Marshal(archive)
 	if len(data) > transferMaxBytes-(64<<10) {
@@ -206,5 +229,5 @@ func importAgentConfiguration(req configImportRequest) (configImportResult, erro
 	if err := writeTransferFiles(dir, plan.files); err != nil {
 		return configImportResult{}, err
 	}
-	return configImportResult{RestartRequired: plan.restart}, nil
+	return configImportResult{RestartRequired: plan.restart, Backups: plan.backups}, nil
 }
