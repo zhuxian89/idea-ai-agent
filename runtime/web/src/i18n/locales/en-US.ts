@@ -885,6 +885,8 @@ export const enUS = {
   "externalImport.emptyHintAction": "If this project already has sessions, use the import button above. Imported sessions can continue.",
 
   "relay.publicAccess": "Public access",
+  "relay.phoneAccess": "Connect your phone",
+  "standalone.version": "Standalone {version}",
 
   "action.ws.connected": "WebSocket connected",
   "action.ws.connecting": "WebSocket connecting",

@@ -884,6 +884,8 @@ export const zhCN = {
   "externalImport.emptyHintAction": "如果项目中已有会话，请点击上方导入按钮，导入后会话可以继续",
 
   "relay.publicAccess": "从公网访问",
+  "relay.phoneAccess": "手机扫码连接",
+  "standalone.version": "独立版 {version}",
 
   "action.ws.connected": "WebSocket 连接正常",
   "action.ws.connecting": "WebSocket 正在连接",

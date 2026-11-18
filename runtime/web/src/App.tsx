@@ -7152,9 +7152,20 @@ export function App({ onGoHome }: AppProps) {
   }, [file, actionHandlers]);
 
   const [standaloneRemoteOpen, setStandaloneRemoteOpen] = useState(false);
-  const standaloneLocal = isStandaloneRuntime && !isRelayNodePage();
+  // 独立后台的页面（本机或经 Relay 访问）都提供同一个远程访问弹窗：版本、二维码、服务状态。
+  const standalonePage = isStandaloneRuntime;
+  const [standaloneVersion, setStandaloneVersion] = useState("");
+  useEffect(() => {
+    if (!standalonePage) return;
+    let disposed = false;
+    fetch(appPath("/api/idea/remote"), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((status) => { if (!disposed) setStandaloneVersion(status?.service?.version || ""); })
+      .catch(() => { if (!disposed) setStandaloneVersion(""); });
+    return () => { disposed = true; };
+  }, [standalonePage]);
   const handleRelayAction = useCallback(async () => {
-    if (standaloneLocal) {
+    if (standalonePage) {
       setStandaloneRemoteOpen(true);
       return;
     }
@@ -7189,10 +7200,10 @@ export function App({ onGoHome }: AppProps) {
       target.searchParams.set("node_name", nodeName);
     }
     navigatePopup(pendingPopup, target.toString());
-  }, [currentRootId, startRelayBinding, relayStatus, standaloneLocal]);
+  }, [currentRootId, startRelayBinding, relayStatus, standalonePage]);
 
   const relayActionLabel = useMemo(() => {
-    if (standaloneLocal) return t("relay.publicAccess");
+    if (standalonePage) return t(isRelayNodePage() ? "relay.phoneAccess" : "relay.publicAccess");
     if (isRelayNodePage()) {
       return null;
     }
@@ -7200,10 +7211,10 @@ export function App({ onGoHome }: AppProps) {
       return null;
     }
     return t("relay.publicAccess");
-  }, [relayStatus, t, standaloneLocal]);
+  }, [relayStatus, t, standalonePage]);
 
   const relayActionDisabled =
-    !standaloneLocal && (!currentRootId ||
+    !standalonePage && (!currentRootId ||
     (!relayStatus?.relay_bound && !relayStatus?.relay_base_url));
   const showUpdateButton =
     !isIDEManagedProject && shouldShowUpdateButton(updateState);
@@ -7611,7 +7622,7 @@ export function App({ onGoHome }: AppProps) {
             onProjectTreeTabChange={setProjectTreeTab}
             relayActionLabel={relayActionLabel}
             relayActionDisabled={relayActionDisabled}
-            relayActionHelp={null}
+            relayActionHelp={standalonePage && standaloneVersion ? t("standalone.version", { version: standaloneVersion }) : null}
             onRelayAction={handleRelayAction}
             relayNodeId={relayStatus?.node_id || ""}
             relayBaseURL={relayStatus?.relay_base_url || ""}
