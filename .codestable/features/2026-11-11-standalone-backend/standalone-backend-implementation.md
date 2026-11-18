@@ -26,7 +26,7 @@ Debian 13 ARM64 隔离 Relay 验证了新装显示 URL、等待确认时再次�
 
 ## 独立后台 0.1.39 正式发布（2026-11-18）
 
-三个平台统一升到 0.1.39，包含安装审查的全部修复，已作为[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.39)发布，标签指向提交 `a37b956`。`scripts/standalone/version.txt` 改为 0.1.39，两条固定安装命令不指定版本时默认安装 0.1.39；仓库的 latest 标记仍留给插件发布 v0.1.27，既有 Windows 工作流依赖它。0.1.35 的发布没有下架。公开包从该提交的独立克隆构建，程序构建信息为 `vcs.modified=false`。先前工作区构建的本地测试包作废。
+三个平台统一升到 0.1.39，包含安装审查的全部修复，已作为[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.39)发布，标签指向提交 `a37b956`。`scripts/standalone/version.txt` 改为 0.1.39，两条固定安装命令不指定版本时默认安装 0.1.39；仓库的 latest 标记仍留给插件发布 v0.1.27，既有 Windows 工作流依赖它。随后按用户要求只保留这一个独立后台发布：0.1.35 至 0.1.38 的 Release 已下架，发布前的元数据快照在 `build/reports/release39-withdraw/`，Git 源码标签保留。0.1.39 的发布说明写明了 macOS、Linux、Windows 的安装、升级、Linux 绑定和手动安装方式。公开包从该提交的独立克隆构建，程序构建信息为 `vcs.modified=false`。先前工作区构建的本地测试包作废。
 
 | 包 | SHA-256 |
 |---|---|
