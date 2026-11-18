@@ -1,5 +1,9 @@
 # 独立后端计划与进度
 
+## Linux 安装后显示绑定链接（2026-11-18，0.1.38 测试版已发布）
+
+[Linux 0.1.38](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.38) 安装并启动后直接显示绑定链接；已有绑定显示原节点地址和状态。Debian 13 ARM64 已验证新装和从 0.1.37 升级。Linux 两种架构的公开包与指定版本的固定入口均已校验。
+
 ## Linux 服务器开机自启（2026-11-18，0.1.37 Linux 测试版已发布）
 
 [Linux 0.1.37](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.37) 为 systemd 服务器注册 Core 和远程网关。Debian 13 ARM64 虚拟机从 0.1.36 原位升级并重启后，root 和普通用户服务均在原端口运行，普通用户无人登录时已自动重连隔离 Relay。Linux 两种架构的公开安装包与安装入口校验通过，默认正式版为 0.1.35。
