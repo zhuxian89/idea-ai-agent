@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
+  - id: linux-systemd-boot
+    description: Linux 0.1.37 测试版已公开；ARM64 Debian 13 重启、无人登录恢复 Relay、异常退出恢复、停止、重复安装、注销与无 systemd 环境均已验证；双架构包及固定入口校验通过。
+    status: done
   - id: linux-36-agent-config-prerelease
     description: Linux 0.1.36 已公开。x64 和 ARM64 安装器、压缩包及校验文件已复核，固定安装入口指定版本后校验通过。默认版为 0.1.35，待 Linux 实机验收。
     status: done

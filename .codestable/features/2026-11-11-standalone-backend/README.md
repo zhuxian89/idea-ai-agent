@@ -1,8 +1,12 @@
 # 独立后端计划与进度
 
+## Linux 服务器开机自启（2026-11-18，0.1.37 Linux 测试版已发布）
+
+[Linux 0.1.37](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.37) 为 systemd 服务器注册 Core 和远程网关。Debian 13 ARM64 虚拟机从 0.1.36 原位升级并重启后，root 和普通用户服务均在原端口运行，普通用户无人登录时已自动重连隔离 Relay。Linux 两种架构的公开安装包与安装入口校验通过，默认正式版为 0.1.35。
+
 ## Linux 独立后台 0.1.36 测试版（2026-11-18）
 
-[Linux 0.1.36 测试版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.36) 已公开，支持 x64 与 ARM64。固定安装命令加 `--version 0.1.36` 即可安装；默认正式版为 0.1.35。10 个公开附件已下载校验，Linux 实机安装与使用待验收。
+[Linux 0.1.36 测试版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.36) 已公开，支持 x64 与 ARM64。固定安装命令加 `--version 0.1.36` 即可安装；默认正式版为 0.1.35。10 个公开附件已下载校验，用户已确认 Linux 配置导入导出可用。
 
 ## 按 Agent 导出当前配置（2026-11-18，源码完成）
 

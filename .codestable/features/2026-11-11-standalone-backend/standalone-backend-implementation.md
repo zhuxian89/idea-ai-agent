@@ -1,3 +1,11 @@
+# Linux 服务器开机自启（2026-11-18）
+
+源码提交 `7f18b85`，Linux 0.1.37 预发布。root 安装使用系统级 systemd，普通用户使用用户服务与 lingering。二者分别托管 Core 与网关，异常退出后独立恢复。普通用户缺少 lingering 授权时输出管理员命令。未运行 systemd 时安装器说明状态并继续原有后台启动。
+
+Debian 13 ARM64 隔离虚拟机用正式 0.1.36 包绑定本地测试 Relay，再用最终 0.1.37 包原位升级，保留路径和端口。关机再开机后，普通用户状态为 lingering，四个服务均为 enabled、active。测试 Relay 在新 boot ID 收到原节点 WebSocket，随后查询显示 connected。还验证了终止 Core 或网关后各自恢复、手动停止保持停止、重启与重复安装保留参数、注销清理注册，以及挂载命名空间隔离下的无 systemd 后台启动。第一次核对无人登录时，测试误将 systemd manager 会话当作用户登录，随后检查 logind 的 State=lingering，确认没有交互登录。
+
+后台与 CLI 回归、旧库全量与迁移 race、网页类型检查、生产构建通过。干净 checkout 交叉编译两种架构，核对 ELF、版本、源码提交、配置与每包 305 个网页文件；10 个公开附件匿名下载，逐项核对 SHA-256。固定入口显式指定版本在两个模拟架构完成下载校验；ARM64 最终包另在上述真实 Linux 虚拟机安装运行。证据位于 `build/reports/linux-service/` 和 `build/reports/release37-linux/`。
+
 # Linux 独立后台 0.1.36 测试版（2026-11-18）
 
 基于源码提交 `a2929f3` 从干净 checkout 交叉构建 Linux amd64 与 arm64。旧库 Kanban 全量及迁移 race、Go API 全量与配置导入导出专项 race、网页类型检查及生产构建通过。解包核对 ELF 架构、嵌入版本、Go 源码提交、安装器、Agent 定义，以及两个包各 305 个网页文件。单文件安装器内嵌 tar.gz 与公开压缩包一致。
