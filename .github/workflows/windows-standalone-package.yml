@@ -12,7 +12,8 @@ on:
       - 'scripts/standalone/verify-windows-standalone-package.ps1'
       - '.github/workflows/windows-standalone-package.yml'
 permissions:
-  contents: read
+  # GitHub only exposes draft releases to identities with repository push access.
+  contents: write
 jobs:
   windows-powershell-5-1:
     runs-on: windows-latest
