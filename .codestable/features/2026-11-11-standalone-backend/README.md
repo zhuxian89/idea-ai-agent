@@ -3,7 +3,7 @@
 ## 当前状态（2026-11-18）
 
 - **独立后台 0.1.39** 是唯一的正式版，也是固定安装命令的默认版本，覆盖 macOS、Windows、Linux 的 x64 与 ARM64。[发布页](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.39)写有安装、升级、Linux 绑定与手动安装方式。0.1.35 至 0.1.38 已下架，Git 标签保留。
-- **公网扫码与版本显示**：0.1.40 macOS 测试版实机发现，公网页面调用本机管理接口会收到 404，版本号也缺失。源码已改为直接将当前页面地址生成二维码，版本号随页面返回。修复计划随 macOS 0.1.41 测试版验证。
+- **[macOS 0.1.41 测试版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.41)** 已发布，覆盖 Apple 芯片与 Intel。公网扫码入口直接将当前页面地址生成二维码，版本号随页面返回。最终包已在 macOS ARM64 经隔离 Relay 验证，公开在线入口安装通过。待用户在真实节点确认，再继续补齐其他平台。
 - **插件**最新发布仍是 0.1.27。已提交的“独立后台无响应时从 IDEA 切回内置模式”源码尚未随插件发布。
 - 独立后台与插件独立发版。发包流程、验证门槛和“只保留一个正式版”的规则见根目录 [AGENTS.md](../../../AGENTS.md) 的《独立版发包规则》。
 - 0.1.39 包含：Agent 配置按 Agent 导出与导入、Linux `-bind` 与安装后显示绑定链接、Linux systemd 开机自启、不同目录同名项目、远程单文件 HTML 预览、Codex 刷新自动升级、完整重启，以及安装与升级失败后的自动恢复。验证证据见 [implementation](standalone-backend-implementation.md)。
