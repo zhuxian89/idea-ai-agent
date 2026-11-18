@@ -78,6 +78,8 @@ func (h *HTTPHandler) handleAgentConfigDefaults(w http.ResponseWriter, r *http.R
 }
 
 func (h *HTTPHandler) handleAgentConfigBackupsList(w http.ResponseWriter, r *http.Request) {
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	agentName := strings.TrimSpace(r.URL.Query().Get("agent"))
 	manifest, err := readAgentConfigManifest()
 	if err != nil {
@@ -103,6 +105,8 @@ func (h *HTTPHandler) handleAgentConfigBackupCreate(w http.ResponseWriter, r *ht
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid request body"))
 		return
 	}
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	entry, err := createAgentConfigBackup(req)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -121,6 +125,8 @@ func (h *HTTPHandler) handleAgentConfigBackupDelete(w http.ResponseWriter, r *ht
 		respondError(w, http.StatusBadRequest, errInvalidRequest("backup id required"))
 		return
 	}
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	manifest, err := deleteAgentConfigBackup(id)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -135,6 +141,8 @@ func (h *HTTPHandler) handleAgentConfigSwitch(w http.ResponseWriter, r *http.Req
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid request body"))
 		return
 	}
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	entry, needsConfirm, err := switchAgentConfig(req, h.AppContext)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -383,32 +391,40 @@ func switchAgentConfig(req agentConfigSwitchRequest, app *AppContext) (agentConf
 	if len(entry.Sources) == 0 && len(entry.EnvKeys) == 0 {
 		return agentConfigManifestEntry{}, false, errors.New("backup has no config content")
 	}
-	exists := false
-	for _, source := range entry.Sources {
+	needsConfirm := false
+	destinations := make([]string, len(entry.Sources))
+	for i, source := range entry.Sources {
 		sourcePath, err := expandUserPath(source.SourcePath)
 		if err != nil {
 			return agentConfigManifestEntry{}, false, err
 		}
+		destinations[i] = sourcePath
+		if strings.HasPrefix(source.SourcePath, "~/") {
+			// Imported files declare portable destinations. Show them before any write.
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return agentConfigManifestEntry{}, false, err
+			}
+			if err := checkTransferPath(home, sourcePath); err != nil {
+				return agentConfigManifestEntry{}, false, err
+			}
+			needsConfirm = true
+		}
 		if _, err := os.Stat(sourcePath); err == nil {
-			exists = true
-			break
-		} else if err != nil && !os.IsNotExist(err) {
+			needsConfirm = true
+		} else if !os.IsNotExist(err) {
 			return agentConfigManifestEntry{}, false, apperr.Wrap("stat", sourcePath, err)
 		}
 	}
-	if exists && !req.ConfirmOverwrite {
+	if needsConfirm && !req.ConfirmOverwrite {
 		return entry, true, nil
 	}
 	configRoot, err := agentConfigRootDir()
 	if err != nil {
 		return agentConfigManifestEntry{}, false, err
 	}
-	for _, source := range entry.Sources {
-		sourcePath, err := expandUserPath(source.SourcePath)
-		if err != nil {
-			return agentConfigManifestEntry{}, false, err
-		}
-		if err := copyFile(filepath.Join(configRoot, filepath.FromSlash(source.BackupPath)), sourcePath); err != nil {
+	for i, source := range entry.Sources {
+		if err := copyFile(filepath.Join(configRoot, filepath.FromSlash(source.BackupPath)), destinations[i]); err != nil {
 			return agentConfigManifestEntry{}, false, err
 		}
 	}

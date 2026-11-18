@@ -413,6 +413,8 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Post("/api/agents/restart", h.protectedEndpoint(h.handleAgentRestart))
 	r.Get("/api/agents/codex/rate-limits", h.protectedEndpoint(h.handleCodexRateLimitsGet))
 	r.Post("/api/agents/codex/rate-limit-reset", h.protectedEndpoint(h.handleCodexRateLimitReset))
+	r.Post("/api/config/export", h.protectedEndpoint(h.handleConfigExport))
+	r.Post("/api/config/import", h.protectedEndpoint(h.handleConfigImport))
 	r.Get("/api/agent-config/defaults", h.protectedEndpoint(h.handleAgentConfigDefaults))
 	r.Get("/api/agent-config/backups", h.protectedEndpoint(h.handleAgentConfigBackupsList))
 	r.Post("/api/agent-config/backups", h.protectedEndpoint(h.handleAgentConfigBackupCreate))

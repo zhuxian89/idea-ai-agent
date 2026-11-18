@@ -152,6 +152,14 @@ async function saveBlobWithNativeShell(blob: Blob, filename: string): Promise<vo
   await NativeDownload.saveBase64({ dataBase64, filename, mimeType });
 }
 
+export async function downloadBlob(blob: Blob, filename: string): Promise<void> {
+  if (isNativeShellRuntime()) {
+    await saveBlobWithNativeShell(blob, filename);
+    return;
+  }
+  triggerBlobDownload(blob, filename);
+}
+
 export async function downloadURL(url: string, filename = "download"): Promise<void> {
   if (typeof document === "undefined") {
     throw new Error("download is only available in browser runtime");

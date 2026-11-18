@@ -76,6 +76,8 @@ type agentAPIProviderProbeResult struct {
 }
 
 func (h *HTTPHandler) handleAgentAPIProvidersList(w http.ResponseWriter, r *http.Request) {
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	agentName := strings.TrimSpace(r.URL.Query().Get("agent"))
 	providers, err := readAgentAPIProviders()
 	if err != nil {
@@ -98,6 +100,8 @@ func (h *HTTPHandler) handleAgentAPIProviderCreate(w http.ResponseWriter, r *htt
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid request body"))
 		return
 	}
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	provider, err := createAgentAPIProvider(r.Context(), req)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -116,6 +120,8 @@ func (h *HTTPHandler) handleAgentAPIProvidersSync(w http.ResponseWriter, r *http
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid request body"))
 		return
 	}
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	providers, err := syncAgentAPIProviders(r.Context(), req.Providers)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -134,6 +140,8 @@ func (h *HTTPHandler) handleAgentAPIProviderDelete(w http.ResponseWriter, r *htt
 		respondError(w, http.StatusBadRequest, errInvalidRequest("provider id required"))
 		return
 	}
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	providers, err := deleteAgentAPIProvider(id)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -152,6 +160,8 @@ func (h *HTTPHandler) handleAgentAPIProviderSwitch(w http.ResponseWriter, r *htt
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid request body"))
 		return
 	}
+	agentConfigMu.Lock()
+	defer agentConfigMu.Unlock()
 	provider, err := switchAgentAPIProvider(req, h.AppContext)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)

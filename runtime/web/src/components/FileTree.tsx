@@ -23,6 +23,7 @@ import {
 } from "../services/appearance";
 import { useI18n, type Locale, type MessageKey } from "../i18n";
 import { useRefreshSpin } from "../hooks";
+import { ConfigTransferDialog } from "./ConfigTransferDialog";
 import { AgentMenuList } from "./AgentMenuList";
 import { AgentIcon } from "./AgentIcon";
 import { AgentSelector } from "./AgentSelector";
@@ -796,7 +797,7 @@ function AgentConfigPopover({
         </>
       ) : step === "confirm" ? (
         <>
-          <div style={{ ...agentConfigHintStyle, color: "#dc2626" }}>
+          <div style={{ ...agentConfigHintStyle, color: "#dc2626", whiteSpace: "pre-line", overflowWrap: "anywhere" }}>
             {confirmMessage || t("agentConfig.targetExists")}
           </div>
           <div style={agentConfigActionRowStyle}>
@@ -1424,6 +1425,7 @@ export function FileTree({
     bootstrapService.canUseProtectedAPI(),
   );
   const [activeRelayTipIndex, setActiveRelayTipIndex] = React.useState(0);
+  const [configTransferOpen, setConfigTransferOpen] = React.useState(false);
   const [agentConfigFlow, setAgentConfigFlow] = React.useState<AgentConfigFlow | null>(null);
   const [agentConfigStep, setAgentConfigStep] = React.useState<AgentConfigStep>("agent");
   const [agentConfigAgents, setAgentConfigAgents] = React.useState<AgentStatus[]>([]);
@@ -2357,7 +2359,10 @@ export function FileTree({
       }
       const result = await switchAgentConfig({ id: agentConfigSwitchSelection.id, confirmOverwrite });
       if (result.needs_confirm) {
-        setAgentConfigConfirmMessage(result.message || t("agentConfig.targetExists"));
+        const paths = result.backup?.sources?.map(source => source.sourcePath) || [];
+        setAgentConfigConfirmMessage(paths.length
+          ? [t("agentConfig.confirmFileTargets"), ...paths].join("\n")
+          : result.message || t("agentConfig.targetExists"));
         setAgentConfigStep("confirm");
         return;
       }
@@ -2856,6 +2861,19 @@ export function FileTree({
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    setConfigTransferOpen(true);
+                    setIsMenuOpen(false);
+                    closeAgentConfigFlow();
+                    closeAgentLifecycleFlow();
+                  }}
+                  style={fileTreeMenuButtonStyle}
+                >
+                  <ConfigArchiveIcon />
+                  <span>{t("configTransfer.title")}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={openAgentLifecycleFlow}
                   style={fileTreeMenuButtonStyle}
                 >
@@ -3250,6 +3268,11 @@ export function FileTree({
 
         </div>
         {agentConfiguration}
+        {configTransferOpen && (
+          <div style={{ position: "absolute", top: "calc(100% + 6px)", left: "8px", right: "3px", zIndex: 40 }}>
+            <ConfigTransferDialog onClose={() => setConfigTransferOpen(false)} />
+          </div>
+        )}
         {idleReleaseOpen ? (
           <div
             style={{
