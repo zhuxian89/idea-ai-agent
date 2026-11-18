@@ -34,9 +34,11 @@ jobs:
       - name: Prepare candidate from the published Windows plugin
         if: ${{ inputs.candidate_release == '' }}
         shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          import io, json, pathlib, urllib.request, zipfile
-          request = urllib.request.Request('https://api.github.com/repos/zhuxian89/idea-ai-agent/releases/latest', headers={'User-Agent':'installer-validation'})
+          import io, json, os, pathlib, urllib.request, zipfile
+          request = urllib.request.Request('https://api.github.com/repos/zhuxian89/idea-ai-agent/releases/latest', headers={'User-Agent':'installer-validation', 'Authorization':'Bearer ' + os.environ['GH_TOKEN']})
           release = json.load(urllib.request.urlopen(request))
           name = 'idea-ai-agent-' + release['tag_name'].removeprefix('v') + '-windows-amd64.zip'
           asset = next(a for a in release['assets'] if a['name'] == name)
