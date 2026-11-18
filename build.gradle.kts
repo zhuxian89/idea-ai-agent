@@ -46,8 +46,12 @@ java {
 }
 tasks.processResources {
     from("scripts") {
-        include("install.sh", "install.ps1")
+        include("install.sh")
         into("installers")
+    }
+    from("scripts/standalone/download.ps1") {
+        into("installers")
+        rename { "install.ps1" }
     }
 }
 tasks.withType<JavaCompile>().configureEach { options.release = 17 }

@@ -53,6 +53,7 @@ func runCLI(args []string) error {
 	foreground := flags.Bool("foreground", false, "run the shared backend in this terminal")
 	noBrowser := flags.Bool("no-browser", false, "do not open a browser")
 	status := flags.Bool("status", false, "show the shared backend status")
+	bind := flags.Bool("bind", false, "show the Relay binding link or the current remote access status")
 	stop := flags.Bool("stop", false, "stop the shared backend for all projects")
 	stopCore := flags.Bool("stop-core", false, "stop the local data service before updating its executable")
 	restart := flags.Bool("restart", false, "restart the remote gateway and local data service for all projects")
@@ -67,6 +68,9 @@ func runCLI(args []string) error {
 	notify := flags.String("notify-script", "", "notification script")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if *bind && (flags.NFlag() != 1 || flags.NArg() != 0) {
+		return fmt.Errorf("use -bind on its own")
 	}
 	if *showVersion {
 		fmt.Println("Local AI Agent", version)
@@ -142,7 +146,7 @@ func runCLI(args []string) error {
 		return descriptorErr
 	}
 	if descriptorErr == nil && descriptor.Mode != "standalone" {
-		if *status {
+		if *status || *bind {
 			return fmt.Errorf("the IDEA remote host is running")
 		}
 		if err := stopIdleIDEHost(ctx, dir); err != nil {
@@ -173,7 +177,7 @@ func runCLI(args []string) error {
 				}
 			}
 		}
-		if *status && statusErr != nil {
+		if (*status || *bind) && statusErr != nil {
 			return fmt.Errorf("Local AI Agent is not responding: %w", statusErr)
 		}
 	}
@@ -183,6 +187,12 @@ func runCLI(args []string) error {
 		}
 		fmt.Println("Local AI Agent", version, "running at", descriptor.URL)
 		return nil
+	}
+	if *bind {
+		if !running {
+			return fmt.Errorf("Local AI Agent is stopped; start it with -no-browser and run -bind again")
+		}
+		return printRemoteBinding(coreCtx, client, os.Stdout)
 	}
 	if descriptorErr == nil && !running {
 		// A crash can leave host.json behind. Only its next lock owner may

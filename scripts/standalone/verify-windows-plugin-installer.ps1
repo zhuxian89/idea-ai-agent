@@ -28,7 +28,7 @@ try {
     if ($Bytes.Length -lt 3 -or $Bytes[0] -ne 239 -or $Bytes[1] -ne 187 -or $Bytes[2] -ne 191) {
         throw 'The packaged installer must use UTF-8 with BOM.'
     }
-    $Expected = [IO.File]::ReadAllBytes((Join-Path $PSScriptRoot '../install.ps1'))
+    $Expected = [IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'download.ps1'))
     if ([Convert]::ToBase64String($Bytes) -cne [Convert]::ToBase64String($Expected)) {
         throw 'The packaged installer differs from source.'
     }

@@ -49,7 +49,7 @@ checksum(output);
 
 if (goos === "windows") {
   const installer = path.join(destination, "install.ps1");
-  cpSync(path.join(root, "scripts/install.ps1"), installer);
+  cpSync(path.join(root, "scripts/standalone/download.ps1"), installer);
   checksum(installer);
 }
 

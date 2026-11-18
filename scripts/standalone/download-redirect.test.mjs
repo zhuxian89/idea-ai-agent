@@ -25,7 +25,7 @@ for (const runtime of runtimes) for (const encoding of ["native", "windows-936"]
   const directory = await mkdtemp(path.join(os.tmpdir(), "standalone-redirect-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const script = path.join(directory, "download.ps1");
-  const sourcePath = process.env.INSTALL_TEST_ONLINE_SCRIPT || new URL("../install.ps1", import.meta.url);
+  const sourcePath = process.env.INSTALL_TEST_ONLINE_SCRIPT || new URL("./download.ps1", import.meta.url);
   const source = await readFile(sourcePath, "utf8");
   const functionStart = source.indexOf("function Get-HttpsContent {");
   const functionEnd = source.indexOf("\n$Architecture =", functionStart);

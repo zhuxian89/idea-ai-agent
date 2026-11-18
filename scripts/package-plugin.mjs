@@ -316,7 +316,7 @@ function validatePackage(archive, version, expectedTargets) {
   const plugin = readZip(zip.read(pluginJar), pluginJar);
   if (expectedTargets.some(target => target.goos === 'windows')) {
     const installer = plugin.read('installers/install.ps1');
-    if (!installer.equals(readFileSync(path.join(root, 'scripts/install.ps1')))) {
+    if (!installer.equals(readFileSync(path.join(root, 'scripts/standalone/download.ps1')))) {
       throw new Error(`${path.basename(archive)} contains a stale Windows installer`);
     }
     if (!installer.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))) {

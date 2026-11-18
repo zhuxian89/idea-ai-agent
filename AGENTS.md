@@ -19,8 +19,8 @@
 没有覆盖 Windows 5.1 读取最终脚本的方式；打包时又跳过了 PowerShell 测试。
 后续必须验证用户实际执行的包内脚本，不能沿用源码或其他运行时的通过结论。
 
-- 插件从自身 JAR 的 `installers/install.ps1` 解出临时脚本执行，不从独立后台附件加载脚本。修改 `scripts/install.ps1` 后，需同步发布固定在线入口，并重打受影响的插件包、更新校验和；只替换独立后台不能修复已安装插件的内嵌脚本。发布前核对公开插件包内的脚本与修复源码一致。
-- 安装脚本统一 UTF-8 BOM，不转为 GBK；PowerShell 5.1 需要 BOM 识别 UTF-8。`.gitattributes` 固定 `.ps1` 的 LF 换行。打包检查最终 JAR 内脚本与源码逐字节一致且有 BOM。
+- 插件从自身 JAR 的 `installers/install.ps1` 解出临时脚本执行，不从独立后台附件加载脚本。固定在线入口 `scripts/install.ps1` 通过 `irm | iex` 调用 UTF-8 BOM 的 `scripts/standalone/download.ps1`。插件打包时将后者原样写入 JAR。修改下载脚本后需同步发布固定在线入口使用的脚本，并重打受影响的插件包、更新校验和；只替换独立后台不能修复已安装插件的内嵌脚本。发布前核对公开插件包内的脚本与修复源码一致。
+- Windows 包内执行的 PowerShell 脚本统一 UTF-8 BOM，不转为 GBK；PowerShell 5.1 需要 BOM 识别 UTF-8。固定在线入口使用 ASCII，读取下载脚本后移除字符串开头的 BOM。`.gitattributes` 固定 `.ps1` 的 LF 换行。打包检查最终 JAR 内脚本与源码逐字节一致且有 BOM。
 - 插件实际调用 `powershell.exe`（Windows PowerShell 5.1）。每次生成或替换 Windows 可用安装包（含通用插件包），即使没有修改安装器，也必须从最终插件 ZIP 提取脚本，在真实 Windows 5.1 验证后才能发布；PowerShell 7、macOS 或 Windows 交叉编译不能替代。缺少环境或测试跳过时不得替换正式附件或记为验证通过。验证真实 GitHub 下载、相对及连续重定向、二进制内容和 SHA-256 校验，保留逐跳 HTTPS 校验和校验成功后才安装的顺序。
 - 修改安装器后，同步核对 Windows 双架构与通用插件 ZIP、Windows 独立 ZIP、在线入口及各自校验文件。发布后重新下载公开附件，核对包内脚本、SHA-256 与已验证产物一致。同版本替换插件时，明确告知用户需从磁盘重装并重启 IDEA；已装插件不会因独立后台附件更新而获得新脚本。
 - Windows 安装进程须在加载脚本前统一 UTF-8 输出，与插件读取日志的编码一致。安装失败应展示原始下载或执行错误，不能让日志解码异常覆盖原因。

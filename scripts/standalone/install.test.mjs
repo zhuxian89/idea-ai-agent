@@ -10,7 +10,7 @@ import test from "node:test";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const versionURL = "https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/standalone/version.txt";
-const powershellInstaller = process.env.INSTALL_TEST_ONLINE_SCRIPT || "scripts/install.ps1";
+const powershellInstaller = process.env.INSTALL_TEST_ONLINE_SCRIPT || "scripts/standalone/download.ps1";
 
 function run(command, args, env = process.env, cwd = root) {
   return new Promise((resolve, reject) => {
@@ -186,16 +186,22 @@ test("PowerShell: the same installer reads the latest version again when upgradi
     return;
   }
   const f = await fixture(t);
-  const script = path.join(f.directory, "install.ps1");
-  await writeFile(script, (await readFile(path.join(root, "scripts/install.ps1"), "utf8")).replace(versionURL, f.base + "/version.txt"));
+  const entrypoint = await readFile(path.join(root, "scripts/install.ps1"), "utf8");
+  const downloader = await readFile(path.join(root, "scripts/standalone/download.ps1"), "utf8");
+  f.files.set("/install.ps1", entrypoint.replace(
+    "https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/standalone/download.ps1",
+    f.base + "/download.ps1",
+  ));
+  f.files.set("/download.ps1", downloader.replace(versionURL, f.base + "/version.txt"));
   const prefix = path.join(f.directory, "installed");
-  const env = { ...f.env, INSTALL_TEST_TRACE: path.join(f.directory, "calls.txt"), PROCESSOR_ARCHITECTURE: "AMD64" };
+  const env = { ...f.env, INSTALL_TEST_ENTRYPOINT: f.base + "/install.ps1", INSTALL_TEST_PREVIOUS_DIR: prefix,
+    INSTALL_TEST_TRACE: path.join(f.directory, "calls.txt"), PROCESSOR_ARCHITECTURE: "AMD64" };
   // Windows 5.1 启动时会用显式空的 WOW64 变量覆盖架构；原生 x64 应省略该变量。
   delete env.PROCESSOR_ARCHITEW6432;
   for (const version of ["3.0.0", "3.0.1"]) {
     await archive(f, version, "windows-amd64", true);
     f.files.set("/version.txt", version + "\n");
-    await checked(pwsh, ["-NoProfile", "-File", script, "-Prefix", prefix], env);
+    await checked(pwsh, ["-NoProfile", "-Command", "irm $env:INSTALL_TEST_ENTRYPOINT | iex"], env);
     assert.equal((await readFile(path.join(prefix, "version.txt"), "utf8")).trim(), version);
   }
   assert.equal(f.requests.filter(url => url === "/version.txt").length, 2);
@@ -255,7 +261,7 @@ test("PowerShell: download, verify, and invoke the package installer for x64 and
 
   const parser = path.join(f.directory, "parse.ps1");
   await writeFile(parser, "param([string]$File)\n$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($File, [ref]$null, [ref]$errors) > $null; if ($errors) { throw ($errors | Out-String) }\n");
-  for (const file of ["scripts/install.ps1", "scripts/standalone/install.ps1"]) {
+  for (const file of ["scripts/standalone/download.ps1", "scripts/standalone/install.ps1"]) {
     await checked(pwsh, ["-NoProfile", "-File", parser, path.join(root, file)]);
   }
 });
