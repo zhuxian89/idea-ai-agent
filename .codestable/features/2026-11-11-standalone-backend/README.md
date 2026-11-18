@@ -2,7 +2,7 @@
 
 ## Linux 安装后显示绑定链接（2026-11-18，0.1.38 测试版已发布）
 
-[Linux 0.1.38](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.38) 安装并启动后直接显示绑定链接；已有绑定显示原节点地址和状态。Debian 13 ARM64 已验证新装和从 0.1.37 升级。Linux 两种架构的公开包与指定版本的固定入口均已校验。
+[Linux 0.1.38](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.38) 安装并启动后直接显示绑定链接；已有绑定显示原节点地址和状态。Debian 13 ARM64 已验证新装和从 0.1.37 升级。Linux 两种架构的公开包与指定版本的固定入口均已校验。用户已在 Linux 真机确认 0.1.38 自启动。安装代码审查发现的 7 项问题已在源码修复并通过隔离回归，三个平台统一升到 0.1.39，六个本地测试包在 `build/standalone/0.1.39/`，未发布（macOS 临时 HOME、Linux 容器端到端已验证）；Windows 5.1 实机和 Linux 真机 systemd 复验待做，见[安装代码审查](standalone-backend-implementation.md#安装代码审查2026-11-18)。
 
 ## Linux 服务器开机自启（2026-11-18，0.1.37 Linux 测试版已发布）
 
@@ -31,6 +31,18 @@
 ## 独立后台 0.1.34 正式发布（2026-11-18）
 
 独立后台 0.1.34 覆盖 macOS、Windows、Linux 的 x64 和 ARM64，Linux 支持 `-bind`。当时的 24 个公开附件和 Windows PowerShell 5.1 验证通过，现已由 0.1.35 接替。[构建与发布证据](standalone-backend-implementation.md#独立后台-0134-正式发布2026-11-18)
+
+## Linux 远程绑定命令（2026-11-18，源码完成）
+
+Linux 安装完成后会打印含实际安装路径的 `local-ai-agent -bind` 命令。首次运行输出 Relay 登录与绑定地址，用户可在手机上确认。再次运行显示待绑定地址或已绑定节点状态。隔离后台通过模拟 Relay 完成端到端命令回归，源码尚未打包发布。[实现与验证](standalone-backend-implementation.md#linux-远程绑定命令2026-11-18)
+
+## Linux 独立后台 0.1.33 补发（2026-11-18）
+
+已将 Linux x64 和 ARM64 安装器、压缩包及校验文件上传到 [独立后台 0.1.33](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.33)。新增 10 个公开附件均重新下载并核对 SHA-256。旧库全量与迁移 race 通过。详见 [构建与发布记录](standalone-backend-implementation.md#linux-独立后台-0133-补发2026-11-18)。
+
+## 插件原生故障恢复（2026-11-18，源码完成，macOS 隔离验证通过）
+
+独立后台无响应且仍占用项目数据时，IDEA 原生故障页提供“切换到内置模式”。已用旧版 0.1.32 独立后台验证：冻结数据进程后，插件自带程序关闭远程入口与数据进程，保留安装记录，再用内置后台打开原项目。插件回归 97 通过、4 环境跳过；Windows x64 启动器交叉编译通过，Windows 实机待验收。源码未打包发布。
 
 ## Windows x64 本地交付：独立后台 0.1.33 / 插件 0.1.27（2026-11-18）
 

@@ -4,7 +4,7 @@ entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
   - id: linux-installer-bind-link
-    description: Linux 0.1.38 安装完成直接显示 Relay 链接。最终包实测新装、升级、保留绑定、暂停状态、延迟启动和绑定失败；双架构公开附件下载校验通过。
+    description: Linux 0.1.38 安装完成直接显示 Relay 链接。最终包实测新装、升级、保留绑定、暂停状态、延迟启动和绑定失败；双架构公开附件下载校验通过。用户在 Linux 真机确认 0.1.38 自启动。
     status: done
   - id: linux-systemd-boot
     description: Linux 0.1.37 测试版已公开；ARM64 Debian 13 重启、无人登录恢复 Relay、异常退出恢复、停止、重复安装、注销与无 systemd 环境均已验证；双架构包及固定入口校验通过。
@@ -26,6 +26,15 @@ steps:
     status: done
   - id: standalone-34-single-current-release
     description: 六平台独立后台 0.1.34 已发布，含 Linux -bind。固定入口在线选择和摘要核对通过，仅保留新 Release。Windows 5.1、旧库及网页入口回归通过。
+    status: done
+  - id: standalone-linux-bind-cli
+    description: Linux 安装后打印远程绑定命令，复用网关控制接口查询或发起 Relay 绑定。待确认链接复用，已绑定输出节点地址和当前状态。隔离回归通过，尚未打包。
+    status: done
+  - id: standalone-33-linux-release
+    description: 从 0.1.33 标签构建并补发 Linux x64 和 ARM64，10 项公开附件下载和 SHA-256 核对通过，旧库全量与迁移 race 通过。
+    status: done
+  - id: embedded-recovery
+    description: 原生故障入口与重启切换已实现，macOS 冻结旧 0.1.32 进程后两项服务停止，内置打开原项目并通过认证；多 IDEA 延迟处理、停止失败和原生按钮回归通过，Windows 实机恢复待验收，未发布。
     status: done
   - id: windows33-plugin27-local-packages
     description: Windows x64 独立 0.1.33 与插件 0.1.27 本地包及校验已生成；最终包 Core 重启与四入口各305资源通过，旧库全量/迁移race通过，最终插件 Windows5.1 下载/BOM/摘要与安装回归2项通过。Kotlin98通过2跳过；API临时库清理及app权限断言各1项既有Windows失败已在HEAD复现。未发布或操作用户实际服务，实际IDEA/Codex验收待用户替换。
@@ -336,3 +345,6 @@ checks:
   - id: regressions
     description: 本轮前端 299/299、Kotlin 87/87、Go 全量复跑、相关 race 与旧库迁移通过；最终 .14/.4 包检查及临时安装升级通过
     status: done
+  - id: install-code-review-fixes
+    description: 安装代码审查的 7 项问题已在源码修复并通过隔离回归（升级失败恢复与暂存、首装失败可重试、Linux 重装保留代理与密钥、macOS/Windows 升级保留网关参数、Windows 清理不盖错误、用户目录保护、日志解码）。已生成三个平台六个 0.1.39 本地测试包，macOS arm64 临时 HOME 与 Linux arm64 容器端到端（新装、升级、失败恢复）通过，未发布；Windows 5.1 实机与 Linux 真机 systemd 复验待做。
+    status: in_progress

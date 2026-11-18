@@ -6,6 +6,43 @@ Debian 13 ARM64 隔离 Relay 验证了新装显示 URL、等待确认时再次�
 
 正式构建提交 `b3f823e`。旧库全量和迁移 race 通过；两个 Linux 架构的 305 个网页资源、程序版本、源码提交、10 个公开附件及固定入口显式选版下载均已校验。默认正式版仍为 0.1.35。记录在 `build/reports/release38-linux/`。
 
+## 安装代码审查（2026-11-18）
+
+用户在 Linux 真机确认 0.1.38 自启动。审查的 7 项问题已在源码修复，每项先写能复现的用例，确认在旧代码上失败再修；未打包、未发布。
+
+| 问题 | 修复 | 验证（隔离目录/临时 HOME） |
+|---|---|---|
+| 升级中途失败，旧后台不再启动；复制中途失败还会留下半个安装 | `install.sh`、`install.ps1` 先把新文件复制到 `.upgrade` 暂存，成功后逐项移动到位；失败时清理暂存并用安装目录里的程序重新启动后台 | Shell 用例在旧脚本上失败、新脚本通过；macOS 与 Linux busybox `sh` 复现“缺文件→旧网页和程序不变、调用序列 `-stop -stop-core -no-browser`”；PowerShell 7.4.6（macOS）同样通过 |
+| 首次安装注册失败后再装提示“已安装” | `-install` 在服务注册成功后才写安装记录；延迟启动的首次安装失败时脚本删除刚复制的程序 | macOS 用例（`~/Library` 为文件时注册失败，无安装记录）；Shell 与 PowerShell 失败后重试用例 |
+| Linux 重装丢失上次保存的代理和 API Key | 重装时环境里缺少的变量沿用环境文件中的旧值，环境里有的以新值为准 | Linux ARM64 容器内运行 `TestLinuxServiceReinstallKeepsSavedEnvironment` |
+| 新增：安装记录不再先创建数据目录，Linux 首次安装写环境文件会失败 | 写环境文件前先创建数据目录 | Linux ARM64 容器内 `TestLinuxServiceFirstInstallCreatesDataDirectory` |
+| macOS/Windows 升级后 `-no-browser` 覆盖已保存的网关参数（如 `-no-relayer`） | 无命令行覆盖项的普通启动沿用已注册的参数，三个平台一致 | macOS 通过真实 CLI 与 launchd（临时 HOME）的 `TestPlainStartKeepsSavedGatewayArguments`，旧代码失败；Windows 仅编译与 vet 通过 |
+| Windows 下载脚本清理临时目录失败会盖掉真正的安装错误 | 清理改为 `-ErrorAction SilentlyContinue` | 源码改动，未单独复现 |
+| `-Prefix` 以反斜杠结尾可绕过用户目录保护；插件读安装日志遇非 UTF-8 字节会抛解码异常 | 比较前去掉末尾反斜杠；日志按替换字符解码（`installLogTail`） | 日志用例已加并通过；反斜杠只改源码，macOS 上的 PowerShell 不识别 `\` 路径，未单独复现 |
+
+回归：Go `cmd`、`backend`、`remotehost` 包通过，Windows 与 Linux 交叉 vet 干净；`scripts/standalone` 下 Shell、PowerShell 和延迟安装用例共 12 项通过；Kotlin `StandaloneInstallerTest` 通过。
+
+**未验证**：Windows PowerShell 5.1 没有运行过修改后的 `install.ps1` 和 `download.ps1`，按 AGENTS.md 在真实 5.1 验证前不得替换公开附件。Linux 真机 systemd 没有复跑修改后的环境文件与暂存逻辑。没有生成安装包，修复内容不在任何已发布版本里。`StandaloneRelease.kt` 取“全部 Release 中最高版本”，Linux 预发布 0.1.36 至 0.1.38 会被 Linux 上的插件视为可更新版本，而脚本默认仍是 0.1.35，是否保留待用户决定，本轮没有改。
+
+## 独立后台 0.1.39 本地测试包（2026-11-18，未发布）
+
+按用户要求三个平台统一升到 0.1.39，包含安装审查的全部修复。先前生成的 Windows、macOS 0.1.38 本地测试包作废，已发布的 Linux 0.1.38 附件是修复之前的构建，保持原样不动。六个包输出在 `build/standalone/0.1.39/`，没有上传 GitHub，`version.txt` 仍是 0.1.35。构建用 `LOCAL_AI_AGENT_VERSION=0.1.39`，源码树有未提交改动，程序的构建信息记录为已修改。
+
+| 包 | SHA-256 |
+|---|---|
+| `local-ai-agent-0.1.39-linux-amd64.tar.gz` | `baf5813f02c14d375eb020caf3bf09ccf8da8f04a5513141975cfd985a130298` |
+| `local-ai-agent-0.1.39-linux-arm64.tar.gz` | `11d7f82428a53f13bbf8fad119049e2eb45b0ab2abc7c1564d27689cf67a438d` |
+| `local-ai-agent-0.1.39-windows-amd64.zip` | `1b649c84c129db204b349320af2811f2c8a9064cf6f81d676abd1e233f815c56` |
+| `local-ai-agent-0.1.39-windows-arm64.zip` | `d00076667f315746c48ebe87b5e9ef7b6f9e532bbbf5183e3b4c09c9de2ffcdf` |
+| `local-ai-agent-0.1.39-macos-arm64.tar.gz` | `99cfaf2c50127c53d55c04d0748063653ed65511ffe279a727a6ac8696688143` |
+| `local-ai-agent-0.1.39-macos-amd64.tar.gz` | `c1ef8c2799c7ddab9b2793d841ff63e9682ec1dc53be18fcf7cc7701e5a9ff71` |
+
+从最终压缩包解出核对：12 个校验文件（六个压缩包、四个自解压安装器、两个在线入口）全部通过；程序架构与平台对应；包内 `install.sh`、`install.ps1` 与源码逐字节一致，PowerShell 脚本有 UTF-8 BOM；每个包 305 个网页文件，无 `/mindfs-assets/` 引用；四个自解压安装器的内嵌归档与对应压缩包逐字节一致；在线入口与 `scripts/install.sh`、`scripts/standalone/download.ps1` 一致；macOS arm64 程序报告 0.1.39。
+
+端到端：macOS arm64 包在临时 HOME 与临时前缀中新装、同包升级（端口不变）、人为删掉 `NOTICE.md` 的失败升级会报错，后台自动回到原端口，注销后 launchd 无遗留任务。Linux arm64 包在 Alpine 容器（无 systemd）中新装直接显示绑定链接、升级、失败升级后自动恢复通过。
+
+**待验证**：Windows 包没有在真实 Windows 5.1 运行（包内是 `install.ps1` 本体，不是在线入口），首次安装、计划任务、登录自启和升级失败恢复要在实机确认。Linux 真机 systemd 没有复跑本组包的开机自启。macOS amd64、Linux amd64 只核对了架构。正式发布前需要提交源码，并按 AGENTS.md 在真实 Windows 5.1 验证包内脚本。
+
 # Linux 服务器开机自启（2026-11-18）
 
 源码提交 `7f18b85`，Linux 0.1.37 预发布。root 安装使用系统级 systemd，普通用户使用用户服务与 lingering。二者分别托管 Core 与网关，异常退出后独立恢复。普通用户缺少 lingering 授权时输出管理员命令。未运行 systemd 时安装器说明状态并继续原有后台启动。
@@ -67,6 +104,26 @@ Go API 全量、配置导入导出竞态回归、前端类型检查和生产构�
 发布后两条固定入口针对六个平台选择并校验 0.1.34，安装最后一步使用测试桩。已有插件和网页更新选择 0.1.34。候选分支自动 CI 在 0.1.34 尚未公开时下载遇到 404，采用已公开 0.1.33 验证候选下载链路，公开后 0.1.34 复核通过。验证记录见 [Windows 5.1 候选](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44265385924) 和 [发布后复核](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44265830885)。
 
 旧独立后台 0.1.27、0.1.30、0.1.31、0.1.32、0.1.33 的 5 个 Release 已下架，原 Release API 和抽检附件下载均返回 404。Git 源码标签保留。发布前后快照、附件摘要和固定入口证据位于 `build/reports/release34/`。
+
+# Linux 远程绑定命令（2026-11-18）
+
+在独立后台增加 `-bind`。命令通过现有本地网关控制接口查询绑定状态。首次发起绑定后输出 Relay 登录地址并退出，网关继续接收确认。再次运行复用待确认链接，已绑定时显示节点名称、地址和连接状态。Linux 安装后打印带实际路径的可复制命令。独立后台尚未运行时，命令提示先启动。
+
+隔离服务配合模拟 Relay 验证首次输出链接、重复查询、授权后 WebSocket 上线、节点地址和暂停状态。安装器回归通过。首次测试运行缺少 `pwsh`，加入本机便携 PowerShell 后 8 项全部通过。用 Linux 分支安装桩核对自定义目录含空格、引号和美元符时可直接复制命令。Linux x64 和 ARM64 交叉编译通过。记录位于 `build/reports/standalone-bind/`，尚未生成或发布安装包。
+
+# Linux 独立后台 0.1.33 补发（2026-11-18）
+
+从发布标签 `fdcc1a4` 的独立 checkout 构建 Linux amd64 和 arm64。首次 linked worktree 构建缺少 Go VCS 元数据，改用完整 checkout 重打，两个 ELF 均记录正确提交和 `vcs.modified=false`。解包核对架构、版本、各 305 个网页文件、安装脚本和 SHA-256。单文件安装器的内嵌归档与对应压缩包逐字节一致。
+
+旧库全量及迁移 race、API、Agent、独立后台 CLI、前端类型检查和远程入口浏览器回归通过。Linux 实机安装待验收。GitHub 新增 10 项附件均匿名下载 HTTP 200，字节与本地和 GitHub 摘要一致。原有 Windows 两项附件 ID 和摘要一致。更新检测在 Linux 双架构均选中 0.1.33，固定在线安装入口的默认版本仍为 0.1.33。验证记录位于 `build/reports/release33-linux/`。
+
+# 独立后台无响应时从 IDEA 切回内置（2026-11-18）
+
+IDEA 启动或重新连接本地聊天失败后，仅在独立数据进程仍独占数据且本地状态探测遇到网络错误时显示原生“切换到内置模式”。认证失败、仅远程入口中断、陈旧的连接文件或其他内置项目的共享锁不会触发这个按钮。检查与恢复命令由插件自带的程序执行，无需更新用户的独立安装。
+
+点击保存一次恢复请求并重启 IDEA；沿用原有的多实例切换锁，最后一个旧 IDEA 退出之后才执行。先关闭远程入口，再关闭数据进程；如果已注册的进程无响应，调用本机服务管理器停止它，等待数据占用释放。关不掉时显示关闭失败，安装记录与项目数据保留。首次 macOS 隔离测试发现服务注销返回后进程尚未退出，改为等待原数据锁释放后复测通过。
+
+插件回归 97 项通过、4 项受现有 Windows/升级运行时环境限制跳过。已验证原生按钮点击后以内置后台打开同一项目并完成本地认证、另一个 IDEA 持有租约时推迟处理，以及仅远程故障时仍可聊天。Go 启动器和后台模块测试通过，覆盖认证错误、陈旧记录、共享及独占写入和停止失败。macOS 隔离冻结旧版 0.1.32 的数据进程后，插件随包程序识别故障，关闭数据与远程入口两项登录服务，逐字节保留独立安装记录，并以内置模式打开项目（HTTP 303 完成本地登录）；Windows x64 启动器已交叉编译，Windows 实机故障恢复待验收。证据在 `build/reports/embedded-recovery/`。本轮只交付源码，无新安装包或 Release。
 
 # Windows x64 本地包 0.1.33 / 0.1.27（2026-11-18）
 
