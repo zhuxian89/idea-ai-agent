@@ -1,10 +1,12 @@
 # 独立后端计划与进度
 
-## 独立后台 0.1.32 与 Windows x64 插件测试包（2026-11-18，准备构建）
+## 独立后台 0.1.32 已发布，Windows x64 插件测试包 0.1.27 已交付（2026-11-18）
 
-独立后台准备发布六平台 0.1.32，Windows x64 插件测试包保持 0.1.27。包内网页、旧库迁移与 Windows PowerShell 5.1 验证按本次产物重新执行。
+远程单文件 HTML 预览已随[独立后台 0.1.32](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.32)发布。六平台共 24 个附件已公开下载并核对 SHA-256，固定安装入口与更新检查均返回 0.1.32。旧库全量和迁移 race 通过。
 
-## 远程单文件 HTML 预览（2026-11-18，本地源码已验证）
+Windows x64 插件测试包版本为 0.1.27，路径为 `build/local-packages/idea-ai-agent-0.1.27-windows-amd64.zip`。正式插件 Release 保留原附件。安装测试包可在 IDEA 中选择「从磁盘安装插件」，安装后重启。最终 ZIP 在真实 Windows PowerShell 5.1 上通过公开 0.1.32 下载和摘要验证。[Windows 验证记录与测试包](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44211930569)
+
+## 远程单文件 HTML 预览（2026-11-18，源码验证）
 
 远程打开 HTML 默认显示源码，点同一行的「预览」即可查看网页和内嵌动画。用截图中的 `pelican-bike.html` 验证了 Chromium、WebKit 的渲染与切换，也验证了编辑保存后的预览。本轮未生成安装包。[实现与验证](standalone-backend-implementation.md#远程单文件-html-预览2026-11-18)
 
@@ -405,7 +407,7 @@ GitHub `v0.1.27` 的 Windows x64 ZIP 与 SHA256SUMS 已替换，原生 Windows P
 
 ## 安装包
 
-插件版本为 `0.1.27`，六平台独立后台均为 `0.1.30`；0.1.29 Release 已下架。新版独立包校验和由各 Release 资产同名 `.sha256` 文件提供；[SHA256SUMS.txt](SHA256SUMS.txt) 保留首次 0.1.27 发布归档。安装步骤见 [独立服务指南](../../../docs/standalone.md)。
+插件版本为 `0.1.27`，六平台独立后台均为 `0.1.32`；0.1.29 Release 已下架。新版独立包校验和由各 Release 资产同名 `.sha256` 文件提供；[SHA256SUMS.txt](SHA256SUMS.txt) 保留首次 0.1.27 发布归档。安装步骤见 [独立服务指南](../../../docs/standalone.md)。
 
 ## 未提交代码审查（2026-11-12）
 

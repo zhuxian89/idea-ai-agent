@@ -1,3 +1,13 @@
+# 独立后台 0.1.32 与 Windows 插件测试包（2026-11-18）
+
+[独立后台 0.1.32](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.32) 的源码标签指向 `4fb3c44`。六平台共 24 个附件经公开地址下载，均与本地产物和 GitHub digest 一致。六个后台程序对应此源码提交，所有包内的 305 个网页文件与本次构建逐一匹配。解包运行 macOS ARM64 后，本地和转发入口各 87 个资源请求成功并匹配包内字节。固定安装脚本与默认版本文件已在线核对，正式 0.1.27 插件发现 Windows 可从 0.1.31 更新到 0.1.32，前端及插件对六个平台均选中 0.1.32。
+
+Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替换网页资源。网页目录以外全部 14 个条目的内容及权限一致，JAR 内版本为 0.1.27。测试包 SHA-256 为 `6e3d39277816c222e331873ba8e6aad3318e017096fa5513ed4fada75b3050a4`。正式插件 Release 的六个资产 ID 和摘要均与发布前一致。
+
+旧库全量和迁移 race、API 全量、前端定向 17 项、安装器本机 7 项通过。Windows 测试 ZIP 解包后的网页入口浏览器回归通过。首次 Gradle 离线构建因本机缺少 foojay 插件依赖中止，恢复依赖后插件配置验证通过，Gradle 的 test 任务命中缓存。Windows 实机从 IDE 安装测试包留给用户验收。
+
+发布前候选分支的常规 CI 在新附件尚未公开时请求 0.1.32，得到 404。随后使用[候选工作流](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44211671771)核对最终插件 ZIP、独立后台双架构和 0.1.32 x64 程序，PowerShell 5.1 的公开下载测试使用当时的 0.1.31。发布后的[复核工作流](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44211930569)使用同一插件 ZIP，通过真实 Windows PowerShell 5.1 下载公开 0.1.32 并校验 SHA-256，5.1 与 7 的跳转回归通过。CI 返回的测试 ZIP 与本地交付文件逐字节一致。常规 push CI 查询正式插件时遇到 GitHub API 匿名限流 403，提交 `95c4985` 将元数据查询改为使用工作流凭据，[主分支复跑](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44212139678)通过。完整证据位于 `build/reports/release32/`。
+
 # 远程单文件 HTML 预览（2026-11-18）
 
 远程文件查看器为 `.html`、`.htm` 及 MIME 为 `text/html` 的文本文件显示「源码 / 预览」。完整 UTF-8 文件复用当前内容，分段读取或其他文本编码通过现有项目文件接口读取完整文本。预览在允许执行脚本的独立沙箱中运行内嵌 CSS、SVG 和 JavaScript。返回源码时保留原查看器和滚动位置。

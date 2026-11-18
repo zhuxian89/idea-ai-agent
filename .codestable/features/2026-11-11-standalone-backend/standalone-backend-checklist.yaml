@@ -4,8 +4,8 @@ entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
   - id: standalone-32-windows-plugin-test
-    description: 发布六平台独立后台 0.1.32，交付 0.1.27 Windows x64 插件测试包。
-    status: in_progress
+    description: 六平台独立后台 0.1.32 的 24 个公开附件与 SHA-256 核对通过；Windows x64 插件测试包维持 0.1.27。发布前后 Windows 5.1 通过，旧库迁移和六平台更新发现通过。
+    status: done
   - id: remote-single-file-html-preview
     description: 远程 HTML 源码与预览切换已实现。Chromium、WebKit 手机宽度实测原始骑行动画和源码返回，两者均通过编辑保存与预览内点击验证。仅完成本地源码与网页构建验证。
     status: done
