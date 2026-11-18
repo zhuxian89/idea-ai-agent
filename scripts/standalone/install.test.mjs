@@ -189,7 +189,9 @@ test("PowerShell: the same installer reads the latest version again when upgradi
   const script = path.join(f.directory, "install.ps1");
   await writeFile(script, (await readFile(path.join(root, "scripts/install.ps1"), "utf8")).replace(versionURL, f.base + "/version.txt"));
   const prefix = path.join(f.directory, "installed");
-  const env = { ...f.env, INSTALL_TEST_TRACE: path.join(f.directory, "calls.txt"), PROCESSOR_ARCHITECTURE: "AMD64", PROCESSOR_ARCHITEW6432: "" };
+  const env = { ...f.env, INSTALL_TEST_TRACE: path.join(f.directory, "calls.txt"), PROCESSOR_ARCHITECTURE: "AMD64" };
+  // Windows 5.1 启动时会用显式空的 WOW64 变量覆盖架构；原生 x64 应省略该变量。
+  delete env.PROCESSOR_ARCHITEW6432;
   for (const version of ["3.0.0", "3.0.1"]) {
     await archive(f, version, "windows-amd64", true);
     f.files.set("/version.txt", version + "\n");
@@ -210,7 +212,8 @@ test("PowerShell: download, verify, and invoke the package installer for x64 and
   const f = await fixture(t);
   const trace = path.join(f.directory, "calls.txt");
   const prefix = path.join(f.directory, "installation with spaces");
-  const env = { ...f.env, INSTALL_TEST_TRACE: trace, PROCESSOR_ARCHITECTURE: "AMD64", PROCESSOR_ARCHITEW6432: "" };
+  const env = { ...f.env, INSTALL_TEST_TRACE: trace, PROCESSOR_ARCHITECTURE: "AMD64" };
+  delete env.PROCESSOR_ARCHITEW6432;
   const install = (version, childEnv = env) => run(pwsh, ["-NoProfile", "-File", powershellInstaller, "-Version", version, "-Prefix", prefix], childEnv);
 
   await archive(f, "3.0.0", "windows-amd64", true);

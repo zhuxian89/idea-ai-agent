@@ -7,12 +7,14 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +24,37 @@ import (
 	"mindfs/server/internal/remotehost"
 	"mindfs/server/internal/session"
 )
+
+func TestStandaloneRestartStopsOnCoreFailure(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("IDE_AGENT_REMOTE_HOST_DIR", dir)
+	var stopRequested atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/control/status":
+			_ = json.NewEncoder(w).Encode(remotehost.Status{Protocol: remotehost.Protocol})
+		case "/control/stop":
+			stopRequested.Store(true)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "core stop rejected"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	address := strings.TrimPrefix(server.URL, "http://")
+	if err := backend.PublishCore(dir, address, address, "test-token"); err != nil {
+		t.Fatal(err)
+	}
+	// 即使网关已停止，完整重启也必须先停 Core；失败不能继续启动网关并报告成功。
+	err := runCLI([]string{"-restart", "-no-browser", "-no-relayer"})
+	if !stopRequested.Load() || err == nil || !strings.Contains(err.Error(), "core stop rejected") {
+		t.Fatalf("restart must report the Core stop failure: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "host.json")); !os.IsNotExist(err) {
+		t.Fatalf("restart started a gateway after Core stop failed: %v", err)
+	}
+}
 
 func TestStandaloneProcessLifecycle(t *testing.T) {
 	dir := t.TempDir()
@@ -199,22 +232,41 @@ func TestStandaloneProcessLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	localJar, _ := cookiejar.New(nil)
-	localBrowser := &http.Client{Jar: localJar, Timeout: 5 * time.Second}
-	login, err := localBrowser.Get(coreBefore.URL + "/?ide_token=" + coreBefore.Token)
-	if err != nil {
-		t.Fatal(err)
+	corePID := func() int {
+		t.Helper()
+		var status struct {
+			PID int `json:"pid"`
+		}
+		if err := backend.CoreClient(dir).Call(context.Background(), "GET", "/control/status", nil, &status); err != nil {
+			t.Fatal(err)
+		}
+		if status.PID == 0 {
+			t.Fatal("missing core process ID")
+		}
+		return status.PID
 	}
-	login.Body.Close()
-	coreURL, _ := url.Parse(coreBefore.URL)
-	headers := http.Header{}
-	for _, cookie := range localJar.Cookies(coreURL) {
-		headers.Add("Cookie", cookie.Name+"="+cookie.Value)
+	pidBefore := corePID()
+	connectStream := func() *websocket.Conn {
+		t.Helper()
+		localJar, _ := cookiejar.New(nil)
+		localBrowser := &http.Client{Jar: localJar, Timeout: 5 * time.Second}
+		login, err := localBrowser.Get(coreBefore.URL + "/?ide_token=" + coreBefore.Token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		login.Body.Close()
+		coreURL, _ := url.Parse(coreBefore.URL)
+		headers := http.Header{}
+		for _, cookie := range localJar.Cookies(coreURL) {
+			headers.Add("Cookie", cookie.Name+"="+cookie.Value)
+		}
+		ws, _, err := websocket.DefaultDialer.Dial(strings.Replace(coreBefore.URL, "http://", "ws://", 1)+"/ws?client_id=isolation-test", headers)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ws
 	}
-	ws, _, err := websocket.DefaultDialer.Dial(strings.Replace(coreBefore.URL, "http://", "ws://", 1)+"/ws?client_id=isolation-test", headers)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ws := connectStream()
 	defer ws.Close()
 	checkStream := func(id string) {
 		t.Helper()
@@ -243,9 +295,22 @@ func TestStandaloneProcessLifecycle(t *testing.T) {
 	command("-restart", "-no-browser", "-no-relayer", "-addr", "127.0.0.1:0")
 	checkData()
 	coreAfter, err := backend.ReadCore(dir)
-	if err != nil || coreBefore != coreAfter {
-		t.Fatal("remote restart replaced the local core", err)
+	if err != nil || coreBefore.Token == coreAfter.Token || pidBefore == corePID() {
+		t.Fatal("restart retained the old local core", err)
 	}
+	// 旧连接必须由 Core 关闭，而不是等到客户端超时；新连接继续操作已有会话。
+	ws.SetReadDeadline(time.Now().Add(5 * time.Second))
+	for {
+		if _, _, err := ws.ReadMessage(); err != nil {
+			if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
+				t.Fatal("restart left the old local connection open")
+			}
+			break
+		}
+	}
+	coreBefore = coreAfter
+	ws = connectStream()
+	defer ws.Close()
 	checkStream("after-restart")
 	command("-stop")
 	checkStream("after-stop")
@@ -341,11 +406,16 @@ func TestStandaloneProcessLifecycle(t *testing.T) {
 		t.Fatal("upgrade lost the legacy port", active.URL, upgraded.URL)
 	}
 	// Restart without an address keeps the actual bound port.
+	pidBefore = corePID()
 	command("-restart", "-no-browser", "-no-relayer")
 	restarted, _ := remotehost.ReadDescriptor(dir)
 	if restarted.URL != active.URL {
 		t.Fatal("restart changed the configured port", active.URL, restarted.URL)
 	}
+	if corePID() == pidBefore {
+		t.Fatal("second restart retained the old core")
+	}
+	checkData()
 	command("-unregister")
 	for _, name := range []string{"core.json", "host.json", "installation.json"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {

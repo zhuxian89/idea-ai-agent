@@ -55,7 +55,7 @@ func runCLI(args []string) error {
 	status := flags.Bool("status", false, "show the shared backend status")
 	stop := flags.Bool("stop", false, "stop the shared backend for all projects")
 	stopCore := flags.Bool("stop-core", false, "stop the local data service before updating its executable")
-	restart := flags.Bool("restart", false, "restart the shared backend for all projects")
+	restart := flags.Bool("restart", false, "restart the remote gateway and local data service for all projects")
 	install := flags.Bool("install", false, "record this executable for IDEA discovery")
 	installationDir := flags.Bool("installation-dir", false, "print the registered installation directory")
 	uninstall := flags.Bool("unregister", false, "remove IDEA discovery after stopping the service")
@@ -220,10 +220,14 @@ func runCLI(args []string) error {
 		if err := backend.UnloadLoginService(ctx, dir, "gateway"); err != nil {
 			return err
 		}
-		if *uninstall {
+		// 重启必须释放 Core 持有的 Agent 进程，才能加载更新后的 CLI。
+		// 先停网关，再等待 Core 释放数据锁；停止失败时不启动新实例。
+		if *restart || *uninstall {
 			if err := stopLocalCore(ctx, dir); err != nil {
 				return err
 			}
+		}
+		if *uninstall {
 			if err := backend.RemoveLoginServices(ctx, dir); err != nil {
 				return err
 			}

@@ -84,7 +84,9 @@ internal fun manageStandalone(dir: Path, action: String) {
     builder.environment().putAll(agentRuntimeEnvironment(EnvironmentUtil.getEnvironmentMap()))
     builder.environment()["IDE_AGENT_REMOTE_HOST_DIR"] = dir.toString()
     val child = builder.start()
-    if (!child.waitFor(25, TimeUnit.SECONDS)) {
+    // 完整重启包含网关停止、Core 数据落盘与关闭，以及 Core 和网关依次启动。
+    val timeoutSeconds = if (action == "restart") 90L else 25L
+    if (!child.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
         child.destroyForcibly()
         error("Local AI Agent control command timed out")
     }

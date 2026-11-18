@@ -52,8 +52,9 @@ type AppServerExec struct {
 	verbose       bool
 	verboseWriter io.Writer
 
-	startOnce sync.Once
-	startErr  error
+	startOnce       sync.Once
+	startErr        error
+	serverUserAgent atomic.Value
 
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
@@ -545,11 +546,31 @@ func (a *AppServerExec) initialize(ctx context.Context) error {
 			"experimentalApi": true,
 		},
 	}
-	_, initErr := a.call(ctx, "initialize", params)
+	result, initErr := a.call(ctx, "initialize", params)
 	if initErr != nil {
 		return initErr
 	}
-	return a.notify("initialized", nil)
+	var initialized struct {
+		UserAgent string `json:"userAgent"`
+	}
+	if err := json.Unmarshal(result, &initialized); err != nil {
+		return err
+	}
+	if err := a.notify("initialized", nil); err != nil {
+		return err
+	}
+	// 保存当前进程的握手信息，磁盘上的 CLI 更新不能覆盖这个版本快照。
+	a.serverUserAgent.Store(initialized.UserAgent)
+	return nil
+}
+
+// AppServerUserAgent returns the completed handshake identity without starting a process.
+func (a *AppServerExec) AppServerUserAgent() (string, bool) {
+	value := a.serverUserAgent.Load()
+	if value == nil {
+		return "", false
+	}
+	return value.(string), true
 }
 
 // ListModels fetches the app server model catalog.

@@ -12,8 +12,8 @@ import (
 	"mindfs/server/internal/remotehost"
 )
 
-// The core owns project data. The remote gateway has a separate descriptor and
-// lifetime, so restarting remote access never rotates the IDE's login token.
+// The core owns project data and has a separate descriptor from the gateway.
+// Stopping only the gateway preserves the IDE login; a full restart rotates it.
 func CoreClient(dir string) *remotehost.Client {
 	client := remotehost.NewClient(dir)
 	client.DescriptorName = "core.json"

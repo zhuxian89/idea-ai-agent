@@ -12,6 +12,8 @@ Local changes:
 - Process user questions and approvals without blocking stream notifications; cancel and join pending handlers when a turn ends.
 - Return a refusal/empty answer on cancellation instead of abandoning a server RPC.
 - Add regression tests and replace upstream tests that expected silent effort downgrades.
+- Retain the app-server initialization `userAgent` as the running process identity;
+  expose it without starting another process so model refresh can detect CLI upgrades.
 
 The installed official Codex CLI still executes the Agent. This is a patched
 third-party Go transport, not an official OpenAI SDK. `runtime/go.mod` uses a local

@@ -198,6 +198,14 @@ func (c *Codex) SupportedSlashCommands() []types.SlashCommandInfo {
 	return SupportedSlashCommands()
 }
 
+// AppServerUserAgent reads the identity reported by the running process at initialization.
+func (c *Codex) AppServerUserAgent() (string, bool) {
+	if transport, ok := c.exec.(interface{ AppServerUserAgent() (string, bool) }); ok {
+		return transport.AppServerUserAgent()
+	}
+	return "", false
+}
+
 // Close releases resources held by the underlying transport.
 func (c *Codex) Close() error {
 	if exec, ok := c.exec.(closeableExec); ok {

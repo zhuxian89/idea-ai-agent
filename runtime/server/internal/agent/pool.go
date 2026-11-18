@@ -20,6 +20,7 @@ type Pool struct {
 	processCtx context.Context
 	cancel     context.CancelFunc
 	mu         sync.Mutex
+	refreshMu  sync.Mutex
 	sessions   map[string]*sessionEntry
 	runtimeEnv map[string]map[string]string
 	closed     bool
@@ -338,6 +339,51 @@ func (p *Pool) closeSessionsForAgent(agentName string, protocol Protocol) {
 			return entry.agentName == agentName && entry.protocol == protocol
 		}),
 	)
+}
+
+// RestartUpdatedCodex replaces an older running CLI before an explicit model refresh.
+func (p *Pool) RestartUpdatedCodex(ctx context.Context, agentName string) error {
+	// 多个页面同时刷新时，版本检查和替换必须串行，避免重复关闭新客户端。
+	p.refreshMu.Lock()
+	defer p.refreshMu.Unlock()
+	p.mu.Lock()
+	def, ok := p.cfg.GetAgent(agentName)
+	closed := p.closed
+	p.mu.Unlock()
+	if closed {
+		return errors.New("agent pool closed")
+	}
+	if !ok {
+		return errors.New("agent not configured: " + agentName)
+	}
+	if agentDefinitionProtocol(agentName, def) != ProtocolCodexSDK {
+		return nil
+	}
+	identity, started := p.codex.AppServerUserAgent(agentName)
+	if !started {
+		return nil
+	}
+	running := ""
+	if fields := strings.Fields(identity); len(fields) > 0 {
+		running = extractVersion(fields[0])
+	}
+	if running == "" {
+		return errors.New("running Codex app-server version is unavailable")
+	}
+	installed, err := readDefinitionVersion(ctx, def)
+	if err != nil {
+		return err
+	}
+	if !isVersionNewer(installed, running) {
+		return nil
+	}
+	// 只替换 Codex 的运行资源；持久化会话由原有恢复链路继续加载。
+	p.closeSessionsForAgent(agentName, ProtocolCodexSDK)
+	if err := p.codex.Close(agentName); err != nil {
+		return err
+	}
+	log.Printf("[agent/pool] codex.upgraded agent=%s running=%s installed=%s", agentName, running, installed)
+	return nil
 }
 
 func cloneEnv(env map[string]string) map[string]string {

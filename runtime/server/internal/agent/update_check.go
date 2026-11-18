@@ -95,10 +95,15 @@ func CheckUpdate(ctx context.Context, def Definition, currentVersion string, cli
 }
 
 func detectDefinitionVersion(def Definition) string {
+	version, _ := readDefinitionVersion(context.Background(), def)
+	return version
+}
+
+func readDefinitionVersion(ctx context.Context, def Definition) (string, error) {
 	if strings.TrimSpace(def.Command) == "" || len(def.VersionArgs) == 0 {
-		return ""
+		return "", errors.New("agent version command is not configured")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, def.Command, def.VersionArgs...)
 	if len(def.Env) > 0 {
@@ -109,9 +114,13 @@ func detectDefinitionVersion(def Definition) string {
 	}
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("read %s CLI version: %w: %s", def.Name, err, strings.TrimSpace(string(output)))
 	}
-	return extractVersion(string(output))
+	version := extractVersion(string(output))
+	if version == "" {
+		return "", fmt.Errorf("unrecognized %s CLI version: %s", def.Name, strings.TrimSpace(string(output)))
+	}
+	return version, nil
 }
 
 func extractVersion(value string) string {

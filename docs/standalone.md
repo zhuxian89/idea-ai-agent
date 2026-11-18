@@ -1,6 +1,6 @@
 # Local AI Agent 独立服务
 
-独立版提供统一的多项目入口，浏览器使用当前优化后的界面。插件直接连接本地数据服务；独立远程入口单独运行。关闭或重启远程入口时，插件界面和本地聊天继续使用；关闭 IDEA 后仍可远程访问。
+独立版提供统一的多项目入口，浏览器使用当前优化后的界面。插件直接连接本地数据服务；独立远程入口单独运行。停止远程入口时，本地聊天继续运行；重新启动独立后台会重启远程入口和本地数据服务，中断进行中的对话，保留历史记录，插件随后自动重新连接。关闭 IDEA 后仍可远程访问。
 
 远程访问沿用现有 Relay，云端无需更新，其他客户端继续使用原协议。IDEA/独立版取消浏览器配对和项目二次授权，节点地址直接进入已开放项目。
 
@@ -108,9 +108,13 @@ local-ai-agent -no-browser
 local-ai-agent /absolute/path/to/project
 ```
 
-`-stop` 和 `-restart` 控制远程入口，断开远程设备；插件的本地聊天继续运行。macOS 安装脚本自动配置 Core 和远程入口的用户 LaunchAgent，Windows 配置两个当前用户计划任务。电脑重启并登录后自动启动；异常退出由系统恢复。手动停止会保持停止，直到手动启动或下一次登录。启动和重启会沿用上次的实际端口，可用 `-addr 127.0.0.1:7441` 指定。`-foreground` 在当前终端运行远程入口。远程日志为 `LocalAIAgent/remote/logs/standalone.log`，本地数据服务日志为同目录的 `core.log`。安装程序使用 `-stop-core` 停止本地数据服务后更新程序。
+`-stop` 仅停止远程入口，断开远程设备，本地聊天继续运行。`-restart` 依次停止远程入口和本地数据服务，等待数据锁释放后重新启动两者，让 Codex 等 Agent 使用更新后的 CLI。重启会中断所有项目中进行的对话，历史记录保留；插件中的“重新启动”会在完成后自动重新连接本地数据服务。
+
+macOS 安装脚本自动配置 Core 和远程入口的用户 LaunchAgent，Windows 配置两个当前用户计划任务。电脑重启并登录后自动启动；异常退出由系统恢复。手动停止会保持停止，直到手动启动或下一次登录。启动和重启会沿用上次的实际端口，可用 `-addr 127.0.0.1:7441` 指定。`-foreground` 在当前终端运行远程入口。远程日志为 `LocalAIAgent/remote/logs/standalone.log`，本地数据服务日志为同目录的 `core.log`。安装程序使用 `-stop-core` 停止本地数据服务后更新程序。
 
 ## 项目与已有数据
+
+聊天菜单中的“刷新模型”会比较正在运行的 Codex 与本机已安装 CLI 的版本。检测到本机版本更新时，自动重启 Codex 并重新读取模型，无需再次确认或手动重启后台。自动重启会中断进行中的 Codex 对话，历史记录保留；同版本刷新不重启。版本读取或重启失败会显示具体错误。
 
 浏览器中点击“添加项目”，可使用三种方式：
 
@@ -159,7 +163,7 @@ node scripts/package-standalone.mjs macos-arm64 --skip-web
 
 ## English
 
-The standalone distribution reuses the current Local AI Agent interface and provides one entry for all projects. The plugin connects directly to a local data service. Remote access runs in a separate process, so stopping, restarting, or failing to authenticate remote access leaves the plugin and local chats available. Opening it from IDEA selects that project, and the browser can switch to other registered projects. The service and access through the existing Relay at `relay.20260310.best` continue after IDEA closes.
+The standalone distribution reuses the current Local AI Agent interface and provides one entry for all projects. The plugin connects directly to a local data service. Stopping remote access leaves local chats running. Restarting the standalone backend restarts both the gateway and the local data service, interrupts active conversations, and reconnects the plugin automatically while preserving history. Opening it from IDEA selects that project, and the browser can switch to other registered projects. The service and access through the existing Relay at `relay.20260310.best` continue after IDEA closes.
 
 On first startup, it imports previously shared projects from the plugin's unified remote entry, reuses their original conversation and attachment storage, and carries over the remote enabled state. Existing standalone settings remain in place. Paused or unshared projects remain in the old records and can be added when needed. Missing directories are reported in the log. Imports run once, so removed projects stay removed. Existing Relay credentials are reused. Sign in to Relay and open the node from its home page, with no browser pairing or additional project authorization; old project bookmarks redirect to the standalone entry while preserving project, session, and file selection.
 
@@ -183,4 +187,4 @@ Windows, macOS and Linux use the versioned Release installers above. For macOS a
 
 GitHub Release titles use `独立后台 <version>` for the standalone backend and `IDEA 插件 <version>` for the IDEA plugin. Both are released independently in this repository, with `standalone-v<version>` and `v<version>` tags respectively.
 
-`-stop` and `-restart` control remote access and keep local chats running. On macOS and Windows, manual stop leaves remote access stopped until it is started again or the next login. Unregistering removes the login jobs. Startup reuses the last bound port unless `-addr` is supplied. Installation updates stop both processes before replacing files; conversation data is retained.
+`-stop` stops only remote access and keeps local chats running. `-restart` stops the gateway and local core, waits for the data lock to be released, then starts both services again. This also replaces their Agent processes. On macOS and Windows, manual stop leaves remote access stopped until it is started again or the next login. Unregistering removes the login jobs. Startup reuses the last bound port unless `-addr` is supplied. Installation updates stop both processes before replacing files; conversation data is retained.

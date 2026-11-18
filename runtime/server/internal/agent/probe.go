@@ -349,6 +349,13 @@ func (p *Prober) ProbeOne(ctx context.Context, name string) Status {
 	if !ok {
 		return unavailableStatus(trimmed, false, "agent not configured", time.Now().UTC())
 	}
+	if p.pool != nil {
+		if err := p.pool.RestartUpdatedCodex(ctx, trimmed); err != nil {
+			status := unavailableStatus(trimmed, true, err.Error(), time.Now().UTC())
+			p.setStatus(status)
+			return status
+		}
+	}
 	status := safeProbeConfiguredAgentWithPool(ctx, trimmed, def, p.pool, p.probeSessions, probePhaseRecovery)
 	p.setStatus(status)
 	return status

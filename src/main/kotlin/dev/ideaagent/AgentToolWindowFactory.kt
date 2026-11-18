@@ -168,7 +168,13 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         })
         ApplicationManager.getApplication().messageBus.connect(this).subscribe(StandaloneBackendListener.TOPIC, object : StandaloneBackendListener {
             override fun changed(action: String) {
-                if (closed || project.isDisposed || !loaded) return
+                if (closed || project.isDisposed) return
+                // Core 重启会更换地址和令牌，所有独立模式项目都要重新读取连接信息。
+                if (action == "restart" && connection?.standalone == true) {
+                    start()
+                    return
+                }
+                if (!loaded) return
                 execute("window.dispatchEvent(new CustomEvent('idea:backend-state', {detail: {busy: false}}));")
             }
         })
@@ -316,7 +322,10 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         ApplicationManager.getApplication().invokeLater {
             if (backendBusy) return@invokeLater
             if (action != "start" && com.intellij.openapi.ui.Messages.showYesNoDialog(project,
-                    localized("此操作会断开远程设备。本地聊天继续运行。继续？", "This disconnects remote devices. Local chats keep running. Continue?"),
+                    if (action == "restart") localized(
+                        "此操作会重启独立后台，断开远程设备并中断所有项目中进行的对话。历史记录保留，插件将自动重新连接。继续？",
+                        "This restarts the standalone backend, disconnects remote devices, and interrupts active conversations in all projects. History is preserved and the plugin reconnects automatically. Continue?")
+                    else localized("此操作会断开远程设备。本地聊天继续运行。继续？", "This disconnects remote devices. Local chats keep running. Continue?"),
                     "Local AI Agent", com.intellij.openapi.ui.Messages.getWarningIcon()) != com.intellij.openapi.ui.Messages.YES) return@invokeLater
             backendBusy = true
             execute("window.dispatchEvent(new CustomEvent('idea:backend-state', {detail: {busy: true}}));")

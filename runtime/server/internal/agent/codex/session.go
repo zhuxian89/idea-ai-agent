@@ -173,6 +173,16 @@ func (r *Runtime) Close(agentName string) error {
 	return client.Close()
 }
 
+func (r *Runtime) AppServerUserAgent(agentName string) (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	client := r.clients[agentName]
+	if client == nil {
+		return "", false
+	}
+	return client.AppServerUserAgent()
+}
+
 func (r *Runtime) getOrCreateClient(opts OpenOptions) *codexsdk.Codex {
 	r.mu.Lock()
 	defer r.mu.Unlock()

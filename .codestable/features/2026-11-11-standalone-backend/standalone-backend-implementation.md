@@ -1,3 +1,52 @@
+# Windows x64 本地包 0.1.33 / 0.1.27（2026-11-18）
+
+按用户要求独立后台升至 0.1.33，插件保持 0.1.27，生成 Windows amd64 本地包供手工替换。证据目录 `build/reports/release33/`。未发布 GitHub、提交推送或安装/重启用户实际服务。
+
+| 产物 | SHA-256 |
+| --- | --- |
+| `build/standalone/0.1.33/local-ai-agent-0.1.33-windows-amd64.zip` | `c2de7bebf408b23f5f6c0ed14eda2e883a98e9db105420c451317b8e403aa21d` |
+| `build/local-packages/idea-ai-agent-0.1.27-windows-amd64.zip` | `d790d5f46c2db4913cc2093342e158364f4f2bc963048d20a669fd930365391b` |
+
+插件通过 `node scripts/package-plugin.mjs local win --version 0.1.27 --verify` 构建。独立包按现有打包布局以版本链接参数构建 EXE，Windows 缺 zip 命令，因此用 `package-windows.py` 归档；在插件构建后重新复制同一 dist。`verify-packages.py` 从最终 ZIP 解出并检查 PE 架构、EXE/JAR 版本、安装器源码/BOM、305 个网页文件。临时隔离启动最终程序，Core PID 37048 → 44280、令牌改变，网关地址及项目身份保留；独立 Core、独立网关、转发、插件内置本地四入口各 305 个 HTTP 资源与包内字节一致。报告 `package-verification.json`。
+
+Agent 全量（含模拟旧版本升级）、SDK、backend、CLI 重启生命周期/停止失败回归通过。kanban 全量与 `TestTaskStoreSnapshotMigration` race 两项门禁通过。前端定向回归、类型检查和生产构建通过。Gradle 测试共100项，98通过、2项运行时升级条件跳过，0失败；`kotlin-summary.json` 保留具体跳过名称。实际 IDEA 多项目重连与真实 Codex 模型显示待用户安装验收。
+
+API `TestApprovalTerminalEventsUpdateTaskWaitingWithoutHidingOtherQuestions` 在功能断言结束后因 SQLite 文件未关闭导致临时目录清理失败；app `TestLocalCLITokenStoreWritesSinglePrivateFile` 因 Windows 返回0666而非Unix0600失败。两项均用 HEAD 源码 overlay 复现，日志 `api-baseline-cleanup.log`、`app-baseline-permission.log`；其余 API/app 测试通过，未记为全量通过。
+
+最终插件 ZIP 经真实 Windows PowerShell 5.1.26100.9818 验证脚本字节及 UTF-8 BOM，下载公开0.1.32并验证摘要成功；默认及ANSI936跳转回归2/2通过（`windows51-final-plugin.log`）。0.1.33仅在本地，未把公开0.1.32下载记为0.1.33线上验证。补充下载回归在5.1/7及两种读取方式共4项通过。安装组合初轮因缺少sh/which/zip失败；使用构建目录内基于Windows tar的zip工具后，5.1暴露显式空 `PROCESSOR_ARCHITEW6432` 会清空架构值的问题。测试改为省略该变量，保留ARM64场景显式赋值；再为测试子进程指定原生5.1模块目录，解决混用PowerShell7模块路径导致Get-FileHash不可用。最终Windows安装回归2/2通过、无跳过，覆盖版本重新读取、x64/ARM64选择、摘要失败、DeferStart与安装失败传播（包安装步骤用临时桩）。Shell三项未在本机验证，不计通过；真实计划任务与登录自启不在本轮隔离验证中。
+
+Review: PASS。完整源码修改沿用下述任务基线兼容审查；新增安装测试修正仅恢复原生x64的环境语义，ARM64输入仍在各自用例覆盖。code-simplifier复核无安全简化，未追加重构。测试修正不进入安装包，最终产物字节不受影响。
+
+# 刷新模型自动更新 Codex 进程（2026-11-18）
+
+用户明确要求“刷新模型”自动比较旧版本并重启，不再要求用户额外确认。保留前一项独立后台完整重启修复，模型刷新只替换需要升级的 Codex 运行资源。
+
+SDK 在 initialize 成功后保存 `userAgent`，通过只读方法暴露当前进程身份，不通过新的 `--version` 覆盖这个快照。Pool 在显式 `ProbeOne` 前比较该身份中的版本与配置中的 CLI 版本命令；仅本机版本更新时移除旧 Codex 运行会话并关闭客户端，然后原探测链路创建新客户端、发布模型状态。比较与替换串行处理。其他协议、同版本和较旧的磁盘版本不重启；尚未初始化的客户端由正常探测启动。版本未知、读取失败或关闭失败均返回错误并结束 pending 状态。
+
+原版本检测调用保留失败时返回空字符串的接口行为，新增带错误结果的内部读取函数供刷新使用。模型数据结构、顺序、隐藏标记与默认值映射沿用原逻辑。运行会话释放后，后续对话通过持久化 AgentSessionID 恢复；正在进行的 Codex 对话会被中断，提示已同步。
+
+`model_refresh_test.go` 使用测试程序的隔离子进程模拟 `--version`、initialize、model/list、config/read 和 thread/unsubscribe，启动时固定模型目录。覆盖 0.164.0 → 0.169.1 后自动出现新模型、同版不重启、磁盘较旧不重启、版本不可识别报错、保留其他 Agent、再次刷新不重复关闭新客户端。夹具不调用真实 Codex 或付费模型。
+
+Review: PASS（静态）。以本会话初始干净工作区及已授权的完整重启修改为基线，检查 SDK 身份快照、版本读取、Pool 资源释放、ProbeOne 成功/失败状态和实际会话 AgentSessionID 恢复调用链。0.164.0 → 0.169.1 会替换；同版、磁盘更旧均保留；无法读取版本时返回错误，不报告刷新成功。code-simplifier 检查无进一步安全简化，未追加行为改写。
+
+验证状态：Agent全量（含自动升级模拟协议）、SDK与API探测回归通过，已纳入本地33/27包。API既有Windows清理失败及实际Codex验收边界见本轮打包记录。格式化产生的一处任务外空行清理已恢复。
+
+# 独立后台完整重启（2026-11-18）
+
+现象：配置测试可见 `gpt-6.2-astra`，聊天刷新仍不可见；用户更新 Codex 后，插件“重新启动”未替换旧 app-server。
+
+现场证据：Core PID 42588 自 09:18:25 运行，Codex PID 7608 于 09:18:26 启动，其 code-mode 子进程使用 0.164.0 发布目录。磁盘 codex.exe 的 `--version` 返回 0.169.1，SHA-256 与 0.169.1 daemon 可执行文件一致。用户点击重启后，网关换为 PID 31560（09:48:16），Core 与 Codex PID/启动时间均未变。
+
+根因：`manageStandalone` 调用 `-restart`，CLI 原分支只停止网关；重新启动网关时 `EnsureCore` 发现现有 Core 健康即返回。插件完成事件原先也只通知按钮刷新，不重新读取 Core 地址与令牌。用户已明确要求将“重新启动”改为完整后台重启。
+
+实现：`-restart` 在网关停止后复用 `stopLocalCore`，等待 Core 数据锁释放并卸载登录服务，之后原启动流程创建新 Core/网关。Core 退出通过 `agentPool.CloseAll` 关闭常驻 Agent。Core 停止失败立即返回原错误。`-stop` 仍只停止网关。插件成功事件让所有独立模式项目调用现有 `start()` 重读连接，内置模式保留当前界面；提示说明中断进行中的对话、保留历史记录，完整重启等待上限从仅网关的 25 秒调整为 90 秒。
+
+此前 `resolveProbePool` 隔离改动及对应测试已撤回。当前回归更新 `TestStandaloneProcessLifecycle`：Core PID/令牌改变、旧 WebSocket 关闭、新连接读写已有会话、重复重启、端口和项目数据保留；新增 `TestStandaloneRestartStopsOnCoreFailure` 覆盖网关已停而 Core 停止失败。Kotlin 新增 `reconnectReadsReplacedCoreAddressAndToken`，检查 Core 地址与令牌更换后重读描述文件，保留原项目身份。
+
+Review: PASS（静态）。以任务开始时的干净工作区为基线，核对 `runCLI` 重启/停止/卸载分支、Core 数据锁和 Agent 关闭顺序、插件完成事件及 `LocalRuntime.start` 的地址/令牌重读路径；授权行为变化是重启中断当前对话，停止远程入口仍保留 Core。code-simplifier 复核无进一步安全简化，未追加源码改写。
+
+验证状态：CLI重启生命周期/停止失败、backend与Kotlin重连回归通过；最终独立包隔离实测Core PID/令牌更换且身份保留。两包已构建，旧库迁移及Windows最终包验证通过。实际IDEA多项目及Codex验收待用户替换；app既有Windows权限断言失败见本轮打包记录。
+
 # 独立后台 0.1.32 与 Windows 插件测试包（2026-11-18）
 
 [独立后台 0.1.32](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.32) 的源码标签指向 `4fb3c44`。六平台共 24 个附件经公开地址下载，均与本地产物和 GitHub digest 一致。六个后台程序对应此源码提交，所有包内的 305 个网页文件与本次构建逐一匹配。解包运行 macOS ARM64 后，本地和转发入口各 87 个资源请求成功并匹配包内字节。固定安装脚本与默认版本文件已在线核对，正式 0.1.27 插件发现 Windows 可从 0.1.31 更新到 0.1.32，前端及插件对六个平台均选中 0.1.32。

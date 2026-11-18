@@ -3,6 +3,15 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
+  - id: windows33-plugin27-local-packages
+    description: Windows x64 独立 0.1.33 与插件 0.1.27 本地包及校验已生成；最终包 Core 重启与四入口各305资源通过，旧库全量/迁移race通过，最终插件 Windows5.1 下载/BOM/摘要与安装回归2项通过。Kotlin98通过2跳过；API临时库清理及app权限断言各1项既有Windows失败已在HEAD复现。未发布或操作用户实际服务，实际IDEA/Codex验收待用户替换。
+    status: done
+  - id: codex-model-refresh-auto-upgrade
+    description: 刷新时比较 app-server 握手版本与磁盘 CLI 版本；磁盘版本更新则自动关闭旧 Codex 并探测新进程，同版保留，失败返回原错误。静态兼容、Agent/SDK与模拟协议回归通过，已纳入本地33/27包，真实升级刷新待用户验收。
+    status: in_progress
+  - id: standalone-full-restart
+    description: 已确认重启仅替换网关、遗留旧 Core/Codex；撤回模型探测隔离。完整重启与插件重连、生命周期/Core停止失败/Kotlin凭据更新回归通过。最终独立33包实测Core PID/令牌更换、身份和网关地址保留；插件27已重打，IDEA多项目重连待用户验收。
+    status: in_progress
   - id: standalone-32-windows-plugin-test
     description: 六平台独立后台 0.1.32 的 24 个公开附件与 SHA-256 核对通过；Windows x64 插件测试包维持 0.1.27。发布前后 Windows 5.1 通过，旧库迁移和六平台更新发现通过。
     status: done

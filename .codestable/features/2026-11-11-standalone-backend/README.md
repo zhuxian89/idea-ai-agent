@@ -1,5 +1,19 @@
 # 独立后端计划与进度
 
+## Windows x64 本地交付：独立后台 0.1.33 / 插件 0.1.27（2026-11-18）
+
+两包已重新构建：`build/standalone/0.1.33/local-ai-agent-0.1.33-windows-amd64.zip`、`build/local-packages/idea-ai-agent-0.1.27-windows-amd64.zip`，各带 SHA-256 文件。独立包包含完整重启与刷新模型自动替换旧 Codex；插件包含 Core 重启后的地址/令牌重读。用户关闭 IDEA 后运行独立 ZIP 内的 `install.ps1`，再从磁盘重装同版本插件并重启 IDEA。本轮仅交付本地包，未发布线上附件、安装或重启用户实际服务。
+
+最终包隔离运行验证通过：Core PID/令牌更换、项目身份/网关地址保留；内置本地及独立 Core/网关/转发四入口各 305 项资源 HTTP 字节匹配。Agent/SDK、重启生命周期、旧库全量与迁移 race、前端及插件回归通过；Kotlin 98 项执行通过、2 项环境跳过。最终 ZIP 的真实 Windows 5.1 脚本/BOM/公开 0.1.32 下载和摘要验证通过，安装回归 2/2 通过。API 临时库清理和 app Unix 权限断言各有一项既有 Windows 失败，已用 HEAD 基线复现，其余用例通过。实际 IDEA 多项目重连及真实 Codex 模型显示待用户安装验收。[本轮证据](standalone-backend-implementation.md#windows-x64-本地包-0133--01272026-11-18)
+
+## 刷新模型自动更新 Codex 进程（2026-11-18，已打包，待实机验收）
+
+用户要求刷新模型时自动比较版本、旧进程自动重启，不增加确认操作。已保存 app-server 握手中的运行时身份，刷新时与 CLI 版本命令比较；本机版本更新时关闭旧 Codex 会话及客户端，再走原探测链路获取模型。同版/较旧版本保留进程，版本读取和关闭失败按错误返回。模拟 CLI 协议回归、Agent/SDK 测试通过，已纳入本地 33/27 包。[实现记录](standalone-backend-implementation.md#刷新模型自动更新-codex-进程2026-11-18)
+
+## 独立后台完整重启（2026-11-18，已打包，待实机验收）
+
+已确认插件“重新启动”只替换网关进程，Core 与旧 Codex app-server 仍在运行。现将 `-restart` 改为停止网关、停止 Core 并等待数据锁释放，再启动新 Core 和网关；插件完成后重新读取地址与令牌连接，提示同步说明对话会中断。此前模型探测隔离改动已撤回。Go 生命周期、Core 停止失败及 Kotlin 连接凭据更新用例通过，最终独立包隔离实测 Core 更换通过。本次交付需更新独立包和插件包。[实现记录](standalone-backend-implementation.md#独立后台完整重启2026-11-18)
+
 ## 独立后台 0.1.32 已发布，Windows x64 插件测试包 0.1.27 已交付（2026-11-18）
 
 远程单文件 HTML 预览已随[独立后台 0.1.32](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.32)发布。六平台共 24 个附件已公开下载并核对 SHA-256，固定安装入口与更新检查均返回 0.1.32。旧库全量和迁移 race 通过。
