@@ -111,6 +111,9 @@ func TestFrontendAssetsStayWithBackend(t *testing.T) {
 							if mode.standalone && !strings.Contains(body, `name="local-ai-agent-mode" content="standalone"`) {
 								t.Fatal("standalone mode was lost", body)
 							}
+							if got := strings.Contains(body, `name="local-ai-agent-version" content="`+version+`"`); got != mode.standalone {
+								t.Fatal("unexpected standalone version metadata", body)
+							}
 						} else if want := files[strings.TrimPrefix(resource, "/")]; body != want {
 							t.Fatalf("%s content = %q, want %q", resource, body, want)
 						}

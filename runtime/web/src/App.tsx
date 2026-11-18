@@ -149,11 +149,12 @@ import {
   compareGitFileInIdea,
   isIdeaRuntime,
   isStandaloneRuntime,
+  standaloneVersion,
   isIDEManagedProject,
   openIdeaFile,
 } from "./services/ideaBridge";
 import { storeRelayNodes } from "./services/launcherNodeSync";
-import { RemoteAccessDialog } from "./components/remote/RemoteAccessDialog";
+import { RemoteAccessDialog, RemoteQRDialog } from "./components/remote/RemoteAccessDialog";
 import {
   cancelScheduledWebViewCacheClear,
   scheduleWebViewCacheClearOnNextLaunch,
@@ -7152,18 +7153,7 @@ export function App({ onGoHome }: AppProps) {
   }, [file, actionHandlers]);
 
   const [standaloneRemoteOpen, setStandaloneRemoteOpen] = useState(false);
-  // 独立后台的页面（本机或经 Relay 访问）都提供同一个远程访问弹窗：版本、二维码、服务状态。
   const standalonePage = isStandaloneRuntime;
-  const [standaloneVersion, setStandaloneVersion] = useState("");
-  useEffect(() => {
-    if (!standalonePage) return;
-    let disposed = false;
-    fetch(appPath("/api/idea/remote"), { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((status) => { if (!disposed) setStandaloneVersion(status?.service?.version || ""); })
-      .catch(() => { if (!disposed) setStandaloneVersion(""); });
-    return () => { disposed = true; };
-  }, [standalonePage]);
   const handleRelayAction = useCallback(async () => {
     if (standalonePage) {
       setStandaloneRemoteOpen(true);
@@ -7897,7 +7887,11 @@ export function App({ onGoHome }: AppProps) {
         if (isMobile) setIsRightOpen(false);
       }} />
       <ToastContainer />
-      {standaloneRemoteOpen ? <RemoteAccessDialog projectName={basenameOfPath(managedRootByIdRef.current[currentRootId || ""]?.root_path || currentRootId || "")} onClose={() => setStandaloneRemoteOpen(false)} /> : null}
+      {standaloneRemoteOpen ? (
+        isRelayNodePage()
+          ? <RemoteQRDialog url={window.location.href} onClose={() => setStandaloneRemoteOpen(false)} />
+          : <RemoteAccessDialog projectName={basenameOfPath(managedRootByIdRef.current[currentRootId || ""]?.root_path || currentRootId || "")} onClose={() => setStandaloneRemoteOpen(false)} />
+      ) : null}
     </>
   );
 }

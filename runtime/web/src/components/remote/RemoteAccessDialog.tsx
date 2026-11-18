@@ -8,6 +8,31 @@ import { RemoteBackendChoice } from "./RemoteBackendChoice";
 import { RemoteBrowserUpdate, useBrowserUpdate } from "./RemoteBrowserUpdate";
 import { RemoteBackendUpdate, useBackendUpdate } from "./RemoteBackendUpdate";
 
+export function RemoteQRDialog({ url, onClose }: { url: string; onClose: () => void }) {
+  const { t, locale } = useI18n();
+  const zh = locale === "zh-CN";
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [qr, setQR] = useState("");
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  useEffect(() => {
+    let disposed = false;
+    void QRCode.toDataURL(url, { width: 192, margin: 2 }).then(
+      value => { if (!disposed) setQR(value); },
+      () => { if (!disposed) setFailed(true); },
+    );
+    return () => { disposed = true; };
+  }, [url]);
+  return <dialog ref={dialog} className="remote-access-dialog remote-access-panel remote-qr-dialog" aria-label={t("relay.phoneAccess")}
+    onCancel={event => { event.preventDefault(); onClose(); }}>
+    <header><button className="remote-close remote-icon-button" type="button" onClick={onClose} aria-label={zh ? "关闭" : "Close"}><RemoteIcon name="close" /></button></header>
+    {qr ? <img className="remote-qr" src={qr} alt={zh ? "远程访问二维码" : "Remote access QR code"} />
+      : <div className="remote-qr-placeholder" role={failed ? "alert" : "status"}>{failed
+        ? (zh ? "无法生成二维码" : "Could not generate QR code")
+        : (zh ? "正在生成二维码…" : "Generating QR code…")}</div>}
+  </dialog>;
+}
+
 type ManagedProject = { project_id: string; name: string; label: string; enabled: boolean; availability: string };
 type RemoteStatus = {
   relay_bound: boolean; enabled: boolean; connected: boolean;

@@ -202,23 +202,39 @@ test('production sidebars use consistent typography in light/dark and mobile lay
 });
 
 test('actual standalone App closes desktop drawers on mobile resize and opens only one sidebar', async t => {
+  const remoteRequests = [];
   const page=await mount(t, `
     import { App } from './src/App';
+    import QRCode from 'qrcode';
     import { sessionService } from './src/services/session';
     sessionService.connect = () => {};
     window.bootstrap=bootstrapService;
+    window.qrForCurrentURL = () => QRCode.toDataURL(window.location.href, { width: 192, margin: 2 });
     function Fixture(){return <App />;}
   `, request=>{
     const path=new URL(request.url()).pathname;
+    if(path.includes('/api/idea/remote')) remoteRequests.push(path);
     if(path.endsWith('/api/dirs')) return [{id:'root',root_path:'/workspace/project',is_git_repo:false}];
     if(path.endsWith('/api/relay/status')) return {e2ee_required:false};
     if(path.endsWith('/api/tree')) return {entries:[{name:'README.md',path:'README.md',is_dir:false}]};
     return {agents:[],shells:[],items:[],entries:[],plugins:[]};
-  },1440,'/n/node/','<meta name="local-ai-agent-mode" content="standalone">');
+  },1440,'/n/node/','<meta name="local-ai-agent-mode" content="standalone"><meta name="local-ai-agent-version" content="9.9.9-test">');
   page.setDefaultTimeout(5000);
   await page.addStyleTag({content: readFileSync(new URL('../src/index.css',import.meta.url),'utf8').replace(/^@(?:import|source)\s[^\n]*$/gm,'')});
   await expect.poll(()=>page.evaluate(()=>window.bootstrap.snapshot().phase)).toBe('ready');
   await expect(page.locator('[data-onboarding="shell"] > aside')).toHaveCount(2);
+  await expect(page.getByText('Standalone 9.9.9-test', { exact: true })).toBeVisible();
+  await page.evaluate(() => history.replaceState(null, '', '?root=root&session=chat'));
+  const phoneAccess = page.getByRole('button', { name: 'Connect your phone', exact: true });
+  await phoneAccess.click();
+  const dialog = page.getByRole('dialog', { name: 'Connect your phone' });
+  const qr = dialog.getByRole('img', { name: 'Remote access QR code' });
+  await expect(qr).toHaveAttribute('src', await page.evaluate(() => window.qrForCurrentURL()));
+  await expect(dialog.getByRole('button')).toHaveCount(1);
+  await expect(dialog.getByRole('link')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  assert.deepEqual(remoteRequests, []);
   await page.setViewportSize({width:390,height:844});
   await expect(page.locator('[data-onboarding="shell"] > aside')).toHaveCount(0);
   await page.getByRole('button',{name:'Open file sidebar',exact:true}).click();

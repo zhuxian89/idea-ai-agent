@@ -2,6 +2,7 @@ import { restoreIdeaAppearance, setIdeaTheme } from "./appearance";
 export { persistIdeaLocale } from "./ideaPreferences";
 
 export const isStandaloneRuntime = document.querySelector('meta[name="local-ai-agent-mode"]')?.getAttribute("content") === "standalone";
+export const standaloneVersion = document.querySelector<HTMLMetaElement>('meta[name="local-ai-agent-version"]')?.content;
 export const isIdeaRuntime = isStandaloneRuntime
   ? new URLSearchParams(window.location.search).get("ide") === "1"
   : !/^\/n\/[^/]+(?:\/|$)/.test(window.location.pathname || "");

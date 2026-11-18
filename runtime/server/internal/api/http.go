@@ -1646,7 +1646,9 @@ func (h *HTTPHandler) serveFrontendIndex(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if h.Standalone {
-		content = []byte(strings.Replace(string(content), "<head>", `<head><meta name="local-ai-agent-mode" content="standalone">`, 1))
+		metadata := `<head><meta name="local-ai-agent-mode" content="standalone">` +
+			`<meta name="local-ai-agent-version" content="` + htmpl.HTMLEscapeString(h.Version) + `">`
+		content = []byte(strings.Replace(string(content), "<head>", metadata, 1))
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(content)
 		return

@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: standalone-relay-page-qr
+  description: 公网页面以当前地址直接生成二维码，版本随 HTML 返回。Chromium 与后端回归通过，待最终 macOS 包经隔离 Relay 验证。
+  status: in_progress
 - id: standalone-0139-release
   description: 独立后台 0.1.39 已作为唯一正式版发布并成为默认安装版本；24 个公开附件回读一致，Windows 5.1 的 GitHub Actions 包验证和公开入口 macOS 端到端通过。
   status: done
