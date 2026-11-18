@@ -8,6 +8,14 @@ Chromium 回归在节点路由验证了版本文本、二维码内容和关闭�
 
 [macOS 0.1.41 测试版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.41)从 `e9890f8` 的干净克隆构建，两架构均为 `vcs.modified=false`。核对了两个压缩包与自解压安装器的摘要、架构、安装脚本、网页资源和内嵌归档。ARM64 最终包在临时 HOME 新装并绑定隔离 Relay，验证了节点页版本、二维码内容、网页 JS/CSS 的实际 HTTP 200、同包升级及升级失败后恢复原端口。首轮隔离浏览器启动未找到临时 HOME 下的 Chromium，指定现有 Chromium 缓存路径后通过。8 个公开附件均匿名下载并逐字节核对，公开固定入口显式安装 0.1.41，检查了本机 HTML 版本和 JS/CSS 并注销临时服务。默认安装仍为 0.1.39，0.1.41 预发布只含 macOS 附件。证据在 `build/reports/release41-macos/`。
 
+## 独立后台 0.1.41 正式发布（2026-11-18）
+
+用户确认 macOS 测试版可用后，将同一标签转为[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.41)。沿用 macOS 两架构的原附件，从相同干净提交 `e9890f8` 补齐 Linux、Windows 和在线入口。24 个附件逐字节比对与 SHA-256 通过；包内脚本、文件架构、305 个网页资源及自解压归档均通过。Kanban 旧库全量和迁移竞态复跑通过。
+
+Linux ARM64 和 x64 在隔离 Alpine 容器验证新装、升级、故障后恢复原端口和文件。公开固定入口在 Linux ARM64 容器和临时 macOS HOME 下显式安装 0.1.41 通过。Windows x64 的最终包在真实 Windows PowerShell 5.1 验证首次安装、计划任务注册、升级与故障恢复。Windows 下载工作流验证实际公开包和 SHA-256。Windows ARM64 核对了架构、归档和相同的包内脚本。[Windows 安装包 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44326559566) · [公开下载 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44327017495)
+
+源码快进合入 `main`，默认安装版本通过 `689383d` 升为 0.1.41。公开入口连续返回新默认版本后，下架 0.1.39 和 0.1.40，保留源码标签。仓库 latest 仍指向插件 v0.1.27。验证记录在 `build/reports/release41/`。
+
 # Linux 安装后显示绑定链接（2026-11-18）
 
 Linux 包内安装脚本在后台启动成功后调用已安装程序的 `-bind`。新节点的绑定 URL 是终端最后一行，已有绑定显示节点 URL 与状态。延迟启动跳过绑定。单独的绑定步骤失败时仍保留安装成功状态，并输出原始错误和带实际路径的重试命令。
