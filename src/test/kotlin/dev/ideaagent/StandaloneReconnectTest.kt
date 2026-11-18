@@ -30,6 +30,31 @@ class StandaloneReconnectTest : BasePlatformTestCase() {
         } finally { runtime.dispose() }
     }
 
+    fun testNativeRecoveryChoiceOpensTheProjectUsingEmbeddedRuntime() {
+        myFixture.addFileToProject("original.txt", "existing project data")
+        val dir = Path.of(requireNotNull(project.basePath)).resolve("native-recovery")
+        Files.createDirectories(dir)
+        val installation = dir.resolve("installation.json")
+        Files.writeString(installation, Gson().toJson(mapOf("executable" to dir.resolve("standalone").toString())))
+        writeBackendMode(dir.resolve("active-backend.json"), BackendMode.STANDALONE)
+        val service = com.intellij.openapi.application.ApplicationManager.getApplication().getService(BackendModeService::class.java)
+        val panel = EmbeddedRecoveryPanel(false) { service.save(dir, BackendMode.EMBEDDED, recover = true) }
+        val button = com.intellij.util.ui.UIUtil.findComponentOfType(panel, javax.swing.JButton::class.java)!!
+        assertEquals("切换到内置模式", button.text)
+        button.doClick()
+        assertEquals(BackendMode.STANDALONE, readBackendMode(dir.resolve("active-backend.json")))
+        val runtime = LocalRuntime(project)
+        try {
+            val connection = runtime.start(dir).get(40, TimeUnit.SECONDS)
+            assertFalse(connection.standalone)
+            val request = connection.endpoint.resolve("/?ide_token=" + connection.token).toURL().openConnection() as HttpURLConnection
+            request.instanceFollowRedirects = false
+            try { assertEquals(303, request.responseCode) } finally { request.disconnect() }
+            assertTrue(Files.exists(installation))
+            assertEquals(BackendMode.EMBEDDED, readBackendMode(dir.resolve("active-backend.json")))
+        } finally { runtime.dispose() }
+    }
+
     fun testRemoteFailureDoesNotBlockPluginStartupOrReconnect() {
         myFixture.addFileToProject("existing.txt", "existing project data")
         val dir = Path.of(requireNotNull(project.basePath)).resolve("standalone-discovery")

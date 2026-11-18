@@ -24,6 +24,23 @@ import (
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	// Only the IDE launcher handles recovery. Standalone installations keep their existing CLI.
+	if len(os.Args) == 2 {
+		dir := os.Getenv("IDE_AGENT_REMOTE_HOST_DIR")
+		switch os.Args[1] {
+		case "--check-unresponsive-core":
+			if unresponsiveWriter(ctx, dir) {
+				os.Exit(23) // Recovery is available to the bundled plugin.
+			}
+			return
+		case "--recover-embedded-core":
+			if err := recoverEmbeddedCore(ctx, dir); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			return
+		}
+	}
 	if handled, err := app.RunCoreCommand(ctx, os.Args[1:], "idea-0.1.0"); handled {
 		if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, context.Canceled) {
 			fmt.Fprintln(os.Stderr, err)

@@ -31,6 +31,11 @@ func StopCore(ctx context.Context, dir string) error {
 	if err := client.Call(ctx, "POST", "/control/stop", struct{}{}, nil); err != nil {
 		return err
 	}
+	return WaitForCoreExit(ctx, dir)
+}
+
+// Unloading a login service can return before the process releases its data.
+func WaitForCoreExit(ctx context.Context, dir string) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {

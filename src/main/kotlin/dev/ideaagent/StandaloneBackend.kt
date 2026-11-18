@@ -32,7 +32,33 @@ internal fun ensureLocalCore(executable: Path, dir: Path) {
     runBackendCommand(executable, dir, "--start-local-core")
 }
 
+internal class StandaloneCoreUnavailable(cause: Exception) : IllegalStateException(cause.message, cause)
+internal class EmbeddedRecoveryFailed(cause: Exception) : IllegalStateException(cause.message, cause)
+
 internal fun runBackendCommand(executable: Path, dir: Path, vararg args: String) {
+    val child = completedBackendCommand(executable, dir, *args)
+    val output = child.inputStream.bufferedReader().use { it.readText() }
+    check(child.exitValue() == 0) { output.trim() }
+}
+
+internal fun <T> checkingCoreFailure(executable: Path, dir: Path, action: () -> T): T {
+    try {
+        return action()
+    } catch (failure: Exception) {
+        val blocked = try {
+            val probe = completedBackendCommand(executable, dir, "--check-unresponsive-core")
+            probe.inputStream.close()
+            probe.exitValue() == 23
+        } catch (probeFailure: Exception) {
+            failure.addSuppressed(probeFailure)
+            false
+        }
+        if (blocked) throw StandaloneCoreUnavailable(failure)
+        throw failure
+    }
+}
+
+private fun completedBackendCommand(executable: Path, dir: Path, vararg args: String): Process {
     val builder = ProcessBuilder(listOf(executable.toString()) + args).redirectErrorStream(true)
     builder.environment().clear()
     builder.environment().putAll(agentRuntimeEnvironment(EnvironmentUtil.getEnvironmentMap()))
@@ -44,8 +70,7 @@ internal fun runBackendCommand(executable: Path, dir: Path, vararg args: String)
         child.destroyForcibly()
         error("Local AI Agent command timed out")
     }
-    val output = child.inputStream.bufferedReader().use { it.readText() }
-    check(child.exitValue() == 0) { output.trim() }
+    return child
 }
 
 internal fun connectLocalCore(dir: Path, projectPath: Path, legacyDataDir: Path): LocalRuntime.Connection {

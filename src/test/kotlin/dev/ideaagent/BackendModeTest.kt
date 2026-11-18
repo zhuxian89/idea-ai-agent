@@ -14,23 +14,23 @@ class BackendModeTest {
     @Test fun choiceIsSavedWithoutChangingTheCurrentSessionAndAppliesOnReopen() {
         val dir = temporary.root.toPath()
         val preparations = mutableListOf<BackendMode>()
-        BackendModeSession.open(dir) { mode, _ -> preparations.add(mode) }.use { first ->
+        BackendModeSession.open(dir) { mode, _, _ -> preparations.add(mode) }.use { first ->
             assertEquals(BackendMode.EMBEDDED, first.mode)
             writeBackendMode(dir.resolve("backend-preference.json"), BackendMode.STANDALONE)
             assertEquals(BackendMode.EMBEDDED, first.mode)
             assertEquals(listOf(BackendMode.EMBEDDED), preparations)
         }
         // An uninstalled choice stays pending and does not prevent local work.
-        BackendModeSession.open(dir) { mode, _ -> preparations.add(mode) }.use {
+        BackendModeSession.open(dir) { mode, _, _ -> preparations.add(mode) }.use {
             assertEquals(BackendMode.EMBEDDED, it.mode)
         }
         Files.writeString(dir.resolve("installation.json"), "{}")
-        BackendModeSession.open(dir) { mode, previous ->
+        BackendModeSession.open(dir) { mode, previous, _ ->
             assertEquals(BackendMode.EMBEDDED, previous)
             preparations.add(mode)
         }.use { assertEquals(BackendMode.STANDALONE, it.mode) }
         writeBackendMode(dir.resolve("backend-preference.json"), BackendMode.EMBEDDED)
-        BackendModeSession.open(dir) { mode, previous ->
+        BackendModeSession.open(dir) { mode, previous, _ ->
             assertEquals(BackendMode.STANDALONE, previous)
             preparations.add(mode)
         }.use { assertEquals(BackendMode.EMBEDDED, it.mode) }
@@ -40,16 +40,16 @@ class BackendModeTest {
     @Test fun existingInstallationKeepsStandaloneUntilUserChoosesOtherwise() {
         val dir = temporary.root.toPath()
         Files.writeString(dir.resolve("installation.json"), "{}")
-        BackendModeSession.open(dir) { _, _ -> }.use { assertEquals(BackendMode.STANDALONE, it.mode) }
+        BackendModeSession.open(dir) { _, _, _ -> }.use { assertEquals(BackendMode.STANDALONE, it.mode) }
         assertNull(readBackendMode(dir.resolve("backend-preference.json")))
         Files.writeString(dir.resolve("backend-preference.json"), """{"mode":"unknown"}""")
-        assertThrows(IllegalStateException::class.java) { BackendModeSession.open(dir) { _, _ -> } }
+        assertThrows(IllegalStateException::class.java) { BackendModeSession.open(dir) { _, _, _ -> } }
     }
 
     @Test fun anotherIdeaProcessKeepsItsModeUntilItsSharedLeaseIsReleased() {
         val dir = temporary.root.toPath()
         writeBackendMode(dir.resolve("active-backend.json"), BackendMode.STANDALONE)
-        writeBackendMode(dir.resolve("backend-preference.json"), BackendMode.EMBEDDED)
+        BackendModeService().save(dir, BackendMode.EMBEDDED, recover = true)
         val source = dir.resolve("Lease.java")
         Files.writeString(source, """
             import java.nio.channels.*;
@@ -67,15 +67,19 @@ class BackendModeTest {
         val child = ProcessBuilder(java.toString(), source.toString(), dir.resolve("ide-clients.lock").toString()).redirectErrorStream(true).start()
         try {
             assertEquals("ready", child.inputStream.bufferedReader().readLine())
-            BackendModeSession.open(dir) { _, _ -> fail("Must not stop another IDEA's backend") }.use {
+            BackendModeSession.open(dir) { _, _, _ -> fail("Must not stop another IDEA's backend") }.use {
                 assertEquals(BackendMode.STANDALONE, it.mode)
             }
         } finally {
             child.outputStream.close()
             if (!child.waitFor(10, TimeUnit.SECONDS)) child.destroyForcibly()
         }
-        BackendModeSession.open(dir) { mode, _ -> assertEquals(BackendMode.EMBEDDED, mode) }.use {
-            assertEquals(BackendMode.EMBEDDED, it.mode)
-        }
+        BackendModeSession.open(dir) { mode, _, recover ->
+            assertEquals(BackendMode.EMBEDDED, mode)
+            assertTrue("recovery must wait until the last IDEA exits", recover)
+        }.close()
+        BackendModeSession.open(dir) { _, _, recover ->
+            assertFalse("normal launches must not repeat recovery", recover)
+        }.close()
     }
 }

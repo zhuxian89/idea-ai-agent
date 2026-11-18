@@ -70,8 +70,11 @@ class LocalRuntime(private val project: Project) : Disposable {
                 Path.of(PathManager.getSystemPath(), "idea-ai-agent", "runtime"))
             val mode = ApplicationManager.getApplication().getService(BackendModeService::class.java).prepare(hostDir, executable)
             if (mode == BackendMode.STANDALONE) {
-                ensureLocalCore(executable, hostDir)
-                result.complete(connectLocalCore(hostDir, projectPath, dataDir))
+                val connection = checkingCoreFailure(executable, hostDir) {
+                    ensureLocalCore(executable, hostDir)
+                    connectLocalCore(hostDir, projectPath, dataDir)
+                }
+                result.complete(connection)
                 return
             }
             Files.createDirectories(dataDir)

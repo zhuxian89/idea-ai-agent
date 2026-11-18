@@ -25,6 +25,8 @@ import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefBrowserBase
 import com.intellij.ui.jcef.JBCefJSQuery
+import com.intellij.util.concurrency.AppExecutorUtil
+import dev.ideaagent.remote.remoteHostDataDir
 import com.intellij.util.ui.UIUtil
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
@@ -271,10 +273,39 @@ class AgentPanel(private val project: Project) : JPanel(BorderLayout()), Disposa
         project.getService(LocalRuntime::class.java).start().whenComplete { ready, error ->
             ApplicationManager.getApplication().invokeLater {
                 if (closed || project.isDisposed) return@invokeLater
-                if (error != null) showStatus(localized("启动失败：", "Failed to start: ") + (error.cause?.message ?: error.message))
-                else attach(ready)
+                when (error) {
+                    null -> attach(ready)
+                    is StandaloneCoreUnavailable -> showEmbeddedRecovery()
+                    is EmbeddedRecoveryFailed -> {
+                        com.intellij.openapi.diagnostic.Logger.getInstance(AgentPanel::class.java).warn("Embedded recovery failed", error)
+                        showStatus(localized("未能关闭独立后台。请先关闭它，再点“重新连接”。",
+                            "Couldn’t stop the standalone service. Close it, then choose Reconnect."))
+                    }
+                    else -> showStatus(localized("启动失败：", "Failed to start: ") + (error.cause?.message ?: error.message))
+                }
             }
         }
+    }
+
+    private fun showEmbeddedRecovery() {
+        val recovery = EmbeddedRecoveryPanel(isEnglishUi()) {
+            val app = ApplicationManager.getApplication()
+            AppExecutorUtil.getAppExecutorService().execute {
+                val saved = runCatching {
+                    app.getService(BackendModeService::class.java).save(remoteHostDataDir(), BackendMode.EMBEDDED, recover = true)
+                }
+                app.invokeLater {
+                    if (closed || project.isDisposed) return@invokeLater
+                    saved.fold(onSuccess = { app.restart() }, onFailure = {
+                        showStatus(localized("无法保存运行方式：", "Couldn’t save the run mode: ") + it.message)
+                    })
+                }
+            }
+        }
+        body.removeAll()
+        body.add(recovery, BorderLayout.NORTH)
+        body.revalidate()
+        body.repaint()
     }
 
     private fun startingText() = localized("正在启动本地 Agent…", "Starting local Agent…")

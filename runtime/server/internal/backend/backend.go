@@ -56,3 +56,14 @@ func Acquire(dir string, shared bool) (*os.File, error) {
 	}
 	return file, nil
 }
+
+// CoreOwnsData probes a shared IDE lease. Other embedded writers may coexist;
+// only the exclusive Core lease conflicts with this probe.
+func CoreOwnsData(dir string) bool {
+	file, err := Acquire(dir, true)
+	if err != nil {
+		return lockContended(err)
+	}
+	file.Close()
+	return false
+}
