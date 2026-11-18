@@ -1,8 +1,16 @@
 # 独立后端计划与进度
 
+## 独立后台 0.1.35 正式发布（2026-11-18）
+
+[独立后台 0.1.35](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.35) 是当前唯一公开的独立后台 Release，包含 Agent 配置导出与导入。两条固定安装命令在六个平台都选择 0.1.35，24 个公开附件和 Windows PowerShell 5.1 验证通过，已下架 0.1.34。[构建与发布证据](standalone-backend-implementation.md#独立后台-0135-正式发布2026-11-18)
+
+## Agent 配置导出与导入（2026-11-18，随 0.1.35 发布）
+
+文件侧栏菜单新增「配置导出与导入」，兼容 MindFS 的 JSON 归档。支持迁移 Agent 配置备份、API 供应商、API Key、自定义 Agent 和 Shell。没有重复项时直接导入，已有配置时一次确认是否覆盖，取消不写入。桌面与窄屏 Chromium 验证通过。窄屏 WebKit 在隔离测试中关闭 Service Worker 后通过，默认环境的导出请求中断待排查。[实现与验证](standalone-backend-implementation.md#agent-配置导出与导入2026-11-18)
+
 ## 独立后台 0.1.34 正式发布（2026-11-18）
 
-[独立后台 0.1.34](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.34) 是当前唯一公开的独立后台 Release。覆盖 macOS、Windows、Linux 的 x64 和 ARM64，Linux 支持 `-bind`。两条固定安装命令默认安装 0.1.34。24 个公开附件和 Windows PowerShell 5.1 验证通过，已下架旧 Release。[构建与发布证据](standalone-backend-implementation.md#独立后台-0134-正式发布2026-11-18)
+独立后台 0.1.34 覆盖 macOS、Windows、Linux 的 x64 和 ARM64，Linux 支持 `-bind`。当时的 24 个公开附件和 Windows PowerShell 5.1 验证通过，现已由 0.1.35 接替。[构建与发布证据](standalone-backend-implementation.md#独立后台-0134-正式发布2026-11-18)
 
 ## Windows x64 本地交付：独立后台 0.1.33 / 插件 0.1.27（2026-11-18）
 

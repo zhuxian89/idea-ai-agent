@@ -3,6 +3,12 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
+  - id: standalone-35-config-transfer-release
+    description: 六平台独立后台 0.1.35 已发布。24 个公开附件、两个固定入口的六平台选版、Windows PowerShell 5.1 发布前后、旧库迁移和最终包跨节点导入导出验证通过。0.1.34 Release 已下架。
+    status: done
+  - id: agent-config-transfer
+    description: 复用 MindFS 的 Agent 配置归档与导入导出入口。无重复直接导入，覆盖前一次确认，取消无写入。Go API 全量与竞态、前端类型与生产构建、桌面与窄屏 Chromium 通过。窄屏 WebKit 关闭 Service Worker 时通过，默认环境的导出请求中断待排查。已随 0.1.35 发布。
+    status: done
   - id: standalone-34-single-current-release
     description: 六平台独立后台 0.1.34 已发布，含 Linux -bind。固定入口在线选择和摘要核对通过，仅保留新 Release。Windows 5.1、旧库及网页入口回归通过。
     status: done

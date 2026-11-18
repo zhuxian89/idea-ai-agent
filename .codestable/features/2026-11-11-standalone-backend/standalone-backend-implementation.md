@@ -1,3 +1,23 @@
+# 独立后台 0.1.35 正式发布（2026-11-18）
+
+从干净的源码提交 `85bbb41` 构建 macOS、Windows 和 Linux 的 x64 与 ARM64。24 个公开附件重新下载返回 HTTP 200，逐项核对包内资源、SHA-256 与 GitHub 摘要。固定安装入口在六个平台拉取并校验 0.1.35，安装环节由隔离桩接管。现有插件与网页的更新检查均找到 0.1.35。
+
+Go API、Core 与 Relay 相关回归、旧库全量与迁移竞态、前端和安装器测试通过。最终 Mac ARM64 包在本地和转发入口各核对 87 项实际网页资源，窄屏 Chromium 使用两个隔离后台验证实际导出、导入、取消和确认覆盖。
+
+标签推送触发的自动验证曾尝试下载尚未公开的 0.1.35，返回 404。正式候选流程核对 Windows 双架构包、x64 程序版本和公开 0.1.34 安装下载，发布后真实 Windows PowerShell 5.1 下载并验证 0.1.35。两次验证均通过。[候选验证](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44288729185) [公开验证](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44288991565)
+
+0.1.34 Release 已下架，抽查原下载地址返回 404。发布后重新核对网页与现有插件的更新发现。证据位于 `build/reports/release35/`。
+
+# Agent 配置导出与导入（2026-11-18）
+
+复用 MindFS `060f507` 的对话框、`mindfs-user-config` v1 格式及文件写入与回滚流程。文件侧栏可导出和导入 Agent 配置备份、API 供应商资料、API Key、自定义 Agent 和 Shell。API Key 和自定义命令由用户主动勾选。MindFS 归档可选择其中的 Agent 相关配置。
+
+无重复时直接写入，有已有项时先返回是否需要覆盖确认。确认后合并新配置并覆盖匹配项，取消时不会发送第二次写入请求。导入的 Agent 备份可在「Agent 配置切换」中使用，配置文件目的地按目标用户的主目录解析，切换前显示目标路径供确认。自定义 Agent 和 Shell 导入后重启后台生效。
+
+Go API 全量、配置导入导出竞态回归、前端类型检查和生产构建通过。配置回归覆盖无重复直接导入、确认前零写入、确认后覆盖、无关供应商保留、备份路径迁移和选择使用。已随独立后台 0.1.35 发布。
+
+两个隔离 Core 经过带项目路径的本机转发，验证实际 JSON 下载、上传、无重复直接导入、取消和确认覆盖。桌面与 390 px 窄屏 Chromium 通过，窄屏 WebKit 关闭 Service Worker 后通过。WebKit 默认开启 Service Worker 时导出 POST 中断，HTTP 和 HTTPS 隔离入口均复现，线上 Safari 待验证。证据位于 `build/reports/config-transfer/`。
+
 # 独立后台 0.1.34 正式发布（2026-11-18）
 
 按用户要求，固定 macOS/Linux 与 Windows PowerShell 在线安装命令。每次发版提升独立版本并构建六平台。新版本公开下载与升级验证通过后下架旧独立 Release。
