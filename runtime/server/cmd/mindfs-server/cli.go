@@ -275,7 +275,17 @@ func runCLI(args []string) error {
 			}
 			childArgs = append(childArgs, project)
 		}
-		managed, err := backend.StartLoginService(ctx, dir, "gateway", executable, childArgs)
+		serviceArgs := childArgs
+		if runtime.GOOS == "linux" && flags.NArg() == 0 {
+			// A plain start after an upgrade reuses the installed systemd invocation.
+			overrides := visitedFlags(flags)
+			delete(overrides, "no-browser")
+			delete(overrides, "restart")
+			if len(overrides) == 0 {
+				serviceArgs = nil
+			}
+		}
+		managed, err := backend.StartLoginService(ctx, dir, "gateway", executable, serviceArgs)
 		if err != nil {
 			return err
 		}
