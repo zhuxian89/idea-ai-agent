@@ -1,5 +1,9 @@
 # 独立后端计划与进度
 
+## 独立后台 0.1.34 正式发布（2026-11-18）
+
+[独立后台 0.1.34](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.34) 是当前唯一公开的独立后台 Release。覆盖 macOS、Windows、Linux 的 x64 和 ARM64，Linux 支持 `-bind`。两条固定安装命令默认安装 0.1.34。24 个公开附件和 Windows PowerShell 5.1 验证通过，已下架旧 Release。[构建与发布证据](standalone-backend-implementation.md#独立后台-0134-正式发布2026-11-18)
+
 ## Windows x64 本地交付：独立后台 0.1.33 / 插件 0.1.27（2026-11-18）
 
 两包已重新构建：`build/standalone/0.1.33/local-ai-agent-0.1.33-windows-amd64.zip`、`build/local-packages/idea-ai-agent-0.1.27-windows-amd64.zip`，各带 SHA-256 文件。独立包包含完整重启与刷新模型自动替换旧 Codex；插件包含 Core 重启后的地址/令牌重读。用户关闭 IDEA 后运行独立 ZIP 内的 `install.ps1`，再从磁盘重装同版本插件并重启 IDEA。本轮仅交付本地包，未发布线上附件、安装或重启用户实际服务。

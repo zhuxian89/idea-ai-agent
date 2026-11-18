@@ -1,3 +1,15 @@
+# 独立后台 0.1.34 正式发布（2026-11-18）
+
+按用户要求，固定 macOS/Linux 与 Windows PowerShell 在线安装命令。每次发版提升独立版本并构建六平台。新版本公开下载与升级验证通过后下架旧独立 Release。
+
+此前 Windows `irm | iex` 接收到 BOM 字符，导致 PowerShell 解析参数声明失败。固定地址现返回 ASCII 入口，入口读入并移除下载器文本开头的 BOM，再执行原下载器。下载器保留原字节及 UTF-8 BOM，正式插件 JAR 内脚本与其逐字节一致。Gradle 资源配置验证通过。未替换正式插件的六项附件。
+
+独立后台 0.1.34 发布标签指向 `f20e70b`，包含 Linux `-bind`。六平台 24 个公开附件 HTTP 200，下载字节、SHA-256 与 GitHub 摘要一致。旧库全量与迁移 race、Go CLI/API/Relay、前端 17 项及安装脚本 10 项回归通过。Mac ARM64 包隔离启动后，本地和转发入口各 87 个网页资源与包内字节一致。真实 Windows PowerShell 5.1 候选及发布后验证通过，最终 x64 程序返回 0.1.34，公开 Windows 归档摘要通过。候选绑定链接状态在隔离 Relay 验证，Linux 实机绑定待验收。
+
+发布后两条固定入口针对六个平台选择并校验 0.1.34，安装最后一步使用测试桩。已有插件和网页更新选择 0.1.34。候选分支自动 CI 在 0.1.34 尚未公开时下载遇到 404，采用已公开 0.1.33 验证候选下载链路，公开后 0.1.34 复核通过。验证记录见 [Windows 5.1 候选](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44265385924) 和 [发布后复核](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44265830885)。
+
+旧独立后台 0.1.27、0.1.30、0.1.31、0.1.32、0.1.33 的 5 个 Release 已下架，原 Release API 和抽检附件下载均返回 404。Git 源码标签保留。发布前后快照、附件摘要和固定入口证据位于 `build/reports/release34/`。
+
 # Windows x64 本地包 0.1.33 / 0.1.27（2026-11-18）
 
 按用户要求独立后台升至 0.1.33，插件保持 0.1.27，生成 Windows amd64 本地包供手工替换。证据目录 `build/reports/release33/`。未发布 GitHub、提交推送或安装/重启用户实际服务。

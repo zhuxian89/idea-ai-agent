@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-installer-device-acceptance
 steps:
+  - id: standalone-34-single-current-release
+    description: 六平台独立后台 0.1.34 已发布，含 Linux -bind。固定入口在线选择和摘要核对通过，仅保留新 Release。Windows 5.1、旧库及网页入口回归通过。
+    status: done
   - id: windows33-plugin27-local-packages
     description: Windows x64 独立 0.1.33 与插件 0.1.27 本地包及校验已生成；最终包 Core 重启与四入口各305资源通过，旧库全量/迁移race通过，最终插件 Windows5.1 下载/BOM/摘要与安装回归2项通过。Kotlin98通过2跳过；API临时库清理及app权限断言各1项既有Windows失败已在HEAD复现。未发布或操作用户实际服务，实际IDEA/Codex验收待用户替换。
     status: done
