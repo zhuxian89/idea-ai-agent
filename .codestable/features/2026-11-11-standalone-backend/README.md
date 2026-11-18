@@ -2,7 +2,7 @@
 
 ## Linux 安装后显示绑定链接（2026-11-18，0.1.38 测试版已发布）
 
-[Linux 0.1.38](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.38) 安装并启动后直接显示绑定链接；已有绑定显示原节点地址和状态。Debian 13 ARM64 已验证新装和从 0.1.37 升级。Linux 两种架构的公开包与指定版本的固定入口均已校验。用户已在 Linux 真机确认 0.1.38 自启动。安装代码审查发现的 7 项问题已在源码修复并通过隔离回归，三个平台统一升到 0.1.39，六个本地测试包在 `build/standalone/0.1.39/`，未发布（macOS 临时 HOME、Linux 容器端到端已验证）；Windows 5.1 实机和 Linux 真机 systemd 复验待做，见[安装代码审查](standalone-backend-implementation.md#安装代码审查2026-11-18)。
+[Linux 0.1.38](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.38) 安装并启动后直接显示绑定链接；已有绑定显示原节点地址和状态。Debian 13 ARM64 已验证新装和从 0.1.37 升级。Linux 两种架构的公开包与指定版本的固定入口均已校验。用户已在 Linux 真机确认 0.1.38 自启动。安装代码审查发现的 7 项问题已在源码修复并通过隔离回归，三个平台统一升到 0.1.39，已作为预发布公开（默认正式版仍是 0.1.35，测试用 `--version 0.1.39`）；Windows 5.1 的 GitHub Actions 包验证、公开附件回读和公开入口端到端通过；Windows 实机登录自启和 Linux 真机 systemd 复验待做，见[安装代码审查](standalone-backend-implementation.md#安装代码审查2026-11-18)。
 
 ## Linux 服务器开机自启（2026-11-18，0.1.37 Linux 测试版已发布）
 

@@ -346,5 +346,5 @@ checks:
     description: 本轮前端 299/299、Kotlin 87/87、Go 全量复跑、相关 race 与旧库迁移通过；最终 .14/.4 包检查及临时安装升级通过
     status: done
   - id: install-code-review-fixes
-    description: 安装代码审查的 7 项问题已在源码修复并通过隔离回归（升级失败恢复与暂存、首装失败可重试、Linux 重装保留代理与密钥、macOS/Windows 升级保留网关参数、Windows 清理不盖错误、用户目录保护、日志解码）。已生成三个平台六个 0.1.39 本地测试包，macOS arm64 临时 HOME 与 Linux arm64 容器端到端（新装、升级、失败恢复）通过，未发布；Windows 5.1 实机与 Linux 真机 systemd 复验待做。
-    status: in_progress
+    description: 安装代码审查的 7 项问题已在源码修复并通过隔离回归（升级失败恢复与暂存、首装失败可重试、Linux 重装保留代理与密钥、macOS/Windows 升级保留网关参数、Windows 清理不盖错误、用户目录保护、日志解码）。0.1.39 已作为预发布公开（标签 standalone-v0.1.39，默认正式版仍是 0.1.35）；24 个公开附件回读一致，Windows 5.1 的 GitHub Actions 包验证和公开入口 macOS 端到端通过；Windows 实机登录自启与 Linux 真机 systemd 复验待做。
+    status: done

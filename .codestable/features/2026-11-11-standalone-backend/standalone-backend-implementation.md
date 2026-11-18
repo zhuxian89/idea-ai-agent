@@ -24,24 +24,26 @@ Debian 13 ARM64 隔离 Relay 验证了新装显示 URL、等待确认时再次�
 
 **未验证**：Windows PowerShell 5.1 没有运行过修改后的 `install.ps1` 和 `download.ps1`，按 AGENTS.md 在真实 5.1 验证前不得替换公开附件。Linux 真机 systemd 没有复跑修改后的环境文件与暂存逻辑。没有生成安装包，修复内容不在任何已发布版本里。`StandaloneRelease.kt` 取“全部 Release 中最高版本”，Linux 预发布 0.1.36 至 0.1.38 会被 Linux 上的插件视为可更新版本，而脚本默认仍是 0.1.35，是否保留待用户决定，本轮没有改。
 
-## 独立后台 0.1.39 本地测试包（2026-11-18，未发布）
+## 独立后台 0.1.39 测试版发布（2026-11-18）
 
-按用户要求三个平台统一升到 0.1.39，包含安装审查的全部修复。先前生成的 Windows、macOS 0.1.38 本地测试包作废，已发布的 Linux 0.1.38 附件是修复之前的构建，保持原样不动。六个包输出在 `build/standalone/0.1.39/`，没有上传 GitHub，`version.txt` 仍是 0.1.35。构建用 `LOCAL_AI_AGENT_VERSION=0.1.39`，源码树有未提交改动，程序的构建信息记录为已修改。
+三个平台统一升到 0.1.39，包含安装审查的全部修复，已作为 [预发布](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.39) 公开，标签指向提交 `a37b956`。默认正式版仍是 0.1.35，`version.txt` 未改，测试时用 `--version 0.1.39`（PowerShell 用 `-Version 0.1.39`）。公开包从该提交的独立克隆构建，程序构建信息为 `vcs.modified=false`。先前工作区构建的本地测试包作废。
 
 | 包 | SHA-256 |
 |---|---|
-| `local-ai-agent-0.1.39-linux-amd64.tar.gz` | `baf5813f02c14d375eb020caf3bf09ccf8da8f04a5513141975cfd985a130298` |
-| `local-ai-agent-0.1.39-linux-arm64.tar.gz` | `11d7f82428a53f13bbf8fad119049e2eb45b0ab2abc7c1564d27689cf67a438d` |
-| `local-ai-agent-0.1.39-windows-amd64.zip` | `1b649c84c129db204b349320af2811f2c8a9064cf6f81d676abd1e233f815c56` |
-| `local-ai-agent-0.1.39-windows-arm64.zip` | `d00076667f315746c48ebe87b5e9ef7b6f9e532bbbf5183e3b4c09c9de2ffcdf` |
-| `local-ai-agent-0.1.39-macos-arm64.tar.gz` | `99cfaf2c50127c53d55c04d0748063653ed65511ffe279a727a6ac8696688143` |
-| `local-ai-agent-0.1.39-macos-amd64.tar.gz` | `c1ef8c2799c7ddab9b2793d841ff63e9682ec1dc53be18fcf7cc7701e5a9ff71` |
+| `local-ai-agent-0.1.39-linux-amd64.tar.gz` | `94d87b1c350a56eed385ddff43a8fecfec410463bc60165366789cc2520aaa72` |
+| `local-ai-agent-0.1.39-linux-arm64.tar.gz` | `3aa72223264a8a3a28398df4781c9c8b6126ca4b995ca4e93aaad6e0762ea158` |
+| `local-ai-agent-0.1.39-windows-amd64.zip` | `5710b0fab41364b3db843f993cc377b729424970e06d10b4cb7f775afbe183e9` |
+| `local-ai-agent-0.1.39-windows-arm64.zip` | `49f091149c15e6d5d501d7fc0a71e103249d926fd2686388a008ed4e46ff7ef6` |
+| `local-ai-agent-0.1.39-macos-arm64.tar.gz` | `9d4df228e4cb8648988e18ebbe448057e665fc3972c075de9f00c165d1710a8b` |
+| `local-ai-agent-0.1.39-macos-amd64.tar.gz` | `866e9b22af4750517e811f3a4636e436be1916bfaa9bcfd933c0ace2ce785d36` |
 
-从最终压缩包解出核对：12 个校验文件（六个压缩包、四个自解压安装器、两个在线入口）全部通过；程序架构与平台对应；包内 `install.sh`、`install.ps1` 与源码逐字节一致，PowerShell 脚本有 UTF-8 BOM；每个包 305 个网页文件，无 `/mindfs-assets/` 引用；四个自解压安装器的内嵌归档与对应压缩包逐字节一致；在线入口与 `scripts/install.sh`、`scripts/standalone/download.ps1` 一致；macOS arm64 程序报告 0.1.39。
+**核对**：24 个公开附件匿名重新下载，与构建产物逐字节一致，12 个校验文件通过；架构、包内脚本与源码一致、PowerShell 脚本 BOM、305 个网页文件、无 `/mindfs-assets/` 引用、四个自解压安装器内嵌归档均已检查；公开的 `download.ps1` 与源码一致。
 
-端到端：macOS arm64 包在临时 HOME 与临时前缀中新装、同包升级（端口不变）、人为删掉 `NOTICE.md` 的失败升级会报错，后台自动回到原端口，注销后 launchd 无遗留任务。Linux arm64 包在 Alpine 容器（无 systemd）中新装直接显示绑定链接、升级、失败升级后自动恢复通过。
+**Windows PowerShell 5.1（GitHub Actions，windows-latest）**：新增 `Windows standalone package` 工作流和 `scripts/standalone/verify-windows-standalone-package.ps1`，下载草稿发布中的 Windows x64 包并核对 SHA-256，在 5.1 下用真实 `local-ai-agent.exe` 运行包内 `install.ps1`：首次安装、计划任务注册、重复首装被拒、`-Prefix` 以反斜杠结尾的用户目录被拒、升级后服务运行、缺文件的升级失败后恢复原服务且无暂存残留，全部通过。既有 `Windows installer` 工作流在同一提交上通过（5.1 下验证 `download.ps1` 与真实下载）。
 
-**待验证**：Windows 包没有在真实 Windows 5.1 运行（包内是 `install.ps1` 本体，不是在线入口），首次安装、计划任务、登录自启和升级失败恢复要在实机确认。Linux 真机 systemd 没有复跑本组包的开机自启。macOS amd64、Linux amd64 只核对了架构。正式发布前需要提交源码，并按 AGENTS.md 在真实 Windows 5.1 验证包内脚本。
+**公开入口端到端**：macOS arm64 通过固定在线入口 `--version 0.1.39` 在临时 HOME 新装并再次升级，端口不变，注销后 launchd 无遗留。macOS、Linux 失败升级恢复此前分别在临时 HOME 和 Alpine 容器验证。
+
+**未验证**：真实 Windows 机器上的登录自启（CI 只验证了任务注册与服务启动）和 Windows ARM64、macOS amd64、Linux amd64 的实际运行（只核对了架构）；Linux 真机 systemd 没有用 0.1.39 复跑开机自启。0.1.39 预发布公开后，插件检测升级取所有发布中的最高版本，macOS、Windows 用户的插件会把 0.1.39 当作可更新版本，是否改成只取正式版仍待决定。
 
 # Linux 服务器开机自启（2026-11-18）
 
