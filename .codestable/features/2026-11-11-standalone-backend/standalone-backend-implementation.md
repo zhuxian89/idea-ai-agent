@@ -306,3 +306,10 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 - 新包的 Chrome 回归验证键盘弹出、视口偏移与收回。WebKit 手机竖屏和横屏模拟中，输入框始终在可见区内，焦点和草稿保留。35 项相关前端回归、最终包 Relay 入口和旧库迁移检查通过。记录见 `build/reports/standalone-0.1.51-keyboard/`。
 - Linux x64、ARM64 本地测试包已通过架构、SHA-256、自解压归档和 305 个网页文件校验。本机 Docker 守护进程无响应，Linux 隔离安装待补。Hostdzire-linux 未升级，iPhone 真机待复测。
 - macOS arm64 测试包使用同一套已验证的网页资源，隔离环境中通过 0.1.50 → 0.1.51 升级、同包升级及缺文件恢复，保留原项目。按用户要求升级本机独立后台，确认 0.1.51 在原地址运行、7 个项目可读、实际返回的网页资源与测试包一致。iPhone 截图显示 `mac-idea` 对话输入框在键盘上方。键盘上沿的「完成」属于 iOS 输入工具栏。[本机升级结果](../../../build/reports/standalone-0.1.51-live-upgrade/result.txt)
+
+### 0.1.51 正式发布
+
+- 用户确认 iPhone 实机测试通过。六个平台安装包从干净的 `09ba412065ca` 构建，305 个网页文件与验收用测试包逐字节一致。正式包远程入口浏览器检查和 Go 旧库迁移、迁移 race 检查均通过。
+- macOS arm64、macOS x64（Rosetta）及 Linux x64、ARM64 已通过最终包隔离安装、同包升级和缺文件失败后的恢复。Windows x64 最终包通过 Windows PowerShell 5.1 安装、计划任务注册、升级和失败恢复。Windows ARM64 通过架构和附件检查。[Linux CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44544663266) · [Windows CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44544658691)
+- 正式版 24 个公开附件均匿名下载并与构建产物逐字节比较。macOS 固定安装入口指定 0.1.51 安装通过，Windows PowerShell 5.1 用插件安装脚本下载公开的 0.1.51 并校验摘要通过。验证记录位于 `build/reports/release51/`。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.51) · [Windows 公开下载 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44545129610)
+- 默认版本提交 `c2f6d87` 已推送。公网固定版本入口连续四次读到 0.1.51，macOS 临时 HOME 使用固定命令默认安装通过。旧 0.1.50 Release 元数据归档后下架，Git 标签保留。插件 `v0.1.27` 继续作为 GitHub Latest。
