@@ -293,3 +293,9 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 - 0.1.49 的对话底部关联文件行只在手机布局隐藏。0.1.50 将隐藏条件扩展至所有远程网页布局，关联文件仍从「项目工具」访问。IDEA 内嵌页面沿用原关联文件展示，设计稿已同步移除电脑对话里的重复入口。
 - 15 项相关前端测试和最终包 Relay 入口测试通过，覆盖内嵌文件打开及原生比较、远程对话隐藏。用含关联文件旧会话的隔离项目验证最终包，Chrome、WebKit 均能从项目工具打开对应文件列表。设计稿验证「本轮修改」和关联文件菜单可用。
 - 0.1.49 → 0.1.50 隔离升级、同版升级、缺文件恢复、305 个网页文件与 SHA-256 校验通过。旧库迁移与 race 检查通过。本机独立后台部署见 `build/reports/standalone-0.1.50-live-upgrade/result.txt`。
+
+### 0.1.50 正式发布与 IDEA 插件 0.1.27 附件更新
+
+- 用户确认 macOS 测试通过，指定独立后台 0.1.50、插件沿用 0.1.27。两套正式包从干净的 `d2f0a1f3e724` 构建。独立后台 24 个公开附件及插件 6 个公开附件均匿名下载回读，逐字节与构建产物一致。插件 `v0.1.27` 继续作为 GitHub Latest，原标签保留，更新附件的构建提交已写入发布说明。
+- macOS arm64 与 amd64（Rosetta）、Linux arm64 与 amd64（容器）通过最终包首次安装、同包升级及缺文件恢复。Windows x64 最终包通过 PowerShell 5.1 首次安装、计划任务注册、升级和失败恢复。在同一 Windows 环境逐一提取并执行了 x64、ARM64 和通用插件 ZIP 中的真实 5.1 安装脚本。独立后台 Windows ARM64 包通过架构、脚本及附件核验。[独立后台 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44515358245) · [插件安装器 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44515358657)
+- 旧库迁移和 race 检查通过。独立后台 0.1.50 的公开安装入口验证通过。`version.txt` 更新后连续四次读回 0.1.50，Linux ARM64 使用固定命令默认安装 0.1.50 成功。旧 0.1.41 Release 的元数据已存档，Release 下架后 Git 标签仍可读取。证据位于 `build/reports/release50/`。[独立后台正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.50) · [插件正式附件](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)

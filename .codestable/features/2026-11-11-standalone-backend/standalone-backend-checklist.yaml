@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: standalone-0150-plugin-0127-release
+  description: 独立后台 0.1.50 正式发布并切为默认安装版本，旧 0.1.41 Release 已下架。IDEA 插件 0.1.27 同版本更新 GitHub 附件，真实 Windows PowerShell 5.1 与公开附件回读验证通过。
+  status: done
 - id: remote-chat-hide-inline-related-files-0150-macos
   description: 远程网页对话底部移除关联文件入口，项目工具仍可打开。最终包隔离验证通过，本机 0.1.50 升级成功，用户确认 macOS 测试通过。
   status: done

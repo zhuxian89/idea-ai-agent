@@ -2,7 +2,8 @@
 
 ## 当前状态（2026-11-19）
 
-- **0.1.50 macOS arm64 本地测试包**移除远程网页对话底部的「关联文件 N」，项目工具继续提供关联文件入口。设计稿已同步。最终包通过 Chrome、WebKit 和隔离升级验证，本机已升级并通过用户 macOS 验收。正式版进入多平台打包与验证。[安装包](../../../build/standalone/0.1.50/local-ai-agent-0.1.50-macos-arm64.sh)
+- **独立后台 0.1.50** 已作为默认正式版发布，覆盖 macOS、Linux、Windows 的 x64 与 ARM64。包括远程网页适配、手机会话与更多设置、可配置的 Agent 边框流光，以及关联文件入口调整。用户确认 macOS 测试通过，六个平台附件及固定安装入口已验证。0.1.41 Release 已下架，源码标签保留。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.50)
+- **IDEA 插件 0.1.27** 已在 GitHub 同版本更新四个平台和通用包。内置后台及远程网页更新已随包发布。已安装 0.1.27 的用户需从磁盘重装并重启 IDEA。[插件下载](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)
 - **IDEA 插件 0.1.28-local.1 macOS arm64 本地测试包**已安装到本机。最终 ZIP 的内置后台通过启动、旧会话和网页资源验证。本机实测切到内置模式及切回独立模式后，均能从远程网页发送消息。[插件 ZIP](../../../build/local-packages/idea-ai-agent-0.1.28-local.1-macos-arm64.zip)
 - **0.1.49 macOS arm64 本地测试包**将手机呼吸点换成 Agent 状态框的边框流光。「更多 → 外观」提供与网页相同的开关、四种效果、配色、自定义颜色、速度、预览与恢复默认。最终包通过 Chrome 和 WebKit 手机视口验证。本机已升级，原地址、7 个项目与网页资源验证通过。用户确认手机流光试用通过。[安装包](../../../build/standalone/0.1.49/local-ai-agent-0.1.49-macos-arm64.sh)
 - **0.1.48 macOS arm64 本地测试包**给手机输入框上方的 Agent 状态栏加入呼吸点。活动状态为工作时播放，开启系统减少动态效果时显示静态点。本机已升级，原地址、7 个项目和随包网页资源验证通过。手机消息已正常送达，待确认 iPhone 上的动效表现。[安装包](../../../build/standalone/0.1.48/local-ai-agent-0.1.48-macos-arm64.sh)
@@ -12,8 +13,6 @@
 - **0.1.44 macOS arm64 本地测试包**将顶栏 Agent 配置入口改为居中弹窗，文件栏收起时也可使用。最终包通过隔离升级，本机上线后用户反馈网页和平板正常。[安装包](../../../build/standalone/0.1.44/local-ai-agent-0.1.44-macos-arm64.sh)
 - **0.1.43 macOS arm64 本地测试包**修正远程网页三栏底色、普通窗口底边和文件菜单裁切。隔离安装与本机升级通过，原地址可读取 7 个项目。[安装包](../../../build/standalone/0.1.43/local-ai-agent-0.1.43-macos-arm64.sh)
 - **0.1.42 macOS arm64 本地测试包**已在本机升级成功。原地址可访问，7 个项目可读取。升级结果见 `build/reports/standalone-0.1.42-live-upgrade/result.txt`。远程桌面和平板增加会话卡片、顶栏常用操作和默认开启的工作状态呼吸灯。已在隔离安装中验证从 0.1.41 升级、读取原项目与会话、更新失败恢复。手机新外壳和设备手动指定安排在第二批。[安装包](../../../build/standalone/0.1.42/local-ai-agent-0.1.42-macos-arm64.sh) · [验证记录](standalone-backend-implementation.md#远程网页第一批与-macos-0142-本地测试包)
-- **[独立后台 0.1.41](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.41)** 已作为默认正式版发布，覆盖 macOS、Linux、Windows 的 x64 与 ARM64。公网节点页左下角显示当前版本，手机扫码直接打开当前页面。用户已确认 macOS 测试版可用。0.1.39 和 0.1.40 已下架，源码标签保留。
-- **插件**最新发布仍是 0.1.27。已提交的“独立后台无响应时从 IDEA 切回内置模式”源码尚未随插件发布。
 - 独立后台与插件独立发版。发包流程、验证门槛和“只保留一个正式版”的规则见根目录 [AGENTS.md](../../../AGENTS.md) 的《独立版发包规则》。
 - 0.1.39 包含：Agent 配置按 Agent 导出与导入、Linux `-bind` 与安装后显示绑定链接、Linux systemd 开机自启、不同目录同名项目、远程单文件 HTML 预览、Codex 刷新自动升级、完整重启，以及安装与升级失败后的自动恢复。验证证据见 [implementation](standalone-backend-implementation.md)。
 
