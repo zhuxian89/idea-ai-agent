@@ -4,8 +4,8 @@ entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
 - id: standalone-0151-public-update-entry
-  description: Relay 公网页面通过正式安装版本入口检查更新，电脑和平板在侧栏底部、手机在「更多」显示。待最终包验证和同版本附件替换。
-  status: in_progress
+  description: Relay 公网页面通过正式安装版本入口检查更新，电脑和平板在侧栏底部、手机在「更多」显示。Chrome、WebKit、Windows PowerShell 5.1 与公开下载验证通过。0.1.51 继续为默认安装版本，新附件已发布。
+  status: done
 - id: standalone-0151-release
   description: 0.1.51 经 iPhone 实机验收后发布。六平台共 24 个附件公开回读、Windows PowerShell 5.1 和固定入口默认安装通过。旧版 0.1.50 Release 已下架，Git 标签保留。
   status: done
