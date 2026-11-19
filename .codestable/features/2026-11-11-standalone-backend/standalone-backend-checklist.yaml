@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: phone-keyboard-visual-viewport-0151
+  description: 远程网页入口监听可见视口尺寸与偏移，键盘弹出时输入区贴合可见底边。通过 Chrome 和 WebKit 模拟验证，macOS arm64 最终包通过隔离升级和本机部署，iPhone 截图显示输入框位于键盘上方。Linux 安装运行及 Hostdzire-linux 实机复测待验证。
+  status: in_progress
 - id: standalone-0150-plugin-0127-release
   description: 独立后台 0.1.50 正式发布并切为默认安装版本，旧 0.1.41 Release 已下架。IDEA 插件 0.1.27 同版本更新 GitHub 附件，真实 Windows PowerShell 5.1 与公开附件回读验证通过。
   status: done

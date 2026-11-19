@@ -299,3 +299,10 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 - 用户确认 macOS 测试通过，指定独立后台 0.1.50、插件沿用 0.1.27。两套正式包从干净的 `d2f0a1f3e724` 构建。独立后台 24 个公开附件及插件 6 个公开附件均匿名下载回读，逐字节与构建产物一致。插件 `v0.1.27` 继续作为 GitHub Latest，原标签保留，更新附件的构建提交已写入发布说明。
 - macOS arm64 与 amd64（Rosetta）、Linux arm64 与 amd64（容器）通过最终包首次安装、同包升级及缺文件恢复。Windows x64 最终包通过 PowerShell 5.1 首次安装、计划任务注册、升级和失败恢复。在同一 Windows 环境逐一提取并执行了 x64、ARM64 和通用插件 ZIP 中的真实 5.1 安装脚本。独立后台 Windows ARM64 包通过架构、脚本及附件核验。[独立后台 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44515358245) · [插件安装器 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44515358657)
 - 旧库迁移和 race 检查通过。独立后台 0.1.50 的公开安装入口验证通过。`version.txt` 更新后连续四次读回 0.1.50，Linux ARM64 使用固定命令默认安装 0.1.50 成功。旧 0.1.41 Release 的元数据已存档，Release 下架后 Git 标签仍可读取。证据位于 `build/reports/release50/`。[独立后台正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.50) · [插件正式附件](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)
+
+### 0.1.51 手机键盘遮住输入框
+
+- Hostdzire-linux 远程对话在手机弹出键盘后看不到输入框。随包远程网页入口此前没有监听可见视口。用 0.1.50 正式资源模拟仅可见高度从 795 缩至 432 像素，输入区底边仍停在 795 像素。新入口监听可见视口尺寸及偏移，复用已有计算，内置页面和原生布局使用原有路径。
+- 新包的 Chrome 回归验证键盘弹出、视口偏移与收回。WebKit 手机竖屏和横屏模拟中，输入框始终在可见区内，焦点和草稿保留。35 项相关前端回归、最终包 Relay 入口和旧库迁移检查通过。记录见 `build/reports/standalone-0.1.51-keyboard/`。
+- Linux x64、ARM64 本地测试包已通过架构、SHA-256、自解压归档和 305 个网页文件校验。本机 Docker 守护进程无响应，Linux 隔离安装待补。Hostdzire-linux 未升级，iPhone 真机待复测。
+- macOS arm64 测试包使用同一套已验证的网页资源，隔离环境中通过 0.1.50 → 0.1.51 升级、同包升级及缺文件恢复，保留原项目。按用户要求升级本机独立后台，确认 0.1.51 在原地址运行、7 个项目可读、实际返回的网页资源与测试包一致。iPhone 截图显示 `mac-idea` 对话输入框在键盘上方。键盘上沿的「完成」属于 iOS 输入工具栏。[本机升级结果](../../../build/reports/standalone-0.1.51-live-upgrade/result.txt)

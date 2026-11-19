@@ -82,6 +82,32 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
   await expect(page.getByRole("navigation", { name: "Remote project" })).toHaveCount(0);
   assert.deepEqual(errors, []);
 
+  await t.test("the phone composer follows the visible viewport when a keyboard covers the page", async () => {
+    await page.setViewportSize({ width: 430, height: 795 });
+    await page.addInitScript(() => {
+      const viewport = Object.assign(new EventTarget(), { width: innerWidth, height: innerHeight, offsetTop: 0 });
+      Object.defineProperty(window, "visualViewport", { value: viewport, configurable: true });
+      window.setTestViewport = (height, offsetTop, event) => {
+        Object.assign(viewport, { height, offsetTop });
+        viewport.dispatchEvent(new Event(event));
+      };
+    });
+    await page.goto("https://entry.test/n/N/p/A/?device=phone");
+    const footer = page.locator(".remote-phone-composer");
+    const textbox = footer.locator('[contenteditable="true"]');
+    await expect(textbox).toBeVisible();
+    await textbox.focus();
+    for (const [height, offsetTop, event] of [[432, 0, "resize"], [432, 38, "scroll"], [795, 0, "resize"]]) {
+      await page.evaluate(([height, offsetTop, event]) => window.setTestViewport(height, offsetTop, event), [height, offsetTop, event]);
+      assert.equal(await page.evaluate(() => innerHeight), 795);
+      await expect.poll(async () => {
+        const box = await footer.boundingBox();
+        return box ? Math.round(box.y + box.height) : null;
+      }).toBe(height + offsetTop);
+      await expect(textbox).toBeFocused();
+    }
+  });
+
   const notices = [];
   page.on("dialog", dialog => {
     notices.push(dialog.message());

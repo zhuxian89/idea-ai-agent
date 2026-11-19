@@ -5,6 +5,7 @@ import { App } from "./App";
 import { registerServiceWorker } from "./registerServiceWorker";
 import { applyAppearanceMode, getAppearanceMode } from "./services/appearance";
 import { isHarmonyRuntime, isNativeShellRuntime } from "./services/runtime";
+import { applyViewportBounds, syncBrowserViewport } from "./services/viewport";
 import { Login } from "./components/Login";
 import { I18nProvider, translateNow } from "./i18n";
 
@@ -292,28 +293,21 @@ function syncViewportHeight(): void {
     return;
   }
 
-  const visualViewport = window.visualViewport;
-  const isNativeShell = isNativeShellRuntime();
-  const rawViewportHeight = isNativeShell || !visualViewport
-    ? window.innerHeight
-    : visualViewport.height;
-  let viewportHeight = rawViewportHeight;
-  if (isNativeShell) {
-    const imeBottom = readRootPixelVar("--mindfs-ime-bottom");
-    if (imeBottom > 0) {
-      largestNativeViewportHeight ||= rawViewportHeight;
-    } else {
-      largestNativeViewportHeight = rawViewportHeight;
-    }
-    const resizedBy = Math.max(0, largestNativeViewportHeight - rawViewportHeight);
-    const remainingImeOverlay = Math.max(0, imeBottom - resizedBy);
-    viewportHeight = Math.max(320, rawViewportHeight - remainingImeOverlay);
+  if (!isNativeShellRuntime()) {
+    syncBrowserViewport();
+    return;
   }
-  const viewportOffsetTop = isNativeShell || !visualViewport
-    ? 0
-    : Math.max(0, visualViewport.offsetTop || 0);
-  document.documentElement.style.setProperty("--mindfs-viewport-height", `${viewportHeight}px`);
-  document.documentElement.style.setProperty("--mindfs-viewport-offset-top", `${viewportOffsetTop}px`);
+
+  const rawViewportHeight = window.innerHeight;
+  const imeBottom = readRootPixelVar("--mindfs-ime-bottom");
+  if (imeBottom > 0) {
+    largestNativeViewportHeight ||= rawViewportHeight;
+  } else {
+    largestNativeViewportHeight = rawViewportHeight;
+  }
+  const resizedBy = Math.max(0, largestNativeViewportHeight - rawViewportHeight);
+  const remainingImeOverlay = Math.max(0, imeBottom - resizedBy);
+  applyViewportBounds(Math.max(320, rawViewportHeight - remainingImeOverlay));
 }
 
 function syncViewportHeightAfterKeyboardChange(): void {

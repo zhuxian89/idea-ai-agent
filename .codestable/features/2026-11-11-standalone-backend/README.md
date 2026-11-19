@@ -2,6 +2,8 @@
 
 ## 当前状态（2026-11-19）
 
+- **0.1.51 Linux 本地测试包**修复远程网页在手机键盘弹出后输入框被挡住的问题。Chrome 和 WebKit 使用随包网页验证视口缩小、偏移和恢复。Linux x64 和 ARM64 包已构建并校验，待 Hostdzire-linux 升级后进行手机实机试用。[x64 测试包](../../../build/standalone/0.1.51/local-ai-agent-0.1.51-linux-amd64.sh) · [ARM64 测试包](../../../build/standalone/0.1.51/local-ai-agent-0.1.51-linux-arm64.sh)
+- **0.1.51 macOS arm64 本地测试包**已在本机升级并验证，原地址及 7 个项目可读。用户的 iPhone 截图显示 `mac-idea` 对话输入框位于弹出的键盘上方。[本机升级结果](../../../build/reports/standalone-0.1.51-live-upgrade/result.txt)
 - **独立后台 0.1.50** 已作为默认正式版发布，覆盖 macOS、Linux、Windows 的 x64 与 ARM64。包括远程网页适配、手机会话与更多设置、可配置的 Agent 边框流光，以及关联文件入口调整。用户确认 macOS 测试通过，六个平台附件及固定安装入口已验证。0.1.41 Release 已下架，源码标签保留。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.50)
 - **IDEA 插件 0.1.27** 已在 GitHub 同版本更新四个平台和通用包。内置后台及远程网页更新已随包发布。已安装 0.1.27 的用户需从磁盘重装并重启 IDEA。[插件下载](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)
 - **IDEA 插件 0.1.28-local.1 macOS arm64 本地测试包**已安装到本机。最终 ZIP 的内置后台通过启动、旧会话和网页资源验证。本机实测切到内置模式及切回独立模式后，均能从远程网页发送消息。[插件 ZIP](../../../build/local-packages/idea-ai-agent-0.1.28-local.1-macos-arm64.zip)
