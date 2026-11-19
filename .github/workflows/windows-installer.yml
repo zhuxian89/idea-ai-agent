@@ -103,11 +103,20 @@ jobs:
       - name: Verify final candidate with Windows PowerShell 5.1
         shell: powershell
         env:
+          CANDIDATE_RELEASE: ${{ inputs.candidate_release }}
           STANDALONE_VERSION: ${{ inputs.standalone_version }}
           PUBLIC_DOWNLOAD_VERSION: ${{ inputs.public_download_version || inputs.standalone_version }}
         run: |
-          & ./scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip ./build/installer-validation/candidate.zip -Version $env:PUBLIC_DOWNLOAD_VERSION
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $plugins = if ($env:CANDIDATE_RELEASE) {
+            Get-ChildItem ./build/installer-validation/idea-ai-agent-*.zip
+          } else {
+            Get-Item ./build/installer-validation/candidate.zip
+          }
+          foreach ($plugin in $plugins) {
+            Write-Host "Verifying packaged installer: $($plugin.Name)"
+            & ./scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip $plugin.FullName -Version $env:PUBLIC_DOWNLOAD_VERSION
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           if ($env:STANDALONE_VERSION) {
             Get-ChildItem ./build/installer-validation/local-ai-agent-*/install.ps1 | ForEach-Object {
               $errors = $null

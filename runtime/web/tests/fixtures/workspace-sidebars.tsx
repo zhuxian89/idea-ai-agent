@@ -5,6 +5,7 @@ import { HandoffPackDialog } from "../../src/components/HandoffPackDialog";
 import { ScheduledAgentTaskDialog } from "../../src/components/ScheduledAgentTaskDialog";
 import { ActionBar } from "../../src/components/ActionBar";
 import { AppShell } from "../../src/layout/AppShell";
+import { setRemoteDeviceMode } from "../../src/services/remoteDevice";
 
 const stamp = new Date(Date.now() - 120000).toISOString();
 const make = (key: string, name: string, patch: Partial<SessionItem> = {}): SessionItem => ({ key, session_key: key, name, agent: "codex", type: "chat", root_id: "a", updated_at: stamp, ...patch });
@@ -29,7 +30,7 @@ export function WorkspaceFixture() {
   w.actions ||= [];
   const record = (action: string, session: SessionItem) => w.actions.push({ action, root: session.root_id, key: session.key });
   w.fixture = {
-    setGroups, setSelected, setSingle, setSearch, setHandoff, setLeft, setRight,
+    setGroups, setSelected, setSingle, setSearch, setHandoff, setLeft, setRight, setDevice: setRemoteDeviceMode,
     finish: () => setGroups(prev => prev.map(group => ({ ...group, sessions: group.sessions.map(s => s.key === "run-1" ? { ...s, pending: false } : s) }))),
     generalSchedule: () => { setSchedule(null); setScheduleOpen(true); },
   };

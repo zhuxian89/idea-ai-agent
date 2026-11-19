@@ -719,9 +719,8 @@ body {
   border-radius: 999px;
 }
 
-@media (max-width: 767px) {
-  html,
-  body {
+html[data-device="phone"],
+html[data-device="phone"] body {
     position: fixed;
     inset: 0;
     width: 100%;
@@ -729,7 +728,27 @@ body {
     overflow: hidden;
   }
 
-  #root {
+html[data-device="phone"] #root {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--mindfs-viewport-offset-top, 0px);
+    height: var(--mindfs-viewport-height, 100dvh);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+@media (max-width: 767px) {
+  html:not([data-device]),
+  html:not([data-device]) body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html:not([data-device]) #root {
     position: fixed;
     left: 0;
     right: 0;

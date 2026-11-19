@@ -8,8 +8,9 @@ import { readActivityFacts, toolActivityState } from "../services/activityFacts"
 import { useActivityTerminal } from "../hooks/useActivityTerminal";
 import { useNetworkOnline } from "../hooks/useNetworkOnline";
 import { ActivityEmoji } from "./ActivityEmoji";
+import { remoteUiActive } from "../services/remoteUiFlag";
 
-export function SessionActivity({ timeline, lastEventAt, connected, recoveryText, rootId = "", sessionKey = "", rootPath, active = true }: {
+export function SessionActivity({ timeline, lastEventAt, connected, recoveryText, rootId = "", sessionKey = "", rootPath, active = true, onResolveQuestion }: {
   timeline: TimelineItem[];
   lastEventAt: number;
   connected: boolean;
@@ -18,6 +19,7 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
   sessionKey?: string;
   rootPath?: string;
   active?: boolean;
+  onResolveQuestion?: () => void;
 }) {
   const { t, locale } = useI18n();
   const networkOnline = useNetworkOnline();
@@ -82,10 +84,17 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
   const activityLabel = parallelNote ? `${parallelNote} · ${detail}` : showDetail ? detail : reaction.label;
   const timeLabel = `${t("session.activityElapsed", { duration: formatDuration(elapsedSeconds) })} · ${lastEventAt > 0 || terminal ? t("session.activityLastUpdate", { duration: idleDuration }) : t("session.activityNoUpdate")}`;
   if (!active && !terminal) return null;
-  return <div data-session-activity className="session-activity">
+  // 远程网页的边框流光只在 agent 真正在干活（work）时亮；等你回答、已结束、出错、离线都不亮。
+  const activityKind = terminal ? (terminal.kind === "error" ? "error" : "done")
+    : !networkOnline || !connected ? "offline"
+    : question ? "wait"
+    : "work";
+  return <div data-session-activity className="session-activity" {...(remoteUiActive() ? { "data-activity-kind": activityKind } : {})}>
     <div className="session-activity-label" role="status" aria-live="polite" aria-atomic="true">
       <ActivityEmoji emoji={reaction.emoji} />
-      <span className={`session-activity-text${showDetail ? " session-activity-tool-summary" : ""}`} title={activityLabel} tabIndex={0}>{activityLabel}</span>
+      {question && onResolveQuestion ? <button type="button" onClick={onResolveQuestion}>
+        {activityLabel}<span className="remote-phone-respond">{t("remote.phone.answerHint")}</span>
+      </button> : <span className={`session-activity-text${showDetail ? " session-activity-tool-summary" : ""}`} title={activityLabel} tabIndex={0}>{activityLabel}</span>}
     </div>
     <div className="session-activity-time" title={timeLabel}>{timeLabel}</div>
   </div>;

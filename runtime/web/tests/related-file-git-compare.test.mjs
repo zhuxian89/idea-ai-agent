@@ -27,6 +27,7 @@ test('related file row separates IDEA open and native Git compare actions', asyn
         import { createRoot } from 'react-dom/client';
         import { I18nProvider } from './src/i18n';
         import { SessionViewer } from './src/components/SessionViewer';
+        import './src/services/remoteUi';
         const session = {key:'related-files', name:'Related files', agent:'codex', pending:false,
           exchanges:[{seq:1, role:'user', content:'修改 note.txt。'}],
           related_files:[{root_id:'project', repo_path:'/repo', repo_kind:'git', path:'note.txt', name:'note.txt'}]};
@@ -60,10 +61,14 @@ test('related file row separates IDEA open and native Git compare actions', asyn
     await page.addInitScript(locale => {
       localStorage.setItem('mindfs-locale', locale);
     }, locale);
-    await page.route(/http:\/\/related-files\.test\/$/, route => route.fulfill({
-      contentType: 'text/html',
-      body: `<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><style>${styles}</style></head><body><div id="root"></div></body></html>`,
-    }));
+    await page.route(/http:\/\/related-files\.test\/(?:\?remote=1)?$/, route => {
+      const standalone = new URL(route.request().url()).searchParams.has('remote')
+        ? '<meta name="local-ai-agent-mode" content="standalone">' : '';
+      return route.fulfill({
+        contentType: 'text/html',
+        body: `<!doctype html><html data-theme="dark"><head><meta charset="utf-8">${standalone}<style>${styles}</style></head><body><div id="root"></div></body></html>`,
+      });
+    });
     await page.goto('http://related-files.test/');
     await page.addScriptTag({ content: script });
     
@@ -92,6 +97,11 @@ test('related file row separates IDEA open and native Git compare actions', asyn
       assert.equal(await page.evaluate(() => window.messages.filter(item => item.action !== 'setLocale').length), 1);
     }
     await page.screenshot({ path: path.join(reports, `related-${locale}.png`), fullPage: true });
+    await page.goto('http://related-files.test/?remote=1');
+    await page.addScriptTag({ content: script });
+    await expect(page.locator('html')).toHaveAttribute('data-remote-ui', '1');
+    await expect(page.getByText('修改 note.txt。', { exact: true })).toBeVisible();
+    await expect(page.getByText('关联文件 1', { exact: true })).toHaveCount(0);
     await context.close();
   }
 });

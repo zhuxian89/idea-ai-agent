@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useI18n } from "../i18n";
 import { IdeaWorkbench, type IdeaWorkbenchOptions } from "./IdeaWorkbench";
+import { RemoteShell } from "./RemoteShell";
+import { isRemoteWebUi } from "../services/remoteUi";
+import { useRemoteDevice } from "../services/remoteDevice";
+import { RemotePhoneShell, type RemotePhoneProps } from "./RemotePhoneShell";
 
 type AppShellProps = {
   ideaWorkbench?: IdeaWorkbenchOptions;
@@ -16,6 +20,12 @@ type AppShellProps = {
   onOpenLeft?: () => void;
   onOpenRight?: () => void;
   sidebarsSwapped?: boolean;
+  /** 远程网页新界面的顶部栏设置，仅在浏览器里的远程页面使用。 */
+  remotePhoneProps?: RemotePhoneProps;
+  remoteTopBar?: {
+    multiProjectSessionsEnabled?: boolean;
+    onMultiProjectSessionsChange?: (enabled: boolean) => void;
+  };
 };
 
 const MOBILE_BREAKPOINT = 768;
@@ -100,9 +110,14 @@ export function AppShell({
   onOpenLeft,
   onOpenRight,
   sidebarsSwapped = false,
+  remoteTopBar,
+  remotePhoneProps,
 }: AppShellProps) {
   const { t } = useI18n();
-  const { isMobile, isTablet } = useResponsive();
+  const viewport = useResponsive();
+  const device = useRemoteDevice();
+  const isMobile = device ? device === "phone" : viewport.isMobile;
+  const isTablet = device ? device === "tablet" || viewport.isTablet : viewport.isTablet;
 
   const sidebarWidth = isMobile ? "0px" : (isTablet ? "200px" : "260px");
   const rightWidth = isMobile ? "0px" : (rightSidebar ? (isTablet ? "240px" : "280px") : "0px");
@@ -190,6 +205,37 @@ export function AppShell({
   if (ideaWorkbench) {
     return <IdeaWorkbench {...ideaWorkbench} chat={main} history={rightSidebar} settings={sidebar} footer={footer} drawer={drawer}
       settingsOpen={leftOpen} historyOpen={rightOpen} onCloseSettings={onCloseLeft} onCloseHistory={onCloseRight} onOpenSettings={onOpenLeft} onOpenHistory={onOpenRight} />;
+  }
+
+  if (isRemoteWebUi && isMobile && remotePhoneProps) {
+    return <RemotePhoneShell
+      leftOpen={leftOpen}
+      rightOpen={rightOpen}
+      onProjects={() => { onCloseRight?.(); onOpenLeft?.(); }}
+      onSessions={() => { onCloseLeft?.(); onOpenRight?.(); }}
+      onChat={() => { onCloseLeft?.(); onCloseRight?.(); }}
+      sidebar={sidebar}
+      sessions={rightSidebar}
+      main={main}
+      footer={footer}
+      drawer={drawer}
+      phone={remotePhoneProps}
+    />;
+  }
+
+
+  if (isRemoteWebUi && !isMobile) {
+    return (
+      <RemoteShell
+        left={{ content: physicalLeftContent, open: physicalLeftOpen, width: physicalLeftWidth, toggleLabel: physicalLeftOpen ? t("sidebar.collapse", { label: physicalLeftLabel }) : t("sidebar.expand", { label: physicalLeftLabel }), onToggle: physicalLeftOpen ? physicalLeftClose : physicalLeftOpenHandler }}
+        right={{ content: physicalRightContent, open: physicalRightOpen, width: physicalRightWidth, toggleLabel: physicalRightOpen ? t("sidebar.collapse", { label: physicalRightLabel }) : t("sidebar.expand", { label: physicalRightLabel }), onToggle: physicalRightOpen ? physicalRightClose : physicalRightOpenHandler }}
+        main={main}
+        drawer={drawer}
+        footer={footer}
+        topBar={remoteTopBar ?? {}}
+        fileMenuWidth={isTablet ? "140px" : "182px"}
+      />
+    );
   }
 
   return (

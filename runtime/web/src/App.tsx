@@ -94,6 +94,9 @@ import {
 import { buildBaseTimeline } from "./hooks/useSessionStream";
 import { translateNow, useI18n } from "./i18n";
 import { AppShell } from "./layout/AppShell";
+import { isRemoteWebUi } from "./services/remoteUi";
+import { useRemoteDevice } from "./services/remoteDevice";
+import { usePhoneWaiting, type PhoneSessionFacts, type PhoneSessionFilter } from "./components/remoteui/phoneSessionFacts";
 import {
   loadPluginsFromSources,
   PluginManager,
@@ -787,22 +790,33 @@ export function App({ onGoHome }: AppProps) {
   );
   const [agentsVersion, setAgentsVersion] = useState(0);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const { isMobile } = useResponsive();
+  const { isMobile: compactViewport } = useResponsive();
+  const remoteDevice = useRemoteDevice();
+  const remotePhone = remoteDevice === "phone";
+  const isMobile = remoteDevice ? remotePhone : compactViewport;
+  const [phoneFilter, setPhoneFilter] = useState<PhoneSessionFilter>("");
   const [sidebarsSwapped, setSidebarsSwapped] = useState(loadSidebarsSwapped);
   const [gitDiffSideBySide, setGitDiffSideBySide] = useState(
     loadGitDiffSideBySide,
   );
   const [isLeftOpen, setIsLeftOpen] = useState(
-    () => !isIdeaRuntime && window.innerWidth >= 768,
+    () => !isIdeaRuntime && (remoteDevice ? !remotePhone && window.innerWidth >= 720 : window.innerWidth >= 768),
   );
 
+  // 远程网页：窄于 1024（平板竖屏）时默认收起会话栏，宽屏默认展开。其他环境保持原来的 768。
   const [isRightOpen, setIsRightOpen] = useState(
-    () => !isIdeaRuntime && window.innerWidth >= 768,
+    () => !isIdeaRuntime && !remotePhone && window.innerWidth >= (isRemoteWebUi ? 1024 : 768),
   );
 
+  const previousRemoteDevice = useRef(remoteDevice);
   useEffect(() => {
     if (isMobile) { setIsLeftOpen(false); setIsRightOpen(false); }
-  }, [isMobile]);
+    else if (remoteDevice && previousRemoteDevice.current === "phone") {
+      setIsLeftOpen(true);
+      setIsRightOpen(window.innerWidth >= 1024);
+    }
+    previousRemoteDevice.current = remoteDevice;
+  }, [isMobile, remoteDevice]);
 
   const [currentRootId, setCurrentRootId] = useState<string | null>(null);
   const currentRootIdRef = useRef<string | null>(null);
@@ -1387,9 +1401,11 @@ export function App({ onGoHome }: AppProps) {
   const currentDirectorySortMode = currentDirectorySortOverride || treeSortMode;
 
   const replaceURLState = useCallback((next: URLState) => {
-    const search = buildURLSearch(next);
-    const target = `${window.location.pathname}${search}`;
-    window.history.replaceState(null, "", target);
+    const search = new URLSearchParams(buildURLSearch(next));
+    const deviceOverride = new URLSearchParams(location.search).get("device");
+    if (isRemoteWebUi && deviceOverride) search.set("device", deviceOverride);
+    const params = search.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${params ? `?${params}` : ""}`);
   }, []);
 
   const redirectToRelayLogin = useCallback(() => {
@@ -1775,6 +1791,7 @@ export function App({ onGoHome }: AppProps) {
     },
     [rootSessionKey],
   );
+  const phoneWaiting = usePhoneWaiting(remotePhone, resolveRootForSessionKey);
   const {
     getSessionSnapshot,
     setSelectedPendingByKey,
@@ -2083,7 +2100,7 @@ export function App({ onGoHome }: AppProps) {
   );
 
   const loadMultiProjectSessionGroups = useCallback(async () => {
-    if (!multiProjectSessionsEnabled || !protectedAPIReady()) {
+    if ((!multiProjectSessionsEnabled && !remotePhone) || !protectedAPIReady()) {
       return;
     }
     setMultiProjectSessionsLoading(true);
@@ -2161,7 +2178,7 @@ export function App({ onGoHome }: AppProps) {
     } finally {
       setMultiProjectSessionsLoading(false);
     }
-  }, [applyPendingToMultiProjectGroups, multiProjectSessionsEnabled]);
+  }, [applyPendingToMultiProjectGroups, multiProjectSessionsEnabled, remotePhone]);
 
   const loadMoreMultiProjectSessions = useCallback(
     async (group: ProjectSessionGroup) => {
@@ -2236,7 +2253,7 @@ export function App({ onGoHome }: AppProps) {
   }, [applyPendingToMultiProjectGroups, rootSessionKey]);
 
   useEffect(() => {
-    if (!multiProjectSessionsEnabled) {
+    if (!multiProjectSessionsEnabled && !remotePhone) {
       return;
     }
     void refreshMultiProjectReplyingSessions();
@@ -2244,6 +2261,7 @@ export function App({ onGoHome }: AppProps) {
   }, [
     loadMultiProjectSessionGroups,
     multiProjectSessionsEnabled,
+    remotePhone,
     refreshMultiProjectReplyingSessions,
   ]);
 
@@ -4583,7 +4601,7 @@ export function App({ onGoHome }: AppProps) {
       currentRootIdRef,
       sessionsRef,
       loadSessionsForRoot,
-      multiProjectSessionsEnabled,
+      multiProjectSessionsEnabled: multiProjectSessionsEnabled || remotePhone,
       refreshMultiProjectReplyingSessions,
       loadMultiProjectSessionGroups,
       replayTargetsForAllRoots,
@@ -4647,6 +4665,7 @@ export function App({ onGoHome }: AppProps) {
     loadMultiProjectSessionGroups,
     loadSessionsForRoot,
     multiProjectSessionsEnabled,
+    remotePhone,
     refreshMultiProjectReplyingSessions,
     rootSessionKey,
     resolveRootForSessionKey,
@@ -5677,6 +5696,7 @@ export function App({ onGoHome }: AppProps) {
   );
   const sessionView = (
     <SessionViewer
+      phone={remotePhone}
       connected={status === "connected"}
       session={selectedSessionSnapshot}
       agents={availableAgents}
@@ -7318,6 +7338,37 @@ export function App({ onGoHome }: AppProps) {
   const openSessionHandoff = (session: SessionItem) => {
     setHandoffSession({ ...session, root_id: session.root_id || currentRootId || undefined });
   };
+  const sessionWithRoot = sessions.map(item => ({ ...item, root_id: item.root_id || currentRootId || undefined }));
+  const phoneGroups = remotePhone ? [
+    ...(currentRootId ? [{ rootId: currentRootId, rootName: managedRootByIdRef.current[currentRootId]?.display_name || currentRootId, sessions: sessionWithRoot.length ? sessionWithRoot : multiProjectSessionGroups.find(group => group.rootId === currentRootId)?.sessions || [], totalCount: sessionWithRoot.length }] : []),
+    ...multiProjectSessionGroups.filter(group => group.rootId !== currentRootId),
+  ] : [];
+  const phoneFactsBySession = new Map<string, PhoneSessionFacts>();
+  const getPhoneFacts = (item: SessionItem): PhoneSessionFacts => {
+    const root = item.root_id || currentRootId || "";
+    const key = rootSessionKey(root, item.key || item.session_key);
+    const known = phoneFactsBySession.get(key);
+    if (known) return item.search_snippet ? { ...known, preview: item.search_snippet } : known;
+    const cached = sessionCacheRef.current[key] as Session | undefined;
+    const exchanges = [...(cached?.exchanges || [])].reverse();
+    const preview = exchanges.find(entry => (entry.role === "assistant" || entry.role === "user") && entry.content?.trim())?.content?.replace(/\s+/g, " ").trim().slice(0, 140);
+    const pending = item.pending || multiProjectPendingByKey[key];
+    const ask = pending && exchanges.find(entry => entry.role === "user" || entry.toolCall?.kind === "ask_user")?.toolCall;
+    const waiting = phoneWaiting[key] ?? (ask && ["running", "pending", "in_progress"].includes(ask.status || "") ? ask.callId : "");
+    const facts: PhoneSessionFacts = {
+      state: waiting ? "wait" : sessionService.getSessionFailure(root, item.key) ? "error" : pending ? "work" : "idle",
+      project: managedRootByIdRef.current[root]?.display_name || root,
+      preview,
+      attentionId: waiting || item.updated_at,
+    };
+    phoneFactsBySession.set(key, facts);
+    return item.search_snippet ? { ...facts, preview: item.search_snippet } : facts;
+  };
+  const filterPhoneSessions = (items: SessionItem[]) => {
+    if (!remotePhone || !phoneFilter) return items;
+    const selected = new Set(items.filter(item => !item.parent_session_key && getPhoneFacts(item).state === phoneFilter).map(item => item.key));
+    return items.filter(item => selected.has(item.key) || (item.parent_session_key && selected.has(item.parent_session_key)));
+  };
   const sessionSidebar =
     sessionListMode === "import" ? (
       <ExternalSessionList
@@ -7353,7 +7404,7 @@ export function App({ onGoHome }: AppProps) {
       !sessionSearchOpen &&
       !sessionSearchResultsMode ? (
       <MultiProjectSessionList
-        groups={multiProjectSessionGroups}
+        groups={remotePhone && phoneFilter ? phoneGroups.map(group => ({ ...group, sessions: filterPhoneSessions(group.sessions) })).filter(group => group.sessions.length > 0) : multiProjectSessionGroups}
         selectedKey={selectedSession?.key}
         selectedRootId={
           (selectedSession?.root_id as string | undefined) ||
@@ -7399,7 +7450,7 @@ export function App({ onGoHome }: AppProps) {
         sessions={
           sessionSearchOpen && sessionSearchResultsMode
             ? sessionSearchResults
-            : sessions.map(session => ({ ...session, root_id: session.root_id || currentRootId || undefined }))
+            : filterPhoneSessions(sessionWithRoot)
         }
         selectedKey={selectedSession?.key}
         headerAction={sessionImportMenu}
@@ -7564,6 +7615,25 @@ export function App({ onGoHome }: AppProps) {
         onCloseRight={() => setIsRightOpen(false)}
         onOpenLeft={() => { setIsLeftOpen(true); if (isMobile) setIsRightOpen(false); }}
         onOpenRight={() => { setIsRightOpen(true); if (isMobile) setIsLeftOpen(false); }}
+        remotePhoneProps={remotePhone ? {
+          title: selectedSession?.name || (file?.name ?? ""),
+          viewingFile: !selectedSession && !!(file || gitDiff),
+          project: managedRootByIdRef.current[selectedRoot]?.display_name || selectedRoot,
+          root: selectedRoot || currentRootId || "",
+          activeKey: selectedKey,
+          groups: phoneGroups,
+          filter: phoneFilter,
+          onFilter: setPhoneFilter,
+          facts: getPhoneFacts,
+          onSession: handleSelectSession,
+          importOpen: sessionListMode === "import" || sessionSearchResultsMode,
+          connection: status,
+          multiProjectSessionsEnabled,
+        } : undefined}
+        remoteTopBar={{
+          multiProjectSessionsEnabled,
+          onMultiProjectSessionsChange: setMultiProjectSessionsEnabled,
+        }}
         sidebar={
           <FileTree
             onProjectAdded={async (rootId) => {
@@ -7594,7 +7664,8 @@ export function App({ onGoHome }: AppProps) {
                 path: e.path,
                 root: r,
                 isRoot: e.is_root === true,
-                suppressTreeExpand: true,
+                suppressTreeExpand: !remotePhone,
+                toggle: remotePhone,
               })
             }
             onToggleDir={(e, r) =>
@@ -7739,6 +7810,7 @@ export function App({ onGoHome }: AppProps) {
             ) : null}
             <ActionBar
               compactWorkbench={isIdeaRuntime}
+              remoteDevice={remoteDevice}
               status={status}
               agentsVersion={agentsVersion}
               currentRootId={currentRootId}

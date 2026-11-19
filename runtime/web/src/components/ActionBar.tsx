@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { isIdeaChromeHost } from "../services/ideaBridge";
 import { useIdeaComposerContext } from "../hooks/useIdeaComposerContext";
+import type { RemoteDevice } from "../services/remoteDevice";
 import { type SessionMode } from "./ModeSelector";
 import { ModeSelector } from "./ModeSelector";
 import { AgentSelector } from "./AgentSelector";
@@ -120,6 +121,7 @@ type ActionBarProps = {
   onToggleLeftSidebar?: () => void;
   onToggleRightSidebar?: () => void;
   sidebarsSwapped?: boolean;
+  remoteDevice?: RemoteDevice | null;
 };
 
 function wsStatusMeta(status: WSStatus, t: (key: MessageKey) => string): {
@@ -415,6 +417,7 @@ export function ActionBar({
   onToggleLeftSidebar,
   onToggleRightSidebar,
   sidebarsSwapped = false,
+  remoteDevice,
 }: ActionBarProps) {
   const { t } = useI18n();
   const [mode, setMode] = useState<SessionMode>("chat");
@@ -480,7 +483,9 @@ export function ActionBar({
   const isComposingRef = useRef(false);
   const inputHistoryDraftRef = useRef("");
   const applyingInputHistoryRef = useRef(false);
-  const { isMobile } = useResponsive();
+  const { isMobile: compactViewport } = useResponsive();
+  const remotePhone = remoteDevice === "phone";
+  const isMobile = remoteDevice ? remotePhone : compactViewport;
   const ideaChromeHost = isIdeaChromeHost();
   const isConnected = status === "connected";
   const connectionMeta = wsStatusMeta(status, t);
@@ -1207,7 +1212,7 @@ export function ActionBar({
   const editorRightInset = compactWorkbench || isMultiLine ? 14 : mode === "command" ? (isMobile ? 92 : 116) : isMobile ? 124 : 148;
   const editorBottomInset = compactWorkbench ? 76 : isMultiLine ? 44 : 12;
   const editorMinHeight = compactWorkbench ? 104 : 44;
-  const mobileFileSidebarButton = isMobile && !compactWorkbench ? (
+  const mobileFileSidebarButton = isMobile && !compactWorkbench && !remotePhone ? (
     <button
       type="button"
       onClick={onToggleLeftSidebar}
@@ -1220,7 +1225,7 @@ export function ActionBar({
       </svg>
     </button>
   ) : null;
-  const mobileSessionSidebarButton = isMobile && !compactWorkbench ? (
+  const mobileSessionSidebarButton = isMobile && !compactWorkbench && !remotePhone ? (
     <button
       type="button"
       onClick={onToggleRightSidebar}
@@ -1243,8 +1248,8 @@ export function ActionBar({
           <div
             style={{
               position: "absolute",
-              left: isMobile ? "36px" : "2px",
-              right: isMobile ? "36px" : "8px",
+              left: isMobile && !remotePhone ? "36px" : "2px",
+              right: isMobile && !remotePhone ? "36px" : "8px",
               bottom: "100%",
               zIndex: 7,
               minWidth: 0,
@@ -1435,7 +1440,7 @@ export function ActionBar({
             ))}
           </div>
         ) : null}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile && !compactWorkbench ? "30px minmax(0, 1fr) 30px" : "1fr", alignItems: isMobile ? "end" : "center", gap: isMobile ? "1px" : 0, padding: isMobile ? "0 1px" : 0, minWidth: 0, maxWidth: "100%" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile && !compactWorkbench && !remotePhone ? "30px minmax(0, 1fr) 30px" : "1fr", alignItems: isMobile ? "end" : "center", gap: isMobile ? "1px" : 0, padding: isMobile ? "0 1px" : 0, minWidth: 0, maxWidth: "100%" }}>
           {sidebarsSwapped ? mobileSessionSidebarButton : mobileFileSidebarButton}
 
           <div

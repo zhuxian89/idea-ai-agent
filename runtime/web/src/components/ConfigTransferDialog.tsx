@@ -14,7 +14,8 @@ const buttonStyle: React.CSSProperties = {
   background: "transparent", color: "var(--text-primary)", font: "inherit", cursor: "pointer",
 };
 
-export function ConfigTransferDialog({ mode, onClose, onUseBackup }: {
+export function ConfigTransferDialog({ mode, onClose, onUseBackup, embedded = false }: {
+  embedded?: boolean;
   mode: "export" | "import";
   onClose: () => void;
   onUseBackup: (backup: ImportedAgentBackup) => void;
@@ -111,12 +112,12 @@ export function ConfigTransferDialog({ mode, onClose, onUseBackup }: {
   };
 
   return (
-      <div ref={dialogRef} role="dialog" aria-label={t(mode === "export" ? "configTransfer.exportAgent" : "configTransfer.importAgent")} tabIndex={-1}
+      <div ref={dialogRef} role={embedded ? undefined : "dialog"} aria-label={embedded ? undefined : t(mode === "export" ? "configTransfer.exportAgent" : "configTransfer.importAgent")} tabIndex={-1}
         onKeyDown={event => {
           if (event.key === "Escape") { event.stopPropagation(); if (!busy) onClose(); }
         }}
         style={{ width: "100%", boxSizing: "border-box", maxHeight: "calc(100dvh - 96px)", display: "flex", flexDirection: "column", borderRadius: 12, border: "1px solid var(--border-color)", background: "var(--menu-bg)", color: "var(--text-primary)", boxShadow: "0 16px 36px rgba(15,23,42,.18)", fontSize: 13, outline: "none", overflow: "hidden" }}>
-        <h2 style={{ fontSize: 15, margin: "12px 12px 6px" }}>{t(mode === "export" ? "configTransfer.exportAgent" : "configTransfer.importAgent")}</h2>
+        {!embedded && <h2 style={{ fontSize: 15, margin: "12px 12px 6px" }}>{t(mode === "export" ? "configTransfer.exportAgent" : "configTransfer.importAgent")}</h2>}
         <div style={{ overflowY: "auto", overscrollBehavior: "contain", padding: "6px 12px", minHeight: 0 }}>
           {mode === "export" && <>
             {agents === null && !error && <p>{t("agentConfig.loading")}</p>}

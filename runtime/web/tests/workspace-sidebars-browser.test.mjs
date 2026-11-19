@@ -29,6 +29,76 @@ async function setup(t, handle = response) {
 const row = (page, key, root = 'a') => page.locator(`[data-session-key="${key}"][data-root-id="${root}"]`);
 async function menu(page, key = 'main', root = 'a') { await row(page,key,root).getByRole('button', {name:'Session menu',exact:true}).click(); return page.getByRole('menu', {name:'Session menu'}); }
 
+test('top-bar agent configuration uses a centered dialog even when files are collapsed', async t => {
+  const requests = [];
+  const page = await setup(t, request => {
+    const path = new URL(request.url()).pathname;
+    if (path === '/api/agent-config/backups') return [{ id: 'saved', agent: 'codex', name: 'Saved config', sources: [] }];
+    if (path === '/api/agent-config/switch') {
+      requests.push(request.postDataJSON());
+      return { needs_confirm: false };
+    }
+    return response(request);
+  });
+  await page.addStyleTag({ content: readFileSync(new URL("../src/components/remoteui/remoteDesign.css", import.meta.url), "utf8") });
+  const files = page.locator('.remote-side-left');
+  const name = 'Agent config switch & restart';
+  const shortcut = page.getByRole('button', { name, exact: true });
+  const dialog = page.getByRole('dialog', { name });
+  await page.evaluate(() => window.fixture.setLeft(false));
+  await page.setViewportSize({ width: 820, height: 400 });
+  await shortcut.click();
+  await expect(dialog).toBeVisible();
+  await expect(files).toHaveAttribute('data-open', 'false');
+  const box = await dialog.boundingBox();
+  assert.ok(Math.abs(box.x + box.width / 2 - 410) < 1);
+  assert.ok(Math.abs(box.y + box.height / 2 - 200) < 1);
+  await dialog.getByText('codex', { exact: true }).click();
+  await dialog.getByText('Saved config', { exact: true }).click();
+  await dialog.getByRole('button', { name: 'Switch', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  assert.equal(requests.length, 1);
+  await expect(shortcut).toBeFocused();
+  await shortcut.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(shortcut).toBeFocused();
+
+  await page.evaluate(() => window.fixture.setLeft(true));
+  await page.getByRole('button', { name: 'Open file tree menu' }).click();
+  await page.locator('[data-file-tree-menu]').getByRole('button', { name }).click();
+  await expect(files.getByText('Choose an agent to switch config')).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+});
+
+test('file menu scrolls to its last option within a short remote viewport', async t => {
+  const page = await setup(t);
+  await page.addStyleTag({ content: readFileSync(new URL("../src/components/remoteui/remoteDesign.css", import.meta.url), "utf8") });
+  const trigger = page.getByRole('button', { name: 'Open file tree menu' });
+  const popup = page.locator('[data-file-tree-menu]');
+  const lastOption = popup.getByRole('button', { name: 'Side-by-side diff' });
+  await page.evaluate(() => window.fixture.setRight(false));
+  await trigger.click();
+  for (const viewport of [{ width: 1060, height: 530 }, { width: 390, height: 450 }]) {
+    await page.setViewportSize(viewport);
+    if (viewport.width < 768) {
+      await page.evaluate(() => window.fixture.setDevice("phone"));
+      await expect(page.locator(".remote-shell")).toHaveCount(0);
+    }
+    if (!(await popup.isVisible())) await trigger.click();
+    await expect.poll(() => popup.evaluate(el => el.getBoundingClientRect().bottom <= innerHeight - 7)).toBe(true);
+    assert.ok(await popup.evaluate(el => el.scrollHeight > el.clientHeight));
+    await page.keyboard.press('End');
+    await expect(lastOption).toBeFocused();
+    await expect(lastOption).toBeInViewport({ ratio: 1 });
+    await lastOption.click();
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
+    if (viewport.width === 1060) await trigger.click();
+  }
+});
+
 test('subagents: running defaults, ended disclosure, selected descendants, transitions and paging in both lists', async t => {
   const page = await setup(t);
   for (const single of [false,true]) {
@@ -190,7 +260,7 @@ test('production sidebars use consistent typography in light/dark and mobile lay
     for(const item of contrast)assert.ok(item.ratio>=4.5,`${theme} ${item.selector}: ${item.ratio}`);
     await page.screenshot({path:new URL(`../../../output/playwright/remote-workspace-implemented/project-names-${theme}.png`,import.meta.url).pathname});
   }
-  await page.evaluate(()=>{window.fixture.setLeft(false);window.fixture.setRight(true);});
+  await page.evaluate(()=>{window.fixture.setDevice("phone");window.fixture.setLeft(false);window.fixture.setRight(true);});
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:new URL('../../../output/playwright/remote-workspace-implemented/mobile.png',import.meta.url).pathname});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
@@ -201,10 +271,12 @@ test('production sidebars use consistent typography in light/dark and mobile lay
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('actual standalone App closes desktop drawers on mobile resize and opens only one sidebar', async t => {
+test('standalone App opens the phone layout on explicit device choice and navigates full-screen pages', async t => {
   const remoteRequests = [];
   const page=await mount(t, `
     import { App } from './src/App';
+    import { setRemoteDeviceMode } from './src/services/remoteDevice';
+    window.setTestDevice=setRemoteDeviceMode;
     import QRCode from 'qrcode';
     import { sessionService } from './src/services/session';
     sessionService.connect = () => {};
@@ -226,6 +298,8 @@ test('actual standalone App closes desktop drawers on mobile resize and opens on
   await expect(page.getByText('Standalone 9.9.9-test', { exact: true })).toBeVisible();
   await page.evaluate(() => history.replaceState(null, '', '?root=root&session=chat'));
   const phoneAccess = page.getByRole('button', { name: 'Connect your phone', exact: true });
+  await page.addStyleTag({content: readFileSync(new URL('../src/components/workspaceSidebar.css',import.meta.url),'utf8')});
+  await expect(phoneAccess).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await phoneAccess.click();
   const dialog = page.getByRole('dialog', { name: 'Connect your phone' });
   const qr = dialog.getByRole('img', { name: 'Remote access QR code' });
@@ -236,18 +310,18 @@ test('actual standalone App closes desktop drawers on mobile resize and opens on
   await expect(dialog).toHaveCount(0);
   assert.deepEqual(remoteRequests, []);
   await page.setViewportSize({width:390,height:844});
-  await expect(page.locator('[data-onboarding="shell"] > aside')).toHaveCount(0);
-  await page.getByRole('button',{name:'Open file sidebar',exact:true}).click();
-  await expect(page.locator('[data-onboarding="shell"] > aside')).toHaveCount(1);
-  await expect(page.locator('aside .workspace-projects')).toBeVisible();
-  // The drawer overlay covers the composer; dispatch the same button event to test the state transition directly.
-  await page.getByRole('button',{name:'Open session sidebar',exact:true}).dispatchEvent('click');
-  await expect(page.locator('[data-onboarding="shell"] > aside')).toHaveCount(1);
-  await expect(page.locator('aside .workspace-sessions')).toBeVisible();
-  await expect(page.locator('aside .workspace-projects')).toHaveCount(0);
-  await page.getByRole('button',{name:'Open file sidebar',exact:true}).dispatchEvent('click');
-  await expect(page.locator('[data-onboarding="shell"] > aside')).toHaveCount(1);
-  await expect(page.locator('aside .workspace-projects')).toBeVisible();
+  await expect(page.locator('.remote-shell')).toBeVisible();
+  await page.evaluate(() => window.setTestDevice("phone"));
+  const phone = page.locator('.remote-phone');
+  await expect(phone).toHaveAttribute('data-page', 'chat');
+  await phone.getByRole('button', {name:'Projects', exact:true}).click();
+  await expect(phone).toHaveAttribute('data-page', 'projects');
+  await expect(phone.locator('.workspace-projects')).toBeVisible();
+  await phone.locator('nav').getByRole('button', {name:'Sessions', exact:true}).click();
+  await expect(phone).toHaveAttribute('data-page', 'sessions');
+  await expect(phone.locator('.workspace-sessions')).toBeVisible();
+  await phone.locator('nav').getByRole('button', {name:'Chat', exact:true}).click();
+  await expect(phone.locator('nav')).toHaveCount(0);
 });
 
 test('project paging retains selected nested sessions and active descendants', async t => {

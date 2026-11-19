@@ -1,4 +1,5 @@
-import React, { useId } from "react";
+import React, { useId, useLayoutEffect, useRef, useState } from "react";
+import { copyText } from "../services/clipboard";
 import { useI18n } from "../i18n";
 
 type Schema = { type?: string; title?: string; description?: string; enum?: unknown[]; properties?: Record<string, Schema>; required?: string[] };
@@ -14,9 +15,45 @@ export function getNativeInteraction(value: unknown): NativeInteraction | null {
 
 const control: React.CSSProperties = { width: "100%", boxSizing: "border-box", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--content-bg)", color: "var(--text-primary)", font: "inherit" };
 
-export function NativeInteractionFields({ interaction: n, answers, onChange, disabled }: {
+function CompactRequestDetails({ details }: { details: Record<string, unknown> }) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const preRef = useRef<HTMLPreElement>(null);
+  const text = Object.entries(details).map(([key, value]) =>
+    `${key}: ${typeof value === "string" ? value : JSON.stringify(value, null, 2)}`,
+  ).join("\n");
+  const [lineCount, setLineCount] = useState(0);
+  useLayoutEffect(() => {
+    const pre = preRef.current;
+    if (!pre) return;
+    const measure = () => {
+      const lineHeight = parseFloat(getComputedStyle(pre).lineHeight);
+      if (lineHeight && pre.clientWidth) setLineCount(Math.round(pre.scrollHeight / lineHeight));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(pre);
+    return () => observer.disconnect();
+  }, [text]);
+  const long = lineCount > 4;
+  const command = typeof details.command === "string" ? details.command : "";
+  return <section className="remote-phone-request">
+    <strong>{t("native.details")}</strong>
+    <pre ref={preRef} data-collapsed={long && !expanded} tabIndex={expanded ? 0 : undefined}>{text}</pre>
+    {long && <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
+      {expanded ? t("remote.phone.collapseDetails") : t("remote.phone.expandLines", { count: lineCount })}
+    </button>}
+    <button type="button" onClick={() => { void copyText(command || text).then(() => setCopyFailed(false), () => setCopyFailed(true)); }}>
+      {command ? t("toolActivity.copyCommand") : t("relayLocal.copy")}
+    </button>
+    {copyFailed && <span role="alert">{t("session.copyFailed")}</span>}
+  </section>;
+}
+
+export function NativeInteractionFields({ interaction: n, answers, onChange, disabled, compactDetails = false }: {
   interaction: NativeInteraction; answers: Record<string, string>;
-  onChange: (answers: Record<string, string>) => void; disabled: boolean;
+  onChange: (answers: Record<string, string>) => void; disabled: boolean; compactDetails?: boolean;
 }) {
   const { t } = useI18n();
   const groupID = useId();
@@ -52,7 +89,7 @@ export function NativeInteractionFields({ interaction: n, answers, onChange, dis
     </div>}
     {details && (n.kind === "refusal_fallback_prompt"
       ? <p style={{ margin: 0, overflowWrap: "anywhere" }}>{String(details.originalModel || "")} → {String(details.fallbackModel || "")}</p>
-      : <details open><summary>{t("native.details")}</summary><pre style={{ margin: "8px 0 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: "12px" }}>{JSON.stringify(details, null, 2)}</pre></details>)}
+      : compactDetails ? <CompactRequestDetails details={details} /> : <details open><summary>{t("native.details")}</summary><pre style={{ margin: "8px 0 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: "12px" }}>{JSON.stringify(details, null, 2)}</pre></details>)}
     <div role="radiogroup" aria-label={t("native.action")} style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
       {n.actions.map(action => <label key={action} style={{ display: "flex", gap: "6px", alignItems: "center", padding: "7px 10px", border: "1px solid var(--border-color)", borderRadius: "6px", cursor: disabled ? "default" : "pointer" }}>
         <input type="radio" name={groupID} checked={answers.q_0 === action} onChange={() => onChange({ ...answers, q_0: action, ...(form && action === "accept" && !answers.q_1 ? { q_1: "{}" } : {}) })} />

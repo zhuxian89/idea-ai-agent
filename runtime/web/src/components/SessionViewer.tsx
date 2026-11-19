@@ -1,6 +1,9 @@
 import { NativeInteractionFields, getNativeInteraction } from "./NativeInteractionFields";
 import { ReplyContext } from "./stream/ReplyContext";
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { PhoneSheet } from "./remoteui/PhoneSheet";
+import { PhoneActivityHostContext } from "./remoteui/phoneSessionFacts";
 import { useSessionStream, type TimelineItem } from "../hooks/useSessionStream";
 import type { TodoUpdate } from "../services/session";
 import { ThinkingBlock } from "./stream/ThinkingBlock";
@@ -13,6 +16,7 @@ import type { ExchangeAux, RelatedFile, ToolCall } from "../services/session";
 import { savePrompt } from "../services/prompts";
 import { reportError } from "../services/error";
 import { compareGitFileInIdea, isIdeaRuntime } from "../services/ideaBridge";
+import { remoteUiActive } from "../services/remoteUiFlag";
 import { rootBadgeButtonStyle } from "./rootBadgeStyle";
 import { copyText } from "../services/clipboard";
 import type { AgentStatus } from "../services/agents";
@@ -73,6 +77,7 @@ type SessionItem = {
 };
 
 type SessionViewerProps = {
+  phone?: boolean;
   session: SessionItem | null;
   connected?: boolean;
   loading?: boolean;
@@ -603,6 +608,8 @@ function AskUserQuestionCard({
   sessionKey,
   agent,
   active,
+  phoneSheet = false,
+  onResolved,
   onAnswer,
 }: {
   toolCall: ToolCall;
@@ -610,6 +617,8 @@ function AskUserQuestionCard({
   sessionKey?: string | null;
   agent?: string;
   active: boolean;
+  phoneSheet?: boolean;
+  onResolved?: () => void;
   onAnswer?: SessionViewerProps["onAskUserAnswer"];
 }) {
   const { t } = useI18n();
@@ -756,7 +765,7 @@ function AskUserQuestionCard({
       </button>
       {expanded ? (
         <div style={{ padding: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          {native ? <NativeInteractionFields interaction={native} answers={answers} onChange={setAnswers} disabled={submitting || submitted || !active || !isCurrent} /> : questions.map((question, index) => {
+          {native ? <NativeInteractionFields compactDetails={phoneSheet} interaction={native} answers={answers} onChange={setAnswers} disabled={submitting || submitted || !active || !isCurrent} /> : questions.map((question, index) => {
             const key = `q_${index}`;
             const options = Array.isArray(question.options) ? question.options : [];
             const selected = answers[key] || "";
@@ -896,6 +905,7 @@ function AskUserQuestionCard({
               await onAnswer({ rootId, sessionKey, agent, toolUseId, answers });
               setSubmitted(true);
               setExpanded(false);
+              onResolved?.();
             } catch (error) {
               setAnswerError(error instanceof Error ? error.message : String(error));
             } finally {
@@ -948,6 +958,7 @@ function shouldDefaultCollapseRelatedFiles(
 
 function SessionViewerInner({
   session,
+  phone = false,
   connected = true,
   loading = false,
   slashCommandResult = null,
@@ -966,6 +977,8 @@ function SessionViewerInner({
   agents,
 }: SessionViewerProps) {
   const { locale, t } = useI18n();
+  const activityHost = useContext(PhoneActivityHostContext);
+  const [openPhoneAsk, setOpenPhoneAsk] = useState("");
   const [relatedFilesCollapsed, setRelatedFilesCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === "undefined") {
@@ -1256,7 +1269,7 @@ function SessionViewerInner({
     });
   }, [sessionKey, targetSeq, targetSeqRequestKey, timeline]);
 
-  const rawRelated = session?.related_files || (session as any)?.outputs || [];
+  const rawRelated = phone || remoteUiActive() ? [] : session?.related_files || (session as any)?.outputs || [];
   const relatedFiles = (Array.isArray(rawRelated) ? rawRelated : [])
     .map((f: any) => {
       const path =
@@ -1324,6 +1337,10 @@ function SessionViewerInner({
     }
     return "";
   })();
+  const activePhoneAsk = phone && activityHost && activeAskUserCallId ? timeline.find(item =>
+    item.type === "tool" && (item.toolCall.callId || item.toolCall.meta?.toolUseId) === activeAskUserCallId,
+  ) : null;
+  const phoneAskKey = activePhoneAsk ? `${rootId}::${sessionKey}::${activeAskUserCallId}` : "";
   const defaultRelatedFilesCollapsed = shouldDefaultCollapseRelatedFiles(
     isMobile,
     relatedFiles.length,
@@ -1468,6 +1485,7 @@ function SessionViewerInner({
       const toolUseId =
         tc.callId ||
         (typeof tc.meta?.toolUseId === "string" ? tc.meta.toolUseId : "");
+      if (isAskUser && activePhoneAsk && toolUseId === activeAskUserCallId) return null;
       return (
         <div key={timelineItemKey} style={{ marginTop: spacing }}>
           {isAskUser ? (
@@ -2223,6 +2241,10 @@ function SessionViewerInner({
     );
   };
 
+  const activity = <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText}
+    active={isAwaiting || isStreaming || !!activePhoneAsk} rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined}
+    onResolveQuestion={phoneAskKey ? () => setOpenPhoneAsk(phoneAskKey) : undefined} />;
+
   return (
     <div
       style={{
@@ -2234,7 +2256,13 @@ function SessionViewerInner({
         background: "transparent",
       }}
     >
-      {interactionMode === "drawer" ? null : (
+      {activePhoneAsk && activePhoneAsk.type === "tool" ? (
+        <PhoneSheet key={phoneAskKey} title={t("remote.phone.wait")} open={openPhoneAsk === phoneAskKey} onClose={() => setOpenPhoneAsk("")}>
+          <AskUserQuestionCard toolCall={activePhoneAsk.toolCall} rootId={rootId} sessionKey={sessionKey} agent={session?.agent}
+            active phoneSheet onAnswer={onAskUserAnswer} onResolved={() => setOpenPhoneAsk("")} />
+        </PhoneSheet>
+      ) : null}
+      {interactionMode === "drawer" || phone ? null : (
         <header
           data-idea-session-heading
           style={{
@@ -2336,8 +2364,7 @@ function SessionViewerInner({
               rootPath={rootPath || undefined} tailClosed={Boolean(slashCommandResult) || (!loading && !isAwaiting && !isStreaming)}
               renderItem={renderTimelineItem} itemSpacing={timelineItemSpacing} />
             {renderSlashCommandResult()}
-            <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText}
-              active={isAwaiting || isStreaming} rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined} />
+            {phone && activityHost ? createPortal(activity, activityHost) : activity}
             {session && rootId ? <SessionRecovery key={`${rootId}:${sessionKey}`} session={session} rootId={rootId}
               connected={connected} active={loading || isAwaiting || isStreaming} /> : null}
 
@@ -2702,6 +2729,7 @@ function SessionViewerInner({
 export const SessionViewer = memo(
   SessionViewerInner,
   (prev, next) =>
+    prev.phone === next.phone &&
     prev.session === next.session &&
     prev.connected === next.connected &&
     prev.loading === next.loading &&

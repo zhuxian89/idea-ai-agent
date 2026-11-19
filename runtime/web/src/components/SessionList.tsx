@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { PhoneSessionFactsContext } from "./remoteui/phoneSessionFacts";
 import { ActivityEmoji } from "./ActivityEmoji";
 import { SessionMenu, type SessionMenuActions } from "./SessionMenu";
 import { buildSessionRows, type SessionRow } from "./sessionHierarchy";
@@ -6,6 +7,7 @@ import "./workspaceSidebar.css";
 import { AgentIcon } from "./AgentIcon";
 import { ModeIcon } from "./ModeIcon";
 import { useI18n, type Locale } from "../i18n";
+import { remoteUiActive } from "../services/remoteUiFlag";
 import { agentDisplayName } from "../services/agentSetup";
 
 export type SessionType = "chat" | "plugin" | "command";
@@ -940,6 +942,9 @@ export function MultiProjectSessionList({
                     </button>
                     <button type="button" className="workspace-project-name" onClick={() => onProjectClick?.(group.rootId)} title={group.rootName || group.rootId}>{group.rootName || group.rootId}</button>
                     <span className="workspace-project-count">{group.totalCount}</span>
+                    {remoteUiActive() && group.sessions.some((item) => item.pending && !item.parent_session_key) ? (
+                      <i className="workspace-group-live" role="img" aria-label={t("sessionList.replying")} title={t("sessionList.replying")} />
+                    ) : null}
                     <button type="button" className="workspace-project-pin" aria-label={pinned ? t("sessionList.unpinProject") : t("sessionList.pinProject")}
                       aria-pressed={pinned} onClick={() => togglePinnedProject(group.rootId)}><PinIcon pinned={pinned} /></button>
                   </div>
@@ -1042,6 +1047,8 @@ function SessionCard({
   const isClosed = !!session.closed_at;
   const isPinned = !!session.pinned_at;
   const isSubagent = !!session.parent_session_key;
+  const factsForCard = useContext(PhoneSessionFactsContext);
+  const phoneFacts = isSubagent ? undefined : factsForCard?.(session);
   const forkSource = parseForkSessionSource(session.source);
   const isForkSession = !!forkSource;
   const storedName = session.name || `Session ${session.key.slice(0, 8)}`;
@@ -1336,6 +1343,12 @@ function SessionCard({
                 })}
               </span>
             ) : null}
+            {phoneFacts && !snippet && phoneFacts.preview ? <span className="remote-phone-card-preview">{phoneFacts.preview}</span> : null}
+            {phoneFacts ? <span className="remote-phone-card-meta">
+              <span>{phoneFacts.project}</span>
+              {phoneFacts.project ? <span aria-hidden="true">·</span> : null}
+              <span>{t(`remote.phone.${phoneFacts.state}`)}</span>
+            </span> : null}
           </button>
         )}
 
@@ -1442,6 +1455,8 @@ function SessionCard({
               }}
             />
           ) : session.pending && !isSubagent ? (
+            <>
+            {remoteUiActive() && !phoneFacts ? <span className="session-replying-label">{t("sessionList.replying")}</span> : null}
             <span
               aria-label={t("sessionList.replying")}
               title={t("sessionList.replying")}
@@ -1457,6 +1472,7 @@ function SessionCard({
                 boxShadow: "0 0 0 1.5px rgba(37,99,235,0.14)",
               }}
             />
+            </>
           ) : (
             <span
               style={{

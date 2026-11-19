@@ -1,0 +1,334 @@
+/*
+ * 远程网页新界面（电脑、平板）。只在浏览器里的远程页面生效：
+ * <html data-remote-ui="1"> 由 services/remoteUi.ts 设置，IDEA 内嵌页面和原生壳没有这个属性。
+ * 布局：顶部栏与同底色的三栏。
+ */
+
+/* ---------- 主题 token ---------- */
+html[data-remote-ui] {
+  --rd-frame: #e1e6ee;
+  --rd-surface: #ffffff;
+  --rd-edge: #c8d0dd;
+  --glow1: #2563eb;
+  --glow2: #06b6d4;
+  --glow3: #a78bfa;
+}
+html[data-remote-ui][data-theme="dark"] {
+  --rd-frame: #030712;
+  --rd-surface: #0f172a;
+  --rd-edge: #1e293b;
+  --glow1: #7aa2ff;
+  --glow2: #5eead4;
+  --glow3: #c4b5fd;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-remote-ui]:not([data-theme]) {
+    --rd-frame: #030712;
+    --rd-surface: #0f172a;
+    --rd-edge: #1e293b;
+    --glow1: #7aa2ff;
+    --glow2: #5eead4;
+    --glow3: #c4b5fd;
+  }
+}
+html[data-remote-ui][data-theme="meadow"] {
+  --rd-frame: #e5d9bd;
+  --rd-surface: #fffaf1;
+  --rd-edge: #d3c5a3;
+  --glow1: #2d5a32;
+  --glow2: #d4a52c;
+  --glow3: #f0d78a;
+}
+html[data-remote-ui][data-theme="moss"] {
+  --rd-frame: #c7d2ba;
+  --rd-surface: #f4f7ee;
+  --rd-edge: #aebd9d;
+  --glow1: #415b3f;
+  --glow2: #9bb552;
+  --glow3: #d7e3a0;
+}
+
+/* ---------- 外壳 ---------- */
+.remote-shell {
+  --mindfs-topbar-bg: var(--rd-frame);
+  display: grid;
+  grid-template-columns: var(--rd-left) minmax(0, 1fr) var(--rd-right);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "top top top" "left center right";
+  height: calc(var(--mindfs-viewport-height, 100dvh) - var(--remote-host-toolbar-height, 0px));
+  padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+  min-height: 0;
+  background: var(--rd-frame);
+  color: var(--text-primary);
+  overflow: hidden;
+  isolation: isolate;
+  box-sizing: border-box;
+  transition: grid-template-columns 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.remote-topbar { grid-area: top; }
+.remote-side-left { grid-area: left; }
+.remote-center { grid-area: center; }
+.remote-side-right { grid-area: right; }
+
+.remote-side {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: transparent;
+}
+.remote-side[data-open="false"] { visibility: hidden; pointer-events: none; }
+.remote-side > * { flex: 1; min-height: 0; }
+
+/* ---------- 顶部栏 ---------- */
+.remote-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  background: var(--rd-frame);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  min-width: 0;
+}
+.remote-topbar-grow { flex: 1; min-width: 0; }
+.remote-topbar-gap { width: 32px; flex: none; }
+.remote-topbar-action {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary);
+  font: inherit; cursor: pointer; white-space: nowrap; flex: none;
+}
+.remote-topbar-action:hover { background: var(--menu-active-bg); color: var(--text-primary); }
+.remote-topbar-theme { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); white-space: nowrap; }
+.remote-topbar-theme select {
+  height: 28px; border: 1px solid var(--rd-edge); border-radius: 8px; background: var(--rd-surface);
+  color: var(--text-primary); font: inherit; padding: 0 6px; max-width: 120px;
+}
+.remote-panel-toggle {
+  width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-secondary); cursor: pointer; flex: none; padding: 0;
+}
+.remote-panel-toggle:hover { background: var(--menu-active-bg); color: var(--text-primary); }
+.remote-panel-toggle[aria-expanded="false"]:hover { color: var(--accent-color); }
+.remote-agent-config-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  box-sizing: border-box;
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(var(--mindfs-viewport-height, 100dvh) - 32px);
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  color: var(--text-primary);
+  background: var(--menu-bg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.26);
+}
+.remote-agent-config-dialog::backdrop { background: rgba(2, 6, 23, 0.42); }
+.remote-agent-config-dialog > header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.remote-agent-config-dialog h2 { flex: 1; margin: 0; font-size: 16px; font-weight: 650; }
+.remote-agent-config-dialog > header button {
+  display: grid; place-items: center; flex: none; width: 32px; height: 32px;
+  border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); cursor: pointer;
+}
+.remote-agent-config-dialog > header button:hover { background: var(--menu-active-bg); }
+.remote-switch {
+  position: relative; width: 32px; height: 18px; border-radius: 9px; background: var(--rd-edge);
+  flex: none; transition: background 0.15s;
+}
+.remote-switch::after {
+  content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); transition: transform 0.15s;
+}
+[aria-checked="true"] > .remote-switch { background: var(--accent-color); }
+[aria-checked="true"] > .remote-switch::after { transform: translateX(14px); }
+@media (max-width: 1000px) {
+  .remote-topbar-theme > span { display: none; }
+}
+@media (max-width: 860px) {
+  .remote-topbar-action:not(.remote-topbar-switch) > span { display: none; }
+}
+@media (max-width: 560px) {
+  .remote-topbar-switch > span:first-child { display: none; }
+}
+
+/* ---------- 对话区 ---------- */
+.remote-center {
+  --content-bg: var(--rd-frame);
+  --mobile-overlay-bg: var(--rd-frame);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--rd-frame);
+  box-shadow: 0 0 0 1px var(--rd-edge);
+  overflow: hidden;
+}
+.remote-shell[data-left-open="true"] .remote-center { border-top-left-radius: 14px; }
+.remote-shell[data-right-open="true"] .remote-center { border-top-right-radius: 14px; }
+.remote-main {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+.remote-footer {
+  flex: none;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  position: relative;
+  z-index: 6;
+  background: transparent;
+}
+
+/* ---------- 左栏：只剩文件树，项目工具收进 ⋮ 菜单 ---------- */
+.remote-tool-crumb { display: none; }
+.remote-shell .remote-tool-crumb { display: flex; align-items: center; gap: 4px; min-width: 0; padding-left: 6px; font-size: 13px; }
+.remote-shell .workspace-project-tabs { display: none; }
+.remote-tool-crumb-root { font-weight: 600; color: var(--text-secondary); }
+.remote-tool-crumb-back {
+  display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 8px 0 2px; border: 0;
+  border-radius: 7px; background: transparent; color: var(--accent-color); font: inherit; font-weight: 600; cursor: pointer;
+}
+.remote-tool-crumb-back:hover { background: var(--menu-active-bg); }
+.remote-tool-crumb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+.remote-tool-crumb-name::before { content: "/"; margin-right: 6px; color: var(--text-secondary); font-weight: 400; }
+.remote-shell .workspace-projects > div:has(.workspace-project-tabs) { background: transparent !important; border-bottom: 0 !important; }
+.remote-shell-only { display: none !important; }
+.remote-shell button.remote-shell-only { display: flex !important; }
+.remote-shell div.remote-shell-only { display: block !important; }
+.remote-menu-heading { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+
+/* ---------- 右栏：会话卡片 ---------- */
+.remote-side .workspace-project-sessions { margin-left: 0; padding-left: 0; border-left: 0; }
+.remote-side .workspace-session-row:not(.workspace-child-session) {
+  background: color-mix(in srgb, var(--rd-surface) 55%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--rd-edge) 90%, transparent);
+  border-radius: 12px !important;
+  padding: 5px 2px 5px 6px !important;
+  margin: 0 0 7px !important;
+}
+.remote-side .workspace-session-row:not(.workspace-child-session):hover:not([data-selected="true"]) {
+  background: color-mix(in srgb, var(--rd-surface) 85%, transparent) !important;
+}
+.remote-side .workspace-session-row[data-selected="true"]:not(.workspace-child-session) {
+  background: var(--rd-surface) !important;
+  border-color: var(--accent-color);
+}
+.session-replying-label, .workspace-group-live { display: none; }
+.remote-shell .session-replying-label { display: inline; font-size: 11px; font-weight: 600; color: var(--accent-color); white-space: nowrap; margin-right: 6px; }
+.remote-shell .workspace-group-live {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; margin: 0 4px;
+  background: var(--accent-color); box-shadow: 0 0 0 3px var(--selection-bg);
+}
+
+/* ---------- Agent 工作状态边框流光 ---------- */
+@property --glow-a { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@property --glow-gate { syntax: "<number>"; initial-value: 0; inherits: true; }
+@keyframes glow-flow { to { --glow-a: 360deg; } }
+@keyframes glow-breathe {
+  0%, 100% { opacity: calc(var(--glow-lo) * var(--glow-gate)); }
+  50% { opacity: calc(var(--glow-hi) * var(--glow-gate)); }
+}
+@keyframes glow-sweep { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
+.remote-glow-frame { position: relative; --glow-gate: 0; transition: --glow-gate 0.9s ease; }
+.remote-glow-frame::before, .remote-glow-frame::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 50;
+  visibility: hidden; transition: visibility 0s 0.95s;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  background: conic-gradient(from 200deg, var(--glow1), var(--glow2), var(--glow3), var(--glow2), var(--glow1));
+  animation: glow-breathe calc(var(--glow-dur, 14s) * 0.4) ease-in-out infinite;
+}
+.remote-glow-frame::before { padding: 1px; --glow-lo: 0.12; --glow-hi: 0.9; }
+.remote-glow-frame::after { padding: 2px; filter: blur(5px); --glow-lo: 0.04; --glow-hi: 0.5; }
+
+html[data-glow="on"] .remote-glow-frame:has([data-session-activity][data-activity-kind="work"]) { --glow-gate: 1; }
+html[data-glow="on"] .remote-glow-frame:has([data-session-activity][data-activity-kind="work"])::before,
+html[data-glow="on"] .remote-glow-frame:has([data-session-activity][data-activity-kind="work"])::after,
+.remote-glow-demo::before, .remote-glow-demo::after { visibility: visible; transition-delay: 0s; }
+
+/* 效果：环绕 / 双向 / 扫光（默认是呼吸） */
+html[data-glow-fx="orbit"] .remote-glow-frame::before,
+html[data-glow-fx="orbit"] .remote-glow-frame::after {
+  background: conic-gradient(from var(--glow-a), transparent 0 34%, color-mix(in srgb, var(--glow1) 14%, transparent) 48%, color-mix(in srgb, var(--glow1) 45%, transparent) 64%, color-mix(in srgb, var(--glow2) 75%, transparent) 80%, color-mix(in srgb, var(--glow3) 90%, transparent) 92%, transparent 100%);
+  animation: glow-flow var(--glow-dur, 14s) linear infinite, glow-breathe calc(var(--glow-dur, 14s) * 0.57) ease-in-out infinite;
+}
+html[data-glow-fx="orbit"] .remote-glow-frame::before { --glow-lo: 0.35; --glow-hi: 1; }
+html[data-glow-fx="orbit"] .remote-glow-frame::after { --glow-lo: 0.1; --glow-hi: 0.55; }
+html[data-glow-fx="dual"] .remote-glow-frame::before,
+html[data-glow-fx="dual"] .remote-glow-frame::after {
+  background: repeating-conic-gradient(from var(--glow-a), transparent 0 17%, color-mix(in srgb, var(--glow1) 14%, transparent) 24%, color-mix(in srgb, var(--glow1) 45%, transparent) 32%, color-mix(in srgb, var(--glow2) 75%, transparent) 40%, color-mix(in srgb, var(--glow3) 90%, transparent) 46%, transparent 50%);
+  animation: glow-flow var(--glow-dur, 14s) linear infinite, glow-breathe calc(var(--glow-dur, 14s) * 0.57) ease-in-out infinite;
+}
+html[data-glow-fx="dual"] .remote-glow-frame::before { --glow-lo: 0.35; --glow-hi: 1; }
+html[data-glow-fx="dual"] .remote-glow-frame::after { --glow-lo: 0.1; --glow-hi: 0.55; }
+html[data-glow-fx="sweep"] .remote-glow-frame::before,
+html[data-glow-fx="sweep"] .remote-glow-frame::after {
+  background: linear-gradient(90deg, transparent 0 36%, color-mix(in srgb, var(--glow1) 45%, transparent) 43%, color-mix(in srgb, var(--glow2) 85%, transparent) 50%, color-mix(in srgb, var(--glow3) 90%, transparent) 57%, transparent 64% 100%);
+  background-size: 250% 100%; background-repeat: no-repeat; opacity: var(--glow-gate);
+  animation: glow-sweep var(--glow-dur, 14s) ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .remote-glow-frame::before, .remote-glow-frame::after { animation: none !important; }
+}
+
+/* ---------- 流光设置面板 ---------- */
+.remote-glow-overlay {
+  position: fixed; inset: 0; z-index: 4000; background: rgba(2, 6, 23, 0.45); display: grid; place-items: center; padding: 16px;
+}
+.remote-glow-dialog {
+  width: min(520px, 100%); max-height: calc(100dvh - 32px); display: flex; flex-direction: column;
+  background: var(--rd-surface); color: var(--text-primary); border-radius: 18px; border: 1px solid var(--rd-edge);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+.remote-glow-dialog > header { display: flex; align-items: center; padding: 14px 10px 6px 20px; }
+.remote-glow-dialog h2 { flex: 1; margin: 0; font-size: 16px; font-weight: 650; }
+.remote-glow-close { width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font-size: 20px; line-height: 1; cursor: pointer; }
+.remote-glow-close:hover { background: var(--menu-active-bg); }
+.remote-glow-body { padding: 6px 20px 16px; overflow: auto; display: grid; gap: 12px; }
+.remote-glow-dialog > footer { display: flex; gap: 8px; padding: 12px 20px 18px; border-top: 1px solid var(--rd-edge); }
+.remote-glow-dialog > footer button { flex: 1; min-height: 40px; border-radius: 10px; border: 1px solid var(--rd-edge); background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.remote-glow-dialog > footer button.primary { background: var(--accent-color); border-color: var(--accent-color); color: #fff; font-weight: 600; }
+.remote-glow-demo {
+  --glow-gate: 1; height: 92px; border-radius: 14px; background: var(--rd-surface);
+  box-shadow: 0 0 0 1px var(--rd-edge); display: grid; place-items: center; color: var(--text-secondary); font-size: 12.5px; overflow: hidden; text-align: center; padding: 0 12px;
+}
+.remote-glow-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 6px 12px; border: 0; border-radius: 10px;
+  background: var(--menu-active-bg); color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.remote-glow-row-text { flex: 1; display: grid; gap: 1px; }
+.remote-glow-row-text small { color: var(--text-secondary); font-size: 12px; }
+.remote-glow-label { display: flex; align-items: baseline; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.remote-glow-label span { font-weight: 400; }
+.remote-glow-seg { display: flex; gap: 6px; }
+.remote-glow-seg button {
+  flex: 1; min-height: 40px; border-radius: 10px; border: 1px solid var(--rd-edge); background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer;
+}
+.remote-glow-seg button[aria-pressed="true"] { background: var(--selection-bg); border-color: var(--accent-color); color: var(--accent-color); font-weight: 600; }
+.remote-glow-colors { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.remote-glow-colors > button, .remote-glow-colors > label {
+  position: relative; width: 34px; height: 34px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+  box-shadow: 0 0 0 1px var(--rd-edge); display: grid; place-items: center; font-size: 11px; color: var(--text-secondary);
+}
+.remote-glow-colors > button.theme { background: var(--rd-surface); font-weight: 650; }
+.remote-glow-colors > label.custom { background: conic-gradient(#f43f5e, #f59e0b, #16a34a, #14b8a6, #6366f1, #e879f9, #f43f5e); }
+.remote-glow-colors > label input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.remote-glow-colors > [aria-pressed="true"], .remote-glow-colors > [data-active="true"] { box-shadow: 0 0 0 2px var(--rd-surface), 0 0 0 4px var(--accent-color); }
+
+.remote-shell label.remote-device-mode { display: flex !important; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 8px; font-size: 12px; }
+.remote-device-mode select { max-width: 58%; border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-primary); background: var(--menu-bg); font: inherit; }
+.remote-shell { grid-template-columns: min(var(--rd-left), 36vw) minmax(0, 1fr) min(var(--rd-right), 36vw); }

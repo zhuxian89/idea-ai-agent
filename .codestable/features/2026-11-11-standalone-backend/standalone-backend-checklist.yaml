@@ -3,6 +3,36 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: remote-chat-hide-inline-related-files-0150-macos
+  description: 远程网页对话底部移除关联文件入口，项目工具仍可打开。最终包隔离验证通过，本机 0.1.50 升级成功，用户确认 macOS 测试通过。
+  status: done
+- id: plugin-built-in-backend-0128-local-macos
+  description: macOS arm64 插件 0.1.28-local.1 已安装。内置和独立模式切换后的远程测试消息均已收到。最终 ZIP 的内置后台启动、历史会话及网页资源验证通过。
+  status: done
+- id: remote-workspace-phone-border-glow-0149-macos
+  description: 手机 Agent 状态框复用网页边框流光与设置。通过窄屏和横屏最终包验证，本机升级到 0.1.49，用户确认手机流光试用通过。
+  status: done
+- id: remote-workspace-phone-activity-0148-macos
+  description: 手机 Agent 状态栏在工作中显示呼吸点，系统减少动态效果时显示静态点。最终包验证和本机部署通过，手机消息已正常送达，待确认 iPhone 上的动效表现。
+  status: in_progress
+- id: remote-workspace-qr-button-0147-macos
+  description: 电脑和平板的扫码入口使用中性色细描边。最终包通过隔离安装和相关浏览器回归，本机部署见 0.1.47 result.txt。
+  status: in_progress
+- id: remote-workspace-phone-more-0146-macos
+  description: 手机「更多」直接展示设置，需要输入的操作打开对应表单，工作状态显示于输入框上方。macOS arm64 最终包通过隔离安装及 Chrome、WebKit 验证，本机部署见 result.txt，待 iPhone Safari 实机试用。
+  status: in_progress
+- id: remote-agent-config-dialog-0144-macos
+  description: 远程网页顶栏 Agent 配置在独立的居中弹窗打开。0.1.44 macOS arm64 本地包通过隔离升级和最终包浏览器验证，本机部署成功，用户反馈网页和平板正常。
+  status: done
+- id: remote-workspace-layout-0143-macos
+  description: 三栏统一底色，按可见视口计算高度，项目菜单内部滚动。0.1.43 macOS arm64 测试包已通过隔离升级与短窗口验证，已在本机升级成功并进入日常试用。
+  status: in_progress
+- id: remote-workspace-ui-0142-macos
+  description: 电脑和平板远程网页第一批已构建 macOS arm64 本地包，隔离升级与回退验证通过。本机已从 0.1.41 升级到 0.1.42，7 个项目可读取。待日常试用。
+  status: in_progress
+- id: remote-workspace-mobile-ui
+  description: 0.1.45 已实现手机外壳、会话卡片、快速切换、授权面板和设备选择。隔离升级及触屏浏览器验证通过，待本机真实 iPhone Safari 验收。
+  status: in_progress
 - id: standalone-relay-page-qr
   description: 0.1.41 正式版已发布并成为默认版本。macOS 用户验收通过，六平台包和 Windows 5.1 发布验证通过。
   status: done

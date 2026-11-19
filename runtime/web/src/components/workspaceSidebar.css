@@ -30,6 +30,15 @@
 .workspace-sessions button:focus-visible, .workspace-projects button:focus-visible, .workspace-session-menu button:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; }
 .workspace-projects-title { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 12px; font-size: 13px; font-weight: 600; }
 .workspace-projects-title .standalone-add-project { width: 28px; height: 28px; min-height: 28px; padding: 0; margin: 0; border: 0; font-size: 20px; background: transparent; }
+.file-tree-relay-action {
+  width: 100%; border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--accent-color); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600;
+}
+.file-tree-relay-action:disabled { background: rgba(148, 163, 184, .2); color: var(--text-secondary); cursor: not-allowed; }
+.remote-shell .file-tree-relay-action { background: transparent; color: var(--text-secondary); }
+.remote-shell .file-tree-relay-action:enabled:hover { background: color-mix(in srgb, var(--text-primary) 6%, transparent); color: var(--text-primary); }
+.remote-shell .file-tree-relay-action:disabled { opacity: .6; }
 .workspace-project-tabs { display: flex; align-items: center; gap: 2px; width: 100%; min-width: 0; }
 .workspace-project-tabs button { min-width: 0; padding: 5px 4px; border: 0; border-radius: 5px; color: var(--text-secondary); background: transparent; font-size: 11px; font-weight: 500; line-height: 18px; white-space: nowrap; cursor: pointer; }
 .workspace-project-tabs button[aria-selected="true"] { color: var(--accent-hover); background: var(--workspace-selected); font-weight: 600; }

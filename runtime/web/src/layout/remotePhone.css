@@ -1,0 +1,169 @@
+.remote-phone {
+  height: calc(var(--mindfs-viewport-height, 100dvh) - var(--remote-host-toolbar-height, 0px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding-top: var(--mindfs-safe-area-top, env(safe-area-inset-top, 0px));
+  background: var(--content-bg);
+  color: var(--text-primary);
+  --mindfs-actionbar-bottom-padding: max(5px, var(--mindfs-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+  --mindfs-file-menu-width: min(320px, calc(100vw - 20px));
+}
+.remote-phone [hidden] { display: none !important; }
+.remote-phone-chat, .remote-phone-page {
+  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+}
+.remote-phone-chat-header {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  padding: 3px 8px; border-bottom: 1px solid var(--border-color);
+  background: var(--content-bg);
+}
+.remote-phone button, .remote-phone-sheet button { touch-action: manipulation; }
+.remote-phone-icon, .remote-phone-title, .remote-phone-nav button, .remote-phone-attention button {
+  border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.remote-phone-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; color: var(--accent-color); }
+.remote-phone-title {
+  flex: 1; min-width: 0; min-height: 44px; display: grid; grid-template-columns: minmax(0, 1fr) 14px;
+  align-content: center; align-items: center; gap: 0 4px; text-align: left; padding: 3px 2px;
+}
+.remote-phone-title small { grid-column: 1 / -1; color: var(--text-secondary); font-size: 11px; }
+.remote-phone-title strong, .remote-phone-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-phone-title strong { font-size: 15px; }
+.remote-phone-title svg { color: var(--text-secondary); }
+.remote-phone-thread { flex: 1; display: flex; position: relative; overflow: hidden; min-height: 0; min-width: 0; }
+.remote-phone-composer { flex: none; min-width: 0; padding-inline: 8px; background: var(--content-bg); }
+.remote-phone-activity { margin: 2px 0 6px; border-radius: 8px; }
+.remote-phone-activity:empty { display: none; }
+.remote-phone-activity .session-activity { margin: 0; padding: 7px 9px; border-radius: inherit; }
+.remote-phone-activity [data-activity-kind="wait"] { background: var(--selection-bg); border-color: var(--accent-color); }
+.remote-phone-activity button { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.remote-phone-activity button .remote-phone-respond { color: var(--accent-color); margin-inline-start: 6px; }
+.remote-phone-attention { display: flex; gap: 6px; align-items: center; padding-inline: 12px 6px; background: var(--selection-bg); }
+.remote-phone-attention[data-state="error"] { color: var(--danger-color, #dc2626); }
+.remote-phone-attention button:first-child { flex: 1; min-height: 40px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-size: 13px; }
+.remote-phone-attention .remote-phone-dismiss { width: 40px; height: 40px; font-size: 20px; }
+
+.remote-phone-page { background: var(--menu-bg); overflow: hidden; }
+.remote-phone-page > .workspace-sessions { flex: 1; min-height: 0; }
+.remote-phone-sessions .workspace-sessions-title { font-size: 20px; }
+.remote-phone-sessions .workspace-session-row:not(.workspace-child-session) {
+  margin: 4px 0 8px; min-height: 58px; padding-right: 4px !important;
+  border: 1px solid var(--border-color); border-radius: 12px !important;
+}
+.remote-phone-sessions .workspace-session-row[data-selected="true"] { border-color: var(--accent-color); }
+.remote-phone-sessions .workspace-project-sessions { margin-inline-start: 0; padding-inline-start: 0; border: 0; }
+.remote-phone-sessions .workspace-session-menu-trigger { width: 37px; height: 42px; }
+.remote-phone-sessions .remote-phone-card-meta { display: flex; align-items: center; min-width: 0; gap: 4px; font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+.remote-phone-card-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-phone-card-preview { display: block; color: var(--text-secondary); font-size: 12px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-phone-filters { flex: none; display: flex; gap: 5px; padding: 8px 9px 5px; overflow-x: auto; }
+.remote-phone-filters button {
+  min-height: 38px; border: 1px solid var(--border-color); border-radius: 8px; white-space: nowrap; padding: 0 7px;
+  color: var(--text-secondary); background: var(--menu-bg); font-size: 12px; cursor: pointer;
+}
+.remote-phone-filters button[aria-pressed="true"] { color: var(--accent-color); background: var(--selection-bg); border-color: var(--accent-color); }
+.remote-phone-projects .workspace-projects-title { min-height: 50px; padding-inline: 14px; font-size: 20px; }
+.remote-phone-projects .workspace-project-tabs { display: none; }
+.remote-phone-projects .remote-tool-crumb { display: flex; align-items: center; min-width: 0; }
+.remote-phone-projects .remote-shell-only { display: block !important; }
+.remote-phone-projects button.remote-shell-only { display: none !important; }
+.remote-phone-projects .workspace-projects li > button { min-height: 42px; }
+.remote-phone-more { padding: 14px; overflow: auto; }
+.remote-phone-more h1 { margin: 2px 0 16px; font-size: 26px; }
+.remote-phone-nav {
+  flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 3px 6px var(--mindfs-actionbar-bottom-padding);
+  background: var(--menu-bg); border-top: 1px solid var(--border-color);
+}
+.remote-phone-nav button {
+  display: grid; justify-items: center; align-content: center; min-height: 48px; gap: 3px;
+  color: var(--text-secondary); font-size: 11px;
+}
+.remote-phone-nav button[aria-current="page"] { color: var(--accent-color); font-weight: 650; }
+
+.remote-phone-sheet {
+  position: fixed; inset: auto 0 max(0px, calc(100dvh - var(--mindfs-viewport-height, 100dvh) - var(--mindfs-viewport-offset-top, 0px)));
+  margin: 0; max-width: none; box-sizing: border-box; width: 100%; max-height: min(84dvh, calc(var(--mindfs-viewport-height, 100dvh) - 18px));
+  padding: 0 12px max(8px, var(--mindfs-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+  background: var(--menu-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 18px 18px 0 0;
+  overflow: hidden;
+}
+.remote-phone-sheet[open] { display: flex; flex-direction: column; }
+.remote-phone-sheet::backdrop { background: rgba(2, 6, 23, .49); }
+.remote-phone-sheet > header { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 0; }
+.remote-phone-sheet h2 { flex: 1; margin: 0; padding-left: 3px; font-size: 18px; }
+.remote-phone-sheet > header button { color: var(--text-secondary); background: transparent; border: 0; width: 44px; height: 44px; cursor: pointer; font-size: 24px; }
+.remote-phone-sheet-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 6px; }
+.remote-phone-search { width: 100%; box-sizing: border-box; font-size: 16px; min-height: 40px; color: inherit; background: var(--content-bg); border: 1px solid var(--border-color); border-radius: 8px; padding-inline: 10px; }
+.remote-phone-sheet summary { padding: 11px 4px 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+.remote-phone-recent, .remote-phone-all {
+  display: flex; align-items: center; gap: 9px; text-align: left; width: 100%; min-height: 44px; padding: 8px;
+  color: inherit; background: var(--content-bg); border: 1px solid var(--border-color); border-radius: 8px; margin: 3px 0; cursor: pointer;
+}
+.remote-phone-recent > span { flex: 1; min-width: 0; }
+.remote-phone-recent strong, .remote-phone-recent small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-phone-recent small { color: var(--text-secondary); font-size: 12px; margin-top: 3px; }
+.remote-phone-recent i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-color); }
+.remote-phone-recent i[data-state="wait"] { background: var(--accent-color); }
+.remote-phone-recent i[data-state="work"] { background: #16a34a; }
+.remote-phone-recent i[data-state="error"] { background: #dc2626; }
+.remote-phone-all { justify-content: center; color: var(--accent-color); margin-top: 10px; }
+.remote-phone-request pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; font-size: 12px; line-height: 1.45; max-height: min(26dvh, 15rem); overflow: auto; overscroll-behavior: contain; }
+.remote-phone-request pre[data-collapsed="true"] { max-height: 4.35em; overflow: hidden; }
+.remote-phone-request button { min-height: 40px; padding: 5px 7px; font: inherit; color: var(--accent-color); background: transparent; border: 0; cursor: pointer; }
+.remote-phone-projects label.remote-device-mode { display: none !important; }
+.remote-phone [data-mindfs-session-content-width] { padding-inline: 10px !important; }
+.remote-phone .workspace-files-toolbar .remote-tool-crumb { padding-inline: 6px; }
+
+.phone-more-group, .phone-more-rows, .file-tree-platform-actions { display: contents; }
+.remote-phone-projects [data-file-tree-menu] > .phone-more-group,
+.remote-phone-projects [data-mindfs-filetree-footer] { display: none !important; }
+.remote-phone-settings { display: flex; flex-direction: column; gap: 13px; border: 0; overflow: visible; }
+.remote-phone-settings > [data-mindfs-filetree-footer] {
+  order: -1; padding: 10px 12px !important; border: 1px solid var(--border-color) !important;
+  border-radius: 12px; background: var(--content-bg);
+}
+.phone-more-menu { display: flex; flex-direction: column; gap: 13px; }
+.phone-more-menu .phone-more-group, .phone-more-menu .phone-more-rows { display: block; }
+.phone-more-menu h2 { margin: 0 2px 5px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.phone-more-menu .phone-more-rows {
+  border: 1px solid var(--border-color); border-radius: 11px; overflow: hidden; background: var(--content-bg);
+}
+.phone-more-menu .phone-more-rows > button { min-height: 46px !important; font-size: 14px !important; }
+.phone-more-menu .phone-more-rows > button + button { border-top: 1px solid var(--border-color) !important; border-radius: 0 !important; }
+.phone-more-links { order: 2; display: grid; gap: 5px; }
+.phone-more-links:empty { display: none; }
+.phone-more-connection { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-secondary); font-size: 12px; }
+.phone-more-connection > span:first-child { display: inline-flex; align-items: center; gap: 5px; }
+.phone-more-connection i { width: 7px; height: 7px; border-radius: 100%; background: var(--text-secondary); }
+.phone-more-connection i[data-state="connected"] { background: #16a34a; }
+.phone-more-node { min-height: 40px; display: grid; place-items: center; color: var(--accent-color); }
+.phone-more-panels > div { position: static !important; }
+.phone-more-choice { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px; }
+.phone-more-choice-label { flex-basis: 100%; font-size: 13px; font-weight: 600; }
+.phone-more-sort { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.phone-more-sort .phone-more-choice-label { grid-column: 1 / -1; }
+.phone-more-choice + .phone-more-choice, .phone-more-choice + button { border-top: 1px solid var(--border-color); }
+.phone-more-choice > button {
+  min-height: 36px; flex: 1 1 auto; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 8px; color: inherit;
+  background: var(--menu-bg); cursor: pointer; font-size: 12px;
+}
+.phone-more-choice > button[aria-pressed="true"] { border-color: var(--accent-color); color: var(--accent-color); background: var(--selection-bg); }
+.phone-more-themes > button { display: grid; gap: 5px; place-items: center; }
+.phone-more-themes i { width: 25px; height: 15px; border-radius: 3px; background: linear-gradient(90deg,#f3f5f8 50%,#0a0f1c 50%); }
+.phone-more-themes i[data-theme-option="light"] { background: #f3f5f8; }
+.phone-more-themes i[data-theme-option="dark"] { background: #020617; }
+.phone-more-themes i[data-theme-option="meadow"] { background: #e5d9bd; }
+.phone-more-themes i[data-theme-option="moss"] { background: #c7d2ba; }
+.phone-more-notification button { display: flex; min-height: 42px; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.phone-more-notification button:disabled { opacity: .52; cursor: default; }
+.phone-more-notification button i { margin-inline-start: auto; }
+.phone-more-notification p { margin: 0; padding: 0 10px 6px; font-size: 12px; color: var(--text-secondary); }
+.phone-more-backup form, .phone-more-backup label { display: grid; gap: 7px; }
+.phone-more-backup form { gap: 12px; }
+.phone-more-backup :is(input, textarea) { width: 100%; box-sizing: border-box; min-height: 38px; padding: 6px; font: inherit; font-size: 16px; color: inherit; background: var(--content-bg); border: 1px solid var(--border-color); border-radius: 7px; }
+.phone-more-backup button[type="submit"] { min-height: 44px; border: 0; border-radius: 8px; background: var(--accent-color); color: white; font: inherit; }
+.phone-more-backup button[type="submit"]:disabled { opacity: .52; }

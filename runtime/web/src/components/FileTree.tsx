@@ -1,7 +1,16 @@
 import "./workspaceSidebar.css";
 import React from "react";
+import { createPortal } from "react-dom";
 import { StandaloneProjects } from "./StandaloneProjects";
 import { isIDEManagedProject } from "../services/ideaBridge";
+import { isRemoteWebUi } from "../services/remoteUi";
+import { GLOW_CHANGE_EVENT, loadGlowConfig, type GlowConfig } from "../services/remoteGlow";
+import { PhoneMoreGroup, PhoneMoreHostContext, PhoneMoreMount } from "./remoteui/PhoneMoreHost";
+import { PhoneAgentBackup } from "./remoteui/PhoneAgentBackup";
+import { PhoneSheet } from "./remoteui/PhoneSheet";
+import { DeviceModeSelect } from "./remoteui/DeviceModeSelect";
+import { GlowSettingsDialog } from "./remoteui/GlowSettingsDialog";
+import { OPEN_AGENT_CONFIG_SWITCH_EVENT } from "./remoteui/RemoteTopBar";
 import { IdeaAgentSettings } from "./IdeaAgentSettings";
 import { AGENT_INSTALLATION_CHANGED } from "../services/agentInstallation";
 import { openExternalURL } from "../services/platformNavigation";
@@ -12,7 +21,8 @@ import {
   type FileEntry,
   sortDirectoryEntries,
 } from "../services/directorySort";
-import { appPath } from "../services/base";
+import { appPath, hostPath } from "../services/base";
+import { remoteProjectPrefix } from "../services/remoteScope";
 import { protectedJSON } from "../services/api";
 import { bootstrapService } from "../services/bootstrap";
 import {
@@ -180,6 +190,7 @@ type FileTreeProps = {
   onGoHome?: () => void;
 };
 
+type AgentConfigPresentation = "sidebar" | "dialog";
 type AgentConfigStep = "agent" | "details" | "confirm";
 type AgentConfigSwitchTab = "backup" | "api_provider";
 type AgentConfigSwitchSelection = { type: "backup" | "api_provider"; id: string };
@@ -222,7 +233,7 @@ function InfoIcon() {
   );
 }
 
-function WebPushMenuItem() {
+function WebPushMenuItem({ phone = false }: { phone?: boolean }) {
   const { t } = useI18n();
   const [status, setStatus] = React.useState<WebPushStatus | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -275,6 +286,14 @@ function WebPushMenuItem() {
       ? t("fileTree.notificationDetailSubscribed")
       : t("fileTree.notificationDetailIOS");
   const detail = message || disabledReason || currentDeviceDetail;
+  if (phone) return <div className="phone-more-notification">
+    <button type="button" role="switch" aria-checked={subscribed} disabled={busy || !enabled} onClick={() => void run(subscribed ? "unsubscribe" : "subscribe")}>
+      <NotificationIcon /><span>{busy ? t("fileTree.notificationBusy") : label}</span><i className="remote-switch" />
+    </button>
+    <p role="status">{detail}</p>
+    <button type="button" disabled={busy || !subscribed} onClick={() => void run("test")}>{t("fileTree.sendTestNotification")}</button>
+  </div>;
+
 
   return (
     <div>
@@ -498,6 +517,7 @@ function OnboardingGuideIcon() {
 }
 
 function AgentConfigPopover({
+  inDialog,
   step,
   agents,
   selectedAgent,
@@ -524,6 +544,7 @@ function AgentConfigPopover({
   onConfirm,
   onCancel,
 }: {
+  inDialog: boolean;
   step: AgentConfigStep;
   agents: AgentStatus[];
   selectedAgent: string;
@@ -559,11 +580,13 @@ function AgentConfigPopover({
     <div
       style={{
         width: "100%",
-        padding: "10px",
-        borderRadius: "12px",
-        border: "1px solid var(--border-color)",
-        background: "var(--menu-bg)",
-        boxShadow: "0 12px 30px rgba(15, 23, 42, 0.14)",
+        ...(!inDialog && {
+          padding: "10px",
+          borderRadius: "12px",
+          border: "1px solid var(--border-color)",
+          background: "var(--menu-bg)",
+          boxShadow: "0 12px 30px rgba(15, 23, 42, 0.14)",
+        }),
         display: "flex",
         flexDirection: "column",
         gap: "10px",
@@ -1092,6 +1115,13 @@ export function FileTree({
   }, [t]);
   const expandedSet = new Set(expanded);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const phoneMore = React.useContext(PhoneMoreHostContext);
+  const moreHost = phoneMore?.host ?? null;
+  const inPhoneMore = moreHost !== null;
+  const [phoneBackupOpen, setPhoneBackupOpen] = React.useState(false);
+  const [glowDialogOpen, setGlowDialogOpen] = React.useState(false);
+  const [glowConfig, setGlowConfig] = React.useState<GlowConfig>(() => loadGlowConfig());
+  const closeGlowDialog = React.useCallback(() => setGlowDialogOpen(false), []);
   const [projectTreeTab, setProjectTreeTab] = React.useState<ProjectTreeTab>(() => {
     if (typeof window === "undefined") {
       return "files";
@@ -1139,7 +1169,7 @@ export function FileTree({
   );
   const [activeRelayTipIndex, setActiveRelayTipIndex] = React.useState(0);
   const [transferMode, setTransferMode] = React.useState<"export" | "import" | null>(null);
-  const [configSwitchOpen, setConfigSwitchOpen] = React.useState(false);
+  const [agentConfigPresentation, setAgentConfigPresentation] = React.useState<AgentConfigPresentation | null>(null);
   const [agentConfigStep, setAgentConfigStep] = React.useState<AgentConfigStep>("agent");
   const [agentConfigAgents, setAgentConfigAgents] = React.useState<AgentStatus[]>([]);
   const [agentConfigAgent, setAgentConfigAgent] = React.useState("");
@@ -1191,6 +1221,8 @@ export function FileTree({
   });
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const agentConfigPopoverRef = React.useRef<HTMLDivElement | null>(null);
+  const agentConfigDialogRef = React.useRef<HTMLDialogElement | null>(null);
+  const agentConfigTitleId = React.useId();
   const agentLifecyclePopoverRef = React.useRef<HTMLDivElement | null>(null);
   const relayServicesPopoverRef = React.useRef<HTMLDivElement | null>(null);
   const updateNotesRef = React.useRef<HTMLDivElement | null>(null);
@@ -1584,7 +1616,7 @@ export function FileTree({
 
   React.useEffect(() => {
     if (agentMenuRequest === null) return;
-    setConfigSwitchOpen(false);
+    setAgentConfigPresentation(null);
     setAgentLifecycleOpen(false);
     setIsAppearanceMenuOpen(false);
     setIsLocaleMenuOpen(false);
@@ -1593,8 +1625,30 @@ export function FileTree({
     onAgentMenuOpened?.();
   }, [agentMenuRequest, onAgentMenuOpened]);
 
+  React.useLayoutEffect(() => {
+    if (!isMenuOpen || !isRemoteWebUi || inPhoneMore) return;
+    const menu = menuRef.current?.querySelector<HTMLElement>("[data-file-tree-menu]");
+    const sidebar = menu?.closest(".workspace-projects");
+    if (!menu || !sidebar) return;
+
+    const viewport = window.visualViewport;
+    const fitMenu = () => {
+      const viewportBottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+      const bottom = Math.min(viewportBottom, sidebar.getBoundingClientRect().bottom);
+      menu.style.maxHeight = `max(0px, calc(${bottom - menu.getBoundingClientRect().top - 8}px - env(safe-area-inset-bottom, 0px)))`;
+    };
+    fitMenu();
+    const observer = new ResizeObserver(fitMenu);
+    observer.observe(sidebar);
+    viewport?.addEventListener("resize", fitMenu);
+    return () => {
+      observer.disconnect();
+      viewport?.removeEventListener("resize", fitMenu);
+    };
+  }, [inPhoneMore, isMenuOpen]);
+
   React.useEffect(() => {
-    if (!isMenuOpen) {
+    if (!isMenuOpen || inPhoneMore) {
       return;
     }
     const handlePointerDown = (event: MouseEvent) => {
@@ -1602,8 +1656,9 @@ export function FileTree({
         setIsMenuOpen(false);
       }
     };
-    const firstItem = menuRef.current?.querySelector<HTMLButtonElement>("[data-file-tree-menu] button");
-    firstItem?.focus();
+    const menuItems = () => Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[data-file-tree-menu] button:not(:disabled)") ?? [])
+      .filter(button => button.getClientRects().length > 0);
+    menuItems()[0]?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!menuRef.current?.contains(document.activeElement)) return;
       if (event.key === "Escape") {
@@ -1611,7 +1666,7 @@ export function FileTree({
         setIsMenuOpen(false);
         menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
       } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-        const buttons = Array.from(menuRef.current.querySelectorAll<HTMLButtonElement>("[data-file-tree-menu] button:not(:disabled)"));
+        const buttons = menuItems();
         if (!buttons.length) return;
         event.preventDefault();
         const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -1626,7 +1681,7 @@ export function FileTree({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isMenuOpen]);
+  }, [inPhoneMore, isMenuOpen]);
 
   const chooseAgentForConfig = React.useCallback(async (agentName: string, agents = agentConfigAgents, backupID?: string) => {
     setAgentConfigAgent(agentName);
@@ -1658,10 +1713,10 @@ export function FileTree({
     }
   }, [agentConfigAgents, agentConfigPreferredProviderIDs, t]);
 
-  const openAgentConfigFlow = React.useCallback((backup?: ImportedAgentBackup) => {
+  const openAgentConfigFlow = React.useCallback((backup?: ImportedAgentBackup, presentation: AgentConfigPresentation = "sidebar") => {
     setIdleReleaseOpen(false);
     setAgentLifecycleOpen(false);
-    setConfigSwitchOpen(true);
+    setAgentConfigPresentation(presentation);
     setAgentConfigStep("agent");
     setAgentConfigAgent("");
     setAgentConfigSwitchTab("backup");
@@ -1692,9 +1747,23 @@ export function FileTree({
       .finally(() => setAgentConfigBusy(false));
   }, [chooseAgentForConfig, t]);
 
+  React.useEffect(() => {
+    if (!isRemoteWebUi || agentSettingsOnly) return;
+    const open = () => openAgentConfigFlow(undefined, "dialog");
+    window.addEventListener(OPEN_AGENT_CONFIG_SWITCH_EVENT, open);
+    return () => window.removeEventListener(OPEN_AGENT_CONFIG_SWITCH_EVENT, open);
+  }, [agentSettingsOnly, openAgentConfigFlow]);
+
+  React.useEffect(() => {
+    if (!isRemoteWebUi) return;
+    const sync = (event: Event) => setGlowConfig((event as CustomEvent<GlowConfig>).detail || loadGlowConfig());
+    window.addEventListener(GLOW_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(GLOW_CHANGE_EVENT, sync);
+  }, []);
+
   const openSessionNaming = React.useCallback(() => {
     setIdleReleaseOpen(false);
-    setConfigSwitchOpen(false);
+    setAgentConfigPresentation(null);
     setAgentLifecycleOpen(false);
     setRelayServicesOpen(false);
     setIsMenuOpen(false);
@@ -1734,7 +1803,7 @@ export function FileTree({
   }, [sessionNamingAgent, sessionNamingBusy, sessionNamingModel, t]);
 
   const openIdleSessionResourceRelease = React.useCallback(() => {
-    setConfigSwitchOpen(false);
+    setAgentConfigPresentation(null);
     setAgentLifecycleOpen(false);
     setRelayServicesOpen(false);
     setSessionNamingOpen(false);
@@ -1778,7 +1847,7 @@ export function FileTree({
       .map((id) => String(id || "").trim())
       .filter(Boolean);
     setAgentLifecycleOpen(false);
-    setConfigSwitchOpen(true);
+    setAgentConfigPresentation("sidebar");
     setAgentConfigStep("agent");
     setAgentConfigAgent("");
     setAgentConfigSwitchTab("api_provider");
@@ -1804,7 +1873,8 @@ export function FileTree({
   }, [agentConfigSwitchRequest?.nonce, t]);
 
   const closeAgentConfigFlow = React.useCallback(() => {
-    setConfigSwitchOpen(false);
+    agentConfigDialogRef.current?.close();
+    setAgentConfigPresentation(null);
     setAgentConfigStep("agent");
     setAgentConfigError("");
     setAgentConfigConfirmMessage("");
@@ -1827,7 +1897,7 @@ export function FileTree({
   }, [t]);
 
   const openAgentLifecycleFlow = React.useCallback(() => {
-    setConfigSwitchOpen(false);
+    setAgentConfigPresentation(null);
     setAgentLifecycleOpen(true);
     setIsMenuOpen(false);
     loadAgentLifecycleCatalog();
@@ -1854,8 +1924,15 @@ export function FileTree({
     setAgentRestartResultAgent("");
   }, [agentConfigRestartingAgent, agentLifecycleAgents, agentRestartResultAgent, t]);
 
+  React.useLayoutEffect(() => {
+    const dialog = agentConfigDialogRef.current;
+    if (agentConfigPresentation !== "dialog" || !dialog) return;
+    dialog.showModal();
+    return () => dialog.close();
+  }, [agentConfigPresentation]);
+
   React.useEffect(() => {
-    if (agentSettingsOnly || !configSwitchOpen || agentConfigStep !== "agent") {
+    if (inPhoneMore || agentSettingsOnly || agentConfigPresentation !== "sidebar" || agentConfigStep !== "agent") {
       return;
     }
     const handlePointerDown = (event: MouseEvent) => {
@@ -1865,10 +1942,10 @@ export function FileTree({
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [agentSettingsOnly, configSwitchOpen, agentConfigStep, closeAgentConfigFlow]);
+  }, [inPhoneMore, agentSettingsOnly, agentConfigPresentation, agentConfigStep, closeAgentConfigFlow]);
 
   React.useEffect(() => {
-    if (agentSettingsOnly || !agentLifecycleOpen) {
+    if (inPhoneMore || agentSettingsOnly || !agentLifecycleOpen) {
       return;
     }
     const handlePointerDown = (event: MouseEvent) => {
@@ -1878,10 +1955,10 @@ export function FileTree({
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [agentSettingsOnly, agentLifecycleOpen, closeAgentLifecycleFlow]);
+  }, [inPhoneMore, agentSettingsOnly, agentLifecycleOpen, closeAgentLifecycleFlow]);
 
   React.useEffect(() => {
-    if (!relayServicesOpen) {
+    if (inPhoneMore || !relayServicesOpen) {
       return;
     }
     const handlePointerDown = (event: MouseEvent) => {
@@ -1894,7 +1971,7 @@ export function FileTree({
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [relayServicesEditing, relayServicesOpen]);
+  }, [inPhoneMore, relayServicesEditing, relayServicesOpen]);
 
   const closeRelayServices = React.useCallback(() => {
     setRelayServicesOpen(false);
@@ -2242,625 +2319,86 @@ export function FileTree({
     </ul>
   );
 
-  const agentConfiguration = configSwitchOpen ? (
-          <div
-            ref={agentConfigPopoverRef}
-            style={{
-              position: agentSettingsOnly ? "static" : "absolute",
-              top: "calc(100% + 6px)",
-              left: "8px",
-              right: "3px",
-              zIndex: 35,
-            }}
-          >
-            <AgentConfigPopover
-              step={agentConfigStep}
-              agents={agentConfigAgents}
-              selectedAgent={agentConfigAgent}
-              switchTab={agentConfigSwitchTab}
-              backups={agentConfigBackups}
-              apiProviders={agentAPIProviders}
-              selectedBackupID={selectedAgentConfigID}
-              selectedAPIProviderID={selectedAgentAPIProviderID}
-              confirmMessage={agentConfigConfirmMessage}
-              busy={agentConfigBusy}
-              restartingAgent={agentConfigRestartingAgent}
-              error={agentConfigError}
-              restartResult={agentRestartResult}
-              onChooseAgent={(name) => {
-                void chooseAgentForConfig(name);
-              }}
-              onSwitchTabChange={setAgentConfigSwitchTab}
-              onSelectedBackupChange={selectAgentConfigBackup}
-              onSelectedAPIProviderChange={selectAgentAPIProvider}
-              onDeleteBackup={(id) => {
-                void deleteSelectedAgentConfigBackup(id);
-              }}
-              onDeleteAPIProvider={(id) => {
-                void deleteSelectedAgentAPIProvider(id);
-              }}
-              onSwitch={() => {
-                void runAgentConfigSwitch(false);
-              }}
-              onRestartAgent={restartAgentFromConfigList}
-              onConfirm={() => {
-                void runAgentConfigSwitch(true);
-              }}
-              onCancel={closeAgentConfigFlow}
-            />
+  const agentConfiguration = agentConfigPresentation ? (
+    <AgentConfigPopover
+      inDialog={agentConfigPresentation === "dialog" || inPhoneMore}
+      step={agentConfigStep}
+      agents={agentConfigAgents}
+      selectedAgent={agentConfigAgent}
+      switchTab={agentConfigSwitchTab}
+      backups={agentConfigBackups}
+      apiProviders={agentAPIProviders}
+      selectedBackupID={selectedAgentConfigID}
+      selectedAPIProviderID={selectedAgentAPIProviderID}
+      confirmMessage={agentConfigConfirmMessage}
+      busy={agentConfigBusy}
+      restartingAgent={agentConfigRestartingAgent}
+      error={agentConfigError}
+      restartResult={agentRestartResult}
+      onChooseAgent={(name) => {
+        void chooseAgentForConfig(name);
+      }}
+      onSwitchTabChange={setAgentConfigSwitchTab}
+      onSelectedBackupChange={selectAgentConfigBackup}
+      onSelectedAPIProviderChange={selectAgentAPIProvider}
+      onDeleteBackup={(id) => {
+        void deleteSelectedAgentConfigBackup(id);
+      }}
+      onDeleteAPIProvider={(id) => {
+        void deleteSelectedAgentAPIProvider(id);
+      }}
+      onSwitch={() => {
+        void runAgentConfigSwitch(false);
+      }}
+      onRestartAgent={restartAgentFromConfigList}
+      onConfirm={() => {
+        void runAgentConfigSwitch(true);
+      }}
+      onCancel={closeAgentConfigFlow}
+    />
+  ) : null;
+
+  const glowTitle = t(inPhoneMore ? "glow.activityTitle" : "glow.title");
+  const glowSettingsButton = isRemoteWebUi ? (
+    <button
+      type="button"
+      className={inPhoneMore ? undefined : "remote-shell-only"}
+      aria-haspopup="dialog"
+      style={{ ...fileTreeMenuButtonStyle, width: "100%" }}
+      onClick={() => { setGlowDialogOpen(true); setIsMenuOpen(false); }}
+    >
+      <span style={{ flex: 1 }}>{glowTitle}</span>
+      <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
+        {glowConfig.on ? `${t(`glow.fx.${glowConfig.fx}` as const)} · ${t(`glow.speed.${glowConfig.speed}` as const)}` : t("glow.off")}
+      </span>
+    </button>
+  ) : null;
+
+  const phonePanelTitle = phoneBackupOpen ? t("fileTree.addAgentConfig")
+    : agentConfigPresentation === "sidebar" ? t("fileTree.switchAgentConfig")
+    : transferMode ? t(transferMode === "export" ? "configTransfer.exportAgent" : "configTransfer.importAgent")
+    : idleReleaseOpen ? t("idleSessionResourceRelease.title")
+    : sessionNamingOpen ? t("sessionNaming.title")
+    : relayServicesOpen ? t("fileTree.relayLocalServices")
+    : agentLifecycleOpen ? t("fileTree.agentInstallUpdate") : "";
+  const closePhonePanel = () => {
+    setPhoneBackupOpen(false);
+    closeAgentConfigFlow();
+    setTransferMode(null);
+    setIdleReleaseOpen(false);
+    setSessionNamingOpen(false);
+    closeRelayServices();
+    closeAgentLifecycleFlow();
+  };
+  const settingsPanels = <>
+    {agentConfigPresentation === "sidebar" ? (
+          <div ref={agentConfigPopoverRef} style={{ position: "absolute", top: "calc(100% + 6px)", left: "8px", right: "3px", zIndex: 35 }}>
+            {agentConfiguration}
           </div>
-        ) : null;
-
-  if (agentSettingsOnly) {
-    return <IdeaAgentSettings agents={agentLifecycleAgents} busy={agentLifecycleBusy || agentConfigBusy}
-      projectReady={!!rootId} notice={agentLifecycleNotice}
-      probingAgent={agentProbingAgent}
-      error={agentLifecycleError || agentConfigError}
-      onProbe={probeAgentFromSettings} onRun={runAgentLifecycleCommand} />;
-  }
-
-  return (
-    <div className="workspace-projects" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      {!isIDEManagedProject ? <div className="workspace-projects-title"><span>{t("fileTree.projects")}</span><StandaloneProjects compact onAdded={onProjectAdded} /></div> : null}
-      <div style={{ position: "relative", height: "36px", padding: "0 3px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--mindfs-topbar-bg, transparent)", boxSizing: "border-box", flexShrink: 0, gap: 0, overflow: "visible" }}>
-        <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: "1 1 auto", maxWidth: "calc(100% - 56px)", marginRight: "6px" }}>
-          <div
-            role="tablist"
-            className="workspace-project-tabs"
-            data-onboarding="project-tabs"
-            aria-label={t("fileTree.projectTabs")}
-          >
-            {([
-              ["files", t("fileTree.files")],
-              ["git", "git"],
-              ["worktrees", t("fileTree.worktrees")],
-              ["related", t("fileTree.relatedFiles")],
-            ] as const).map(([value, label]) => {
-              const active = projectTreeTab === value;
-              const flexGrow = value === "related" ? 1.45 : value === "worktrees" ? 1.15 : 0.85;
-              return (
-                <React.Fragment key={value}>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setProjectTreeTab(value)}
-                    style={{ flex: `${flexGrow} 1 auto` }}
-                  >
-                    {label}
-                  </button>
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-        <button
-          type="button"
-          data-onboarding="sidebar-refresh"
-          onClick={() => void handleRefreshClick()}
-          onMouseDown={() => setTreePressed(true)}
-          onMouseUp={() => setTreePressed(false)}
-          onMouseLeave={() => setTreePressed(false)}
-          aria-label={t("common.refresh")}
-          title={t("common.refresh")}
-          style={{
-            width: "22px",
-            height: "28px",
-            borderRadius: "8px",
-            border: "none",
-            background: "transparent",
-            color: "var(--text-secondary)",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            cursor: "pointer",
-            outline: "none",
-            flexShrink: 0,
-            padding: 0,
-          }}
-        >
-          <span
-            data-refresh-visual
-            style={{
-              width: "18px",
-              height: "28px",
-              borderRadius: "8px",
-              background: treePressed || treeRefreshing ? "rgba(0, 0, 0, 0.06)" : "transparent",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              style={treeRefreshing ? { animation: "mindfs-update-spin 0.8s linear infinite" } : undefined}
-            >
-              <path
-                fill="currentColor"
-                d="M19.91 15.51h-4.53a1 1 0 0 0 0 2h2.4A8 8 0 0 1 4 12a1 1 0 0 0-2 0a10 10 0 0 0 16.88 7.23V21a1 1 0 0 0 2 0v-4.5a1 1 0 0 0-.97-.99M12 2a10 10 0 0 0-6.88 2.77V3a1 1 0 0 0-2 0v4.5a1 1 0 0 0 1 1h4.5a1 1 0 0 0 0-2h-2.4A8 8 0 0 1 20 12a1 1 0 0 0 2 0A10 10 0 0 0 12 2"
-              />
-            </svg>
-          </span>
-        </button>
-        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
-          <button
-            type="button"
-            data-onboarding="sidebar-menu"
-            onClick={() => {
-              setIsMenuOpen((open) => {
-                const nextOpen = !open;
-                if (nextOpen) {
-                  setIsAppearanceMenuOpen(false);
-                  setIsLocaleMenuOpen(false);
-                  setIsSortMenuOpen(false);
-                }
-                return nextOpen;
-              });
-            }}
-            aria-label={t("fileTree.menu.open")}
-            aria-expanded={isMenuOpen}
-            style={{
-              width: "28px",
-              height: "28px",
-              borderRadius: "8px",
-              border: "none",
-              background: isMenuOpen ? "rgba(0, 0, 0, 0.06)" : "transparent",
-              color: "var(--text-secondary)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              outline: "none",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <circle cx="12" cy="5" r="1.8" />
-              <circle cx="12" cy="12" r="1.8" />
-              <circle cx="12" cy="19" r="1.8" />
-            </svg>
-          </button>
-          {isMenuOpen ? (
-            <div
-              data-file-tree-menu
-              style={{
-                position: "absolute",
-                top: "calc(100% + 6px)",
-                right: 0,
-                width: "var(--mindfs-file-menu-width, 182px)",
-                maxWidth: "calc(100vw - 16px)",
-                padding: "6px",
-                boxSizing: "border-box",
-                whiteSpace: "nowrap",
-                borderRadius: "10px",
-                border: "1px solid var(--border-color)",
-                background: "var(--menu-bg)",
-                boxShadow: "0 12px 30px rgba(15, 23, 42, 0.14)",
-                zIndex: 20,
-              }}
-            >
-
-                <button
-                  type="button"
-                  onClick={() => openAgentConfigFlow()}
-                  style={fileTreeMenuButtonStyle}
-                >
-                  <ConfigSwitchIcon />
-                  <span>{t("fileTree.switchAgentConfig")}</span>
-                </button>
-                {(["export", "import"] as const).map(mode => (
-                  <button key={mode} type="button" style={fileTreeMenuButtonStyle} onClick={() => {
-                    setTransferMode(mode);
-                    setIsMenuOpen(false);
-                    closeAgentConfigFlow();
-                    closeAgentLifecycleFlow();
-                  }}>
-                    <ConfigArchiveIcon />
-                    <span>{t(mode === "export" ? "configTransfer.exportAgent" : "configTransfer.importAgent")}</span>
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={openAgentLifecycleFlow}
-                  style={fileTreeMenuButtonStyle}
-                >
-                  <AgentInstallIcon />
-                  <span>{t("fileTree.agentInstallUpdate")}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={openSessionNaming}
-                  style={fileTreeMenuButtonStyle}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M4 6h16" />
-                    <path d="M4 12h10" />
-                    <path d="M4 18h7" />
-                    <path d="m17 16 2 2 3-4" />
-                  </svg>
-                  <span>{t("fileTree.sessionNamingAgent")}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={openIdleSessionResourceRelease}
-                  style={fileTreeMenuButtonStyle}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 7v5l3 2" />
-                  </svg>
-                  <span>{t("fileTree.idleSessionResourceRelease")}</span>
-                  <span
-                    style={{
-                      marginLeft: "auto",
-                      color: "var(--text-secondary)",
-                      fontSize: "11px",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {idleReleaseHours || "72"}h
-                  </span>
-                </button>
-                {!relayNoRelayer ? <button
-                  type="button"
-                  onClick={() => {
-                    setRelayServicesOpen(true);
-                    setRelayServicesEditing(false);
-                    closeAgentConfigFlow();
-                    setAgentLifecycleOpen(false);
-                    setIsMenuOpen(false);
-                    setIsAppearanceMenuOpen(false);
-                    setIsLocaleMenuOpen(false);
-                    setIsSortMenuOpen(false);
-                  }}
-                  style={fileTreeMenuButtonStyle}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M4 17V7a2 2 0 0 1 2-2h6" />
-                    <path d="M8 21h8a2 2 0 0 0 2-2v-6" />
-                    <path d="M14 3h7v7" />
-                    <path d="m21 3-9 9" />
-                  </svg>
-                  <span>{t("fileTree.relayLocalServices")}</span>
-                </button> : null}
-                {!isNativeApp ? <WebPushMenuItem /> : null}
-                <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAppearanceMenuOpen((open) => !open);
-                    setIsLocaleMenuOpen(false);
-                    setIsSortMenuOpen(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--text-primary)",
-                    borderRadius: "8px",
-                    padding: "8px 10px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                  }}
-                  aria-expanded={isAppearanceMenuOpen}
-                >
-                  <span style={{ flex: 1 }}>{t("appearance.title")}</span>
-                  <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
-                    {t(APPEARANCE_OPTIONS.find((option) => option.value === appearanceMode)?.labelKey || "appearance.system")}
-                  </span>
-                  <ChevronRight isOpen={isAppearanceMenuOpen} />
-                </button>
-                {isAppearanceMenuOpen ? APPEARANCE_OPTIONS.map((option) => {
-                  const active = option.value === appearanceMode;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setAppearanceMode(option.value);
-                        setAppearanceModeState(option.value);
-                        setIsMenuOpen(false);
-                        setIsAppearanceMenuOpen(false);
-                        setIsLocaleMenuOpen(false);
-                        setIsSortMenuOpen(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        background: active ? "var(--selection-bg)" : "transparent",
-                        color: active ? "var(--accent-color)" : "var(--text-primary)",
-                        borderRadius: "8px",
-                        padding: "8px 10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        textAlign: "left",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                      }}
-                    >
-                      <span>{t(option.labelKey)}</span>
-                      <span style={{ fontSize: "11px", opacity: active ? 1 : 0 }}>✓</span>
-                    </button>
-                  );
-                }) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLocaleMenuOpen((open) => !open);
-                    setIsAppearanceMenuOpen(false);
-                    setIsSortMenuOpen(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--text-primary)",
-                    borderRadius: "8px",
-                    padding: "8px 10px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                  }}
-                  aria-expanded={isLocaleMenuOpen}
-                >
-                  <span style={{ flex: 1 }}>{t("locale.language")}</span>
-                  <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
-                    {t(LOCALE_OPTIONS.find((option) => option.value === locale)?.labelKey || "locale.zhCN")}
-                  </span>
-                  <ChevronRight isOpen={isLocaleMenuOpen} />
-                </button>
-                {isLocaleMenuOpen ? LOCALE_OPTIONS.map((option) => {
-                  const active = option.value === locale;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setLocale(option.value);
-                        setIsMenuOpen(false);
-                        setIsAppearanceMenuOpen(false);
-                        setIsLocaleMenuOpen(false);
-                        setIsSortMenuOpen(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        background: active ? "var(--selection-bg)" : "transparent",
-                        color: active ? "var(--accent-color)" : "var(--text-primary)",
-                        borderRadius: "8px",
-                        padding: "8px 10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        textAlign: "left",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                      }}
-                    >
-                      <span>{t(option.labelKey)}</span>
-                      <span style={{ fontSize: "11px", opacity: active ? 1 : 0 }}>✓</span>
-                    </button>
-                  );
-                }) : null}
-                <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSortMenuOpen((open) => !open);
-                    setIsAppearanceMenuOpen(false);
-                    setIsLocaleMenuOpen(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--text-primary)",
-                    borderRadius: "8px",
-                    padding: "8px 10px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                  }}
-                  aria-expanded={isSortMenuOpen}
-                >
-                  <span style={{ flex: 1 }}>{t("fileTree.globalSort")}</span>
-                  <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
-                    {sortLabel(sortMode)}
-                  </span>
-                  <ChevronRight isOpen={isSortMenuOpen} />
-                </button>
-                {isSortMenuOpen ? DIRECTORY_SORT_OPTIONS.map((option) => {
-                const active = option.value === sortMode;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      onSortModeChange?.(option.value as DirectorySortMode);
-                      setIsMenuOpen(false);
-                      setIsAppearanceMenuOpen(false);
-                      setIsLocaleMenuOpen(false);
-                      setIsSortMenuOpen(false);
-                    }}
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      background: active ? "var(--selection-bg)" : "transparent",
-                      color: active ? "var(--accent-color)" : "var(--text-primary)",
-                      borderRadius: "8px",
-                      padding: "8px 10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      fontSize: "12px",
-                    }}
-                  >
-                    <span>{sortLabel(option.value as DirectorySortMode)}</span>
-                    <span style={{ fontSize: "11px", opacity: active ? 1 : 0 }}>✓</span>
-                  </button>
-                );
-              }) : null}
-              <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />
-
-              <button
-                type="button"
-                onClick={() => {
-                  onShowHiddenFilesChange?.(!showHiddenFiles);
-                  setIsAppearanceMenuOpen(false);
-                  setIsSortMenuOpen(false);
-                }}
-                style={{
-                  width: "100%",
-                  border: "none",
-                  background: showHiddenFiles ? "var(--selection-bg)" : "transparent",
-                  color: showHiddenFiles ? "var(--accent-color)" : "var(--text-primary)",
-                  borderRadius: "8px",
-                  padding: "8px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                }}
-              >
-                <span>{t("fileTree.showHiddenFiles")}</span>
-                <span style={{ fontSize: "11px", opacity: showHiddenFiles ? 1 : 0 }}>✓</span>
-              </button>
-              <button
-                type="button"
-                disabled={newProjectMetaLocationBusy}
-                onClick={() => {
-                  if (newProjectMetaLocationBusy) return;
-                  const previous = newProjectMetaLocation;
-                  const next = previous === "home" ? "project" : "home";
-                  setNewProjectMetaLocation(next);
-                  setNewProjectMetaLocationBusy(true);
-                  updateNewProjectMetaLocationPreference(next)
-                    .then(setNewProjectMetaLocation)
-                    .catch(() => setNewProjectMetaLocation(previous))
-                    .finally(() => setNewProjectMetaLocationBusy(false));
-                }}
-                style={{
-                  width: "100%",
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--text-primary)",
-                  borderRadius: "8px",
-                  padding: "8px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  textAlign: "left",
-                  cursor: newProjectMetaLocationBusy ? "default" : "pointer",
-                  fontSize: "12px",
-                  opacity: newProjectMetaLocationBusy ? 0.65 : 1,
-                }}
-              >
-                <span style={{ flex: 1 }}>{t("fileTree.newProjectMetaLocation")}</span>
-                <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
-                  {t(newProjectMetaLocation === "home" ? "fileTree.metaLocationHome" : "fileTree.metaLocationProject")}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onMultiProjectSessionsChange?.(!multiProjectSessionsEnabled);
-                  setIsAppearanceMenuOpen(false);
-                  setIsSortMenuOpen(false);
-                }}
-                style={{
-                  width: "100%",
-                  border: "none",
-                  background: multiProjectSessionsEnabled ? "var(--selection-bg)" : "transparent",
-                  color: multiProjectSessionsEnabled ? "var(--accent-color)" : "var(--text-primary)",
-                  borderRadius: "8px",
-                  padding: "8px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                }}
-              >
-                <span>{t("fileTree.multiProjectSessions")}</span>
-                <span style={{ fontSize: "11px", opacity: multiProjectSessionsEnabled ? 1 : 0 }}>✓</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onSidebarsSwappedChange?.(!sidebarsSwapped);
-                  setIsAppearanceMenuOpen(false);
-                  setIsSortMenuOpen(false);
-                }}
-                style={{
-                  width: "100%",
-                  border: "none",
-                  background: sidebarsSwapped ? "var(--selection-bg)" : "transparent",
-                  color: sidebarsSwapped ? "var(--accent-color)" : "var(--text-primary)",
-                  borderRadius: "8px",
-                  padding: "8px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                }}
-              >
-                <span>{t("fileTree.swapSidebars")}</span>
-                <span style={{ fontSize: "11px", opacity: sidebarsSwapped ? 1 : 0 }}>✓</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onGitDiffSideBySideChange?.(!gitDiffSideBySide);
-                  setIsAppearanceMenuOpen(false);
-                  setIsSortMenuOpen(false);
-                }}
-                style={{
-                  width: "100%",
-                  border: "none",
-                  background: gitDiffSideBySide ? "var(--selection-bg)" : "transparent",
-                  color: gitDiffSideBySide ? "var(--accent-color)" : "var(--text-primary)",
-                  borderRadius: "8px",
-                  padding: "8px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                }}
-              >
-                <span>{t("fileTree.sideBySideDiff")}</span>
-                <span style={{ fontSize: "11px", opacity: gitDiffSideBySide ? 1 : 0 }}>✓</span>
-              </button>
-            </div>
-          ) : null}
-
-        </div>
-        {agentConfiguration}
+        ) : null}
         {transferMode && (
           <div style={{ position: "absolute", top: "calc(100% + 6px)", left: "8px", right: "3px", zIndex: 40 }}>
-            <ConfigTransferDialog key={transferMode} mode={transferMode} onClose={() => setTransferMode(null)} onUseBackup={(backup) => {
+            <ConfigTransferDialog key={transferMode} embedded={inPhoneMore} mode={transferMode} onClose={() => setTransferMode(null)} onUseBackup={(backup) => {
               setTransferMode(null);
               openAgentConfigFlow(backup);
             }} />
@@ -3070,6 +2608,680 @@ export function FileTree({
             />
           </div>
         ) : null}
+  </>;
+
+  if (agentSettingsOnly) {
+    return <IdeaAgentSettings agents={agentLifecycleAgents} busy={agentLifecycleBusy || agentConfigBusy}
+      projectReady={!!rootId} notice={agentLifecycleNotice}
+      probingAgent={agentProbingAgent}
+      error={agentLifecycleError || agentConfigError}
+      onProbe={probeAgentFromSettings} onRun={runAgentLifecycleCommand} />;
+  }
+
+  return (
+    <div className="workspace-projects" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {agentConfigPresentation === "dialog" ? createPortal(
+        <dialog
+          ref={agentConfigDialogRef}
+          className="remote-agent-config-dialog"
+          aria-labelledby={agentConfigTitleId}
+          onCancel={(event) => {
+            event.preventDefault();
+            closeAgentConfigFlow();
+          }}
+        >
+          <header>
+            <h2 id={agentConfigTitleId}>{t("fileTree.switchAgentConfig")}</h2>
+            <button type="button" onClick={closeAgentConfigFlow} aria-label={t("common.close")}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </header>
+          {agentConfiguration}
+        </dialog>,
+        document.body,
+      ) : null}
+      {isRemoteWebUi ? <GlowSettingsDialog title={glowTitle} open={glowDialogOpen} onClose={closeGlowDialog} /> : null}
+      {!isIDEManagedProject ? <div className="workspace-projects-title"><span>{t("fileTree.projects")}</span><StandaloneProjects compact onAdded={onProjectAdded} /></div> : null}
+      <div className="workspace-files-toolbar" style={{ position: "relative", height: "36px", padding: "0 3px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--mindfs-topbar-bg, transparent)", boxSizing: "border-box", flexShrink: 0, gap: 0, overflow: "visible" }}>
+        <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: "1 1 auto", maxWidth: "calc(100% - 56px)", marginRight: "6px" }}>
+          {isRemoteWebUi ? (
+            <div className="remote-tool-crumb">
+              {projectTreeTab === "files" ? (
+                <span className="remote-tool-crumb-root">{t("fileTree.files")}</span>
+              ) : (
+                <>
+                  <button type="button" className="remote-tool-crumb-back" onClick={() => setProjectTreeTab("files")} aria-label={t("fileTree.backToFiles")}>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+                    {t("fileTree.files")}
+                  </button>
+                  <b className="remote-tool-crumb-name">
+                    {projectTreeTab === "git" ? t("git.changes") : projectTreeTab === "worktrees" ? t("fileTree.worktrees") : t("fileTree.relatedFiles")}
+                  </b>
+                </>
+              )}
+            </div>
+          ) : null}
+          <div
+            role="tablist"
+            className="workspace-project-tabs"
+            data-onboarding="project-tabs"
+            aria-label={t("fileTree.projectTabs")}
+          >
+            {([
+              ["files", t("fileTree.files")],
+              ["git", "git"],
+              ["worktrees", t("fileTree.worktrees")],
+              ["related", t("fileTree.relatedFiles")],
+            ] as const).map(([value, label]) => {
+              const active = projectTreeTab === value;
+              const flexGrow = value === "related" ? 1.45 : value === "worktrees" ? 1.15 : 0.85;
+              return (
+                <React.Fragment key={value}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setProjectTreeTab(value)}
+                    style={{ flex: `${flexGrow} 1 auto` }}
+                  >
+                    {label}
+                  </button>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+        <button
+          type="button"
+          data-onboarding="sidebar-refresh"
+          onClick={() => void handleRefreshClick()}
+          onMouseDown={() => setTreePressed(true)}
+          onMouseUp={() => setTreePressed(false)}
+          onMouseLeave={() => setTreePressed(false)}
+          aria-label={t("common.refresh")}
+          title={t("common.refresh")}
+          style={{
+            width: "22px",
+            height: "28px",
+            borderRadius: "8px",
+            border: "none",
+            background: "transparent",
+            color: "var(--text-secondary)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            cursor: "pointer",
+            outline: "none",
+            flexShrink: 0,
+            padding: 0,
+          }}
+        >
+          <span
+            data-refresh-visual
+            style={{
+              width: "18px",
+              height: "28px",
+              borderRadius: "8px",
+              background: treePressed || treeRefreshing ? "rgba(0, 0, 0, 0.06)" : "transparent",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              style={treeRefreshing ? { animation: "mindfs-update-spin 0.8s linear infinite" } : undefined}
+            >
+              <path
+                fill="currentColor"
+                d="M19.91 15.51h-4.53a1 1 0 0 0 0 2h2.4A8 8 0 0 1 4 12a1 1 0 0 0-2 0a10 10 0 0 0 16.88 7.23V21a1 1 0 0 0 2 0v-4.5a1 1 0 0 0-.97-.99M12 2a10 10 0 0 0-6.88 2.77V3a1 1 0 0 0-2 0v4.5a1 1 0 0 0 1 1h4.5a1 1 0 0 0 0-2h-2.4A8 8 0 0 1 20 12a1 1 0 0 0 2 0A10 10 0 0 0 12 2"
+              />
+            </svg>
+          </span>
+        </button>
+        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
+          <button
+            type="button"
+            data-onboarding="sidebar-menu"
+            onClick={() => {
+              setIsMenuOpen((open) => {
+                const nextOpen = !open;
+                if (nextOpen) {
+                  setIsAppearanceMenuOpen(false);
+                  setIsLocaleMenuOpen(false);
+                  setIsSortMenuOpen(false);
+                }
+                return nextOpen;
+              });
+            }}
+            aria-label={t("fileTree.menu.open")}
+            aria-expanded={isMenuOpen}
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "8px",
+              border: "none",
+              background: isMenuOpen ? "rgba(0, 0, 0, 0.06)" : "transparent",
+              color: "var(--text-secondary)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              outline: "none",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="5" r="1.8" />
+              <circle cx="12" cy="12" r="1.8" />
+              <circle cx="12" cy="19" r="1.8" />
+            </svg>
+          </button>
+          {isMenuOpen || inPhoneMore ? (
+            <PhoneMoreMount host={moreHost}>
+            <div
+              data-file-tree-menu={inPhoneMore ? undefined : true}
+              className={inPhoneMore ? "phone-more-menu" : undefined}
+              style={inPhoneMore ? undefined : {
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                right: 0,
+                width: "var(--mindfs-file-menu-width, 182px)",
+                maxWidth: "calc(100vw - 16px)",
+                overflowY: isRemoteWebUi ? "auto" : undefined,
+                overscrollBehaviorY: isRemoteWebUi ? "contain" : undefined,
+                padding: "6px",
+                boxSizing: "border-box",
+                whiteSpace: "nowrap",
+                borderRadius: "10px",
+                border: "1px solid var(--border-color)",
+                background: "var(--menu-bg)",
+                boxShadow: "0 12px 30px rgba(15, 23, 42, 0.14)",
+                zIndex: 20,
+              }}
+            >
+
+                {isRemoteWebUi && !inPhoneMore ? (
+                  <div className="remote-shell-only" role="group" aria-label={t("fileTree.projectTools")}>
+                    <div className="remote-menu-heading">{t("fileTree.projectTools")}</div>
+                    {([
+                      ["git", t("git.changes")],
+                      ["worktrees", t("fileTree.worktrees")],
+                      ["related", t("fileTree.relatedFiles")],
+                    ] as const).map(([value, label]) => (
+                      <button key={value} type="button" style={fileTreeMenuButtonStyle} onClick={() => { setProjectTreeTab(value); setIsMenuOpen(false); }}>
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                    <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />
+                  </div>
+                ) : null}
+                <PhoneMoreGroup phone={inPhoneMore} name="agent" title="Agent">
+                {inPhoneMore && <button type="button" onClick={() => setPhoneBackupOpen(true)} style={fileTreeMenuButtonStyle}>
+                  <span aria-hidden="true">＋</span><span>{t("fileTree.addAgentConfig")}</span>
+                </button>}
+                <button
+                  type="button"
+                  onClick={() => openAgentConfigFlow()}
+                  style={fileTreeMenuButtonStyle}
+                >
+                  <ConfigSwitchIcon />
+                  <span>{t("fileTree.switchAgentConfig")}</span>
+                </button>
+                {(["export", "import"] as const).map(mode => (
+                  <button key={mode} type="button" style={fileTreeMenuButtonStyle} onClick={() => {
+                    setTransferMode(mode);
+                    setIsMenuOpen(false);
+                    closeAgentConfigFlow();
+                    closeAgentLifecycleFlow();
+                  }}>
+                    <ConfigArchiveIcon />
+                    <span>{t(mode === "export" ? "configTransfer.exportAgent" : "configTransfer.importAgent")}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={openAgentLifecycleFlow}
+                  style={fileTreeMenuButtonStyle}
+                >
+                  <AgentInstallIcon />
+                  <span>{t("fileTree.agentInstallUpdate")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openSessionNaming}
+                  style={fileTreeMenuButtonStyle}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 6h16" />
+                    <path d="M4 12h10" />
+                    <path d="M4 18h7" />
+                    <path d="m17 16 2 2 3-4" />
+                  </svg>
+                  <span>{t("fileTree.sessionNamingAgent")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openIdleSessionResourceRelease}
+                  style={fileTreeMenuButtonStyle}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                  </svg>
+                  <span>{t("fileTree.idleSessionResourceRelease")}</span>
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      color: "var(--text-secondary)",
+                      fontSize: "11px",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {idleReleaseHours || "72"}h
+                  </span>
+                </button>
+                {!relayNoRelayer ? <button
+                  type="button"
+                  onClick={() => {
+                    setRelayServicesOpen(true);
+                    setRelayServicesEditing(false);
+                    closeAgentConfigFlow();
+                    setAgentLifecycleOpen(false);
+                    setIsMenuOpen(false);
+                    setIsAppearanceMenuOpen(false);
+                    setIsLocaleMenuOpen(false);
+                    setIsSortMenuOpen(false);
+                  }}
+                  style={fileTreeMenuButtonStyle}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 17V7a2 2 0 0 1 2-2h6" />
+                    <path d="M8 21h8a2 2 0 0 0 2-2v-6" />
+                    <path d="M14 3h7v7" />
+                    <path d="m21 3-9 9" />
+                  </svg>
+                  <span>{t("fileTree.relayLocalServices")}</span>
+                </button> : null}
+                </PhoneMoreGroup>
+                <PhoneMoreGroup phone={inPhoneMore} name="notifications" title={t("remote.phone.notifications")}>
+                  {!isNativeApp ? <WebPushMenuItem phone={inPhoneMore} /> : null}
+                </PhoneMoreGroup>
+                {!inPhoneMore && <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />}
+                {!inPhoneMore && <PhoneMoreGroup phone={false} name="appearance" title={t("appearance.title")}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAppearanceMenuOpen((open) => !open);
+                    setIsLocaleMenuOpen(false);
+                    setIsSortMenuOpen(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--text-primary)",
+                    borderRadius: "8px",
+                    padding: "8px 10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                  }}
+                  aria-expanded={isAppearanceMenuOpen}
+                >
+                  <span style={{ flex: 1 }}>{t("appearance.title")}</span>
+                  <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
+                    {t(APPEARANCE_OPTIONS.find((option) => option.value === appearanceMode)?.labelKey || "appearance.system")}
+                  </span>
+                  <ChevronRight isOpen={isAppearanceMenuOpen} />
+                </button>
+                {isRemoteWebUi && !inPhoneMore ? <DeviceModeSelect className="remote-shell-only remote-device-mode" /> : null}
+                {isAppearanceMenuOpen ? APPEARANCE_OPTIONS.map((option) => {
+                  const active = option.value === appearanceMode;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setAppearanceMode(option.value);
+                        setAppearanceModeState(option.value);
+                        setIsMenuOpen(false);
+                        setIsAppearanceMenuOpen(false);
+                        setIsLocaleMenuOpen(false);
+                        setIsSortMenuOpen(false);
+                      }}
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        background: active ? "var(--selection-bg)" : "transparent",
+                        color: active ? "var(--accent-color)" : "var(--text-primary)",
+                        borderRadius: "8px",
+                        padding: "8px 10px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                      }}
+                    >
+                      <span>{t(option.labelKey)}</span>
+                      <span style={{ fontSize: "11px", opacity: active ? 1 : 0 }}>✓</span>
+                    </button>
+                  );
+                }) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLocaleMenuOpen((open) => !open);
+                    setIsAppearanceMenuOpen(false);
+                    setIsSortMenuOpen(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--text-primary)",
+                    borderRadius: "8px",
+                    padding: "8px 10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                  }}
+                  aria-expanded={isLocaleMenuOpen}
+                >
+                  <span style={{ flex: 1 }}>{t("locale.language")}</span>
+                  <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
+                    {t(LOCALE_OPTIONS.find((option) => option.value === locale)?.labelKey || "locale.zhCN")}
+                  </span>
+                  <ChevronRight isOpen={isLocaleMenuOpen} />
+                </button>
+                {isLocaleMenuOpen ? LOCALE_OPTIONS.map((option) => {
+                  const active = option.value === locale;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setLocale(option.value);
+                        setIsMenuOpen(false);
+                        setIsAppearanceMenuOpen(false);
+                        setIsLocaleMenuOpen(false);
+                        setIsSortMenuOpen(false);
+                      }}
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        background: active ? "var(--selection-bg)" : "transparent",
+                        color: active ? "var(--accent-color)" : "var(--text-primary)",
+                        borderRadius: "8px",
+                        padding: "8px 10px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                      }}
+                    >
+                      <span>{t(option.labelKey)}</span>
+                      <span style={{ fontSize: "11px", opacity: active ? 1 : 0 }}>✓</span>
+                    </button>
+                  );
+                }) : null}
+                {glowSettingsButton}
+                </PhoneMoreGroup>}
+                {!inPhoneMore && <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />}
+                <PhoneMoreGroup phone={inPhoneMore} name="files" title={t("remote.phone.fileSettings")}>
+                {inPhoneMore ? <div className="phone-more-choice phone-more-sort" role="group" aria-label={t("fileTree.globalSort")}>
+                  <span className="phone-more-choice-label">{t("fileTree.globalSort")}</span>
+                  {DIRECTORY_SORT_OPTIONS.map(option => <button type="button" key={option.value} aria-pressed={sortMode === option.value} onClick={() => onSortModeChange?.(option.value)}>{sortLabel(option.value)}</button>)}
+                </div> : <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSortMenuOpen((open) => !open);
+                    setIsAppearanceMenuOpen(false);
+                    setIsLocaleMenuOpen(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--text-primary)",
+                    borderRadius: "8px",
+                    padding: "8px 10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                  }}
+                  aria-expanded={isSortMenuOpen}
+                >
+                  <span style={{ flex: 1 }}>{t("fileTree.globalSort")}</span>
+                  <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
+                    {sortLabel(sortMode)}
+                  </span>
+                  <ChevronRight isOpen={isSortMenuOpen} />
+                </button>
+                {isSortMenuOpen ? DIRECTORY_SORT_OPTIONS.map((option) => {
+                const active = option.value === sortMode;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onSortModeChange?.(option.value as DirectorySortMode);
+                      setIsMenuOpen(false);
+                      setIsAppearanceMenuOpen(false);
+                      setIsLocaleMenuOpen(false);
+                      setIsSortMenuOpen(false);
+                    }}
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      background: active ? "var(--selection-bg)" : "transparent",
+                      color: active ? "var(--accent-color)" : "var(--text-primary)",
+                      borderRadius: "8px",
+                      padding: "8px 10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <span>{sortLabel(option.value as DirectorySortMode)}</span>
+                    <span style={{ fontSize: "11px", opacity: active ? 1 : 0 }}>✓</span>
+                  </button>
+                );
+              }) : null}
+              <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />
+
+                </>}
+              <button
+                type="button"
+                role={inPhoneMore ? "switch" : undefined}
+                aria-checked={inPhoneMore ? showHiddenFiles : undefined}
+                onClick={() => {
+                  onShowHiddenFilesChange?.(!showHiddenFiles);
+                  setIsAppearanceMenuOpen(false);
+                  setIsSortMenuOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  background: showHiddenFiles ? "var(--selection-bg)" : "transparent",
+                  color: showHiddenFiles ? "var(--accent-color)" : "var(--text-primary)",
+                  borderRadius: "8px",
+                  padding: "8px 10px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                }}
+              >
+                <span>{t("fileTree.showHiddenFiles")}</span>
+                {inPhoneMore ? <span className="remote-switch" aria-hidden="true" /> : <span style={{ fontSize: "11px", opacity: showHiddenFiles ? 1 : 0 }}>✓</span>}
+              </button>
+              <button
+                type="button"
+                disabled={newProjectMetaLocationBusy}
+                onClick={() => {
+                  if (newProjectMetaLocationBusy) return;
+                  const previous = newProjectMetaLocation;
+                  const next = previous === "home" ? "project" : "home";
+                  setNewProjectMetaLocation(next);
+                  setNewProjectMetaLocationBusy(true);
+                  updateNewProjectMetaLocationPreference(next)
+                    .then(setNewProjectMetaLocation)
+                    .catch(() => setNewProjectMetaLocation(previous))
+                    .finally(() => setNewProjectMetaLocationBusy(false));
+                }}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--text-primary)",
+                  borderRadius: "8px",
+                  padding: "8px 10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  textAlign: "left",
+                  cursor: newProjectMetaLocationBusy ? "default" : "pointer",
+                  fontSize: "12px",
+                  opacity: newProjectMetaLocationBusy ? 0.65 : 1,
+                }}
+              >
+                <span style={{ flex: 1 }}>{t("fileTree.newProjectMetaLocation")}</span>
+                <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
+                  {t(newProjectMetaLocation === "home" ? "fileTree.metaLocationHome" : "fileTree.metaLocationProject")}
+                </span>
+              </button>
+              <button
+                type="button"
+                role={inPhoneMore ? "switch" : undefined}
+                aria-checked={inPhoneMore ? multiProjectSessionsEnabled : undefined}
+                onClick={() => {
+                  onMultiProjectSessionsChange?.(!multiProjectSessionsEnabled);
+                  setIsAppearanceMenuOpen(false);
+                  setIsSortMenuOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  background: multiProjectSessionsEnabled ? "var(--selection-bg)" : "transparent",
+                  color: multiProjectSessionsEnabled ? "var(--accent-color)" : "var(--text-primary)",
+                  borderRadius: "8px",
+                  padding: "8px 10px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                }}
+              >
+                <span>{t("fileTree.multiProjectSessions")}</span>
+                {inPhoneMore ? <span className="remote-switch" aria-hidden="true" /> : <span style={{ fontSize: "11px", opacity: multiProjectSessionsEnabled ? 1 : 0 }}>✓</span>}
+              </button>
+              <button
+                type="button"
+                role={inPhoneMore ? "switch" : undefined}
+                aria-checked={inPhoneMore ? sidebarsSwapped : undefined}
+                onClick={() => {
+                  onSidebarsSwappedChange?.(!sidebarsSwapped);
+                  setIsAppearanceMenuOpen(false);
+                  setIsSortMenuOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  background: sidebarsSwapped ? "var(--selection-bg)" : "transparent",
+                  color: sidebarsSwapped ? "var(--accent-color)" : "var(--text-primary)",
+                  borderRadius: "8px",
+                  padding: "8px 10px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                }}
+              >
+                <span>{t("fileTree.swapSidebars")}</span>
+                {inPhoneMore ? <span className="remote-switch" aria-hidden="true" /> : <span style={{ fontSize: "11px", opacity: sidebarsSwapped ? 1 : 0 }}>✓</span>}
+              </button>
+              <button
+                type="button"
+                role={inPhoneMore ? "switch" : undefined}
+                aria-checked={inPhoneMore ? gitDiffSideBySide : undefined}
+                onClick={() => {
+                  onGitDiffSideBySideChange?.(!gitDiffSideBySide);
+                  setIsAppearanceMenuOpen(false);
+                  setIsSortMenuOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  background: gitDiffSideBySide ? "var(--selection-bg)" : "transparent",
+                  color: gitDiffSideBySide ? "var(--accent-color)" : "var(--text-primary)",
+                  borderRadius: "8px",
+                  padding: "8px 10px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                }}
+              >
+                <span>{t("fileTree.sideBySideDiff")}</span>
+                {inPhoneMore ? <span className="remote-switch" aria-hidden="true" /> : <span style={{ fontSize: "11px", opacity: gitDiffSideBySide ? 1 : 0 }}>✓</span>}
+              </button>
+                </PhoneMoreGroup>
+                {inPhoneMore && <>
+                  <PhoneMoreGroup phone name="appearance" title={t("appearance.title")}>
+                    <div className="phone-more-choice phone-more-themes" role="group" aria-label={t("remote.topbar.theme")}>
+                      {APPEARANCE_OPTIONS.map(option => <button type="button" key={option.value} aria-pressed={appearanceMode === option.value} onClick={() => { setAppearanceMode(option.value); setAppearanceModeState(option.value); }}>
+                        <i data-theme-option={option.value} aria-hidden="true" />{t(option.labelKey)}
+                      </button>)}
+                    </div>
+                    <div className="phone-more-choice" role="group" aria-label={t("locale.language")}>
+                      <span className="phone-more-choice-label">{t("locale.language")}</span>
+                      {LOCALE_OPTIONS.map(option => <button type="button" key={option.value} aria-pressed={locale === option.value} onClick={() => setLocale(option.value)}>{t(option.labelKey)}</button>)}
+                    </div>
+                    {glowSettingsButton}
+                  </PhoneMoreGroup>
+                  <PhoneMoreGroup phone name="device" title={t("remote.device.title")}>
+                    <DeviceModeSelect className="phone-more-choice" segmented />
+                  </PhoneMoreGroup>
+                </>}
+            </div>
+            </PhoneMoreMount>
+          ) : null}
+
+        </div>
+        {inPhoneMore ? <PhoneSheet title={phonePanelTitle || t("remote.phone.more")} open={!!phonePanelTitle} onClose={closePhonePanel}>
+          <div className="phone-more-panels">{phoneBackupOpen ? <PhoneAgentBackup onSaved={() => setPhoneBackupOpen(false)} /> : settingsPanels}</div>
+        </PhoneSheet> : settingsPanels}
       </div>
       <div style={{ padding: "8px", flex: 1, minHeight: 0, overflow: "auto", display: "flex", flexDirection: "column" }}>
         {entries.length === 0 ? (
@@ -3094,6 +3306,7 @@ export function FileTree({
           renderEntries(entries, 0, rootId || "")
         )}
       </div>
+      <PhoneMoreMount host={moreHost}>
       <div
         data-mindfs-filetree-footer="1"
         style={{
@@ -3362,59 +3575,28 @@ export function FileTree({
             ) : null}
           </div>
         ) : null}
-        {shouldShowInstallButton ? (
-          relayActionLabel ? (
-            <button
-              type="button"
-              disabled={relayActionDisabled}
-              onClick={() => onRelayAction?.()}
-              style={{
-                width: "100%",
-                border: "1px solid var(--border-color)",
-                background: relayActionDisabled ? "rgba(148, 163, 184, 0.2)" : "var(--accent-color)",
-                color: relayActionDisabled ? "var(--text-secondary)" : "#fff",
-                borderRadius: "10px",
-                padding: "10px 12px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                cursor: relayActionDisabled ? "not-allowed" : "pointer",
-                fontSize: "12px",
-                fontWeight: 600,
-              }}
-            >
-              <span>{relayActionLabel}</span>
-            </button>
-          ) : null
-        ) : relayActionLabel ? (
+        {relayActionLabel ? (
           <button
             type="button"
+            className="file-tree-relay-action"
             disabled={relayActionDisabled}
             onClick={() => onRelayAction?.()}
-            style={{
-              width: "100%",
-              border: "1px solid var(--border-color)",
-              background: relayActionDisabled ? "rgba(148, 163, 184, 0.2)" : "var(--accent-color)",
-              color: relayActionDisabled ? "var(--text-secondary)" : "#fff",
-              borderRadius: "10px",
-              padding: "10px 12px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              cursor: relayActionDisabled ? "not-allowed" : "pointer",
-              fontSize: "12px",
-              fontWeight: 600,
-            }}
           >
             <span>{relayActionLabel}</span>
           </button>
         ) : null}
-        {relayActionHelp ? (
+        {phoneMore?.connection ? <div className="phone-more-connection">
+          <span><i data-state={phoneMore.connection} />{t(`action.ws.${phoneMore.connection}`)}</span>
+          {relayActionHelp && <span>{relayActionHelp}</span>}
+        </div> : relayActionHelp ? (
           <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.5, textAlign: "center" }}>
             {relayActionHelp}
           </div>
+        ) : null}
+        <div className={inPhoneMore ? "phone-more-links" : "file-tree-platform-actions"}>
+
+        {inPhoneMore && remoteProjectPrefix() ? (
+          <a className="phone-more-node" href={hostPath("/")}>{t("fileTree.goHome")}</a>
         ) : null}
         {isNativeApp && onGoHome ? (
           <button
@@ -3473,7 +3655,9 @@ export function FileTree({
             {installHelp}
           </div>
         ) : null}
+        </div>
       </div>
+      </PhoneMoreMount>
       <style>{`
         @keyframes mindfs-update-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes mindfs-bound-pulse {
