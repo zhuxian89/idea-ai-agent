@@ -3,6 +3,7 @@
 ## 当前状态（2026-11-19）
 
 - **独立后台 0.1.51** 已成为默认安装版本，修复手机键盘弹出后遮住远程对话输入框的问题。Mac 节点经 iPhone 实机验收，六个平台共 24 个附件已发布并回读核验。0.1.50 Release 已下架，Git 标签保留。Hostdzire-linux 节点待升级。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.51)
+- **0.1.51 同版重打包**已接入 Relay 公网更新检查。电脑和平板在侧栏底部显示，手机在「更多」显示。待最终附件验证和替换。
 - **IDEA 插件 0.1.27** 已在 GitHub 同版本更新四个平台和通用包。内置后台及远程网页更新已随包发布。已安装 0.1.27 的用户需从磁盘重装并重启 IDEA。[插件下载](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)
 - **IDEA 插件 0.1.28-local.1 macOS arm64 本地测试包**已安装到本机。最终 ZIP 的内置后台通过启动、旧会话和网页资源验证。本机实测切到内置模式及切回独立模式后，均能从远程网页发送消息。[插件 ZIP](../../../build/local-packages/idea-ai-agent-0.1.28-local.1-macos-arm64.zip)
 - **0.1.49 macOS arm64 本地测试包**将手机呼吸点换成 Agent 状态框的边框流光。「更多 → 外观」提供与网页相同的开关、四种效果、配色、自定义颜色、速度、预览与恢复默认。最终包通过 Chrome 和 WebKit 手机视口验证。本机已升级，原地址、7 个项目与网页资源验证通过。用户确认手机流光试用通过。[安装包](../../../build/standalone/0.1.49/local-ai-agent-0.1.49-macos-arm64.sh)

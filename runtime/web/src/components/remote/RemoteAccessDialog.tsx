@@ -67,7 +67,7 @@ export function RemoteAccessDialog({ onClose, projectName = "" }: { onClose: () 
   const [view, setView] = useState<"access" | "settings" | "projects">("access");
   const update = useBackendUpdate(backendReady && isIdeaRuntime && isStandaloneRuntime);
   const browserUpdate = useBrowserUpdate(
-    backendReady && isStandaloneRuntime && !isIdeaRuntime ? status?.service?.version : undefined,
+    backendReady && isStandaloneRuntime && !isIdeaRuntime && status?.service?.platform ? status.service.version : undefined,
     status?.service?.platform,
   );
   const newVersion = isStandaloneRuntime && (isIdeaRuntime ? update.available : browserUpdate.available && !browserUpdate.error);

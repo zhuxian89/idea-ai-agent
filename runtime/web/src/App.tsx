@@ -7174,6 +7174,7 @@ export function App({ onGoHome }: AppProps) {
 
   const [standaloneRemoteOpen, setStandaloneRemoteOpen] = useState(false);
   const standalonePage = isStandaloneRuntime;
+  const publicStandaloneVersion = standalonePage && isRelayNodePage() ? standaloneVersion : undefined;
   const handleRelayAction = useCallback(async () => {
     if (standalonePage) {
       setStandaloneRemoteOpen(true);
@@ -7683,7 +7684,8 @@ export function App({ onGoHome }: AppProps) {
             onProjectTreeTabChange={setProjectTreeTab}
             relayActionLabel={relayActionLabel}
             relayActionDisabled={relayActionDisabled}
-            relayActionHelp={standalonePage && standaloneVersion ? t("standalone.version", { version: standaloneVersion }) : null}
+            relayActionHelp={standalonePage && standaloneVersion && !publicStandaloneVersion ? t("standalone.version", { version: standaloneVersion }) : null}
+            publicStandaloneVersion={publicStandaloneVersion}
             onRelayAction={handleRelayAction}
             relayNodeId={relayStatus?.node_id || ""}
             relayBaseURL={relayStatus?.relay_base_url || ""}

@@ -12,6 +12,7 @@ import { DeviceModeSelect } from "./remoteui/DeviceModeSelect";
 import { GlowSettingsDialog } from "./remoteui/GlowSettingsDialog";
 import { OPEN_AGENT_CONFIG_SWITCH_EVENT } from "./remoteui/RemoteTopBar";
 import { IdeaAgentSettings } from "./IdeaAgentSettings";
+import { RemotePublishedUpdate } from "./remote/RemoteBrowserUpdate";
 import { AGENT_INSTALLATION_CHANGED } from "../services/agentInstallation";
 import { openExternalURL } from "../services/platformNavigation";
 import { isNativeShellRuntime, shouldEnablePWAInstall } from "../services/runtime";
@@ -169,6 +170,7 @@ type FileTreeProps = {
   relayActionLabel?: string | null;
   relayActionDisabled?: boolean;
   relayActionHelp?: string | null;
+  publicStandaloneVersion?: string;
   onRelayAction?: () => void;
   relayNodeId?: string;
   relayBaseURL?: string;
@@ -1088,6 +1090,7 @@ export function FileTree({
   relayActionLabel = null,
   relayActionDisabled = false,
   relayActionHelp = null,
+  publicStandaloneVersion,
   onRelayAction,
   relayNodeId = "",
   relayBaseURL = "",
@@ -3593,6 +3596,7 @@ export function FileTree({
             {relayActionHelp}
           </div>
         ) : null}
+        {publicStandaloneVersion && <RemotePublishedUpdate version={publicStandaloneVersion} />}
         <div className={inPhoneMore ? "phone-more-links" : "file-tree-platform-actions"}>
 
         {inPhoneMore && remoteProjectPrefix() ? (

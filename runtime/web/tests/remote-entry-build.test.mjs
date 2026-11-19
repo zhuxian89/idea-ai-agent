@@ -18,6 +18,7 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
   t.after(() => browser.close());
   const page = await browser.newPage({ locale: "en-US" });
   const errors = [], requests = [];
+  let standalone = false;
   page.on("pageerror", error => errors.push(error.message));
   await page.route("https://entry.test/**", async route => {
     const request = route.request(), url = new URL(request.url());
@@ -39,7 +40,10 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
     }
     const file = api === "/" ? "index.html" : api.slice(1);
     const contentType = file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : file.endsWith(".html") ? "text/html" : "application/octet-stream";
-    return route.fulfill({ contentType, body: await readFile(path.join(outDir, file)) });
+    const body = await readFile(path.join(outDir, file));
+    return route.fulfill({ contentType, body: standalone && file === "index.html"
+      ? body.toString().replace("</head>", '<meta name="local-ai-agent-mode" content="standalone"><meta name="local-ai-agent-version" content="0.1.51"></head>')
+      : body });
   });
   // The Relay homepage and plain project links need no browser pairing data.
   await page.goto("https://entry.test/n/N/p/A/");
@@ -81,6 +85,40 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
   await expect.poll(() => requests.includes("/api/dirs")).toBe(true);
   await expect(page.getByRole("navigation", { name: "Remote project" })).toHaveCount(0);
   assert.deepEqual(errors, []);
+
+  await t.test("public standalone update checks are available on desktop, tablet, and phone", async () => {
+    const versionURL = "https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/standalone/version.txt";
+    let version = "0.1.52";
+    await page.route(versionURL, route => route.fulfill({ contentType: "text/plain", body: version }));
+    standalone = true;
+    for (const [device, width, height] of [["desktop", 1440, 900], ["tablet", 820, 1180], ["phone", 390, 844]]) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`https://entry.test/n/N/p/A/?device=${device}`);
+      if (device === "phone") {
+        await page.getByRole("button", { name: "Sessions", exact: true }).click();
+        await page.getByRole("button", { name: "More", exact: true }).click();
+      }
+      const update = page.getByRole("region", { name: "Standalone updates" });
+      await expect(update.getByText("0.1.51", { exact: true })).toBeVisible();
+      await expect(update.getByRole("status")).toHaveText("New version: 0.1.52");
+      await expect(update.getByRole("button", { name: "Check for updates" })).toBeInViewport();
+      await expect(update.getByRole("link", { name: "View release" })).toHaveAttribute("href", /standalone-v0\.1\.52$/);
+      await page.getByRole("button", { name: "Connect your phone", exact: true }).click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await page.keyboard.press("Escape");
+    }
+    const update = page.getByRole("region", { name: "Standalone updates" });
+    version = "0.1.51";
+    await update.getByRole("button", { name: "Check for updates" }).click();
+    await expect(update.getByRole("status")).toHaveText("Up to date");
+    version = "invalid";
+    await update.getByRole("button", { name: "Check for updates" }).click();
+    await expect(update.getByRole("alert")).toBeVisible();
+    assert.equal(requests.some(url => url.includes("/api/idea/remote")), false);
+    assert.deepEqual(errors, []);
+    standalone = false;
+    await page.unroute(versionURL);
+  });
 
   await t.test("the phone composer follows the visible viewport when a keyboard covers the page", async () => {
     await page.setViewportSize({ width: 430, height: 795 });

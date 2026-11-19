@@ -37,3 +37,13 @@ export async function checkStandaloneRelease(platform: string, signal: AbortSign
   if (!response.ok) throw new Error(`GitHub Releases returned HTTP ${response.status}`);
   return selectStandaloneRelease(await response.json(), platform);
 }
+
+export async function checkPublishedStandaloneVersion(signal: AbortSignal): Promise<string> {
+  const response = await fetch("https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/standalone/version.txt", {
+    signal, cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`Standalone version returned HTTP ${response.status}`);
+  const version = (await response.text()).trim();
+  if (!versionPattern.test(version)) throw new Error("Invalid published standalone version");
+  return version;
+}
