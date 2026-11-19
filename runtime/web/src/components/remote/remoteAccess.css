@@ -65,6 +65,7 @@
 }
 .remote-published-update p { margin: 0; }
 .remote-published-update .remote-note { margin-top: 4px; color: var(--text-secondary); font-size: 12px; }
+.remote-published-update > [role=status] { flex-basis: 100%; margin-top: 0 !important; }
 .remote-published-update > button.remote-text-button {
   min-height: 44px;
   padding: 0 4px;

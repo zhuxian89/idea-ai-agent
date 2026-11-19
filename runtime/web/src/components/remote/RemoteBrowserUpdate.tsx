@@ -36,11 +36,13 @@ export function RemoteBrowserUpdate({ state, version, zh, publicAccess = false }
 }) {
   const label = (cn: string, en: string) => zh ? cn : en;
   const { latest, checking, error, available, check } = state;
+  const status = latest && !error ? <p className={available ? "remote-release" : "remote-note"} role="status">{available ? label(`有新版本 ${latest}`, `New version: ${latest}`) : label("已是最新版本", "Up to date")}</p> : null;
   return <section className={`remote-setting-row remote-update-row${publicAccess ? " remote-published-update" : ""}`} aria-label={label("独立后台更新", "Standalone updates")}>
-    <div className="remote-setting-body"><p>{label("独立后台", "Standalone service")}</p><p className="remote-note remote-version">{version}</p>
-      {latest && !error ? <p className={available ? "remote-release" : "remote-note"} role="status">{available ? label(`有新版本 ${latest}`, `New version: ${latest}`) : label("已是最新版本", "Up to date")}</p> : null}
+    <div className="remote-setting-body">{!publicAccess && <p>{label("独立后台", "Standalone service")}</p>}<p className="remote-note remote-version">{version}</p>
+      {!publicAccess && status}
     </div>
     <button type="button" className="remote-text-button" disabled={checking} onClick={check}>{checking ? label("检查中…", "Checking…") : label("检查更新", "Check for updates")}</button>
+    {publicAccess && status}
     {available && !error ? <div className="remote-update-action">{!publicAccess && <p className="remote-note">{label("在 IDEA 的远程设置中点击更新，即可自动安装。", "Update from IDEA’s remote settings for automatic installation.")}</p>}
       <a href={`https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v${latest}`} target="_blank" rel="noreferrer">{label("查看新版", "View release")}</a></div> : null}
     {error ? <div className="remote-update-error"><p role="alert">{label("无法检查更新，请重试。", "Could not check for updates. Try again.")}</p><details><summary>{label("查看详情", "Details")}</summary><pre>{error}</pre></details></div> : null}
