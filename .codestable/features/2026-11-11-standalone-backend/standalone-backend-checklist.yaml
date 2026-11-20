@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: standalone-browser-self-update
+  description: 网页从现有安装入口直接升级，适用 macOS、Linux、Windows。最终包验证进行中。
+  status: in_progress
 - id: standalone-0151-public-update-entry
   description: Relay 公网页面通过正式安装版本入口检查更新，电脑和平板在侧栏底部、手机在「更多」显示。Chrome、WebKit、Windows PowerShell 5.1 与公开下载验证通过。0.1.51 继续为默认安装版本，新附件已发布。
   status: done

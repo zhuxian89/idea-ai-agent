@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>页面内更新独立后台设计预览</title>
+<style>
+:root{color-scheme:light;--frame:#e1e6ee;--bg:#f3f5f8;--surface:#fff;--sunk:#e9edf3;--hover:#1a2a4a0d;--line:#dfe3ea;--line-strong:#c9d0db;--text:#141a26;--text2:#444f63;--muted:#566175;--accent:#225cdf;--accent-bg:#e6eeff;--accent-line:#bdd0fb;--on-accent:#fff;--green:#0f7a52;--amber:#9e5200;--amber-bg:#fbeed7;--danger:#c0392b;--danger-bg:#fbe5e1;--scrim:#0a102066;--pop-shadow:0 14px 40px #141a2630,0 2px 8px #141a2614;--font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+:root[data-theme="dark"]{color-scheme:dark;--frame:#070a14;--bg:#0a0f1c;--surface:#0e1424;--sunk:#151d32;--hover:#ffffff10;--line:#1d2740;--line-strong:#2c3858;--text:#e6ebf5;--text2:#b2bcd0;--muted:#92a0ba;--accent:#7aa2ff;--accent-bg:#17254a;--accent-line:#2f4a85;--on-accent:#0a0f1c;--green:#62d3a2;--amber:#f0b45c;--amber-bg:#33260f;--danger:#ff9b8c;--danger-bg:#3b1c1a;--scrim:#000a;--pop-shadow:0 16px 44px #000a,0 2px 8px #0006}
+:root[data-theme="meadow"]{color-scheme:light;--frame:#e5d9bd;--bg:#f1ead9;--surface:#fffaf0;--sunk:#e9dfc8;--hover:#3a2e1410;--line:#e2d8c0;--line-strong:#cdbf9e;--text:#1d3033;--text2:#445552;--muted:#5d6b66;--accent:#2d5a32;--accent-bg:#e1ebd3;--accent-line:#b6cd9f;--on-accent:#fff;--green:#2d6a3a;--amber:#8a5a10;--amber-bg:#f5e4bd;--danger:#b23a30;--danger-bg:#f7e0d9;--scrim:#2a200d66;--pop-shadow:0 14px 40px #4a3a1a30}
+:root[data-theme="moss"]{color-scheme:light;--frame:#c7d2ba;--bg:#dde4d1;--surface:#f4f7ee;--sunk:#cfd8c3;--hover:#1d261f12;--line:#c2ccb5;--line-strong:#a9b69a;--text:#1d261f;--text2:#3f4c40;--muted:#4f5d50;--accent:#415b3f;--accent-bg:#d3dec6;--accent-line:#a8bb97;--on-accent:#fff;--green:#2d6a3a;--amber:#7e5612;--amber-bg:#ecdfb6;--danger:#a63a2e;--danger-bg:#f0d9d2;--scrim:#1a221b66;--pop-shadow:0 14px 40px #27332430}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font-family:var(--font);font-size:14px;line-height:1.5;color:var(--text);background:var(--frame);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button,select{font:inherit;color:inherit}button{border:0;background:none;padding:0;cursor:pointer}
+.pbar{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;min-height:44px;padding:6px 16px;background:var(--surface);border-bottom:1px solid var(--line);font-size:12px;color:var(--text2)}
+.pbar strong{color:var(--text);font-size:13px}.pbar .grow{flex:1}
+.pbar label{display:inline-flex;align-items:center;gap:6px}
+.pbar select{height:26px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);padding:0 6px}
+.seg{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--sunk);flex-wrap:wrap}
+.seg button{height:24px;padding:0 10px;border-radius:7px;font-size:12px;color:var(--text2);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--line)}
+.stage{flex:1;overflow:auto;display:flex;justify-content:center;align-items:flex-start;gap:48px;padding:32px 24px;flex-wrap:wrap}
+.col h2{margin:0 0 4px;font-size:14px}.col p.sub{margin:0 0 14px;font-size:12px;color:var(--muted);max-width:300px}
+.note{font-size:12px;color:var(--muted);max-width:300px;margin-top:12px;line-height:1.6}.note b{color:var(--text)}
+
+/* 侧栏页脚：与 system-monitor-v1 一致，宽 260，左右内边距 12，文字缩进 10 */
+.side{position:relative;width:260px;background:var(--frame);border-radius:14px;box-shadow:0 0 0 1px var(--line);display:flex;flex-direction:column;justify-content:flex-end;min-height:420px;overflow:visible}
+.side .fake{flex:1;padding:12px}.side .fake i{display:block;height:28px;border-radius:9px;background:var(--hover);margin-bottom:8px}.side .fake i.s{width:62%;height:20px}
+.foot{padding:10px 12px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.tile{display:grid;grid-template-columns:1fr 1px 1fr;align-items:center;height:52px;border-radius:10px;box-shadow:inset 0 0 0 1px var(--line);padding:0 10px;color:var(--text2)}
+.tile .c{display:flex;align-items:center;gap:8px}.tile .c:last-child{padding-left:12px}
+.tile .r{width:28px;height:28px;border-radius:50%;border:3px solid var(--line-strong);border-top-color:var(--accent);flex:none}
+.tile .tx{display:grid;line-height:1.15}.tile .nm{font-size:11.5px;color:var(--muted)}.tile .v{font-size:15px;font-weight:700;color:var(--text)}
+.tile .vs{width:1px;height:26px;background:var(--line-strong);opacity:.6}
+.qrbtn{height:40px;display:flex;align-items:center;gap:10px;padding:0 9px;border-radius:10px;box-shadow:inset 0 0 0 1px var(--line);font-size:12px;font-weight:600;color:var(--text2)}
+.qrbtn .qr{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.qrbtn .lb{flex:1}.qrbtn .go{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;opacity:.75}
+.meta{margin-top:4px;padding:8px 10px 0;border-top:1px solid var(--line);display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.meta .r{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px}
+.meta .chk{color:var(--accent);font-weight:600}
+.meta .ok{justify-content:flex-start;gap:6px}.meta .ok i{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.meta .newv{justify-content:flex-start;gap:6px;color:var(--accent)}.meta .newv i{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+
+/* ===== 本设计：有新版本时的更新行 ===== */
+.upd{display:grid;gap:8px;padding:6px 0 2px}
+.upd .row{display:flex;gap:8px;align-items:center}
+.btn{height:32px;padding:0 12px;border-radius:9px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.btn.pri{flex:1;background:var(--accent);color:var(--on-accent)}.btn.pri:hover{filter:brightness(1.08)}
+.btn.sec{box-shadow:inset 0 0 0 1px var(--line-strong);color:var(--text2)}.btn.sec:hover{background:var(--hover);color:var(--text)}
+.btn.ghost{color:var(--muted);padding:0 4px}
+.upd .small{font-size:11.5px;color:var(--muted);line-height:1.5}
+.bar{height:4px;border-radius:2px;background:var(--line-strong);overflow:hidden;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;width:36%;border-radius:2px;background:var(--accent);animation:run 1.6s ease-in-out infinite}
+@keyframes run{0%{left:-36%}100%{left:100%}}
+.state{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text2);line-height:1.5}
+.state svg{width:15px;height:15px;flex:none;margin-top:2px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.state.ok{color:var(--green)}.state.bad{color:var(--danger)}
+.errbox{border-radius:10px;background:var(--danger-bg);color:var(--danger);padding:8px 10px;font-size:12px;line-height:1.5}
+.errbox details{margin-top:6px;color:var(--text2)}.errbox summary{cursor:pointer;color:var(--danger)}
+.errbox pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font:11px var(--mono);color:var(--text2)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line-strong);border-top-color:var(--accent);animation:sp 1s linear infinite;flex:none;margin-top:3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* 确认弹窗 */
+.scrim{position:absolute;inset:-60px -40px -20px -40px;background:var(--scrim);border-radius:18px;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px}
+.dlg{width:100%;max-width:300px;background:var(--surface);border-radius:16px;box-shadow:0 0 0 1px var(--line),var(--pop-shadow);padding:18px;display:grid;gap:12px}
+.dlg h3{margin:0;font-size:15px}.dlg p{margin:0;font-size:13px;color:var(--text2);line-height:1.6}
+.dlg ul{margin:0;padding-left:18px;font-size:12.5px;color:var(--text2);line-height:1.7}
+.dlg .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}.dlg .btn{height:34px;padding:0 14px}
+.dlg .btn.pri{flex:none}
+
+@media (prefers-reduced-motion:reduce){.bar i,.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="pbar" role="toolbar" aria-label="预览控制">
+  <strong>页面内更新</strong><span>设计预览 · 示例数据</span><span class="grow"></span>
+  <span class="seg" id="seg" role="group" aria-label="状态">
+    <button type="button" data-v="latest" aria-pressed="false">已是最新</button>
+    <button type="button" data-v="available" aria-pressed="true">有新版本</button>
+    <button type="button" data-v="confirm" aria-pressed="false">确认更新</button>
+    <button type="button" data-v="running" aria-pressed="false">更新中</button>
+    <button type="button" data-v="reconnect" aria-pressed="false">重新连接</button>
+    <button type="button" data-v="done" aria-pressed="false">完成</button>
+    <button type="button" data-v="failed" aria-pressed="false">失败</button>
+  </span>
+  <label>主题 <select id="selTheme" aria-label="主题"><option value="light">浅色模式</option><option value="dark">深色模式</option><option value="meadow">翠谷金光</option><option value="moss">苔痕绿影</option><option value="system">跟随系统</option></select></label>
+</div>
+<div class="stage" id="stage"></div>
+<script>
+const $=s=>document.querySelector(s);
+const QR='<svg class="qr" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.4"/><rect x="14" y="3" width="7" height="7" rx="1.4"/><rect x="3" y="14" width="7" height="7" rx="1.4"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h3M20 17v4"/></svg>';
+const GO='<svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+const I={ok:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>',bad:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4zM12 10v4M12 17h.01"/></svg>'};
+function foot(inner){
+  return `<div class="foot"><div class="tile"><span class="c"><span class="r"></span><span class="tx"><span class="nm">CPU</span><span class="v">12%</span></span></span><span class="vs"></span><span class="c"><span class="r" style="border-top-color:var(--accent)"></span><span class="tx"><span class="nm">内存</span><span class="v">65%</span></span></span></div><div class="qrbtn">${QR}<span class="lb">手机扫码连接</span>${GO}</div><div class="meta">${inner}</div></div>`;
+}
+const fake='<div class="fake"><i></i><i class="s"></i><i class="s"></i><i></i></div>';
+const rows={
+  latest:`<div class="r"><span>0.1.51</span><button class="chk" type="button">检查更新</button></div><div class="r ok"><i></i><span>已是最新版本</span></div>`,
+  available:`<div class="r"><span>0.1.51</span><button class="chk" type="button">检查更新</button></div><div class="r newv"><i></i><span>有新版本 0.1.52</span></div><div class="upd"><div class="row"><button class="btn pri" type="button">立即更新</button><button class="btn sec" type="button">查看新版</button></div><div class="small">更新会重启后台，进行中的会话会中断，聊天记录保留。</div></div>`,
+  running:`<div class="r"><span>0.1.51</span><span></span></div><div class="upd"><div class="state"><span class="spin"></span><span>正在更新到 0.1.52…<br><span class="small">下载并校验安装包，然后重启后台，通常不到一分钟。</span></span></div><div class="bar"><i></i></div></div>`,
+  reconnect:`<div class="r"><span>0.1.51</span><span></span></div><div class="upd"><div class="state"><span class="spin"></span><span>后台正在重启，页面会自动重新连接…</span></div><div class="bar"><i></i></div></div>`,
+  done:`<div class="r"><span>0.1.52</span><button class="chk" type="button">检查更新</button></div><div class="upd"><div class="state ok">${I.ok}<span>已更新到 0.1.52，聊天记录已保留。</span></div></div>`,
+  failed:`<div class="r"><span>0.1.51</span><button class="chk" type="button">检查更新</button></div><div class="upd"><div class="errbox"><b>更新没有完成，已保留原来的 0.1.51。</b><details><summary>查看详情</summary><pre>SHA-256 verification failed;\ninstallation was not changed.</pre></details></div><div class="row"><button class="btn pri" type="button">重试</button><button class="btn sec" type="button">查看新版</button></div></div>`,
+};
+function col(title,sub,state,extra=''){
+  const base=state==='confirm'?'available':state;
+  const dlg=state==='confirm'?`<div class="scrim"><div class="dlg" role="dialog" aria-label="更新到 0.1.52"><h3>更新到 0.1.52？</h3><p>更新会重启这台电脑上的后台：</p><ul><li>正在运行的会话会中断</li><li>聊天记录、端口和远程绑定保留</li><li>失败时自动恢复到 0.1.51</li></ul><p style="font-size:12px;color:var(--muted)">更新期间这个页面会断开，恢复后自动重新连接。</p><div class="acts"><button class="btn sec" type="button">取消</button><button class="btn pri" type="button">更新并重启</button></div></div></div>`:'';
+  return `<div class="col"><h2>${title}</h2><p class="sub">${sub}</p><div class="side">${fake}${foot(rows[base])}${dlg}</div>${extra}</div>`;
+}
+let state='available',theme='dark';
+function render(){
+  $('#stage').innerHTML=
+   col('现在','只能“查看新版”，要回电脑上敲命令。','available').replace('<div class="upd"><div class="row"><button class="btn pri" type="button">立即更新</button><button class="btn sec" type="button">查看新版</button></div><div class="small">更新会重启后台，进行中的会话会中断，聊天记录保留。</div></div>','<div class="r"><a style="color:var(--accent);text-decoration:underline;font-size:13px">查看新版</a></div>')
+   + col('调整后','在页面上直接更新。',state,`<div class="note"><b>流程</b><br>① 发现新版本：主按钮“立即更新”，“查看新版”降为次按钮。<br>② 点“立即更新”先弹确认，说明会中断会话、数据保留、失败会恢复。<br>③ 更新中：进度条加文字，页面随后断开并自动重连。<br>④ 完成：版本号变新，绿色提示；失败：红色提示，写明“已保留原来的版本”，可重试或展开详情。<br>⑤ 只有拥有这台电脑访问权限的人才看得到按钮，和其他设置一样受登录保护。</div>`);
+}
+const mq=matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(v){theme=v;$('#selTheme').value=v;document.documentElement.dataset.theme=v==='system'?(mq.matches?'dark':'light'):v}
+$('#selTheme').addEventListener('change',e=>applyTheme(e.target.value));mq.addEventListener('change',()=>{if(theme==='system')applyTheme('system')});
+$('#seg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;state=b.dataset.v;[...$('#seg').children].forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
+const P=new URL(location).searchParams;
+if(['latest','available','confirm','running','reconnect','done','failed'].includes(P.get('state')))state=P.get('state');
+[...$('#seg').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===state));
+applyTheme(['light','dark','meadow','moss','system'].includes(P.get('theme'))?P.get('theme'):'dark');
+render();
+</script>
+</body>
+</html>

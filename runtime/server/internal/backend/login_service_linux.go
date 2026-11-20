@@ -135,6 +135,7 @@ func writeServiceEnvironment(file, dir string) error {
 		"HOME", "PATH", "XDG_CONFIG_HOME", "MINDFS_RELAY_BASE_URL", "MINDFS_STATIC_DIR", "MINDFS_AGENTS_CONFIG",
 		"CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "GEMINI_API_KEY",
 		"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+		"LOCAL_AI_AGENT_INSTALL_SCRIPT_BASE_URL", "LOCAL_AI_AGENT_DOWNLOAD_BASE_URL",
 	} {
 		if value, ok := os.LookupEnv(key); ok {
 			put(key, value)

@@ -44,7 +44,7 @@ func (s loginService) write(dir, executable string, args []string) error {
 		value(arg)
 	}
 	body.WriteString("</array><key>EnvironmentVariables</key><dict>")
-	for _, key := range []string{"HOME", "PATH", "MINDFS_RELAY_BASE_URL", "MINDFS_STATIC_DIR", "CODEX_HOME", "CLAUDE_CONFIG_DIR"} {
+	for _, key := range []string{"HOME", "PATH", "MINDFS_RELAY_BASE_URL", "MINDFS_STATIC_DIR", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "LOCAL_AI_AGENT_INSTALL_SCRIPT_BASE_URL", "LOCAL_AI_AGENT_DOWNLOAD_BASE_URL"} {
 		if text, ok := os.LookupEnv(key); ok {
 			fmt.Fprintf(&body, "<key>%s</key>", key)
 			value(text)

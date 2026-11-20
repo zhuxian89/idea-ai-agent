@@ -28,7 +28,7 @@ func writeScheduledTask(dir, kind, executable string, args []string) error {
 		logName = "standalone.log"
 	}
 	environment := map[string]string{"IDE_AGENT_REMOTE_HOST_DIR": dir}
-	for _, key := range []string{"PATH", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "MINDFS_RELAY_BASE_URL", "MINDFS_STATIC_DIR", "CODEX_HOME", "CLAUDE_CONFIG_DIR"} {
+	for _, key := range []string{"PATH", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "MINDFS_RELAY_BASE_URL", "MINDFS_STATIC_DIR", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "LOCAL_AI_AGENT_INSTALL_SCRIPT_BASE_URL", "LOCAL_AI_AGENT_DOWNLOAD_BASE_URL"} {
 		if value, ok := os.LookupEnv(key); ok {
 			environment[key] = value
 		}

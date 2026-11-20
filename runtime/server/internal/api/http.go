@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"mindfs/server/internal/agent"
@@ -34,6 +35,7 @@ import (
 	"mindfs/server/internal/gitview"
 	"mindfs/server/internal/preferences"
 	"mindfs/server/internal/relay"
+	"mindfs/server/internal/selfupdate"
 	"mindfs/server/internal/session"
 
 	"github.com/go-chi/chi/v5"
@@ -47,6 +49,9 @@ type HTTPHandler struct {
 	LocalCLIToken    string
 	LocalAccessToken string
 	Standalone       bool
+	selfUpdateOnce   sync.Once
+	selfUpdate       *selfupdate.Updater
+	selfUpdateErr    error
 	RelayStatus      func(context.Context) (relay.Status, error)
 }
 
@@ -385,6 +390,8 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Get("/api/local_dirs", h.protectedEndpoint(h.handleLocalDirs))
 	r.Get("/api/relay/status", h.handleRelayStatus)
 	r.Get("/api/system/stats", h.protectedEndpoint(h.handleSystemStats))
+	r.Get("/api/standalone/update", h.protectedEndpoint(h.handleStandaloneUpdateStatus))
+	r.Post("/api/standalone/update", h.protectedEndpoint(h.handleStandaloneUpdateStart))
 	r.Post("/api/relay/bind/start", h.protectedEndpoint(h.handleRelayBindStart))
 	r.Get("/api/token-station/userinfo", h.protectedEndpoint(h.handleTokenStationUserInfo))
 	r.Post("/api/token-station/bind/start", h.protectedEndpoint(h.handleTokenStationBindStart))

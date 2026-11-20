@@ -5,6 +5,13 @@ on:
       standalone_version:
         description: Standalone version whose draft release holds the packages
         required: true
+      candidate_release:
+        description: Draft release tag when replacing an existing public version
+        required: false
+      verify_self_update:
+        description: Verify the browser-triggered update using the final package
+        type: boolean
+        default: false
   push:
     branches: ['standalone-*']
     paths:
@@ -25,12 +32,14 @@ jobs:
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RELEASE: ${{ inputs.candidate_release }}
         run: |
           $version = $env:VERSION -replace '^standalone-', ''
           $out = Join-Path $PWD 'candidate'
           New-Item -ItemType Directory -Path $out | Out-Null
           $name = "local-ai-agent-$version-windows-amd64.zip"
-          gh release download "standalone-v$version" --repo $env:GITHUB_REPOSITORY --dir $out --pattern $name --pattern "$name.sha256"
+          $release = if ($env:CANDIDATE_RELEASE) { $env:CANDIDATE_RELEASE } else { "standalone-v$version" }
+          gh release download $release --repo $env:GITHUB_REPOSITORY --dir $out --pattern $name --pattern "$name.sha256"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $expected = ((Get-Content -LiteralPath (Join-Path $out "$name.sha256") -Raw).Trim() -split '\s+')[0]
           $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $out $name)).Hash
@@ -42,3 +51,13 @@ jobs:
         run: |
           & ./scripts/standalone/verify-windows-standalone-package.ps1 -Zip $env:ZIP -Version $env:PACKAGE_VERSION
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/setup-go@v5
+        if: ${{ inputs.verify_self_update }}
+        with:
+          go-version-file: runtime/go.mod
+          cache-dependency-path: runtime/go.sum
+      - name: Verify the scheduled self-update with Windows PowerShell 5.1
+        if: ${{ inputs.verify_self_update }}
+        shell: powershell
+        run: |
+          & ./scripts/standalone/verify-windows-self-update.ps1 -Zip $env:ZIP -Version $env:PACKAGE_VERSION

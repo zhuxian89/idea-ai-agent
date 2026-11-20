@@ -79,6 +79,13 @@ func StartRemoteGateway(ctx context.Context, dir, addr, version, token string, d
 			http.Error(w, "remote access disabled", 503)
 			return
 		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/standalone/update" {
+			relayOrigin, err := url.Parse(manager.Status().RelayBaseURL)
+			if err != nil || relayOrigin.Host == "" || r.Header.Get("Origin") != relayOrigin.Scheme+"://"+relayOrigin.Host {
+				http.Error(w, "invalid update origin", http.StatusForbidden)
+				return
+			}
+		}
 		coreProxy(dir, true).ServeHTTP(w, r)
 	})}
 	defer remoteServer.Close()

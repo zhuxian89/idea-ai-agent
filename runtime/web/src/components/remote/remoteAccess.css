@@ -132,3 +132,46 @@
 
 [data-theme="dark"] .remote-access-panel { --remote-danger:#ffa6a6; }
 .remote-access-panel > p[role="status"] { margin-top:12px; }
+
+/* ---------- 页面内更新独立后台（设计稿 docs/design/standalone-update-v1） ---------- */
+.remote-update-action { --upd-ok: #2fb67c; --upd-bad: #e5534b; display: grid; gap: 8px; }
+.remote-update-controls { display: grid; gap: 8px; }
+.remote-update-buttons { display: flex; gap: 8px; align-items: center; }
+.remote-update-primary, .remote-update-secondary {
+  height: 32px; padding: 0 12px; border-radius: 9px; font: inherit; font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; cursor: pointer; text-decoration: none; box-sizing: border-box;
+}
+.remote-update-primary { flex: 1; border: 0; background: var(--accent-color); color: #fff; }
+.remote-update-primary:hover { filter: brightness(1.08); }
+.remote-update-secondary { border: 0; background: transparent; color: var(--text-secondary); box-shadow: inset 0 0 0 1px var(--border-color); }
+.remote-update-secondary:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
+.remote-update-small { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); }
+.remote-update-progress { display: grid; gap: 8px; }
+.remote-update-state { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.remote-update-state svg { width: 15px; height: 15px; flex: none; margin-top: 2px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.remote-update-ok { color: var(--upd-ok); }
+.remote-update-spin { width: 14px; height: 14px; margin-top: 3px; flex: none; border-radius: 50%; border: 2px solid var(--border-color); border-top-color: var(--accent-color); animation: remote-update-spin 1s linear infinite; }
+@keyframes remote-update-spin { to { transform: rotate(360deg); } }
+.remote-update-bar { height: 4px; border-radius: 2px; background: var(--border-color); overflow: hidden; position: relative; }
+.remote-update-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 36%; border-radius: 2px; background: var(--accent-color); animation: remote-update-run 1.6s ease-in-out infinite; }
+@keyframes remote-update-run { 0% { left: -36%; } 100% { left: 100%; } }
+.remote-update-failure { border-radius: 10px; padding: 8px 10px; font-size: 12px; line-height: 1.5; color: var(--upd-bad); background: color-mix(in srgb, var(--upd-bad) 12%, transparent); }
+.remote-update-failure p { margin: 4px 0 0; color: var(--text-secondary); }
+.remote-update-failure details { margin-top: 6px; color: var(--text-secondary); }
+.remote-update-failure summary { cursor: pointer; color: var(--upd-bad); }
+.remote-update-failure pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 160px; overflow: auto; }
+.remote-update-dialog {
+  width: min(320px, calc(100vw - 32px)); box-sizing: border-box; padding: 18px; border: 1px solid var(--border-color); border-radius: 16px;
+  background: var(--panel-bg); color: var(--text-primary); box-shadow: 0 18px 44px rgba(15, 23, 42, 0.3);
+}
+.remote-update-dialog::backdrop { background: rgba(10, 16, 32, 0.45); }
+.remote-update-dialog[open] { display: grid; gap: 10px; }
+.remote-update-dialog h3 { margin: 0; font-size: 15px; }
+.remote-update-dialog p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+.remote-update-dialog ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.7; color: var(--text-secondary); }
+.remote-update-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+.remote-update-dialog-actions .remote-update-primary { flex: none; height: 34px; padding: 0 14px; }
+.remote-update-dialog-actions .remote-update-secondary { height: 34px; padding: 0 14px; }
+@media (prefers-reduced-motion: reduce) {
+  .remote-update-spin, .remote-update-bar i { animation: none; }
+}
