@@ -47,8 +47,7 @@ export type UpdateEvent =
   | { type: "status"; status: UpdateStatus; pageVersion?: string }
   | { type: "unsupported" }
   | { type: "unreachable"; at: number }
-  | { type: "startFailed"; error: string }
-  | { type: "dismiss" };
+  | { type: "startFailed"; error: string };
 
 /** 页面上的更新状态机，纯函数，方便测试。 */
 export function nextUpdateUi(ui: UpdateUi, event: UpdateEvent): UpdateUi {
@@ -75,7 +74,5 @@ export function nextUpdateUi(ui: UpdateUi, event: UpdateEvent): UpdateUi {
     }
     case "startFailed":
       return { ...ui, step: "failed", error: event.error, log: "", lostAt: 0 };
-    case "dismiss":
-      return ui.step === "failed" ? { ...ui, step: "idle", error: "", log: "" } : ui;
   }
 }

@@ -72,11 +72,10 @@ test('a lost connection while nothing is updating changes nothing', () => {
   assert.equal(next(idle, { type: 'unreachable', at: 5 }), idle);
 });
 
-test('a failed update shows the installer output and can be dismissed for a retry', () => {
+test('a failed update shows the installer output and retains its retry version', () => {
   let ui = next(start, status('failed', { target: '0.1.53', error: 'the installer exited with code 1', log: 'cp: NOTICE.md: No such file' }));
   assert.deepEqual([ui.step, ui.error, ui.log], ['failed', 'the installer exited with code 1', 'cp: NOTICE.md: No such file']);
-  ui = next(ui, { type: 'dismiss' });
-  assert.deepEqual([ui.step, ui.error], ['idle', '']);
+  assert.equal(ui.target, '0.1.53');
   ui = next(start, { type: 'startFailed', error: 'HTTP 409' });
   assert.deepEqual([ui.step, ui.error], ['failed', 'HTTP 409']);
 });

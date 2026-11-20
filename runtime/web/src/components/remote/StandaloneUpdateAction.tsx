@@ -43,7 +43,7 @@ export function useStandaloneUpdate(pageVersion: string) {
   const start = (version: string) => startUpdate(version)
     .then((status) => dispatch({ type: "status", status, pageVersion }))
     .catch((cause) => dispatch({ type: "startFailed", error: cause instanceof Error ? cause.message : String(cause) }));
-  return { ui, start, dismiss: () => dispatch({ type: "dismiss" }) };
+  return { ui, start };
 }
 
 type Props = {
@@ -53,12 +53,11 @@ type Props = {
   available: boolean;
   zh: boolean;
   onStart: (version: string) => void;
-  onDismiss: () => void;
   releaseURL: string;
 };
 
 /** 有新版本时的“立即更新”，以及更新中、完成、失败的状态。设计稿见 docs/design/standalone-update-v1。 */
-export function StandaloneUpdateAction({ ui, latest, available, zh, onStart, onDismiss, releaseURL }: Props) {
+export function StandaloneUpdateAction({ ui, latest, available, zh, onStart, releaseURL }: Props) {
   const label = (cn: string, en: string) => (zh ? cn : en);
   const dialog = useRef<HTMLDialogElement>(null);
   const [asking, setAsking] = useState(false);
@@ -91,6 +90,7 @@ export function StandaloneUpdateAction({ ui, latest, available, zh, onStart, onD
     );
   }
   const failed = ui.step === "failed";
+  const target = failed && ui.target ? ui.target : latest;
   const reconnectLost = failed && ui.error === "reconnect_timeout";
   return (
     <div className="remote-update-controls">
@@ -108,7 +108,7 @@ export function StandaloneUpdateAction({ ui, latest, available, zh, onStart, onD
       ) : null}
       {available || failed ? (
         <div className="remote-update-buttons">
-          <button type="button" className="remote-update-primary" onClick={() => { onDismiss(); setAsking(true); }}>
+          <button type="button" className="remote-update-primary" disabled={!target} onClick={() => setAsking(true)}>
             {failed ? label("重试", "Retry") : label("立即更新", "Update now")}
           </button>
           <a className="remote-update-secondary" href={releaseURL} target="_blank" rel="noreferrer">{label("查看新版", "View release")}</a>
@@ -118,7 +118,7 @@ export function StandaloneUpdateAction({ ui, latest, available, zh, onStart, onD
         <p className="remote-update-small">{label("更新会重启后台，进行中的会话会中断，聊天记录保留。", "Updating restarts the backend. Running sessions are interrupted; chats are kept.")}</p>
       ) : null}
       <dialog ref={dialog} className="remote-update-dialog" aria-labelledby="remote-update-title" onClose={() => setAsking(false)} onCancel={() => setAsking(false)}>
-        <h3 id="remote-update-title">{label(`更新到 ${latest}？`, `Update to ${latest}?`)}</h3>
+        <h3 id="remote-update-title">{label(`更新到 ${target}？`, `Update to ${target}?`)}</h3>
         <p>{label("更新会重启这台电脑上的后台：", "Updating restarts the backend on this computer:")}</p>
         <ul>
           <li>{label("正在运行的会话会中断", "Running sessions are interrupted")}</li>
@@ -128,7 +128,7 @@ export function StandaloneUpdateAction({ ui, latest, available, zh, onStart, onD
         <p className="remote-update-small">{label("更新期间这个页面会断开，恢复后自动重新连接。", "This page disconnects during the update and reconnects afterwards.")}</p>
         <div className="remote-update-dialog-actions">
           <button type="button" className="remote-update-secondary" onClick={() => setAsking(false)}>{label("取消", "Cancel")}</button>
-          <button type="button" className="remote-update-primary" onClick={() => { setAsking(false); onStart(latest); }}>{label("更新并重启", "Update and restart")}</button>
+          <button type="button" className="remote-update-primary" onClick={() => { setAsking(false); onStart(target); }}>{label("更新并重启", "Update and restart")}</button>
         </div>
       </dialog>
     </div>

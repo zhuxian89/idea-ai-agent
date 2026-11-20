@@ -47,7 +47,7 @@ export function RemoteBrowserUpdate({ state, version, zh, publicAccess = false }
     {publicAccess && status}
     {update.ui.supported && (update.ui.step !== "idle" || (available && !error)) ? (
       <div className="remote-update-action">
-        <StandaloneUpdateAction ui={update.ui} latest={latest} available={available && !error} zh={zh} onStart={update.start} onDismiss={update.dismiss} releaseURL={releaseURL} />
+        <StandaloneUpdateAction ui={update.ui} latest={latest} available={available && !error} zh={zh} onStart={update.start} releaseURL={releaseURL} />
       </div>
     ) : available && !error ? <div className="remote-update-action">{!publicAccess && <p className="remote-note">{label("在 IDEA 的远程设置中点击更新，即可自动安装。", "Update from IDEA’s remote settings for automatic installation.")}</p>}
       <a href={releaseURL} target="_blank" rel="noreferrer">{label("查看新版", "View release")}</a></div> : null}
