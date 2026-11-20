@@ -28,6 +28,9 @@
 
 ## 待验证与待决定
 
+- **Agent 装完仍显示“需要安装”（源码已改，未打包，未提交）**：用户在 Windows 上点击 Agent 安装按钮装 Claude Code，官方安装器把程序放进 `%USERPROFILE%\.local\bin` 并提示它不在 PATH 里；后台只用自己进程的 PATH 查找（`agent/probe.go`），独立后台的 PATH 是安装时的快照，所以找不到。已改为后台启动时把用户目录（Windows：`.local\bin`、`%APPDATA%\npm`、`%LOCALAPPDATA%\agy\bin`；macOS：`~/.local/bin`、`/opt/homebrew/bin`、`/usr/local/bin`；Linux：`~/.local/bin`、`/usr/local/bin`）追加到 PATH 末尾（`agent/userpath.go`，在 `app/server.go` 创建 Agent 池前调用），目录尚不存在也加入，保持用户原有顺序。测试覆盖“启动后才装进 `~/.local/bin` 的程序能被探测到”，去掉修复后该测试失败；**未在 Windows 实机验证**。同一条输出里的 `鈥�` 乱码未处理：官方引导脚本本身是纯 ASCII，这些符号由它下载的 `claude` 程序打印，是哪一层把 UTF-8 当 GBK 读还没定位，需要 Windows 环境复现。
+- **左下角电脑状态（源码完成，未打包，未提交）**：左侧栏左下角、“手机扫码连接”按钮上方显示这台电脑的 CPU 与内存（圆环、数字，点开是详情与最近一分钟走势），手机上不显示，读取失败时不显示；设计稿 `docs/design/system-monitor-v1`。后端新增 `GET /api/system/stats`（`runtime/server/internal/sysstats`）和依赖 `gopsutil/v4 v4.26.5`（选这个版本是因为新版会把 `go.mod` 的 Go 要求从 1.25 抬到 1.26），许可证文本已加入独立包与插件运行时的 `licenses/`。Go 全量测试、前端类型检查和 12 项新测试通过；用打好的 macOS 包在隔离实例里经 Chromium 验证了位置、展开收起、轮询频率、四种主题和 iPhone/Pixel 隐藏。**未验证**：经 Relay 的公网页面、Linux 与 Windows 上的实际读数、真实 Safari。
+- **root 运行的后台无法启动 Claude Code（源码已改，未打包）**：Claude Code 在 uid 0 下拒绝 `--allow-dangerously-skip-permissions` 和 `bypassPermissions`，后台等不到初始化响应，报 `initialization failed: context deadline exceeded`。已改为后台以 root 运行时给 Claude Code 补环境变量 `IS_SANDBOX=1`（`runtime/server/internal/agent/claude/native_options.go`），用户已在 Linux root 环境确认该变量有效。单元测试通过；用真实 root 进程的测试在 macOS 上跳过，未在 Linux root 容器或真机用我们的包复验。`IS_SANDBOX` 是 Claude Code 未文档化的开关，升级 Claude Code 后可能失效。
 - Windows 实机：全新安装的计划任务、登录自启和重启接入。GitHub Actions 已在 Windows PowerShell 5.1 验证包内安装脚本、计划任务注册、升级与失败恢复，但不含真实登录。
 - Linux 真机：用 0.1.39 复跑 systemd 开机自启。macOS amd64、Linux amd64、Windows ARM64 只核对了架构。
 - Codex 刷新自动升级和独立后台完整重启：自动化与隔离验证通过，真实升级刷新与 IDEA 多项目重连待用户验收。
