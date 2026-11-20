@@ -155,6 +155,12 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 	if relayBaseURL == "" {
 		relayBaseURL = agentConfig.RelayBaseURL
 	}
+	// The service's PATH is a snapshot from when it was installed; Agent installers use per-user
+	// directories that are often missing from it. A failure here only means detection and launches
+	// rely on the PATH as it is, so it must not stop the backend.
+	if err := agent.AddUserBinDirsToPath(); err != nil {
+		log.Printf("[agent] could not add per-user bin directories to PATH: %v", err)
+	}
 	agentPool := agent.NewPool(agentConfig)
 	var services *api.AppContext
 	defer func() {
