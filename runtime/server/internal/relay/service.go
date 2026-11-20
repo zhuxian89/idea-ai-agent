@@ -608,6 +608,7 @@ func prepareLocalProxyHeaders(outbound, original *http.Request, targetURL *url.U
 	if original.URL != nil && original.URL.Scheme != "" {
 		outbound.Header.Set("X-Forwarded-Proto", original.URL.Scheme)
 	}
+	outbound.Header.Del("X-Forwarded-Origin")
 	if origin := strings.TrimSpace(original.Header.Get("Origin")); origin != "" {
 		outbound.Header.Set("X-Forwarded-Origin", origin)
 		if localOrigin := originFromURL(targetURL); localOrigin != "" {

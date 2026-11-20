@@ -81,7 +81,7 @@ func StartRemoteGateway(ctx context.Context, dir, addr, version, token string, d
 		}
 		if r.Method == http.MethodPost && r.URL.Path == "/api/standalone/update" {
 			relayOrigin, err := url.Parse(manager.Status().RelayBaseURL)
-			if err != nil || relayOrigin.Host == "" || r.Header.Get("Origin") != relayOrigin.Scheme+"://"+relayOrigin.Host {
+			if err != nil || relayOrigin.Host == "" || r.Header.Get("X-Forwarded-Origin") != relayOrigin.Scheme+"://"+relayOrigin.Host {
 				http.Error(w, "invalid update origin", http.StatusForbidden)
 				return
 			}
