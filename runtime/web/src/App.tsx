@@ -117,6 +117,7 @@ import {
   protectedAPIReady,
 } from "./services/api";
 import { appPath, appURL, isRelayNodePage } from "./services/base";
+import { standaloneUpdateInProgress } from "./services/standaloneUpdate";
 import {
   bootstrapService,
   type BootstrapState,
@@ -1421,12 +1422,13 @@ export function App({ onGoHome }: AppProps) {
   }, []);
 
   const handleRelayWebSocketClosed = useCallback(async () => {
-    if (!isRelayNodePage() || relayWSAuthCheckRef.current) {
+    if (!isRelayNodePage() || relayWSAuthCheckRef.current || standaloneUpdateInProgress()) {
       return;
     }
     relayWSAuthCheckRef.current = true;
     try {
       const response = await fetch("/api/auth/me", { cache: "no-cache" });
+      if (standaloneUpdateInProgress()) return;
       if (!response.ok) {
         redirectToRelayLogin();
         return;
@@ -1441,6 +1443,7 @@ export function App({ onGoHome }: AppProps) {
           Accept: "application/json",
         },
       });
+      if (standaloneUpdateInProgress()) return;
       if (
         nodeResponse.status === 403 ||
         nodeResponse.status === 404 ||
@@ -1459,7 +1462,7 @@ export function App({ onGoHome }: AppProps) {
 
   const handleRelayNavigationFailure = useCallback(
     async (status: number, errorCode?: string | null) => {
-      if (!isRelayPWAContext()) {
+      if (!isRelayPWAContext() || standaloneUpdateInProgress()) {
         return false;
       }
       const code = String(errorCode || "").trim();

@@ -11,16 +11,31 @@ export type UpdateStatus = {
   log?: string;
 };
 
-export function fetchUpdateStatus(): Promise<UpdateStatus> {
-  return protectedJSON<UpdateStatus>(appPath("/api/standalone/update"), { cache: "no-store" });
+let updatingUntil = 0;
+
+export function standaloneUpdateInProgress(): boolean {
+  return Date.now() < updatingUntil;
 }
 
-export function startUpdate(version: string): Promise<UpdateStatus> {
-  return protectedJSON<UpdateStatus>(appPath("/api/standalone/update"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ version }),
-  });
+export async function fetchUpdateStatus(): Promise<UpdateStatus> {
+  const status = await protectedJSON<UpdateStatus>(appPath("/api/standalone/update"), { cache: "no-store" });
+  if (status.phase === "installing") updatingUntil = Date.now() + RECONNECT_LIMIT_MS;
+  if (status.phase === "done" || status.phase === "failed") updatingUntil = 0;
+  return status;
+}
+
+export async function startUpdate(version: string): Promise<UpdateStatus> {
+  updatingUntil = Date.now() + RECONNECT_LIMIT_MS;
+  try {
+    return await protectedJSON<UpdateStatus>(appPath("/api/standalone/update"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version }),
+    });
+  } catch (error) {
+    updatingUntil = 0;
+    throw error;
+  }
 }
 
 /** 后台重启期间页面连不上；超过这个时间还连不上就按失败处理，提示用户去那台电脑上查看。 */
