@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -27,7 +28,11 @@ exit "$code"`
 // launchDetached runs the install command outside this process. The command stops this service,
 // so it must not be a child that dies with it.
 func launchDetached(p plan) error {
-	args := []string{"-c", wrapperScript, "sh", p.ScriptURL, p.Version, p.ExitFile}
+	runner := filepath.Join(p.WorkDir, "run.sh")
+	if err := os.WriteFile(runner, []byte(wrapperScript), 0o600); err != nil {
+		return err
+	}
+	args := []string{runner, p.ScriptURL, p.Version, p.ExitFile}
 	if started, err := launchSystemd(p, args); started || err != nil {
 		return err
 	}

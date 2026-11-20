@@ -61,3 +61,25 @@ jobs:
         shell: powershell
         run: |
           & ./scripts/standalone/verify-windows-self-update.ps1 -Zip $env:ZIP -Version $env:PACKAGE_VERSION
+  linux-systemd-self-update:
+    if: ${{ inputs.verify_self_update }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.standalone_version }}
+      CANDIDATE_RELEASE: ${{ inputs.candidate_release }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: runtime/go.mod
+          cache-dependency-path: runtime/go.sum
+      - name: Verify the final Linux package through systemd
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release=${CANDIDATE_RELEASE:-standalone-v$VERSION}
+          archive=local-ai-agent-$VERSION-linux-amd64.tar.gz
+          gh release download "$release" --dir "$RUNNER_TEMP" --pattern "$archive" --pattern "$archive.sha256"
+          (cd "$RUNNER_TEMP" && sha256sum -c "$archive.sha256")
+          (cd runtime && go build -trimpath -ldflags="-X main.version=$VERSION-standalone.1" -o "$RUNNER_TEMP/old-agent" ./server/cmd/mindfs-server)
+          sudo python3 scripts/standalone/verify-linux-self-update.py "$RUNNER_TEMP/$archive" "$RUNNER_TEMP/old-agent" "$VERSION"
