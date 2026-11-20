@@ -58,21 +58,27 @@
 .remote-update-action button { margin-top:6px; }
 .remote-update-error details { margin-top:8px; }
 .remote-published-update {
-  gap: 4px 10px;
-  padding: 6px 0 0;
+  gap: 3px 8px;
+  padding: 8px 10px 0;
   border-top: 1px solid var(--panel-border);
   border-bottom: 0;
+  font-size: 12px;
 }
+.remote-published-update .remote-setting-body { display: flex; align-items: center; min-height: 24px; }
+.remote-published-update .remote-version { margin: 0; font-size: 12px; color: var(--text-secondary); }
 .remote-published-update p { margin: 0; }
-.remote-published-update .remote-note { margin-top: 4px; color: var(--text-secondary); font-size: 12px; }
-.remote-published-update > [role=status] { flex-basis: 100%; margin-top: 0 !important; }
+.remote-published-update .remote-note { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.remote-published-update > [role=status] { flex-basis: 100%; margin: 0 !important; display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.remote-published-update > p.remote-note[role=status]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #2fb67c; flex: none; }
 .remote-published-update > button.remote-text-button {
-  min-height: 44px;
-  padding: 0 4px;
+  min-height: 24px;
+  padding: 2px 0;
   border: 0;
   background: transparent;
   color: var(--accent-color);
   font: inherit;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 .remote-published-update > button.remote-text-button:hover { text-decoration: underline; }

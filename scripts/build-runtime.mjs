@@ -38,4 +38,5 @@ mkdirSync(path.join(output, 'licenses'), {recursive: true});
 cpSync(path.join(runtime, 'third_party/codex-go-sdk/LICENSE'), path.join(output, 'licenses/codex-go-sdk-LICENSE'));
 cpSync(path.join(runtime, 'third_party/claude-agent-sdk-go/LICENSE'), path.join(output, 'licenses/claude-agent-sdk-go-LICENSE'));
 cpSync(path.join(runtime, 'third_party/jsonschema-v6-LICENSE'), path.join(output, 'licenses/jsonschema-v6-LICENSE'));
+cpSync(path.join(runtime, 'third_party/gopsutil-LICENSES.txt'), path.join(output, 'licenses/gopsutil-LICENSES.txt'));
 console.log(`Local runtime ready: ${output}`);

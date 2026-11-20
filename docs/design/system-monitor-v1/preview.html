@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>顶栏电脑状态设计预览</title>
+<style>
+:root{color-scheme:light;--frame:#e1e6ee;--center:#ffffff;--bg:#f3f5f8;--surface:#fff;--sunk:#e9edf3;--hover:#1a2a4a0d;--select:#e6eeff;--line:#dfe3ea;--line-strong:#c9d0db;--text:#141a26;--text2:#444f63;--muted:#566175;--accent:#225cdf;--accent-bg:#e6eeff;--accent-line:#bdd0fb;--on-accent:#fff;--amber:#9e5200;--amber-bg:#fbeed7;--danger:#c0392b;--danger-bg:#fbe5e1;--pop-shadow:0 14px 40px #141a2630,0 2px 8px #141a2614;--font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;--mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+:root[data-theme="dark"]{color-scheme:dark;--frame:#070a14;--center:#0e1424;--bg:#0a0f1c;--surface:#0e1424;--sunk:#151d32;--hover:#ffffff10;--select:#17254a;--line:#1d2740;--line-strong:#2c3858;--text:#e6ebf5;--text2:#b2bcd0;--muted:#92a0ba;--accent:#7aa2ff;--accent-bg:#17254a;--accent-line:#2f4a85;--amber:#f0b45c;--amber-bg:#33260f;--danger:#ff9b8c;--danger-bg:#3b1c1a;--pop-shadow:0 16px 44px #000a,0 2px 8px #0006}
+:root[data-theme="meadow"]{color-scheme:light;--frame:#e5d9bd;--center:#fffaf0;--bg:#f1ead9;--surface:#fffaf0;--sunk:#e9dfc8;--hover:#3a2e1410;--select:#f1e3bf;--line:#e2d8c0;--line-strong:#cdbf9e;--text:#1d3033;--text2:#445552;--muted:#5d6b66;--accent:#2d5a32;--accent-bg:#e1ebd3;--accent-line:#b6cd9f;--amber:#8a5a10;--amber-bg:#f5e4bd;--danger:#b23a30;--danger-bg:#f7e0d9;--pop-shadow:0 14px 40px #4a3a1a30,0 2px 8px #4a3a1a14}
+:root[data-theme="moss"]{color-scheme:light;--frame:#c7d2ba;--center:#f4f7ee;--bg:#dde4d1;--surface:#f4f7ee;--sunk:#cfd8c3;--hover:#1d261f12;--select:#cbd5bd;--line:#c2ccb5;--line-strong:#a9b69a;--text:#1d261f;--text2:#3f4c40;--muted:#4f5d50;--accent:#415b3f;--accent-bg:#d3dec6;--accent-line:#a8bb97;--amber:#7e5612;--amber-bg:#ecdfb6;--danger:#a63a2e;--danger-bg:#f0d9d2;--pop-shadow:0 14px 40px #27332430,0 2px 8px #27332414}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;font-family:var(--font);font-size:14px;line-height:1.5;color:var(--text);background:var(--frame);-webkit-font-smoothing:antialiased;overflow:hidden}
+button,select{font:inherit;color:inherit}
+button{border:0;background:none;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ic{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---------- 预览工具条（不属于设计本身） ---------- */
+.pbar{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;min-height:44px;padding:6px 14px;background:var(--surface);border-bottom:1px solid var(--line);font-size:12px;color:var(--text2);position:relative;z-index:80}
+.pbar strong{color:var(--text);font-size:13px;white-space:nowrap}
+.pbar .grow{flex:1}
+.seg{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--sunk)}
+.seg button{height:24px;padding:0 9px;border-radius:7px;font-size:12px;color:var(--text2);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--line)}
+.pbar label{display:inline-flex;align-items:center;gap:6px}
+.pbar select{height:26px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);padding:0 6px}
+
+/* ---------- 应用外框 ---------- */
+.stage{flex:1;min-height:0;display:flex;justify-content:center;background:var(--frame)}
+.app{width:100%;display:flex;flex-direction:column;min-width:0;background:var(--frame)}
+
+/* ---------- 顶部栏（与生产一致：44px、同底色） ---------- */
+.topbar{flex:none;display:flex;align-items:center;gap:6px;height:44px;padding:0 8px;background:var(--frame);font-size:12.5px;min-width:0;position:relative;z-index:50}
+.topbar .grow{flex:1;min-width:0}
+.tb-gap{width:32px;flex:none}
+.tb-btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 10px;border-radius:8px;color:var(--text2);white-space:nowrap;flex:none}
+.tb-btn:hover{background:var(--hover);color:var(--text)}
+.tb-theme{display:inline-flex;align-items:center;gap:6px;color:var(--text2);white-space:nowrap}
+.tb-theme span.sel{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text)}
+.panel-toggle{width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:var(--text2);flex:none}
+.panel-toggle:hover{background:var(--hover);color:var(--text)}
+.sw{position:relative;width:32px;height:18px;border-radius:9px;background:var(--line-strong);flex:none}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0004}
+
+/* ---------- 电脑状态（本设计的内容） ---------- */
+.mon-wrap{position:relative;width:100%}
+.mon{display:flex;align-items:center;width:100%;height:46px;padding:0 4px;border-radius:12px;background:var(--surface);box-shadow:0 0 0 1px var(--line);color:var(--text2);transition:background .15s,box-shadow .15s}
+.mon:hover{box-shadow:0 0 0 1px var(--line-strong)}.mon[aria-expanded="true"]{box-shadow:0 0 0 1.5px var(--accent-line);background:var(--accent-bg)}
+.mon-item{flex:1;justify-content:center;display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mon-item .name{color:var(--text2);font-size:12.5px;font-weight:500}
+.mon-item .val{font-weight:600;color:var(--text);min-width:2.4em;text-align:right}
+.mon-item[data-lv="warn"] .val{color:var(--amber)}
+.mon-item[data-lv="crit"] .val{color:var(--danger)}
+.mon-sep{width:1px;height:14px;background:var(--line-strong);flex:none}
+.rg{position:relative;width:24px;height:24px;flex:none;display:inline-grid;place-items:center}.rg .ring{width:24px;height:24px}.rg .glyph{position:absolute;width:11px;height:11px;stroke-width:2.1;color:var(--text2)}.mon-item[data-lv="warn"] .glyph{color:var(--amber)}.mon-item[data-lv="crit"] .glyph{color:var(--danger)}
+.ring{--p:0;width:22px;height:22px;flex:none;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:3.2;stroke-linecap:round}
+.ring .track{stroke:var(--line-strong);opacity:.55}
+.ring .prog{stroke:var(--c,var(--accent));stroke-dasharray:calc(var(--p) * 1px) 100;transition:stroke-dasharray .6s cubic-bezier(.2,.7,.2,1),stroke .3s}
+[data-lv="warn"]{--c:var(--amber)}
+[data-lv="crit"]{--c:var(--danger)}
+.mon-item[data-lv="ok"]{--c:var(--accent)}
+.mon[data-state="loading"] .ring .prog{stroke-dasharray:18 100;animation:spin 1.1s linear infinite;transform-origin:50% 50%;transform-box:fill-box;stroke:var(--muted)}
+.mon[data-state="loading"] .val{color:var(--muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 弹出详情 */
+.pop{position:absolute;left:0;right:0;bottom:calc(100% + 8px);padding:12px;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line),var(--pop-shadow);z-index:70;display:grid;gap:12px}
+.pop-h{display:flex;align-items:center;gap:8px}
+.pop-h b{font-size:13px;color:var(--text)}
+.pop-head{display:grid;gap:1px;min-width:0}.pop-h small,.host{color:var(--muted);font-size:12px}
+.pop-h .live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.live i{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.blk{display:grid;grid-template-columns:56px 1fr;gap:4px 10px;align-items:center;padding:10px;border-radius:12px;background:var(--bg);box-shadow:0 0 0 1px var(--line)}
+.big{position:relative;width:56px;height:56px}
+.big .ring{width:56px;height:56px}
+.big .ring circle{stroke-width:5.4}
+.big .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}
+.big .num small{font-size:10px;font-weight:600;margin:3px 0 0 1px;color:var(--muted);align-self:center}
+.blk[data-lv="warn"] .num{color:var(--amber)}
+.blk[data-lv="crit"] .num{color:var(--danger)}
+.blk h4{margin:0;font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}.blk h4 .ic{width:14px;height:14px;color:var(--text2)}
+.blk p{margin:0;font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+.blk .meta{display:grid;gap:1px}
+.spark{grid-column:1/-1;height:44px;margin-top:6px}
+.spark svg{display:block;width:100%;height:100%;overflow:visible}
+.spark .area{fill:var(--fill)}
+.spark .line{fill:none;stroke:var(--c);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.spark .dot{fill:var(--c)}
+.spark-axis{grid-column:1/-1;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:-2px}
+.pop-note{font-size:12px;color:var(--muted);line-height:1.55;display:flex;gap:6px}
+.pop-note .ic{margin-top:2px}
+.pop-warn{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:10px;font-size:12px;background:var(--danger-bg);color:var(--danger)}
+.pop-warn[data-k="warn"]{background:var(--amber-bg);color:var(--amber)}
+
+/* 工作区示意 */
+.work{flex:1;min-height:0;display:grid;grid-template-columns:230px 1fr 250px;gap:8px;padding:0 8px 8px}
+.col{border-radius:12px;background:transparent;padding:10px;display:grid;align-content:start;gap:8px}
+.col.left{display:flex;flex-direction:column;min-height:0}
+.foot{margin-top:auto;display:grid;gap:8px;padding:8px 4px 4px}
+.cta{height:40px;border-radius:11px;background:var(--accent);color:var(--on-accent);font-weight:600;font-size:13px;display:grid;place-items:center;border:1px solid var(--line)}
+.foot-help{font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+.ph{height:30px;border-radius:9px;background:var(--hover)}
+.ph.s{height:22px;opacity:.6;width:70%}
+.center{border-radius:14px;background:var(--center);box-shadow:0 0 0 1px var(--line);padding:22px;display:grid;align-content:start;gap:12px}
+.center .t{height:14px;border-radius:7px;background:var(--sunk)}
+.center .ub{justify-self:end;width:46%;height:46px;border-radius:16px 16px 4px 16px;background:var(--accent-bg)}
+
+@media (prefers-reduced-motion:reduce){.ring .prog{transition:none}.mon[data-state="loading"] .ring .prog{animation:none}.live i{animation:none}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h14m-4-4 4 4-4 4M20 16H6m4-4-4 4 4 4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4 2.5 20h19L12 4zM12 10v4M12 17h.01"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></symbol>
+<symbol id="i-mem" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="9" rx="1.8"/><path d="M6 15v3M10 15v3M14 15v3M18 15v3M6 10.5h2.2M10.9 10.5h2.2M15.8 10.5h2.2"/></symbol>
+</svg>
+
+<div class="pbar" role="toolbar" aria-label="预览控制">
+  <strong>顶栏电脑状态</strong><span>设计预览 · 示例数据</span>
+  <span class="grow"></span>
+  <span class="seg" id="segState" role="group" aria-label="状态">
+    <button type="button" data-v="ok" aria-pressed="true">正常</button>
+    <button type="button" data-v="warn" aria-pressed="false">偏高</button>
+    <button type="button" data-v="crit" aria-pressed="false">过载</button>
+    <button type="button" data-v="loading" aria-pressed="false">读取中</button>
+    <button type="button" data-v="off" aria-pressed="false">读取失败</button>
+  </span>
+  <label><input type="checkbox" id="chkOpen"> 展开详情</label>
+  <label>主题 <select id="selTheme" aria-label="主题"><option value="light">浅色模式</option><option value="dark">深色模式</option><option value="meadow">翠谷金光</option><option value="moss">苔痕绿影</option><option value="system">跟随系统</option></select></label>
+</div>
+
+<div class="stage" id="stage">
+  <div class="app" id="app"></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const ic=(n,c='')=>`<svg class="ic ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+
+/* ---------- 示例数据 ---------- */
+const SCENES={
+  ok:  {cpu:41,mem:67,cores:12,used:11.5,total:16,host:'mac-idea'},
+  warn:{cpu:78,mem:82,cores:12,used:13.1,total:16,host:'mac-idea'},
+  crit:{cpu:96,mem:93,cores:12,used:14.9,total:16,host:'mac-idea'},
+};
+const lv=p=>p>=90?'crit':p>=70?'warn':'ok';
+let state='ok',open=false;
+const hist={cpu:[],mem:[]};
+function seed(){
+  const s=SCENES[state==='loading'||state==='off'?'ok':state];
+  const jitter=(b,a)=>Math.max(2,Math.min(99,b+(Math.sin(a*.7)+Math.sin(a*.23+1))*6));
+  hist.cpu=[];hist.mem=[];
+  for(let i=0;i<30;i++){hist.cpu.push(jitter(s.cpu,i));hist.mem.push(s.mem+Math.sin(i*.2)*1.5)}
+  hist.cpu[29]=s.cpu;hist.mem[29]=s.mem;
+}
+
+/* ---------- 组件 ---------- */
+function ring(p,cls=''){return `<svg class="ring ${cls}" viewBox="0 0 36 36" style="--p:${p*1.0}" aria-hidden="true"><circle class="track" cx="18" cy="18" r="15.9155" pathLength="100"/><circle class="prog" cx="18" cy="18" r="15.9155" pathLength="100"/></svg>`}
+function item(kind,p,withName=true){
+  const name=kind==='cpu'?'CPU':'内存';
+  const loading=state==='loading';
+  const full=kind==='cpu'?'CPU 使用率':'内存使用率';
+  return `<span class="mon-item" data-lv="${loading?'ok':lv(p)}" title="${full}${loading?'':' '+Math.round(p)+'%'}"><span class="rg">${ring(loading?0:p)}${ic(kind==='cpu'?'cpu':'mem','glyph')}</span>${withName?`<span class="name">${name}</span>`:''}<span class="val">${loading?'--':Math.round(p)+'%'}</span></span>`;
+}
+function spark(arr,kind){
+  const W=260,H=44,n=arr.length;
+  const pts=arr.map((v,i)=>[i*(W/(n-1)),H-3-(v/100)*(H-8)]);
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const last=pts[n-1];
+  return `<div class="spark"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${kind==='cpu'?'CPU':'内存'}最近 60 秒走势"><defs><linearGradient id="g-${kind}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--c);stop-opacity:.3"/><stop offset="1" style="stop-color:var(--c);stop-opacity:0"/></linearGradient></defs><path class="area" style="fill:url(#g-${kind})" d="${d} L${W} ${H} L0 ${H} Z"/><path class="line" d="${d}"/></svg></div><div class="spark-axis"><span>60 秒前</span><span>现在</span></div>`;
+}
+function details(s){
+  const cl=lv(s.cpu),ml=lv(s.mem);
+  const worst=cl==='crit'||ml==='crit'?'crit':cl==='warn'||ml==='warn'?'warn':'';
+  return `<div class="pop-head"><div class="pop-h"><b>这台电脑</b><span class="live"><i></i>每 2 秒更新</span></div><small class="host">${s.host}</small></div>
+  ${worst?`<div class="pop-warn" data-k="${worst}">${ic('warn')}<span>${worst==='crit'?'负载很高，Agent 响应可能变慢':'负载偏高'}</span></div>`:''}
+  <div class="blk" data-lv="${cl}" style="--c:var(--${cl==='ok'?'accent':cl==='warn'?'amber':'danger'})">
+    <div class="big">${ring(s.cpu)}<span class="num">${Math.round(s.cpu)}<small>%</small></span></div>
+    <div class="meta"><h4>${ic('cpu')} 处理器</h4><p>${s.cores} 核 · 当前 ${Math.round(s.cpu)}%</p></div>
+    ${spark(hist.cpu,'cpu')}
+  </div>
+  <div class="blk" data-lv="${ml}" style="--c:var(--${ml==='ok'?'accent':ml==='warn'?'amber':'danger'})">
+    <div class="big">${ring(s.mem)}<span class="num">${Math.round(s.mem)}<small>%</small></span></div>
+    <div class="meta"><h4>${ic('mem')} 内存</h4><p>已用 ${s.used.toFixed(1)} / ${s.total.toFixed(1)} GB</p><p>可用 ${(s.total-s.used).toFixed(1)} GB</p></div>
+    ${spark(hist.mem,'mem')}
+  </div>
+  <div class="pop-note">${ic('info')}<span>显示的是运行 Local AI Agent 的这台电脑，不是你正在看的手机或浏览器所在的设备。</span></div>`;
+}
+function monitor(s,compact){
+  if(state==='off')return '';
+  const loading=state==='loading';
+  return `<div class="mon-wrap"><button type="button" class="mon" id="monBtn" data-state="${loading?'loading':'ready'}" aria-haspopup="dialog" aria-expanded="${open&&!loading}" aria-label="这台电脑：CPU ${Math.round(s.cpu)}%，内存 ${Math.round(s.mem)}%">${item('cpu',s.cpu)}<span class="mon-sep"></span>${item('mem',s.mem)}</button>${open&&!loading?`<div class="pop" role="dialog" aria-label="这台电脑的资源使用">${details(s)}</div>`:''}</div>`;
+}
+
+/* ---------- 页面 ---------- */
+function topbar(s){
+  return `<header class="topbar">
+    <button class="panel-toggle" type="button" aria-label="项目栏"><svg class="ic" style="width:20px;height:20px" viewBox="0 0 24 24"><rect x="3.8" y="5.8" width="5.4" height="12.4" rx="1.6" fill="currentColor" fill-opacity=".32" stroke="none"/><rect x="3" y="4.5" width="18" height="15" rx="3.2"/><path d="M9.5 4.5v15"/></svg></button>
+    <span class="grow"></span>
+    <button class="tb-btn" type="button">${ic('swap')}<span class="t">Agent 配置切换重启</span></button>
+    <button class="tb-btn tb-sw" type="button" role="switch" aria-checked="false"><span class="t">多项目会话列表</span><span class="sw"></span></button>
+    <label class="tb-theme"><span>主题</span><span class="sel">${{light:'浅色模式',dark:'深色模式',meadow:'翠谷金光',moss:'苔痕绿影',system:'跟随系统'}[themeSel]} ${ic('down')}</span></label>
+    <button class="panel-toggle" type="button" aria-label="会话栏"><svg class="ic" style="width:20px;height:20px" viewBox="0 0 24 24"><rect x="14.8" y="5.8" width="5.4" height="12.4" rx="1.6" fill="currentColor" fill-opacity=".32" stroke="none"/><rect x="3" y="4.5" width="18" height="15" rx="3.2"/><path d="M14.5 4.5v15"/></svg></button>
+  </header>`;
+}
+function desktop(s){
+  return `${topbar(s)}<div class="work"><div class="col left"><div class="ph"></div><div class="ph s"></div><div class="ph s"></div><div class="ph"></div><div class="foot">${monitor(s)}<div class="cta">手机扫码连接</div><div class="foot-help">已安装，可从桌面或应用列表打开</div></div></div><div class="center"><div class="ub"></div><div class="t" style="width:78%"></div><div class="t" style="width:64%"></div><div class="t" style="width:71%"></div></div><div class="col"><div class="ph"></div><div class="ph"></div><div class="ph s"></div></div></div>`;
+}
+let themeSel='light';
+function render(){
+  const s=SCENES[state==='loading'||state==='off'?'ok':state];
+  $('#app').innerHTML=desktop(s);
+  const b=$('#monBtn');
+  if(b)b.addEventListener('click',e=>{e.stopPropagation();open=!open;$('#chkOpen').checked=open;render()});
+  const pp=$('.pop');if(pp)pp.addEventListener('click',e=>e.stopPropagation());
+}
+/* 每 2 秒让示例数据轻微波动，演示环形和走势的过渡 */
+setInterval(()=>{
+  if(state==='loading'||state==='off'||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const s=SCENES[state];
+  hist.cpu.push(Math.max(2,Math.min(99,s.cpu+(Math.random()-.5)*10)));hist.cpu.shift();
+  hist.mem.push(s.mem+(Math.random()-.5)*1.2);hist.mem.shift();
+  const live={...s,cpu:hist.cpu[29],mem:hist.mem[29],used:s.total*hist.mem[29]/100};
+  const keep=document.activeElement&&document.activeElement.id==='monBtn';
+  const sc2=SCENES[state];SCENES[state]=live;render();SCENES[state]=sc2;
+  if(keep){const b=$('#monBtn');b&&b.focus()}
+},2000);
+
+/* ---------- 预览控制 ---------- */
+const mq=matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(v){themeSel=v;$('#selTheme').value=v;document.documentElement.dataset.theme=v==='system'?(mq.matches?'dark':'light'):v;render()}
+$('#selTheme').addEventListener('change',e=>applyTheme(e.target.value));
+mq.addEventListener('change',()=>{if(themeSel==='system')applyTheme('system')});
+function seg(id,cb){$(id).addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...$(id).children].forEach(x=>x.setAttribute('aria-pressed',x===b));cb(b.dataset.v)})}
+seg('#segState',v=>{state=v;seed();render()});
+$('#chkOpen').addEventListener('change',e=>{open=e.target.checked;render()});
+document.addEventListener('click',()=>{if(open){open=false;$('#chkOpen').checked=false;render()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&open){open=false;$('#chkOpen').checked=false;render()}});
+/* ?theme=dark&state=warn&open=1 可直接打开某个画面 */
+const P=new URL(location).searchParams;
+if(['ok','warn','crit','loading','off'].includes(P.get('state')))state=P.get('state');
+open=P.get('open')==='1';$('#chkOpen').checked=open;
+seed();
+[...$('#segState').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===state));
+applyTheme(['light','dark','meadow','moss','system'].includes(P.get('theme'))?P.get('theme'):'light');
+</script>
+</body>
+</html>

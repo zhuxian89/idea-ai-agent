@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>左下角页脚对齐设计预览</title>
+<style>
+:root{color-scheme:light;--frame:#e1e6ee;--bg:#f3f5f8;--surface:#fff;--sunk:#e9edf3;--hover:#1a2a4a0d;--select:#e6eeff;--line:#dfe3ea;--line-strong:#c9d0db;--text:#141a26;--text2:#444f63;--muted:#566175;--accent:#225cdf;--accent-bg:#e6eeff;--accent-line:#bdd0fb;--on-accent:#fff;--green:#0f7a52;--amber:#9e5200;--danger:#c0392b;--font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif}
+:root[data-theme="dark"]{color-scheme:dark;--frame:#070a14;--bg:#0a0f1c;--surface:#0e1424;--sunk:#151d32;--hover:#ffffff10;--select:#17254a;--line:#1d2740;--line-strong:#2c3858;--text:#e6ebf5;--text2:#b2bcd0;--muted:#92a0ba;--accent:#7aa2ff;--accent-bg:#17254a;--accent-line:#2f4a85;--green:#62d3a2;--amber:#f0b45c;--danger:#ff9b8c}
+:root[data-theme="meadow"]{color-scheme:light;--frame:#e5d9bd;--bg:#f1ead9;--surface:#fffaf0;--sunk:#e9dfc8;--hover:#3a2e1410;--select:#f1e3bf;--line:#e2d8c0;--line-strong:#cdbf9e;--text:#1d3033;--text2:#445552;--muted:#5d6b66;--accent:#2d5a32;--accent-bg:#e1ebd3;--accent-line:#b6cd9f;--green:#2d6a3a;--amber:#8a5a10;--danger:#b23a30}
+:root[data-theme="moss"]{color-scheme:light;--frame:#c7d2ba;--bg:#dde4d1;--surface:#f4f7ee;--sunk:#cfd8c3;--hover:#1d261f12;--select:#cbd5bd;--line:#c2ccb5;--line-strong:#a9b69a;--text:#1d261f;--text2:#3f4c40;--muted:#4f5d50;--accent:#415b3f;--accent-bg:#d3dec6;--accent-line:#a8bb97;--green:#2d6a3a;--amber:#7e5612;--danger:#a63a2e}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:var(--font);font-size:14px;line-height:1.5;color:var(--text);background:var(--frame);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button,select{font:inherit;color:inherit}button{border:0;background:none;padding:0;cursor:pointer}
+.pbar{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;min-height:44px;padding:6px 16px;background:var(--surface);border-bottom:1px solid var(--line);font-size:12px;color:var(--text2)}
+.pbar strong{color:var(--text);font-size:13px}.pbar .grow{flex:1}
+.pbar label{display:inline-flex;align-items:center;gap:6px}
+.pbar select{height:26px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);padding:0 6px}
+.seg{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--sunk)}
+.seg button{height:24px;padding:0 10px;border-radius:7px;font-size:12px;color:var(--text2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--line)}
+.stage{flex:1;overflow:auto;display:flex;justify-content:center;align-items:flex-start;gap:56px;padding:32px 24px;flex-wrap:wrap}
+.col h2{margin:0 0 4px;font-size:14px}.col p.sub{margin:0 0 14px;font-size:12px;color:var(--muted);max-width:300px}
+
+/* ---- 侧栏外框：260px 宽，页脚内边距 12px，与生产一致 ---- */
+.side{width:260px;background:var(--frame);border-radius:14px;box-shadow:0 0 0 1px var(--line);display:flex;flex-direction:column;justify-content:flex-end;min-height:330px;overflow:hidden}
+.side .fake{flex:1;padding:12px}.side .fake i{display:block;height:28px;border-radius:9px;background:var(--hover);margin-bottom:8px}.side .fake i.s{width:62%;height:20px}
+.foot{padding:10px 12px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px;position:relative}
+.ic{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;position:absolute}
+.rg{position:relative;width:24px;height:24px;flex:none;display:inline-grid;place-items:center;color:var(--text2)}
+.ring{width:100%;height:100%;transform:rotate(-90deg)}.ring circle{fill:none;stroke-width:3.2;stroke-linecap:round}
+.ring .t{stroke:var(--line-strong);opacity:.8}.ring .p{stroke:var(--accent)}
+.btn{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2);background:transparent}
+
+/* ======================= 现在 ======================= */
+.now .card{display:flex;align-items:center;width:100%;height:46px;padding:0 4px;border-radius:12px;background:var(--surface);box-shadow:0 0 0 1px var(--line);color:var(--text2)}
+.now .item{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.now .nm{font-size:12.5px;font-weight:500}.now .v{font-size:13px;font-weight:600;color:var(--text);min-width:2.4em;text-align:right}
+.now .sep{width:1px;height:14px;background:var(--line);flex:none}
+.now .upd{margin-top:2px;padding-top:6px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.now .upd .ver{font-size:12px;color:var(--muted)}.now .upd .chk{margin-left:auto;min-height:44px;padding:0 4px;color:var(--accent);font-size:14px}
+.now .upd .st{flex-basis:100%;font-size:12px;color:var(--muted);margin:0}
+.now .hint{font-size:11px;color:var(--muted);text-align:center;line-height:1.5;margin-top:2px}
+
+/* ======================= 调整后 ======================= */
+.after .tile{--c:var(--accent);display:grid;grid-template-columns:1fr 1px 1fr;align-items:center;width:100%;height:52px;border-radius:10px;background:transparent;box-shadow:inset 0 0 0 1px var(--line);color:var(--text2);padding:0 10px;transition:box-shadow .15s,background .15s}
+.after .tile:hover{box-shadow:inset 0 0 0 1px var(--line-strong)}
+.after .cell{display:flex;align-items:center;gap:8px;min-width:0}
+.after .cell .rg{width:28px;height:28px}.after .cell .ic{width:12px;height:12px}
+.after .cell .tx{display:grid;line-height:1.15;min-width:0}
+.after .cell .nm{font-size:11.5px;color:var(--muted)}
+.after .cell .v{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.after .cell[data-lv="warn"]{--c:var(--amber)}.after .cell[data-lv="crit"]{--c:var(--danger)}
+.after .cell[data-lv="warn"] .v,.after .cell[data-lv="crit"] .v{color:var(--c)}
+.after .ring .p{stroke:var(--c,var(--accent))}
+.after .cell + .vs{width:1px;height:26px;background:var(--line-strong);opacity:.6}
+.after .cell:last-child{padding-left:12px}
+.after .qrbtn{width:100%;height:40px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:10px;background:transparent;color:var(--text2);font-size:12px;font-weight:600;box-shadow:inset 0 0 0 1px var(--line);transition:background .15s}
+.after .qrbtn:hover{background:color-mix(in srgb,var(--text) 6%,transparent);color:var(--text)}
+.after .qrbtn .qr{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.after .qrbtn .lb{flex:1;text-align:left}
+.after .qrbtn .go{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.75;flex:none}
+.after .meta{margin-top:4px;padding-top:8px;border-top:1px solid var(--line);display:grid;gap:3px;padding-inline:10px;font-size:12px;line-height:1.5;color:var(--muted)}
+.after .meta .r{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px}
+.after .meta .chk{color:var(--accent);font-size:12px;font-weight:600;padding:2px 0}
+.after .meta .ok{justify-content:flex-start;gap:6px}.after .meta .ok i{width:6px;height:6px;border-radius:50%;background:var(--green)}
+/* 对齐线 */
+.guides .foot::before,.guides .foot::after{content:"";position:absolute;top:0;bottom:0;width:0;border-left:1px dashed #ff4d8d;opacity:.8;pointer-events:none;z-index:5}
+.guides .after .foot::before{left:22px}.guides .after .foot::after{right:22px}
+.guides .now .foot::before{left:12px}.guides .now .foot::after{right:12px}
+.note{font-size:12px;color:var(--muted);max-width:300px;margin-top:12px;line-height:1.6}
+.note b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="pbar" role="toolbar" aria-label="预览控制">
+  <strong>页脚对齐</strong><span>设计预览 · 示例数据</span><span class="grow"></span>
+  <span class="seg" id="segLv" role="group" aria-label="负载"><button type="button" data-v="ok" aria-pressed="true">正常</button><button type="button" data-v="warn" aria-pressed="false">偏高</button><button type="button" data-v="crit" aria-pressed="false">过载</button></span>
+  <label><input type="checkbox" id="chkGuides"> 显示对齐线</label>
+  <label>主题 <select id="selTheme" aria-label="主题"><option value="light">浅色模式</option><option value="dark">深色模式</option><option value="meadow">翠谷金光</option><option value="moss">苔痕绿影</option><option value="system">跟随系统</option></select></label>
+</div>
+<div class="stage" id="stage"></div>
+<script>
+const $=s=>document.querySelector(s);
+const SC={ok:{cpu:12,mem:65},warn:{cpu:78,mem:82},crit:{cpu:96,mem:93}};
+const lv=p=>p>=90?'crit':p>=70?'warn':'ok';
+const CHIP='<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>';
+const MEM='<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="9" rx="1.8"/><path d="M6 15v3M10 15v3M14 15v3M18 15v3M6 10.5h2.2M10.9 10.5h2.2M15.8 10.5h2.2"/></svg>';
+const ring=(p,c)=>`<svg class="ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="t" cx="18" cy="18" r="15.9155" pathLength="100"/><circle class="p" cx="18" cy="18" r="15.9155" pathLength="100" stroke-dasharray="${p} 100" ${c?`style="stroke:${c}"`:''}/></svg>`;
+const col=l=>l==='ok'?'var(--accent)':l==='warn'?'var(--amber)':'var(--danger)';
+const fake='<div class="fake"><i></i><i class="s"></i><i class="s"></i><i></i></div>';
+function now(s){
+  const c=lv(s.cpu),m=lv(s.mem);
+  const it=(n,p,g,l)=>`<span class="item"><span class="rg">${ring(p,col(l))}${g}</span><span class="nm">${n}</span><span class="v" style="${l!=='ok'?'color:'+col(l):''}">${p}%</span></span>`;
+  return `<div class="col now"><h2>现在</h2><p class="sub">文字、卡片和按钮各按各的对齐。</p><div class="side">${fake}<div class="foot"><div class="card">${it('CPU',s.cpu,CHIP,c)}<span class="sep"></span>${it('内存',s.mem,MEM,m)}</div><div class="btn">手机扫码连接</div><div class="upd"><span class="ver">0.1.52</span><button class="chk" type="button">检查更新</button><p class="st">已是最新版本</p></div><div class="hint">已安装，可从桌面或应用列表打开</div></div></div></div>`;
+}
+function after(s){
+  const c=lv(s.cpu),m=lv(s.mem);
+  const cell=(n,p,g,l)=>`<span class="cell" data-lv="${l}"><span class="rg">${ring(p)}${g}</span><span class="tx"><span class="nm">${n}</span><span class="v">${p}%</span></span></span>`;
+  return `<div class="col after"><h2>调整后</h2><p class="sub">圆环、文字、状态点共用左边一条线；“检查更新”落在右边那条线上。</p><div class="side">${fake}<div class="foot"><div class="tile">${cell('CPU',s.cpu,CHIP,c)}<span class="vs"></span>${cell('内存',s.mem,MEM,m)}</div><button class="qrbtn" type="button"><svg class="qr" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.4"/><rect x="14" y="3" width="7" height="7" rx="1.4"/><rect x="3" y="14" width="7" height="7" rx="1.4"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h3M20 17v4"/></svg><span class="lb">手机扫码连接</span><svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><div class="meta"><div class="r"><span>0.1.52</span><button class="chk" type="button">检查更新</button></div><div class="r ok"><i></i><span>已是最新版本</span></div><div class="r">已安装，可从桌面或应用列表打开</div></div></div></div>
+  <div class="note"><b>改了什么</b><br>① 电脑状态与按钮同宽、同圆角（10px）。两者都和侧栏同底色（不填充）。按钮的文字颜色、边框都保持现在的样子，只在左边加二维码图标、右边加箭头，内容靠左。
+<br>② 按钮内容靠左：二维码图标在圆环、文字所在的同一条左线上，箭头在右，整行被撑满，不再是中间一行灰字。<br>③ 状态卡里 CPU 与内存各占一半，名称在上、数字在下，列对齐，不再因为“内存”比“CPU”长而错位。<br>④ 页脚文字统一靠左，缩进 10px，与状态卡里圆环的左缘在同一条线上；“检查更新”右对齐在对称的右侧位置。<br>⑤ 字号只用三档：15（数字）、12（说明）、11.5（名称）。</div></div>`;
+}
+let lvl='ok',theme='dark';
+function render(){const s=SC[lvl];$('#stage').innerHTML=now(s)+after(s);}
+const mq=matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(v){theme=v;$('#selTheme').value=v;document.documentElement.dataset.theme=v==='system'?(mq.matches?'dark':'light'):v}
+$('#selTheme').addEventListener('change',e=>applyTheme(e.target.value));mq.addEventListener('change',()=>{if(theme==='system')applyTheme('system')});
+$('#segLv').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...$('#segLv').children].forEach(x=>x.setAttribute('aria-pressed',x===b));lvl=b.dataset.v;render()});
+$('#chkGuides').addEventListener('change',e=>document.body.classList.toggle('guides',e.target.checked));
+const P=new URL(location).searchParams;
+if(['ok','warn','crit'].includes(P.get('state')))lvl=P.get('state');
+[...$('#segLv').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===lvl));
+if(P.get('guides')==='1'){document.body.classList.add('guides');$('#chkGuides').checked=true}
+applyTheme(['light','dark','meadow','moss','system'].includes(P.get('theme'))?P.get('theme'):'dark');
+render();
+</script>
+</body>
+</html>

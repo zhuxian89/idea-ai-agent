@@ -170,6 +170,8 @@ type FileTreeProps = {
   relayActionLabel?: string | null;
   relayActionDisabled?: boolean;
   relayActionHelp?: string | null;
+  /** 页脚里“手机扫码连接”按钮上方的内容，例如电脑状态。 */
+  footerTop?: React.ReactNode;
   publicStandaloneVersion?: string;
   onRelayAction?: () => void;
   relayNodeId?: string;
@@ -1090,6 +1092,7 @@ export function FileTree({
   relayActionLabel = null,
   relayActionDisabled = false,
   relayActionHelp = null,
+  footerTop = null,
   publicStandaloneVersion,
   onRelayAction,
   relayNodeId = "",
@@ -1454,6 +1457,7 @@ export function FileTree({
   const shouldShowRelayTip = Boolean(relayTip);
   const shouldShowNextRelayTip = visibleRelayTips.length > 1;
   const hasFooterContent =
+    !!footerTop ||
     !!updateActionLabel ||
     !!updateActionHelp ||
     !!relayActionLabel ||
@@ -3578,6 +3582,7 @@ export function FileTree({
             ) : null}
           </div>
         ) : null}
+        {footerTop}
         {relayActionLabel ? (
           <button
             type="button"
@@ -3585,14 +3590,16 @@ export function FileTree({
             disabled={relayActionDisabled}
             onClick={() => onRelayAction?.()}
           >
+            <svg className="rel-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.4" /><rect x="14" y="3" width="7" height="7" rx="1.4" /><rect x="3" y="14" width="7" height="7" rx="1.4" /><path d="M14 14h3v3h-3zM20 14v.01M14 20h3M20 17v4" /></svg>
             <span>{relayActionLabel}</span>
+            <svg className="rel-ico rel-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
           </button>
         ) : null}
         {phoneMore?.connection ? <div className="phone-more-connection">
           <span><i data-state={phoneMore.connection} />{t(`action.ws.${phoneMore.connection}`)}</span>
           {relayActionHelp && <span>{relayActionHelp}</span>}
         </div> : relayActionHelp ? (
-          <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.5, textAlign: "center" }}>
+          <div className="file-tree-footer-note">
             {relayActionHelp}
           </div>
         ) : null}
@@ -3655,7 +3662,7 @@ export function FileTree({
           </button>
         ) : null}
         {shouldShowInstallHelp ? (
-          <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.5, textAlign: "center" }}>
+          <div className="file-tree-footer-note">
             {installHelp}
           </div>
         ) : null}

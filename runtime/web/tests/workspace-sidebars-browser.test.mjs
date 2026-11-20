@@ -295,7 +295,7 @@ test('standalone App opens the phone layout on explicit device choice and naviga
   await page.addStyleTag({content: readFileSync(new URL('../src/index.css',import.meta.url),'utf8').replace(/^@(?:import|source)\s[^\n]*$/gm,'')});
   await expect.poll(()=>page.evaluate(()=>window.bootstrap.snapshot().phase)).toBe('ready');
   await expect(page.locator('[data-onboarding="shell"] > aside')).toHaveCount(2);
-  await expect(page.getByText('Standalone 9.9.9-test', { exact: true })).toBeVisible();
+  await expect(page.getByText('9.9.9-test', { exact: true })).toBeVisible();
   await page.evaluate(() => history.replaceState(null, '', '?root=root&session=chat'));
   const phoneAccess = page.getByRole('button', { name: 'Connect your phone', exact: true });
   await page.addStyleTag({content: readFileSync(new URL('../src/components/workspaceSidebar.css',import.meta.url),'utf8')});

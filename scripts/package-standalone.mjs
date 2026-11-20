@@ -36,7 +36,7 @@ cpSync(path.join(root, "runtime/web/dist"), path.join(bundle, "web"), { recursiv
 for (const file of ["agents.json", "task_template.json"]) cpSync(path.join(root, "runtime", file), path.join(bundle, file));
 for (const file of ["LICENSE", "NOTICE.md"]) cpSync(path.join(root, file), path.join(bundle, file));
 mkdirSync(path.join(bundle, "licenses"));
-for (const [source, filename] of [["codex-go-sdk/LICENSE", "codex-sdk.txt"], ["claude-agent-sdk-go/LICENSE", "claude-sdk.txt"], ["jsonschema-v6-LICENSE", "jsonschema.txt"]]) {
+for (const [source, filename] of [["codex-go-sdk/LICENSE", "codex-sdk.txt"], ["claude-agent-sdk-go/LICENSE", "claude-sdk.txt"], ["jsonschema-v6-LICENSE", "jsonschema.txt"], ["gopsutil-LICENSES.txt", "gopsutil.txt"]]) {
   cpSync(path.join(root, "runtime/third_party", source), path.join(bundle, "licenses", filename));
 }
 cpSync(path.join(root, "scripts/standalone", goos === "windows" ? "install.ps1" : "install.sh"), path.join(bundle, goos === "windows" ? "install.ps1" : "install.sh"));

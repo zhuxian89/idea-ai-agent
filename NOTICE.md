@@ -29,3 +29,8 @@ retained in that directory and shipped with the web assets.
 `github.com/santhosh-tekuri/jsonschema/v6` v6.0.3 validates native MCP form
 responses. Its Apache-2.0 license is retained in
 `runtime/third_party/jsonschema-v6-LICENSE` and included in runtime distributions.
+
+CPU and memory load on the computer running the backend is read with
+`github.com/shirou/gopsutil/v4` (BSD-3-Clause) and its dependencies (BSD-3-Clause,
+Apache-2.0 and MIT). Their license texts are retained in
+`runtime/third_party/gopsutil-LICENSES.txt` and included in runtime distributions.

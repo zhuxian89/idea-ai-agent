@@ -384,6 +384,7 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Delete("/api/dirs", h.protectedEndpoint(h.handleRemoveDir))
 	r.Get("/api/local_dirs", h.protectedEndpoint(h.handleLocalDirs))
 	r.Get("/api/relay/status", h.handleRelayStatus)
+	r.Get("/api/system/stats", h.protectedEndpoint(h.handleSystemStats))
 	r.Post("/api/relay/bind/start", h.protectedEndpoint(h.handleRelayBindStart))
 	r.Get("/api/token-station/userinfo", h.protectedEndpoint(h.handleTokenStationUserInfo))
 	r.Post("/api/token-station/bind/start", h.protectedEndpoint(h.handleTokenStationBindStart))

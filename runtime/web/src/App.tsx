@@ -158,6 +158,7 @@ import {
 } from "./services/ideaBridge";
 import { storeRelayNodes } from "./services/launcherNodeSync";
 import { RemoteAccessDialog, RemoteQRDialog } from "./components/remote/RemoteAccessDialog";
+import { SystemMonitor } from "./components/SystemMonitor";
 import {
   cancelScheduledWebViewCacheClear,
   scheduleWebViewCacheClearOnNextLaunch,
@@ -7684,6 +7685,7 @@ export function App({ onGoHome }: AppProps) {
             onProjectTreeTabChange={setProjectTreeTab}
             relayActionLabel={relayActionLabel}
             relayActionDisabled={relayActionDisabled}
+            footerTop={isStandaloneRuntime && !isMobile ? <SystemMonitor /> : null}
             relayActionHelp={standalonePage && standaloneVersion && !publicStandaloneVersion ? t("standalone.version", { version: standaloneVersion }) : null}
             publicStandaloneVersion={publicStandaloneVersion}
             onRelayAction={handleRelayAction}
