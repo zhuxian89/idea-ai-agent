@@ -4,8 +4,8 @@ entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
 - id: standalone-browser-self-update
-  description: 网页从现有安装入口直接升级，适用 macOS、Linux、Windows。最终包验证进行中。
-  status: in_progress
+  description: 0.1.52 同版正式发布网页直接升级。最终包通过 macOS Relay、Linux systemd 和 Windows 5.1 验证，24 个公开附件回读一致。
+  status: done
 - id: standalone-0151-public-update-entry
   description: Relay 公网页面通过正式安装版本入口检查更新，电脑和平板在侧栏底部、手机在「更多」显示。Chrome、WebKit、Windows PowerShell 5.1 与公开下载验证通过。0.1.51 继续为默认安装版本，新附件已发布。
   status: done
