@@ -2,8 +2,27 @@ package claude
 
 import (
 	claudeagent "github.com/roasbeef/claude-agent-sdk-go"
+	"os"
 	"strings"
 )
+
+// Claude Code exits at startup when bypassPermissions (or the flag that allows switching to it)
+// is used with uid 0, unless IS_SANDBOX=1 is set. Without it a root service never receives the
+// initialization response and every probe and session ends in "context deadline exceeded".
+func claudeEnvironment(uid int, env map[string]string) map[string]string {
+	if uid != 0 {
+		return env
+	}
+	if _, set := env["IS_SANDBOX"]; set {
+		return env
+	}
+	withSandbox := make(map[string]string, len(env)+1)
+	for key, value := range env {
+		withSandbox[key] = value
+	}
+	withSandbox["IS_SANDBOX"] = "1"
+	return withSandbox
+}
 
 func (s *session) nativeOptions(opts OpenOptions) []claudeagent.Option {
 	permissionMode := claudeagent.PermissionMode(strings.TrimSpace(opts.Mode))
@@ -20,7 +39,7 @@ func (s *session) nativeOptions(opts OpenOptions) []claudeagent.Option {
 		// This SDK's transport consumes SkillsConfig, not Options.SettingSources.
 		claudeagent.WithSkills(claudeagent.SkillsConfig{EnableSkills: true, SettingSources: []string{"user", "project", "local"}}),
 		claudeagent.WithCwd(opts.RootPath),
-		claudeagent.WithEnv(opts.Env),
+		claudeagent.WithEnv(claudeEnvironment(os.Geteuid(), opts.Env)),
 		claudeagent.WithVerbose(true),
 		claudeagent.WithIncludePartialMessages(true),
 		claudeagent.WithAgentProgressSummaries(true),

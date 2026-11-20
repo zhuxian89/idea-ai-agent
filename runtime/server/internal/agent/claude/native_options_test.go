@@ -6,6 +6,7 @@ import (
 	"errors"
 	claudeagent "github.com/roasbeef/claude-agent-sdk-go"
 	"mindfs/server/internal/agent/types"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -98,5 +99,39 @@ func TestNativePermissionWaitsForUser(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("permission answer was not consumed")
+	}
+}
+
+func TestClaudeEnvironmentMarksRootServiceAsSandbox(t *testing.T) {
+	user := map[string]string{"HOME": "/home/user"}
+	if got := claudeEnvironment(1000, user); got["IS_SANDBOX"] != "" || len(got) != 1 {
+		t.Fatalf("a normal user must not get the sandbox marker: %v", got)
+	}
+	got := claudeEnvironment(0, user)
+	if got["IS_SANDBOX"] != "1" || got["HOME"] != "/home/user" {
+		t.Fatalf("root must get IS_SANDBOX=1 and keep its environment: %v", got)
+	}
+	if _, changed := user["IS_SANDBOX"]; changed {
+		t.Fatal("the caller's environment map was modified")
+	}
+	if got := claudeEnvironment(0, nil); got["IS_SANDBOX"] != "1" {
+		t.Fatalf("root with no environment: %v", got)
+	}
+	if got := claudeEnvironment(0, map[string]string{"IS_SANDBOX": "0"}); got["IS_SANDBOX"] != "0" {
+		t.Fatalf("an explicit setting must be kept: %v", got)
+	}
+}
+
+// Runs for real only when the test process is uid 0 (for example in a container).
+func TestNativeOptionsCarrySandboxMarkerForRealRoot(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("not running as root")
+	}
+	opts := claudeagent.DefaultOptions()
+	for _, option := range (&session{}).nativeOptions(OpenOptions{RootPath: t.TempDir()}) {
+		option(&opts)
+	}
+	if opts.Env["IS_SANDBOX"] != "1" {
+		t.Fatalf("root session options lack IS_SANDBOX=1: %v", opts.Env)
 	}
 }
