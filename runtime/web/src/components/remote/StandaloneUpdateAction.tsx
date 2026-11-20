@@ -1,4 +1,5 @@
 import React, { useEffect, useReducer, useRef, useState } from "react";
+import { bootstrapService } from "../../services/bootstrap";
 import {
   POLL_MS,
   RELOAD_AFTER_MS,
@@ -14,10 +15,15 @@ export function useStandaloneUpdate(pageVersion: string) {
   const [ui, dispatch] = useReducer(nextUpdateUi, initialUpdateUi);
   useEffect(() => {
     let alive = true;
-    fetchUpdateStatus()
-      .then((status) => { if (alive) dispatch({ type: "status", status, pageVersion }); })
-      .catch(() => { if (alive) dispatch({ type: "unsupported" }); });
-    return () => { alive = false; };
+    let checked = false;
+    const unsubscribe = bootstrapService.subscribe(({ phase }) => {
+      if (phase !== "ready" || checked) return;
+      checked = true;
+      fetchUpdateStatus()
+        .then((status) => { if (alive) dispatch({ type: "status", status, pageVersion }); })
+        .catch(() => { if (alive) dispatch({ type: "unsupported" }); });
+    });
+    return () => { alive = false; unsubscribe(); };
   }, [pageVersion]);
   const polling = ui.step === "installing" || ui.step === "reconnecting";
   useEffect(() => {
