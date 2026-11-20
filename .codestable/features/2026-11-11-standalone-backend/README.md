@@ -2,6 +2,7 @@
 
 ## 当前状态（2026-11-19）
 
+- **独立后台 0.1.52 已作为唯一正式版发布**（2026-11-20，标签指向 `1fb4ea3`，从该提交的干净克隆构建）：左下角电脑状态与页脚对齐、Windows/Linux 装完 Agent 后检测不到的修复（后台追加用户目录到 PATH）、root 下 Claude Code 的 `IS_SANDBOX=1` 修复。`version.txt` 与固定安装命令默认 0.1.52，0.1.51 已下架（快照在 `build/reports/release52-withdraw/`，Git 标签保留）。验证：24 个公开附件匿名回读逐字节一致；Windows PowerShell 5.1（GitHub Actions）新装、升级、失败恢复通过；macOS 隔离环境新装、升级、失败恢复和公开入口（指定版本与默认版本）通过。未验证：Linux 包在真实环境或容器里的运行（本轮没有可用的 Linux 环境）、Windows 实机登录自启、公网页面上的新页脚、真实 Windows 上“装完 Agent 能被检测到”的修复。
 - **独立后台 0.1.51** 已成为默认安装版本，修复手机键盘弹出后遮住远程对话输入框的问题。Mac 节点经 iPhone 实机验收，六个平台共 24 个附件已发布并回读核验。0.1.50 Release 已下架，Git 标签保留。Hostdzire-linux 节点待升级。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.51)
 - **0.1.51 同版重打包已发布**。Relay 公网项目页可检查独立后台更新，电脑和平板在侧栏底部，手机在「更多」。24 个公开附件均已回读验证。按用户要求，本机继续运行此前的 0.1.51 构建，后续单独升级。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.51)
 - **IDEA 插件 0.1.27** 已在 GitHub 同版本更新四个平台和通用包。内置后台及远程网页更新已随包发布。已安装 0.1.27 的用户需从磁盘重装并重启 IDEA。[插件下载](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)
