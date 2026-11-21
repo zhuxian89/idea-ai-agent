@@ -337,3 +337,10 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 - macOS arm64 本地测试包通过 SHA-256、内嵌归档和 305 个网页文件校验。Chrome 与 WebKit 用包内网页验证 Relay 节点和项目入口、更新检查、手机键盘视口变化及加载失败提示。WebKit 在 320 和 390 像素竖屏、780 像素横屏验证快速切换。[浏览器回归](../../../build/reports/standalone-0.1.59-macos-ui/browser-regressions.log) · [快速切换预览](../../../build/reports/standalone-0.1.59-macos-ui/quick-switch.png)
 - 隔离环境从 0.1.58 升级到 0.1.59，同包重装和缺文件时恢复均通过，原项目和端口保留。本机升级预检确认 0.1.58 在运行，7 个项目可读且 Relay 已连接。升级任务核对版本、项目和网页资源，失败时恢复 0.1.58。[隔离验证](../../../build/reports/standalone-0.1.59-macos-ui/isolated-install.log) · [部署结果](../../../build/reports/standalone-0.1.59-live-upgrade/result.txt)
 - 本机 0.1.59 已在原端口运行，7 个项目可读，二进制、网页资源和 Relay 状态核对通过。[部署结果](../../../build/reports/standalone-0.1.59-live-upgrade/result.txt)
+
+### 0.1.59 正式发布
+
+- 六个平台从 `7c6b7f0` 的干净克隆构建。24 个公开附件匿名回读与本地归档及 GitHub SHA-256 逐字节一致。各包包含 305 个配套网页文件，macOS arm64 的网页资源与本机试用包逐字节相同。[公开附件核验](../../../build/reports/release59/public-verification.json)
+- Go 全量测试、Bark 与更新接口的 race 检查、旧库迁移和迁移 race 检查通过。Chrome 相关前端回归 29 项和 WebKit 包内入口回归 3 项通过。macOS arm64 和 Rosetta x64 从 0.1.52 升级、同包重装及缺文件后的恢复均保持原项目与端口。[前端回归](../../../build/reports/release59/frontend-final.log)
+- Windows x64 最终 ZIP 在 PowerShell 5.1 中通过首次安装、升级、失败恢复和计划任务自更新。Linux x64 通过 systemd 自更新。Windows 下载器另以 PowerShell 5.1 从正式 Release 下载了 0.1.59 并校验 SHA-256。[最终包 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44889651701) · [Windows 公开下载 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44889920956)
+- `33c5dd5` 将固定安装入口切到 0.1.59。公开版本文件连续三次返回新版本，macOS 从固定入口在隔离环境默认安装 0.1.59，网页和节点版本查询接口验证通过。0.1.52 Release 已归档下架，Git 标签保留。插件 `v0.1.27` 为 GitHub Latest。[默认安装验证](../../../build/reports/release59/macos-public-default.log) · [0.1.52 快照](../../../build/reports/release59/standalone-v0.1.52-before-withdraw.json)
