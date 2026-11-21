@@ -25,15 +25,16 @@
 .remote-phone-icon, .remote-phone-title, .remote-phone-nav button, .remote-phone-attention button {
   border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer;
 }
-.remote-phone-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; color: var(--accent-color); }
+/* The two header icons stay quiet so the conversation is what holds the eye; they brighten while pressed. */
+.remote-phone-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; color: var(--text-secondary); }
+.remote-phone-leading { justify-items: start; padding-inline: 2px 0; }
+.remote-phone-icon:active { color: var(--text-primary); }
 .remote-phone-title {
-  flex: 1; min-width: 0; min-height: 44px; display: grid; grid-template-columns: minmax(0, 1fr) 14px;
-  align-content: center; align-items: center; gap: 0 4px; text-align: left; padding: 3px 2px;
+  flex: 1; min-width: 0; min-height: 44px; display: flex;
+  align-items: center; gap: 4px; text-align: left; padding: 3px 2px;
 }
-.remote-phone-title small { grid-column: 1 / -1; color: var(--text-secondary); font-size: 11px; }
-.remote-phone-title strong, .remote-phone-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.remote-phone-title strong { font-size: 15px; }
-.remote-phone-title svg { color: var(--text-secondary); }
+.remote-phone-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.remote-phone-title svg { flex: none; color: var(--text-secondary); }
 .remote-phone-thread { flex: 1; display: flex; position: relative; overflow: hidden; min-height: 0; min-width: 0; }
 .remote-phone-composer { flex: none; min-width: 0; padding-inline: 8px; background: var(--content-bg); }
 .remote-phone-activity { margin: 2px 0 6px; border-radius: 8px; }
@@ -97,20 +98,31 @@
 .remote-phone-sheet h2 { flex: 1; margin: 0; padding-left: 3px; font-size: 18px; }
 .remote-phone-sheet > header button { color: var(--text-secondary); background: transparent; border: 0; width: 44px; height: 44px; cursor: pointer; font-size: 24px; }
 .remote-phone-sheet-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 6px; }
-.remote-phone-search { width: 100%; box-sizing: border-box; font-size: 16px; min-height: 40px; color: inherit; background: var(--content-bg); border: 1px solid var(--border-color); border-radius: 8px; padding-inline: 10px; }
-.remote-phone-sheet summary { padding: 11px 4px 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+.remote-phone-search-bar { position: sticky; top: 0; z-index: 1; padding-bottom: 6px; background: var(--menu-bg); }
+.remote-phone-search { width: 100%; box-sizing: border-box; font-size: 16px; min-height: 44px; color: inherit; background: var(--content-bg); border: 1px solid var(--border-color); border-radius: 8px; padding-inline: 10px; }
+.remote-phone-recent-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.remote-phone-recent-empty { margin: 12px 4px; color: var(--text-secondary); font-size: 13px; }
 .remote-phone-recent, .remote-phone-all {
   display: flex; align-items: center; gap: 9px; text-align: left; width: 100%; min-height: 44px; padding: 8px;
-  color: inherit; background: var(--content-bg); border: 1px solid var(--border-color); border-radius: 8px; margin: 3px 0; cursor: pointer;
+  color: inherit; background: var(--content-bg); border: 1px solid var(--border-color); border-radius: 8px; margin: 0; cursor: pointer;
+  scroll-margin-top: 50px;
 }
+.remote-phone-recent[aria-current="true"] { background: var(--selection-bg); border-color: var(--accent-color); }
+.remote-phone-recent:active, .remote-phone-all:active { background: var(--selection-bg); }
 .remote-phone-recent > span { flex: 1; min-width: 0; }
 .remote-phone-recent strong, .remote-phone-recent small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-phone-recent strong { font-size: 14px; }
 .remote-phone-recent small { color: var(--text-secondary); font-size: 12px; margin-top: 3px; }
-.remote-phone-recent i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-color); }
+.remote-phone-recent .remote-phone-recent-meta { display: flex; align-items: center; gap: 8px; }
+.remote-phone-recent-meta > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.remote-phone-recent-state { display: flex; flex: none; align-items: center; gap: 4px; }
+.remote-phone-recent i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-secondary); }
 .remote-phone-recent i[data-state="wait"] { background: var(--accent-color); }
 .remote-phone-recent i[data-state="work"] { background: #16a34a; }
 .remote-phone-recent i[data-state="error"] { background: #dc2626; }
-.remote-phone-all { justify-content: center; color: var(--accent-color); margin-top: 10px; }
+.remote-phone-recent svg { flex: none; color: var(--text-secondary); }
+.remote-phone-recent[aria-current="true"] svg { color: var(--accent-color); }
+.remote-phone-all { justify-content: center; color: var(--accent-color); font-size: 13px; margin-top: 10px; }
 .remote-phone-request pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; font-size: 12px; line-height: 1.45; max-height: min(26dvh, 15rem); overflow: auto; overscroll-behavior: contain; }
 .remote-phone-request pre[data-collapsed="true"] { max-height: 4.35em; overflow: hidden; }
 .remote-phone-request button { min-height: 40px; padding: 5px 7px; font: inherit; color: var(--accent-color); background: transparent; border: 0; cursor: pointer; }

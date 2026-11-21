@@ -45,6 +45,23 @@ func (h *HTTPHandler) handleStandaloneUpdateStatus(w http.ResponseWriter, r *htt
 	respondJSON(w, http.StatusOK, updater.Status())
 }
 
+// handleStandaloneLatest answers "what is the newest standalone version" on behalf of the page.
+// Older backends have no such route (404), and the page then checks for itself as it always did.
+func (h *HTTPHandler) handleStandaloneLatest(w http.ResponseWriter, r *http.Request) {
+	updater, err := h.selfUpdater()
+	if err != nil {
+		respondError(w, http.StatusNotFound, err)
+		return
+	}
+	version, err := updater.Latest(r.Context())
+	if err != nil {
+		respondError(w, http.StatusBadGateway, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	respondJSON(w, http.StatusOK, map[string]string{"version": version})
+}
+
 func (h *HTTPHandler) handleStandaloneUpdateStart(w http.ResponseWriter, r *http.Request) {
 	updater, err := h.selfUpdater()
 	if err != nil {

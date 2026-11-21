@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { checkPublishedStandaloneVersion, checkStandaloneRelease, compareStandaloneVersions } from "../../services/standaloneRelease";
+import { fetchLatestFromNode } from "../../services/standaloneUpdate";
+import { bootstrapService } from "../../services/bootstrap";
 import { useI18n } from "../../i18n";
 import { StandaloneUpdateAction, useStandaloneUpdate } from "./StandaloneUpdateAction";
 
@@ -15,8 +17,18 @@ export function useBrowserUpdate(version?: string, platform?: string) {
     let active = true;
     setChecking(true); setError("");
     const timeout = window.setTimeout(() => controller.abort(), 20000);
-    const request = platform ? checkStandaloneRelease(platform, controller.signal) : checkPublishedStandaloneVersion(controller.signal);
-    request.then(value => {
+    // A page opened through Relay asks the node for the latest version. Only a backend that has
+    // no such route (older than this change) is checked from the browser, as before.
+    const fetchVersion = async () => {
+      if (platform) return checkStandaloneRelease(platform, controller.signal);
+      if (!bootstrapService.canUseProtectedAPI()) {
+        const bootstrap = await bootstrapService.start();
+        if (bootstrap.phase === "error") throw new Error(bootstrap.error);
+      }
+      const published = await fetchLatestFromNode(controller.signal);
+      return published ?? checkPublishedStandaloneVersion(controller.signal);
+    };
+    fetchVersion().then(value => {
       if (active) { setAvailable(compareStandaloneVersions(version, value) < 0); setLatest(value); }
     }).catch(cause => { if (active) setError(String(cause)); })
       .finally(() => { window.clearTimeout(timeout); if (active) setChecking(false); });

@@ -329,3 +329,11 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 - 在公网项目页的独立后台版本旁增加「检查更新」。电脑和平板放在侧栏底部，手机放在「更多」。页面自动读取固定安装入口的正式版本，有新版时提供发布页链接。当前版本来自后台 HTML，检查只读取公开版本文件，扫码弹窗继续使用当前地址。
 - 最终网页包在 Chrome 和 WebKit 中验证了三个尺寸的自动检查、手动检查、新版提示、错误反馈及扫码入口。Go 旧库迁移、迁移 race 和网页资源归属检查通过。macOS arm64 与 x64、Linux arm64 与 x64 的首次安装、同包升级和失败恢复通过。Windows x64 最终包通过真实 PowerShell 5.1 验证。[平台验证](https://github.com/zhuxian89/idea-ai-agent/actions/runs/44550871123)
 - 按用户要求沿用 0.1.51。新附件从干净提交 `5f09ada4b69e` 构建，20 个内容变化的附件已替换，另外 4 个安装入口及摘要与原附件一致。全部 24 个公开附件逐字节回读通过。现有标签保留，发布说明记录实际构建提交。公开固定安装命令在隔离 macOS 环境中将旧 0.1.51 升级至新构建，原端口保持可用。本机实际安装仍为原 0.1.51，待单独升级。验证记录位于 `build/reports/release51-repack/`。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.51)
+
+### 0.1.59 手机顶栏和会话切换
+
+- 对话顶栏的会话入口用三横线，标题压为单行。快速切换从项目分组改为跨项目列表，等你回答的会话和运行中会话排在前面，行内展示项目、状态和当前项。
+- 用 0.1.58 最终包复现首屏更新检查返回 `api_not_ready`。节点查询现等待页面连接就绪，旧节点的 404 仍走公开版本文件。手机壳回归、Bark 和相关 Go 接口检查通过。旧库迁移和迁移 race 检查通过。
+- macOS arm64 本地测试包通过 SHA-256、内嵌归档和 305 个网页文件校验。Chrome 与 WebKit 用包内网页验证 Relay 节点和项目入口、更新检查、手机键盘视口变化及加载失败提示。WebKit 在 320 和 390 像素竖屏、780 像素横屏验证快速切换。[浏览器回归](../../../build/reports/standalone-0.1.59-macos-ui/browser-regressions.log) · [快速切换预览](../../../build/reports/standalone-0.1.59-macos-ui/quick-switch.png)
+- 隔离环境从 0.1.58 升级到 0.1.59，同包重装和缺文件时恢复均通过，原项目和端口保留。本机升级预检确认 0.1.58 在运行，7 个项目可读且 Relay 已连接。升级任务核对版本、项目和网页资源，失败时恢复 0.1.58。[隔离验证](../../../build/reports/standalone-0.1.59-macos-ui/isolated-install.log) · [部署结果](../../../build/reports/standalone-0.1.59-live-upgrade/result.txt)
+- 本机 0.1.59 已在原端口运行，7 个项目可读，二进制、网页资源和 Relay 状态核对通过。[部署结果](../../../build/reports/standalone-0.1.59-live-upgrade/result.txt)

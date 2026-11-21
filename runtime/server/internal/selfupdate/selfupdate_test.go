@@ -1,6 +1,10 @@
 package selfupdate
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -211,5 +215,67 @@ func TestOnlyOneUpdateAtATime(t *testing.T) {
 	}
 	if len(plans.all()) != 1 {
 		t.Fatalf("one installer, not %d", len(plans.all()))
+	}
+}
+
+func TestLatestReadsThePublishedVersionTheNodeWouldInstall(t *testing.T) {
+	var served string
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if served == "404" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, served)
+	}))
+	defer server.Close()
+	t.Setenv(scriptBaseEnv, server.URL+"/scripts")
+	u := New(t.TempDir(), "/x/local-ai-agent", "0.1.52")
+
+	served = "0.1.53\n"
+	version, err := u.Latest(context.Background())
+	if err != nil || version != "0.1.53" || gotPath != "/scripts/standalone/version.txt" {
+		t.Fatalf("version=%q err=%v path=%q", version, err, gotPath)
+	}
+
+	served = "0.1.54-standalone.2"
+	if version, err = u.Latest(context.Background()); err != nil || version != "0.1.54-standalone.2" {
+		t.Fatalf("standalone build number: %q %v", version, err)
+	}
+
+	for _, bad := range []string{"<html>blocked</html>", "", "v0.1.53", "0.1", strings.Repeat("1", 400)} {
+		served = bad
+		if _, err := u.Latest(context.Background()); err == nil || !strings.Contains(err.Error(), "not a release number") {
+			t.Fatalf("%q must be refused as a version, got %v", bad, err)
+		}
+	}
+
+	served = "404"
+	if _, err := u.Latest(context.Background()); err == nil || !strings.Contains(err.Error(), "HTTP 404") {
+		t.Fatalf("an HTTP failure must name the status, got %v", err)
+	}
+
+	server.Close()
+	if _, err := u.Latest(context.Background()); err == nil || !strings.Contains(err.Error(), "could not reach") {
+		t.Fatalf("an unreachable server must say so, got %v", err)
+	}
+}
+
+func TestLatestGivesUpWhenAskedToStop(t *testing.T) {
+	hang := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-hang }))
+	defer server.Close()
+	defer close(hang)
+	t.Setenv(scriptBaseEnv, server.URL)
+	u := New(t.TempDir(), "/x/local-ai-agent", "0.1.52")
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	if _, err := u.Latest(ctx); err == nil {
+		t.Fatal("a cancelled lookup must fail")
+	}
+	if time.Since(started) > 2*time.Second {
+		t.Fatal("the lookup ignored its context")
 	}
 }

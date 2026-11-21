@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -83,6 +84,7 @@ type Updater struct {
 	goos   string
 	launch func(plan) error
 	now    func() time.Time
+	client *http.Client // nil means http.DefaultClient; tests replace it
 
 	mu sync.Mutex
 }

@@ -2,6 +2,7 @@ import "./workspaceSidebar.css";
 import React from "react";
 import { createPortal } from "react-dom";
 import { StandaloneProjects } from "./StandaloneProjects";
+import { BarkMenuItem } from "./notifications/BarkSettings";
 import { isIDEManagedProject } from "../services/ideaBridge";
 import { isRemoteWebUi } from "../services/remoteUi";
 import { GLOW_CHANGE_EVENT, loadGlowConfig, type GlowConfig } from "../services/remoteGlow";
@@ -15,7 +16,7 @@ import { IdeaAgentSettings } from "./IdeaAgentSettings";
 import { RemotePublishedUpdate } from "./remote/RemoteBrowserUpdate";
 import { AGENT_INSTALLATION_CHANGED } from "../services/agentInstallation";
 import { openExternalURL } from "../services/platformNavigation";
-import { isNativeShellRuntime, shouldEnablePWAInstall } from "../services/runtime";
+import { isIOSAppRuntime, isNativeShellRuntime, shouldEnablePWAInstall } from "../services/runtime";
 import {
   DIRECTORY_SORT_OPTIONS,
   type DirectorySortMode,
@@ -1446,7 +1447,7 @@ export function FileTree({
         : t("pwa.helpUnavailable");
 
   const shouldShowInstallButton = !relayNoRelayer && !isNativeApp && !isKnownInstalled && !(isAndroidChrome && !deferredInstallPrompt);
-  const shouldShowInstallHelp = !relayNoRelayer && !isNativeApp && (!!installHelp) && (isKnownInstalled || isIOS || isMacSafari || isDesktopChromium || deferredInstallPrompt !== null || (isAndroidChrome && !deferredInstallPrompt));
+  const shouldShowInstallHelp = !relayNoRelayer && !isNativeApp && !isIOSAppRuntime() && (!!installHelp) && (isKnownInstalled || isIOS || isMacSafari || isDesktopChromium || deferredInstallPrompt !== null || (isAndroidChrome && !deferredInstallPrompt));
   const visibleRelayTips = React.useMemo(
     () => relayTips.filter((tip) => tip.id && tip.title && !dismissedRelayTipIds.includes(tip.id)),
     [dismissedRelayTipIds, relayTips],
@@ -2917,7 +2918,8 @@ export function FileTree({
                 </button> : null}
                 </PhoneMoreGroup>
                 <PhoneMoreGroup phone={inPhoneMore} name="notifications" title={t("remote.phone.notifications")}>
-                  {!isNativeApp ? <WebPushMenuItem phone={inPhoneMore} /> : null}
+                  {!isNativeApp && !isIOSAppRuntime() ? <WebPushMenuItem phone={inPhoneMore} /> : null}
+                  <BarkMenuItem phone={inPhoneMore} />
                 </PhoneMoreGroup>
                 {!inPhoneMore && <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />}
                 {!inPhoneMore && <PhoneMoreGroup phone={false} name="appearance" title={t("appearance.title")}>

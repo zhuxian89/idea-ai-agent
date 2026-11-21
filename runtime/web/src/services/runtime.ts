@@ -68,6 +68,20 @@ export function isAndroidRuntime(): boolean {
   return getNativePlatform() === "android";
 }
 
+/**
+ * The iOS App is a WKWebView shell around the normal Relay pages, so it keeps
+ * the Safari/PWA code paths (keyboard, viewport, downloads handled natively by
+ * WebKit). It only announces itself so the page can drop browser-only UI such
+ * as "add to home screen" and pick the App link for notifications.
+ */
+export function isIOSAppRuntime(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const app = (window as Window & { MindFSIOSApp?: { platform?: string } }).MindFSIOSApp;
+  return app?.platform === "ios";
+}
+
 export function isHarmonyRuntime(): boolean {
   return getNativePlatform() === "harmony";
 }
@@ -145,5 +159,5 @@ export function shouldRegisterServiceWorker(): boolean {
 }
 
 export function shouldEnablePWAInstall(): boolean {
-  return !isNativeShellRuntime();
+  return !isNativeShellRuntime() && !isIOSAppRuntime();
 }

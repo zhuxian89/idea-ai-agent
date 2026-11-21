@@ -60,6 +60,14 @@ export async function mount(
       });
     }
     const result = await handleRequest(route.request());
+    // A handler may answer with a status or raw text: { __status, __text? }.
+    if (result && typeof result === "object" && "__status" in result) {
+      return route.fulfill({
+        status: result.__status,
+        contentType: "__text" in result ? "text/plain" : "application/json",
+        body: "__text" in result ? result.__text : JSON.stringify(result.__json ?? {}),
+      });
+    }
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(result),

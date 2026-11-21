@@ -19,6 +19,7 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
   const page = await browser.newPage({ locale: "en-US" });
   const errors = [], requests = [];
   let standalone = false;
+  let publishedVersion = "0.1.59";
   page.on("pageerror", error => errors.push(error.message));
   await page.route("https://entry.test/**", async route => {
     const request = route.request(), url = new URL(request.url());
@@ -36,13 +37,15 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
       let payload = { dirs: [], agents: [], shells: [], tasks: [], templates: [], items: [] };
       if (api === "/api/relay/status") payload = { remote_host: !project && !legacy && !local, e2ee_required: false, node_name: "Test computer" };
       else if (api === "/api/remote/projects") payload = { projects: ["A", "B"].map(id => ({ project_id: id, name: `Project ${id}`, label: "", availability: "online" })) };
+      else if (api === "/api/standalone/latest") return publishedVersion
+        ? json({ version: publishedVersion }) : json({ error: "Could not read the published version" }, 502);
       return json(payload);
     }
     const file = api === "/" ? "index.html" : api.slice(1);
     const contentType = file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : file.endsWith(".html") ? "text/html" : "application/octet-stream";
     const body = await readFile(path.join(outDir, file));
     return route.fulfill({ contentType, body: standalone && file === "index.html"
-      ? body.toString().replace("</head>", '<meta name="local-ai-agent-mode" content="standalone"><meta name="local-ai-agent-version" content="0.1.51"></head>')
+      ? body.toString().replace("</head>", '<meta name="local-ai-agent-mode" content="standalone"><meta name="local-ai-agent-version" content="0.1.58"></head>')
       : body });
   });
   // The Relay homepage and plain project links need no browser pairing data.
@@ -87,9 +90,6 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
   assert.deepEqual(errors, []);
 
   await t.test("public standalone update checks are available on desktop, tablet, and phone", async () => {
-    const versionURL = "https://raw.githubusercontent.com/zhuxian89/idea-ai-agent/main/scripts/standalone/version.txt";
-    let version = "0.1.52";
-    await page.route(versionURL, route => route.fulfill({ contentType: "text/plain", body: version }));
     standalone = true;
     for (const [device, width, height] of [["desktop", 1440, 900], ["tablet", 820, 1180], ["phone", 390, 844]]) {
       await page.setViewportSize({ width, height });
@@ -99,25 +99,24 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
         await page.getByRole("button", { name: "More", exact: true }).click();
       }
       const update = page.getByRole("region", { name: "Standalone updates" });
-      await expect(update.getByText("0.1.51", { exact: true })).toBeVisible();
-      await expect(update.getByRole("status")).toHaveText("New version: 0.1.52");
+      await expect(update.getByText("0.1.58", { exact: true })).toBeVisible();
+      await expect(update.getByRole("status")).toHaveText("New version: 0.1.59");
       await expect(update.getByRole("button", { name: "Check for updates" })).toBeInViewport();
-      await expect(update.getByRole("link", { name: "View release" })).toHaveAttribute("href", /standalone-v0\.1\.52$/);
+      await expect(update.getByRole("link", { name: "View release" })).toHaveAttribute("href", /standalone-v0\.1\.59$/);
       await page.getByRole("button", { name: "Connect your phone", exact: true }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await page.keyboard.press("Escape");
     }
     const update = page.getByRole("region", { name: "Standalone updates" });
-    version = "0.1.51";
+    publishedVersion = "0.1.58";
     await update.getByRole("button", { name: "Check for updates" }).click();
     await expect(update.getByRole("status")).toHaveText("Up to date");
-    version = "invalid";
+    publishedVersion = "";
     await update.getByRole("button", { name: "Check for updates" }).click();
     await expect(update.getByRole("alert")).toBeVisible();
     assert.equal(requests.some(url => url.includes("/api/idea/remote")), false);
     assert.deepEqual(errors, []);
     standalone = false;
-    await page.unroute(versionURL);
   });
 
   await t.test("the phone composer follows the visible viewport when a keyboard covers the page", async () => {

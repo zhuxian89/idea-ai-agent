@@ -1,6 +1,6 @@
 # Privacy Notice
 
-Last updated: November 12, 2026
+Last updated: November 21, 2026
 
 Local AI Agent is an open-source IntelliJ IDEA plugin. It does not include telemetry, analytics or advertising tracking. Local use does not require Relay; optional remote access connects the plugin to a Relay service after you enable it and link your computer (the unreleased multi-project implementation described below). Released version 0.1.25 uses separate project nodes.
 
@@ -27,6 +27,14 @@ The QR code, **Open browser** action and **Copy link** contain a node or project
 Remote browsers can view project conversations and files, send Agent instructions, respond to approvals and edit files on disk, subject to the Agent's configured permissions. Browsers may retain file/session data in local storage or IndexedDB, plus static resources in service-worker caches. Text composer drafts are retained in session storage for project switches in the same browser tab; attachment contents are not persisted there. File editor drafts remain in page memory and switching away requires confirmation if they are unsaved. Unsaved IDEA editor buffers are not synchronized.
 
 Turning remote access off disconnects remote browsers and retains local data. To remove a Relay binding, first disable access in the plugin and delete the node in Relay's node-management page. Clear the Relay site's browser data to remove cached content and any credentials retained by older versions; this can affect other nodes on the same site as well.
+
+## Optional lock-screen notifications (Bark)
+
+Lock-screen notifications are off until you paste a Bark device key in **More → Notifications → Bark push** and turn the switch on. The backend stores the key, the Bark server address and your choices in `bark.json` in the Local AI Agent configuration directory (file mode `0600`); clients can read only the last four characters of the key. By default only approval requests, questions and final failures are sent; task completion is opt-in.
+
+When a selected event happens, the backend sends the project name, the session title, a one-line summary (for a completion, the last line of the final answer; for an approval, who is asking plus a preview of the single most telling argument, such as the first line of the command, cut to 80 characters, never the full request or other parameters) and a link that opens the session to the Bark server you configured (`https://api.day.app` by default, or your own server). The Bark server hands the message to Apple Push Notification service, which delivers it to the Bark app on your phone, where it appears on the lock screen under Bark's name. These services can read the message; we do not add end-to-end encryption to it, and their terms and privacy policies apply. The link contains the node address and the project and session identifiers, but no password or token.
+
+The device key is also sent from your browser or the iOS App to your own backend when you save it; through Relay this request follows the same forwarding rules as other remote traffic described above. Removing the device in the same screen deletes the key from `bark.json`.
 
 ## Optional voice input
 

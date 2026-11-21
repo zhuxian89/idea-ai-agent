@@ -30,9 +30,19 @@ test("phone keeps chat chrome compact and navigates cards, quick switching, proj
   await shell.getByRole("button", { name: "Switch session" }).click();
   const quick = page.getByRole("dialog", { name: "Switch session" });
   await expect(quick).toBeVisible();
-  await expect(quick.getByText("Main conversation")).toBeVisible();
-  await expect(quick.getByText("Other conversation")).toBeHidden();
-  await quick.getByRole("searchbox").fill("Other");
+  const choices = quick.getByRole("list").getByRole("button");
+  await expect(choices.locator("strong")).toHaveText([
+    "Other conversation", "Main conversation", "Pinned finished", "Recently finished", "Older finished",
+  ]);
+  await expect(choices.first()).toContainText("Beta project");
+  await expect(choices.first()).toContainText("Needs an answer");
+  const current = quick.locator('[aria-current="true"]');
+  await expect(current).toContainText("Main conversation");
+  await expect(current).toContainText("Running");
+  await quick.getByRole("searchbox").fill("missing session");
+  await expect(quick.getByText("No matching sessions")).toBeVisible();
+  await quick.getByRole("searchbox").fill(" beta project ");
+  await expect(choices).toHaveCount(1);
   await quick.getByRole("button", { name: /Other conversation/ }).click();
   await expect(shell.locator(".remote-phone-title")).toContainText("Other conversation");
   await expect(activity).toHaveAttribute("data-activity-kind", "work");
@@ -55,6 +65,39 @@ test("phone keeps chat chrome compact and navigates cards, quick switching, proj
   await shell.locator("nav").getByRole("button", { name: "Projects", exact: true }).click();
   await expect(shell.locator(".remote-phone-projects .workspace-projects")).toBeVisible();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+});
+
+test("phone header aligns the one-line title with the compact sessions and projects icons", async t => {
+  const page = await setup(t);
+  const header = page.locator(".remote-phone-chat-header");
+  await expect(header).toBeVisible();
+  await expect(header.locator(".remote-phone-title")).toHaveText("Main conversation");
+  const measured = await header.evaluate(element => {
+    const middle = node => { const box = node.getBoundingClientRect(); return box.top + box.height / 2; };
+    const icons = element.querySelectorAll(".remote-phone-icon");
+    const leading = icons[0].querySelector("svg");
+    const title = element.querySelector(".remote-phone-title strong");
+    const colorOf = value => { const probe = document.createElement("i"); probe.style.color = value; document.body.append(probe); const out = getComputedStyle(probe).color; probe.remove(); return out; };
+    return {
+      sessions: middle(leading), folder: middle(icons[1].querySelector("svg")),
+      chevron: middle(element.querySelector(".remote-phone-title svg")), title: middle(title),
+      leadingOffset: leading.getBoundingClientRect().left - element.getBoundingClientRect().left,
+      leadingTarget: icons[0].getBoundingClientRect().toJSON(),
+      titleWrapping: getComputedStyle(title).whiteSpace,
+      leadingLines: leading.querySelector("path").getAttribute("d").match(/M/g)?.length,
+      iconColor: getComputedStyle(icons[0]).color, folderColor: getComputedStyle(icons[1]).color,
+      accent: colorOf("var(--accent-color)"), secondary: colorOf("var(--text-secondary)"),
+    };
+  });
+  for (const name of ["folder", "chevron", "title"]) assert.ok(Math.abs(measured[name] - measured.sessions) <= 1, `${name} is ${measured[name] - measured.sessions}px off the sessions button's axis`);
+  assert.ok(measured.leadingOffset <= 12, "the sessions icon should sit close to the leading edge");
+  assert.ok(measured.leadingTarget.width >= 44 && measured.leadingTarget.height >= 44);
+  assert.equal(measured.titleWrapping, "nowrap");
+  assert.equal(measured.leadingLines, 3);
+  assert.notEqual(measured.iconColor, measured.accent, "the sessions button must not use the accent colour");
+  assert.notEqual(measured.folderColor, measured.accent, "the projects button must not use the accent colour");
+  assert.equal(measured.iconColor, measured.secondary);
+  assert.equal(measured.folderColor, measured.secondary);
 });
 
 test("phone keeps approval above the composer and submits the original request from its sheet", async t => {

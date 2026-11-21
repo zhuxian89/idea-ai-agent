@@ -1,0 +1,24 @@
+.bark-dialog { width: min(420px, calc(100vw - 32px)); }
+.bark-dialog > header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.bark-dialog h2 { flex: 1; margin: 0; font-size: 16px; font-weight: 650; }
+.bark-group { margin: 14px 0 0; padding: 0; border: 0; }
+.bark-group > h3 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.bark-rows { overflow: hidden; border: 1px solid var(--border-color); border-radius: 10px; }
+.bark-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; box-sizing: border-box; padding: 8px 12px; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.bark-row + .bark-row { border-top: 1px solid var(--border-color); }
+.bark-row:disabled { opacity: .52; cursor: default; }
+.bark-row > span:first-child { flex: 1; min-width: 0; }
+.bark-row .bark-meta { color: var(--text-secondary); font-size: 12px; }
+.bark-row .remote-switch { margin-inline-start: auto; }
+.bark-device { display: flex; gap: 8px; padding: 8px; }
+.bark-device input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 14px; }
+.bark-device button, .bark-inline-actions button { flex: none; padding: 7px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.bark-device button:disabled, .bark-inline-actions button:disabled { opacity: .52; cursor: default; }
+.bark-inline-actions { display: flex; gap: 8px; }
+.bark-note { margin: 8px 2px 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.bark-status { min-height: 18px; margin: 10px 2px 0; font-size: 12px; color: var(--text-secondary); }
+.bark-status[data-tone="error"] { color: var(--remote-danger, #b12c39); }
+.bark-dialog :is(button, input):focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.bark-menu-item { display: flex; width: 100%; min-height: 42px; align-items: center; gap: 8px; box-sizing: border-box; padding: 7px 10px; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.bark-menu-item > span:first-of-type { flex: 1; min-width: 0; }
+.bark-menu-item .bark-meta { margin-inline-start: auto; color: var(--text-secondary); font-size: 12px; }

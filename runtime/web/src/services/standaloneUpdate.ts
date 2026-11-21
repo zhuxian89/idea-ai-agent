@@ -1,4 +1,4 @@
-import { protectedJSON } from "./api";
+import { ProtectedAPIError, protectedJSON } from "./api";
 import { appPath } from "./base";
 
 /** 独立后台在页面里更新自己：GET 读状态，POST 触发。旧版后台和内置后台没有这个接口（404）。 */
@@ -22,6 +22,21 @@ export async function fetchUpdateStatus(): Promise<UpdateStatus> {
   if (status.phase === "installing") updatingUntil = Date.now() + RECONNECT_LIMIT_MS;
   if (status.phase === "done" || status.phase === "failed") updatingUntil = 0;
   return status;
+}
+
+/**
+ * 由后台查最新版本：下载并安装更新的是那台电脑，手机能不能直连 GitHub 说明不了更新能否成功，
+ * 手机网络常常连不上 GitHub（浏览器只会报 “TypeError: Load failed”）。
+ * 旧后台没有这个接口（404），返回 null，由调用方沿用浏览器直连；其他失败原样抛出，带后台报告的真实原因。
+ */
+export async function fetchLatestFromNode(signal: AbortSignal): Promise<string | null> {
+  try {
+    const result = await protectedJSON<{ version?: unknown }>(appPath("/api/standalone/latest"), { cache: "no-store", signal });
+    return typeof result.version === "string" && result.version ? result.version : null;
+  } catch (error) {
+    if (error instanceof ProtectedAPIError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export async function startUpdate(version: string): Promise<UpdateStatus> {

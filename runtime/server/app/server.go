@@ -16,6 +16,7 @@ import (
 	"mindfs/server/internal/agent"
 	"mindfs/server/internal/api"
 	"mindfs/server/internal/backend"
+	"mindfs/server/internal/barknotify"
 	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/fs"
 	"mindfs/server/internal/githubimport"
@@ -184,6 +185,10 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		}
 		return time.Duration(hours) * time.Hour
 	})
+	barkService, err := barknotify.NewService()
+	if err != nil {
+		log.Printf("[bark] init.error err=%v", err)
+	}
 	webPushStore, err := webpush.NewStore()
 	if err != nil {
 		log.Printf("[webpush] init.error err=%v", err)
@@ -205,6 +210,7 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 		}),
 		WebPush: webpush.NewService(webPushConfig, webPushStore),
 		Notify:  notifyscript.NewService(notifyscript.Config{Script: opts.NotifyScript}),
+		Bark:    barkService,
 	}
 	services.Scheduled = scheduled.NewService(services, services)
 	services.Scheduled.Start(ctx)

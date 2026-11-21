@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -72,5 +74,38 @@ func TestSelfUpdateIsBehindTheSameProofAsEveryOtherEndpoint(t *testing.T) {
 		if w.Code != 401 {
 			t.Errorf("%s through the relay without proof: %d", method, w.Code)
 		}
+	}
+}
+
+func latestRequest(h *HTTPHandler) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	h.protectedEndpoint(h.handleStandaloneLatest).ServeHTTP(w, httptest.NewRequest("GET", "/api/standalone/latest", nil))
+	return w
+}
+
+func TestStandaloneAnswersTheLatestVersionAndAnEmbeddedBackendDoesNot(t *testing.T) {
+	status, body := http.StatusOK, "0.1.53\n"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	}))
+	defer upstream.Close()
+	t.Setenv("LOCAL_AI_AGENT_INSTALL_SCRIPT_BASE_URL", upstream.URL)
+	t.Setenv("IDE_AGENT_REMOTE_HOST_DIR", t.TempDir())
+
+	// The embedded backend has no such route, which is what tells the page to check for itself.
+	if w := latestRequest(&HTTPHandler{AppContext: &AppContext{}, Version: "0.1.52"}); w.Code != 404 {
+		t.Fatalf("embedded: %d", w.Code)
+	}
+
+	h := &HTTPHandler{AppContext: &AppContext{}, Version: "0.1.52", Standalone: true}
+	w := latestRequest(h)
+	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || strings.TrimSpace(w.Body.String()) != `{"version":"0.1.53"}` {
+		t.Fatalf("latest: %d %v %s", w.Code, w.Header(), w.Body)
+	}
+
+	status = http.StatusServiceUnavailable
+	if w := latestRequest(h); w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "HTTP 503") {
+		t.Fatalf("upstream failure must be a 502 that names the cause: %d %s", w.Code, w.Body)
 	}
 }

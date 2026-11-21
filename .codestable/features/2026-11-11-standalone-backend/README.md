@@ -2,6 +2,7 @@
 
 ## 当前状态（2026-11-21）
 
+- **0.1.59 macOS arm64 本地测试包已通过整包和隔离升级验证，本机部署成功。** 手机对话显示靠左的三横线入口和单行标题。快速切换按会话活跃状态排列，显示项目、状态与当前项。首屏更新检查等待节点接口就绪。本机 7 个项目可读、网页与安装包一致、Relay 已连接。六平台正式包进入构建与验证。[本机部署结果](../../../build/reports/standalone-0.1.59-live-upgrade/result.txt)
 - **[网页直接更新独立后台](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.52)** 已随 0.1.52 同版换包上线。macOS、Linux、Windows 支持网页调用固定安装脚本。旧构建需先用固定安装命令重装一次。最终包通过 macOS Relay 桌面和手机、Linux systemd、Windows PowerShell 5.1 验证。
 - **独立后台 0.1.52 已作为唯一正式版发布**（2026-11-20，标签指向 `1fb4ea3`，从该提交的干净克隆构建）：左下角电脑状态与页脚对齐、Windows/Linux 装完 Agent 后检测不到的修复（后台追加用户目录到 PATH）、root 下 Claude Code 的 `IS_SANDBOX=1` 修复。`version.txt` 与固定安装命令默认 0.1.52，0.1.51 已下架（快照在 `build/reports/release52-withdraw/`，Git 标签保留）。验证：24 个公开附件匿名回读逐字节一致；Windows PowerShell 5.1（GitHub Actions）新装、升级、失败恢复通过；macOS 隔离环境新装、升级、失败恢复和公开入口（指定版本与默认版本）通过。未验证：Linux 包在真实环境或容器里的运行（本轮没有可用的 Linux 环境）、Windows 实机登录自启、公网页面上的新页脚、真实 Windows 上“装完 Agent 能被检测到”的修复。
 - **独立后台 0.1.51** 已成为默认安装版本，修复手机键盘弹出后遮住远程对话输入框的问题。Mac 节点经 iPhone 实机验收，六个平台共 24 个附件已发布并回读核验。0.1.50 Release 已下架，Git 标签保留。Hostdzire-linux 节点待升级。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.51)

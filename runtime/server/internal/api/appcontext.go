@@ -15,6 +15,7 @@ import (
 	"mindfs/server/internal/agent"
 	agenttypes "mindfs/server/internal/agent/types"
 	"mindfs/server/internal/api/usecase"
+	"mindfs/server/internal/barknotify"
 	"mindfs/server/internal/commandexec"
 	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/fs"
@@ -52,6 +53,7 @@ type AppContext struct {
 	E2EE          *e2ee.Manager
 	WebPush       *webpush.Service
 	Notify        *notifyscript.Service
+	Bark          *barknotify.Service
 	Prefs         *preferences.Store
 	Scheduled     *scheduled.Service
 	Kanban        *kanban.Service
@@ -65,6 +67,9 @@ type AppContext struct {
 	streamHub                *StreamHub
 	candidateRegistry        *usecase.CandidateRegistry
 	externalImporters        map[string]agenttypes.ExternalSessionImporter
+
+	failureMu       sync.Mutex
+	sessionFailures map[string]sessionFailure
 }
 
 func (s *AppContext) GetRootContext(rootID string) (*RootContext, error) {
@@ -872,6 +877,7 @@ func (s *AppContext) BroadcastSessionUpdate(rootID, sessionKey string, update ag
 }
 
 func (s *AppContext) BroadcastSessionError(rootID, sessionKey, message string) {
+	s.recordSessionFailure(rootID, sessionKey, message)
 	s.UpdateTaskSessionErrorForSession(rootID, sessionKey, message)
 	s.GetSessionStreamHub().BroadcastSessionStream(rootID, sessionKey, &StreamEvent{
 		Type: "error",
@@ -924,6 +930,7 @@ func (s *AppContext) notifySessionDone(rootID, sessionKey, requestID string, pen
 	if s == nil {
 		return
 	}
+	failure, failed := s.takeSessionFailure(rootID, sessionKey)
 	if strings.HasPrefix(strings.TrimSpace(requestID), "scheduled:") {
 		return
 	}
@@ -947,6 +954,22 @@ func (s *AppContext) notifySessionDone(rootID, sessionKey, requestID string, pen
 		EventID:      eventID,
 	})
 	s.notifyPayload(context.Background(), eventID, payload)
+	// Bark only reports final outcomes: a turn that ended in an error is a
+	// failure, never a completion, even though the web payload keeps its type.
+	barkEvent := barknotify.Event{
+		Kind:         barknotify.KindDone,
+		EventID:      eventID,
+		RootID:       rootID,
+		RootTitle:    rootTitle,
+		SessionKey:   sessionKey,
+		SessionTitle: sessionTitle,
+		Summary:      summary,
+	}
+	if failed {
+		barkEvent.Kind = barknotify.KindFailed
+		barkEvent.Summary = failure
+	}
+	s.notifyBark(barkEvent)
 }
 
 func (s *AppContext) notifyAskUserIfNeeded(rootID, sessionKey string, event *StreamEvent) {
@@ -967,6 +990,11 @@ func (s *AppContext) notifyAskUserIfNeeded(rootID, sessionKey string, event *Str
 		EventID:      "session.ask_user:" + rootID + ":" + sessionKey + ":" + toolCall.CallID,
 	})
 	s.notifyPayload(context.Background(), notify.EventID(payload), payload)
+	kind := barknotify.KindAskUser
+	if isApprovalPrompt(toolCall) {
+		kind = barknotify.KindApproval
+	}
+	s.notifyBark(barkEventForPrompt(kind, notify.EventID(payload), rootID, s.rootTitle(rootID), sessionKey, s.sessionTitle(rootID, sessionKey), askUserSummary(toolCall)))
 }
 
 func (s *AppContext) updateTaskAuxFlagsFromEvent(rootID, sessionKey string, event *StreamEvent) {
@@ -1065,6 +1093,20 @@ func (s *AppContext) notifyScheduled(rootID, taskID, taskName, sessionKey, summa
 		EventID:    eventID,
 	})
 	s.notifyPayload(context.Background(), eventID, payload)
+	barkEvent := barknotify.Event{
+		Kind:         barknotify.KindDone,
+		EventID:      eventID,
+		RootID:       rootID,
+		RootTitle:    s.rootTitle(rootID),
+		SessionKey:   sessionKey,
+		SessionTitle: strings.TrimSpace(taskName),
+		Summary:      summary,
+	}
+	if !success {
+		barkEvent.Kind = barknotify.KindFailed
+		barkEvent.Summary = message
+	}
+	s.notifyBark(barkEvent)
 }
 
 func (s *AppContext) notifyPayload(ctx context.Context, eventID string, payload notify.Payload) {
@@ -1199,4 +1241,96 @@ func (s *AppContext) GetCandidateRegistry() *usecase.CandidateRegistry {
 		s.candidateRegistry = registry
 	}
 	return s.candidateRegistry
+}
+
+func (s *AppContext) notifyBark(event barknotify.Event) {
+	if s == nil || s.Bark == nil {
+		return
+	}
+	s.Bark.Notify(context.Background(), event)
+}
+
+func barkEventForPrompt(kind barknotify.Kind, eventID, rootID, rootTitle, sessionKey, sessionTitle, summary string) barknotify.Event {
+	return barknotify.Event{
+		Kind:         kind,
+		EventID:      eventID,
+		RootID:       rootID,
+		RootTitle:    rootTitle,
+		SessionKey:   sessionKey,
+		SessionTitle: sessionTitle,
+		Summary:      summary,
+	}
+}
+
+// approvalPromptHeader and approvalCallPrefix mark the synthetic ask-user
+// prompts Codex and Claude Code use for tool approvals, which carry the full
+// command in their body and deserve a different lock-screen label.
+const (
+	approvalPromptHeader = "执行授权"
+	approvalCallPrefix   = "approval-"
+)
+
+func isApprovalPrompt(toolCall agenttypes.ToolCall) bool {
+	if strings.HasPrefix(strings.TrimSpace(toolCall.CallID), approvalCallPrefix) {
+		return true
+	}
+	if toolCall.Meta != nil {
+		if questions, ok := toolCall.Meta["questions"].([]agenttypes.AskUserQuestionItem); ok {
+			for _, question := range questions {
+				if strings.TrimSpace(question.Header) == approvalPromptHeader {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+type sessionFailure struct {
+	message string
+	at      time.Time
+}
+
+const sessionFailureMemory = 10 * time.Minute
+
+func sessionFailureKey(rootID, sessionKey string) string {
+	return rootID + "\x00" + sessionKey
+}
+
+// recordSessionFailure remembers that the running turn ended in an error so
+// the done event that always follows can be reported as a failure.
+func (s *AppContext) recordSessionFailure(rootID, sessionKey, message string) {
+	if s == nil || strings.TrimSpace(sessionKey) == "" {
+		return
+	}
+	now := time.Now()
+	s.failureMu.Lock()
+	defer s.failureMu.Unlock()
+	if s.sessionFailures == nil {
+		s.sessionFailures = make(map[string]sessionFailure)
+	}
+	for key, item := range s.sessionFailures {
+		if now.Sub(item.at) > sessionFailureMemory {
+			delete(s.sessionFailures, key)
+		}
+	}
+	s.sessionFailures[sessionFailureKey(rootID, sessionKey)] = sessionFailure{message: normalizeAgentErrorMessage(errors.New(message)), at: now}
+}
+
+func (s *AppContext) takeSessionFailure(rootID, sessionKey string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	s.failureMu.Lock()
+	defer s.failureMu.Unlock()
+	key := sessionFailureKey(rootID, sessionKey)
+	item, ok := s.sessionFailures[key]
+	if !ok {
+		return "", false
+	}
+	delete(s.sessionFailures, key)
+	if time.Since(item.at) > sessionFailureMemory {
+		return "", false
+	}
+	return item.message, true
 }

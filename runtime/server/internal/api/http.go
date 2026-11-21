@@ -391,6 +391,7 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Get("/api/relay/status", h.handleRelayStatus)
 	r.Get("/api/system/stats", h.protectedEndpoint(h.handleSystemStats))
 	r.Get("/api/standalone/update", h.protectedEndpoint(h.handleStandaloneUpdateStatus))
+	r.Get("/api/standalone/latest", h.protectedEndpoint(h.handleStandaloneLatest))
 	r.Post("/api/standalone/update", h.protectedEndpoint(h.handleStandaloneUpdateStart))
 	r.Post("/api/relay/bind/start", h.protectedEndpoint(h.handleRelayBindStart))
 	r.Get("/api/token-station/userinfo", h.protectedEndpoint(h.handleTokenStationUserInfo))
@@ -408,6 +409,9 @@ func (h *HTTPHandler) Routes() http.Handler {
 	r.Post("/api/web-push/subscriptions", h.protectedEndpoint(h.handleWebPushSubscriptionSave))
 	r.Delete("/api/web-push/subscriptions", h.protectedEndpoint(h.handleWebPushSubscriptionDelete))
 	r.Post("/api/web-push/test", h.protectedEndpoint(h.handleWebPushTest))
+	r.Get("/api/bark", h.protectedEndpoint(h.handleBarkStatus))
+	r.Put("/api/bark", h.protectedEndpoint(h.handleBarkUpdate))
+	r.Post("/api/bark/test", h.protectedEndpoint(h.handleBarkTest))
 
 	// Agent status API
 	r.Get("/api/agents", h.protectedEndpoint(h.handleAgentsList))

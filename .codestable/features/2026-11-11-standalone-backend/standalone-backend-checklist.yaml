@@ -1,8 +1,14 @@
 feature: 2026-11-11-standalone-backend
 status: in_progress
 entrypoint: README.md
-current_step: windows-first-install-acceptance
+current_step: standalone-0159-release
 steps:
+- id: standalone-0159-release
+  description: 0.1.59 按用户确认进入六平台正式发布，待最终包 PowerShell 5.1、匿名回读与固定安装入口验证。
+  status: in_progress
+- id: remote-workspace-phone-header-session-switch-0159-macos
+  description: 手机单行顶栏与会话切换按活跃状态排序已实现。更新检查等待接口就绪。macOS arm64 本地包的整包回归、旧库迁移和隔离升级通过。本机部署成功，7 个项目可读且 Relay 已连接。
+  status: in_progress
 - id: standalone-browser-self-update
   description: 0.1.52 同版正式发布网页直接升级。最终包通过 macOS Relay、Linux systemd 和 Windows 5.1 验证，24 个公开附件回读一致。
   status: done

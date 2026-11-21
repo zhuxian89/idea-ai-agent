@@ -166,7 +166,7 @@ import {
 } from "./services/nativeCacheControl";
 import { projectStorage } from "./services/remoteScope";
 import { syncNativeReplyPollerE2EE } from "./services/replyPoller";
-import { isNativeShellRuntime } from "./services/runtime";
+import { isIOSAppRuntime, isNativeShellRuntime } from "./services/runtime";
 import {
   clearCachedSessionsForRoot,
   getCachedMultiRootSessionList,
@@ -235,7 +235,8 @@ function isStandaloneDisplayMode(): boolean {
   };
   return (
     window.matchMedia?.("(display-mode: standalone)")?.matches === true ||
-    navigatorWithStandalone.standalone === true
+    navigatorWithStandalone.standalone === true ||
+    isIOSAppRuntime()
   );
 }
 
