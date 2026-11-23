@@ -6,6 +6,10 @@ import { ScheduledAgentTaskDialog } from "../../src/components/ScheduledAgentTas
 import { ActionBar } from "../../src/components/ActionBar";
 import { AppShell } from "../../src/layout/AppShell";
 import { setRemoteDeviceMode } from "../../src/services/remoteDevice";
+import { setChildSessionsVisible } from "../../src/components/sessionHierarchy";
+
+// The product hides sub-agent sessions for now; this fixture exists to keep their behaviour covered.
+setChildSessionsVisible(true);
 
 const stamp = new Date(Date.now() - 120000).toISOString();
 const make = (key: string, name: string, patch: Partial<SessionItem> = {}): SessionItem => ({ key, session_key: key, name, agent: "codex", type: "chat", root_id: "a", updated_at: stamp, ...patch });

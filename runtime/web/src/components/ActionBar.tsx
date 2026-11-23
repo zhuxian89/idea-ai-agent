@@ -124,40 +124,6 @@ type ActionBarProps = {
   remoteDevice?: RemoteDevice | null;
 };
 
-function wsStatusMeta(status: WSStatus, t: (key: MessageKey) => string): {
-  color: string;
-  shadow: string;
-  label: string;
-} {
-  switch (status) {
-    case "connected":
-      return {
-        color: "#22c55e",
-        shadow: "none",
-        label: t("action.ws.connected"),
-      };
-    case "connecting":
-      return {
-        color: "#f59e0b",
-        shadow: "none",
-        label: t("action.ws.connecting"),
-      };
-    case "reconnecting":
-      return {
-        color: "#ef4444",
-        shadow: "none",
-        label: t("action.ws.reconnecting"),
-      };
-    case "disconnected":
-    default:
-      return {
-        color: "#94a3b8",
-        shadow: "none",
-        label: t("action.ws.disconnected"),
-      };
-  }
-}
-
 const modePlaceholderKeys: Record<SessionMode, MessageKey> = {
   chat: "action.placeholder.chat",
   plugin: "action.placeholder.plugin",
@@ -488,7 +454,6 @@ export function ActionBar({
   const isMobile = remoteDevice ? remotePhone : compactViewport;
   const ideaChromeHost = isIdeaChromeHost();
   const isConnected = status === "connected";
-  const connectionMeta = wsStatusMeta(status, t);
   const DRAG_THRESHOLD = -40;
   const boundRingColor = detachedBoundSession ? "#f59e0b" : "#2563eb";
   const boundRingShadow = detachedBoundSession
@@ -1732,23 +1697,6 @@ export function ActionBar({
                 ) : null}
               </div>
             ) : null}
-
-            <span
-              aria-label={connectionMeta.label}
-              title={connectionMeta.label}
-              style={{
-                position: "absolute",
-                left: "5px",
-                bottom: "4px",
-                width: "6px",
-                height: "6px",
-                borderRadius: "50%",
-                background: connectionMeta.color,
-                boxShadow: connectionMeta.shadow,
-                pointerEvents: "auto",
-                zIndex: 6,
-              }}
-            />
 
             <div className={compactWorkbench ? "idea-input-controls" : undefined} data-onboarding="input-controls" style={{ position: "absolute", right: isMobile ? "4px" : "8px", bottom: isMultiLine ? "6px" : "50%", transform: isMultiLine ? "none" : "translateY(50%)", display: "flex", alignItems: "center", gap: isMobile ? "0px" : "2px", zIndex: 5, transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
               <div

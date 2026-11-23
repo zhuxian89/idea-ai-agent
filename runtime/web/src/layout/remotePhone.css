@@ -56,7 +56,12 @@
   border: 1px solid var(--border-color); border-radius: 12px !important;
 }
 .remote-phone-sessions .workspace-session-row[data-selected="true"] { border-color: var(--accent-color); }
-.remote-phone-sessions .workspace-project-sessions { margin-inline-start: 0; padding-inline-start: 0; border: 0; }
+.remote-phone-sessions .workspace-project-sessions { margin-inline-start: 17px; padding-inline-start: 7px; border: 0; border-inline-start: 2px solid var(--border-color); }
+.remote-phone-sessions .workspace-session-project:has([data-selected="true"]) > .workspace-project-sessions { border-inline-start-color: var(--accent-color); }
+.remote-phone-sessions .workspace-session-project + .workspace-session-project { margin-top: 20px; }
+.remote-phone-sessions .workspace-project-heading { min-height: 42px; }
+.remote-phone-sessions .workspace-project-name { font-size: 16px; font-weight: 700; }
+.remote-phone-sessions .workspace-project-count { font-size: 12px; }
 .remote-phone-sessions .workspace-session-menu-trigger { width: 37px; height: 42px; }
 .remote-phone-sessions .remote-phone-card-meta { display: flex; align-items: center; min-width: 0; gap: 4px; font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
 .remote-phone-card-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

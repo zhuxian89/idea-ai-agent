@@ -6,6 +6,18 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const require = createRequire(import.meta.url);
+
+// The real timing rules, so these tests keep exercising what ships.
+const reconnectPolicy = (() => {
+  const exports = {};
+  vm.runInNewContext(
+    ts.transpileModule(fs.readFileSync("src/services/reconnectPolicy.ts", "utf8"), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    }).outputText,
+    { exports, Math },
+  );
+  return exports;
+})();
 const service = { exports: {} };
 vm.runInNewContext(
   ts.transpileModule(fs.readFileSync("src/services/session.ts", "utf8"), {
@@ -32,6 +44,7 @@ vm.runInNewContext(
         };
       }
       if (name === "./sessionHistory") return { hasCurrentActivityHistory: () => false };
+      if (name === "./reconnectPolicy") return reconnectPolicy;
       return require(name);
     },
   },

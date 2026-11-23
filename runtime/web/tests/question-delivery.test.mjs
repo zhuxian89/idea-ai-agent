@@ -4,12 +4,25 @@ import ts from "typescript";
 import vm from "node:vm";
 import { test } from "node:test";
 
+// The real timing rules, so these tests keep exercising what ships.
+const reconnectPolicy = (() => {
+  const exports = {};
+  vm.runInNewContext(
+    ts.transpileModule(fs.readFileSync("src/services/reconnectPolicy.ts", "utf8"), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    }).outputText,
+    { exports, Math },
+  );
+  return exports;
+})();
+
 function createService() {
   const exports = {};
   const source = fs.readFileSync("src/services/session.ts", "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
   const sandbox = { exports, console, setTimeout, clearTimeout, WebSocket: { OPEN: 1 }, require: (name) => {
     if (name === "./e2ee") return { e2eeService: { setClientId() {}, isRequired: () => false } };
+    if (name === "./reconnectPolicy") return reconnectPolicy;
     return {};
   } };
   vm.runInNewContext(compiled, sandbox);
@@ -105,34 +118,39 @@ test("continuation completion replay releases its lock, while unrelated request 
   assert.equal(service.getSessionFailure("root", "s"), undefined);
 });
 
-test("watchdog probes open sockets and reconnects when pong times out", async () => {
+test("watchdog probes only a silent socket and drops it when nothing answers", async () => {
   const { service, messages, sandbox } = createService();
-  let probeTimeout;
-  let reconnects = 0;
-  sandbox.window = {
-    setTimeout(callback) {
-      probeTimeout = callback;
-      return 1;
-    },
-  };
+  const timers = [];
+  sandbox.window = { setTimeout(callback, ms) { timers.push({ callback, ms }); return timers.length; } };
+  let drops = 0;
+  service.failAndRetry = () => { drops += 1; };
   service.rootId = "root";
-  service.reconnectNow = () => { reconnects += 1; };
 
+  // A connection that has just spoken is alive: no probe.
+  service.lastInboundAt = Date.now();
   service.ensureReconnectLoop();
   await Promise.resolve();
+  assert.equal(messages.length, 0, "a socket that just received data must not be probed");
 
+  // Silent for longer than the idle threshold: one probe, with the generous timeout.
+  service.lastInboundAt = Date.now() - reconnectPolicy.RECONNECT_POLICY.probeIdleMs - 1;
+  service.ensureReconnectLoop();
+  await Promise.resolve();
   assert.equal(messages.length, 1);
   assert.equal(messages[0].type, "ping");
-  assert.equal(typeof probeTimeout, "function");
+  const probe = timers.at(-1);
+  assert.equal(probe.ms, reconnectPolicy.RECONNECT_POLICY.probeTimeoutMs);
 
-  const acknowledgedProbeTimeout = probeTimeout;
+  // Any reply cancels the pending drop.
   service.clearProbe();
-  acknowledgedProbeTimeout();
-  assert.equal(reconnects, 0, "a received pong must cancel the pending reconnect");
+  probe.callback();
+  assert.equal(drops, 0, "a received reply must cancel the pending reconnect");
 
+  // No probe is stacked while one is outstanding; an unanswered one drops the socket.
   service.ensureReconnectLoop();
   assert.equal(messages.length, 2);
-  assert.equal(messages[1].type, "ping");
-  probeTimeout();
-  assert.equal(reconnects, 1);
+  service.ensureReconnectLoop();
+  assert.equal(messages.length, 2, "a second probe must not be sent while one is waiting");
+  timers.at(-1).callback();
+  assert.equal(drops, 1);
 });

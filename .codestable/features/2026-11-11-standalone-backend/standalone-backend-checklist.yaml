@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: standalone-0160-1-macos
+  description: 0.1.60-standalone.1 macOS arm64 本地包已安装。包内手机入口、旧库迁移、隔离升级和失败恢复通过，用户在 iPhone 上确认输入框圆点消失。
+  status: done
 - id: standalone-0159-release
   description: 0.1.59 已正式发布并成为默认安装版本。六平台包、24 个公开附件回读、PowerShell 5.1、Linux systemd、macOS 隔离安装及旧库迁移验证通过。0.1.52 Release 已下架，Git 标签保留。
   status: done

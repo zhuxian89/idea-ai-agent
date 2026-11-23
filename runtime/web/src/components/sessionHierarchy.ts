@@ -5,6 +5,14 @@ export type SessionRow =
   | { type: "child-group"; parent: SessionItem; group: "running" | "ended"; count: number; expanded: boolean; depth: number }
   | { type: "child-more"; parent: SessionItem; depth: number };
 
+/**
+ * Sub-agent sessions (children of another session) are left out of the lists for now: their
+ * "running" and "ended" groups made the project/session structure hard to read. The child handling
+ * below is intact; turn this on to bring the groups back. Tests that cover the child lists turn it on.
+ */
+let childSessionsVisible = false;
+export const setChildSessionsVisible = (visible: boolean) => { childSessionsVisible = visible; };
+
 // Both the single-project list and the project groups use the same hierarchy.
 export function buildSessionRows(
   sessions: SessionItem[],
@@ -43,6 +51,7 @@ export function buildSessionRows(
   const rows: SessionRow[] = [];
   const append = (session: SessionItem, depth: number) => {
     rows.push({ type: "session", session, depth });
+    if (!childSessionsVisible) return;
     const descendants = children.get(session.key) || [];
     const key = stateKey(session);
     for (const group of ["running", "ended"] as const) {

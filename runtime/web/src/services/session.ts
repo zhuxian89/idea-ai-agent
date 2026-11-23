@@ -1,4 +1,5 @@
 import { ACTIVITY_HISTORY_VERSION, hasCurrentActivityHistory, mergeHistoryAux, mergeHistoryExchanges } from "./sessionHistory";
+import { RECONNECT_POLICY, connectTimeoutMs, retryDelayMs } from "./reconnectPolicy";
 export { hasCurrentActivityHistory } from "./sessionHistory";
 import { appURL, wsURL } from "./base";
 import { ProtectedAPIError, protectedFetch, protectedJSON } from "./api";
@@ -331,31 +332,30 @@ class SessionService {
   private activeProbeId: string | null = null;
   private connectingStartedAt = 0;
   private openingSocket = false;
-  private reconnectDelayMs = 1000;
-  private fastReconnectUntil = 0;
+  /** Attempts in a row that did not become healthy; drives the backoff and the connect timeout. */
+  private failures = 0;
+  private healthyTimer: number | null = null;
+  private openedAt = 0;
+  private lastInboundAt = 0;
+  private lastWakeAt = 0;
   private rootId: string | null = null;
   private hasConnected = false;
   private readonly clientId = this.generateClientId();
-  private readonly maxReconnectDelayMs = 30000;
-  private readonly fastReconnectDelayMs = 1000;
-  private readonly fastReconnectWindowMs = 10000;
-  private readonly connectTimeoutMs = 5000;
-  private readonly probeTimeoutMs = 2000;
   private readonly reconnectWatchdogMs = 3000;
   private contextCache = new Map<string, { selectionKey: string }>();
 
   constructor() {
     e2eeService.setClientId(this.clientId);
     if (typeof window !== "undefined") {
-      window.addEventListener("online", () => this.ensureConnection());
-      window.addEventListener("pageshow", () => this.ensureConnection());
-      window.addEventListener("focus", () => this.ensureConnection());
+      window.addEventListener("online", () => this.onWake());
+      window.addEventListener("pageshow", () => this.onWake());
+      window.addEventListener("focus", () => this.onWake());
       window.setInterval(() => this.ensureReconnectLoop(), this.reconnectWatchdogMs);
     }
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
-          this.ensureConnection();
+          this.onWake();
         }
       });
     }
@@ -385,6 +385,10 @@ class SessionService {
   }
 
   connect(rootId: string) {
+    if (this.rootId !== rootId) {
+      // A different project is an explicit request, not a retry: start from a clean slate.
+      this.failures = 0;
+    }
     this.rootId = rootId;
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.emit({ type: this.hasConnected ? "ws.reconnected" : "ws.connected" });
@@ -392,11 +396,8 @@ class SessionService {
       return;
     }
     if (this.openingSocket || this.ws?.readyState === WebSocket.CONNECTING) {
-      if (
-        this.connectingStartedAt > 0 &&
-        Date.now() - this.connectingStartedAt > this.connectTimeoutMs
-      ) {
-        this.reconnectNow();
+      if (this.connectAttemptExpired()) {
+        this.failAndRetry("connect_timeout");
         return;
       }
       this.emit({ type: this.hasConnected ? "ws.reconnecting" : "ws.connecting" });
@@ -422,6 +423,7 @@ class SessionService {
       this.openingSocket = false;
       console.error("[Session] Failed to prepare WebSocket proof:", err);
       this.emit({ type: "ws.closed", payload: { code: 0, reason: "e2ee_proof_failed", was_clean: false } });
+      this.failures += 1;
       this.scheduleReconnect();
       return;
     }
@@ -433,17 +435,26 @@ class SessionService {
     this.openingSocket = false;
     this.ws = ws;
     this.connectingStartedAt = Date.now();
+    const allowedMs = connectTimeoutMs(this.failures);
     this.connectTimeoutTimer = window.setTimeout(() => {
       if (this.ws !== ws || ws.readyState !== WebSocket.CONNECTING) return;
-      console.warn("[Session] WebSocket connect timed out, reconnecting");
-      this.reconnectNow();
-    }, this.connectTimeoutMs);
+      console.warn(`[Session] WebSocket connect timed out after ${allowedMs}ms (failures=${this.failures})`);
+      this.failAndRetry("connect_timeout");
+    }, allowedMs);
 
     ws.onopen = () => {
       if (this.ws !== ws) return;
       this.clearConnectTimeout();
       this.clearProbe();
-      this.reconnectDelayMs = 1000;
+      this.openedAt = Date.now();
+      this.lastInboundAt = this.openedAt;
+      // Only a connection that stays up counts as a recovery. Opening is not enough: on a slow
+      // path a socket can open and be dropped again moments later, and that must keep backing off.
+      this.clearHealthyTimer();
+      this.healthyTimer = window.setTimeout(() => {
+        this.healthyTimer = null;
+        if (this.ws === ws && ws.readyState === WebSocket.OPEN) this.failures = 0;
+      }, RECONNECT_POLICY.healthyAfterMs);
       if (this.hasConnected) {
         this.emit({ type: "ws.reconnected" });
       } else {
@@ -460,6 +471,7 @@ class SessionService {
 
     ws.onmessage = (event) => {
       if (this.ws !== ws) return;
+      this.lastInboundAt = Date.now();
       this.clearProbe();
       void (async () => {
         try {
@@ -478,6 +490,7 @@ class SessionService {
       if (this.ws !== ws) return;
       this.rejectPendingAnswers();
       this.clearConnectTimeout();
+      this.clearHealthyTimer();
       this.ws = null;
       this.emit({
         type: "ws.closed",
@@ -487,7 +500,7 @@ class SessionService {
           was_clean: event.wasClean,
         },
       });
-      this.fastReconnectUntil = Date.now() + this.fastReconnectWindowMs;
+      this.failures += 1;
       this.scheduleReconnect();
     };
 
@@ -545,57 +558,71 @@ class SessionService {
     }
   }
 
-  private ensureConnection() {
+  private connectAttemptExpired(): boolean {
+    return (
+      this.connectingStartedAt > 0 &&
+      Date.now() - this.connectingStartedAt > connectTimeoutMs(this.failures)
+    );
+  }
+
+  /**
+   * The page came back to the foreground or the network returned. The socket may have died while
+   * the page was away, so this is the one moment a prompt check is worth it: a missing socket is
+   * opened now (the wait is skipped, the failure count is not), an open one gets a short probe.
+   * An attempt that is already in progress is left alone.
+   */
+  private onWake() {
     if (!this.rootId) return;
+    const now = Date.now();
+    if (now - this.lastWakeAt < RECONNECT_POLICY.wakeCooldownMs) return;
+    this.lastWakeAt = now;
     if (!this.ws || this.ws.readyState >= WebSocket.CLOSING) {
-      this.reconnectNow();
+      if (this.openingSocket) return;
+      this.clearReconnectTimer();
+      this.connect(this.rootId);
       return;
     }
     if (this.ws.readyState === WebSocket.CONNECTING) {
-      if (
-        this.connectingStartedAt > 0 &&
-        Date.now() - this.connectingStartedAt > this.connectTimeoutMs
-      ) {
-        this.reconnectNow();
-      }
+      if (this.connectAttemptExpired()) this.failAndRetry("connect_timeout");
       return;
     }
-    this.probeConnection();
+    this.probeConnection(RECONNECT_POLICY.wakeProbeTimeoutMs);
   }
 
+  /** Safety net every few seconds. It never connects ahead of a pending retry: that is the backoff. */
   private ensureReconnectLoop() {
     if (!this.rootId) return;
     if (!this.ws || this.ws.readyState >= WebSocket.CLOSING) {
-      this.reconnectNow();
+      if (!this.reconnectTimer && !this.openingSocket) this.scheduleReconnect();
+      return;
+    }
+    if (this.ws.readyState === WebSocket.CONNECTING) {
+      if (this.connectAttemptExpired()) this.failAndRetry("connect_timeout");
       return;
     }
     if (
-      this.ws.readyState === WebSocket.CONNECTING &&
-      this.connectingStartedAt > 0 &&
-      Date.now() - this.connectingStartedAt > this.connectTimeoutMs
+      this.ws.readyState === WebSocket.OPEN &&
+      !this.activeProbeId &&
+      Date.now() - this.lastInboundAt > RECONNECT_POLICY.probeIdleMs
     ) {
-      this.reconnectNow();
-      return;
-    }
-    if (this.ws.readyState === WebSocket.OPEN) {
-      this.probeConnection();
+      this.probeConnection(RECONNECT_POLICY.probeTimeoutMs);
     }
   }
 
-  private reconnectNow() {
+  /** Give up on the current socket, count it as a failure and retry after the backoff. */
+  private failAndRetry(reason: string) {
     if (!this.rootId) return;
-    const rootId = this.rootId;
     this.clearReconnectTimer();
     this.clearProbe();
+    this.clearHealthyTimer();
     this.closeSocket();
-    this.reconnectDelayMs = 1000;
-    this.fastReconnectUntil = Date.now() + this.fastReconnectWindowMs;
-    this.connect(rootId);
+    this.failures += 1;
+    console.warn(`[Session] connection dropped (${reason}); failures=${this.failures}`);
+    this.scheduleReconnect();
   }
 
-  private probeConnection() {
+  private probeConnection(timeoutMs: number) {
     if (!this.rootId || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      this.reconnectNow();
       return;
     }
     if (this.activeProbeId) return;
@@ -610,10 +637,9 @@ class SessionService {
     });
     this.probeTimeoutTimer = window.setTimeout(() => {
       if (this.activeProbeId !== probeId) return;
-      console.warn("[Session] WebSocket probe timed out, reconnecting");
-      this.clearProbe();
-      this.reconnectNow();
-    }, this.probeTimeoutMs);
+      console.warn(`[Session] WebSocket probe got no reply in ${timeoutMs}ms`);
+      this.failAndRetry("probe_timeout");
+    }, timeoutMs);
   }
 
   private buildSelectionKey(selection: unknown): string {
@@ -651,22 +677,21 @@ class SessionService {
   private scheduleReconnect() {
     if (!this.rootId) return;
     if (this.reconnectTimer) return;
-    const isFastReconnect = Date.now() < this.fastReconnectUntil;
-    const delay = isFastReconnect
-      ? this.fastReconnectDelayMs
-      : this.reconnectDelayMs;
-    if (!isFastReconnect) {
-      this.reconnectDelayMs = Math.min(
-        this.reconnectDelayMs * 2,
-        this.maxReconnectDelayMs,
-      );
-    }
+    const delay = retryDelayMs(Math.max(1, this.failures));
+    console.info(`[Session] reconnecting in ${delay}ms (failures=${this.failures})`);
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (this.rootId) {
         this.connect(this.rootId);
       }
     }, delay);
+  }
+
+  private clearHealthyTimer() {
+    if (this.healthyTimer) {
+      clearTimeout(this.healthyTimer);
+      this.healthyTimer = null;
+    }
   }
 
   private handleMessage(msg: any) {
@@ -809,6 +834,8 @@ class SessionService {
   ): Promise<boolean> {
     const socket = this.ws;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
+      // Someone is waiting on this message, so do not sit out the backoff: try now (rate limited).
+      this.onWake();
       return false;
     }
     let serialized = JSON.stringify(message);

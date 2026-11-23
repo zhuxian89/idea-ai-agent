@@ -133,6 +133,7 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
     const footer = page.locator(".remote-phone-composer");
     const textbox = footer.locator('[contenteditable="true"]');
     await expect(textbox).toBeVisible();
+    await expect(footer.getByTitle(/^WebSocket /)).toHaveCount(0);
     await textbox.focus();
     for (const [height, offsetTop, event] of [[432, 0, "resize"], [432, 38, "scroll"], [795, 0, "resize"]]) {
       await page.evaluate(([height, offsetTop, event]) => window.setTestViewport(height, offsetTop, event), [height, offsetTop, event]);
@@ -159,4 +160,35 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
     assert.match(notices[index], new RegExp(`/n/N/assets/index-[^/]+\\.${extension}$`));
     await page.unroute(pattern);
   }
+
+  await t.test("the iOS App renews on foreground and only redirects to login on a confirmed 401", async () => {
+    await page.addInitScript(() => {
+      window.MindFSIOSApp = { platform: "ios" };
+    });
+    const project = "https://entry.test/n/N/p/A/?device=phone";
+    await page.route("https://entry.test/n/N/p/A/api/dirs", route =>
+      route.fulfill({ status: 401, json: { error: "unauthorized" } }));
+    await page.route("https://entry.test/login?*", route => route.fulfill({ body: "Relay login" }));
+    let authStatus = 503;
+    let probes = 0;
+    await page.route("https://entry.test/api/auth/me", route => {
+      probes++;
+      return authStatus ? route.fulfill({ status: authStatus, json: { error: "auth_probe" } }) : route.abort("failed");
+    });
+    for (authStatus of [503, 0]) {
+      const previous = probes;
+      await page.goto(project);
+      await expect.poll(() => probes).toBeGreaterThanOrEqual(previous + 2);
+      const login = await page.waitForURL("**/login?*", { timeout: 600 }).then(() => true, () => false);
+      assert.equal(login, false, `temporary auth failure (${authStatus}) opened login`);
+      await expect(page).toHaveURL(project);
+    }
+    authStatus = 200;
+    const previous = probes;
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await expect.poll(() => probes).toBeGreaterThan(previous);
+    authStatus = 401;
+    await page.reload();
+    await expect(page).toHaveURL(url => url.pathname === "/login" && url.searchParams.get("next") === "/n/N/p/A/?device=phone");
+  });
 });

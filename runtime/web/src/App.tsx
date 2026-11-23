@@ -252,6 +252,10 @@ function isRelayPWAContext(): boolean {
   );
 }
 
+function checkRelaySession(): Promise<Response> {
+  return fetch("/api/auth/me", { cache: "no-store" });
+}
+
 function isRelayNodesPage(): boolean {
   if (typeof window === "undefined") {
     return false;
@@ -685,6 +689,7 @@ export function App({ onGoHome }: AppProps) {
   const pluginsTrustPendingByRootRef = useRef<Record<string, boolean>>({});
   const didInitRef = useRef(false);
   const relayWSAuthCheckRef = useRef(false);
+  const relayWSAuthCheckedAtRef = useRef(0);
   const managedRootsRequestRef = useRef<Promise<
     ManagedRootPayload[] | null
   > | null>(null);
@@ -1422,18 +1427,37 @@ export function App({ onGoHome }: AppProps) {
     window.location.replace("/nodes");
   }, []);
 
+  useEffect(() => {
+    // Node pages are forwarded without checking the Relay account cookie.
+    if (!isIOSAppRuntime() || !isRelayNodePage()) return;
+    const renewSession = () => {
+      if (document.visibilityState === "visible") {
+        void checkRelaySession().catch(() => {}); // The connection handles offline recovery.
+      }
+    };
+    renewSession();
+    document.addEventListener("visibilitychange", renewSession);
+    return () => document.removeEventListener("visibilitychange", renewSession);
+  }, []);
+
   const handleRelayWebSocketClosed = useCallback(async () => {
     if (!isRelayNodePage() || relayWSAuthCheckRef.current || standaloneUpdateInProgress()) {
       return;
     }
+    // A flapping connection closes again and again; one verdict per half minute is enough, and
+    // each check costs two requests through the same tunnel that is struggling.
+    const now = Date.now();
+    if (now - relayWSAuthCheckedAtRef.current < 30_000) return;
+    relayWSAuthCheckedAtRef.current = now;
     relayWSAuthCheckRef.current = true;
     try {
-      const response = await fetch("/api/auth/me", { cache: "no-cache" });
+      const response = await checkRelaySession();
       if (standaloneUpdateInProgress()) return;
-      if (!response.ok) {
+      if (response.status === 401) {
         redirectToRelayLogin();
         return;
       }
+      if (!response.ok) return;
       const nodeID = relayNodeIdFromPathname(window.location.pathname);
       if (!nodeID) {
         return;
@@ -1469,11 +1493,13 @@ export function App({ onGoHome }: AppProps) {
       const code = String(errorCode || "").trim();
       if (status === 401 || code === "unauthorized") {
         try {
-          const response = await fetch("/api/auth/me");
-          if (response.ok) {
+          const response = await checkRelaySession();
+          if (standaloneUpdateInProgress() || response.status !== 401) {
             return false;
           }
-        } catch {}
+        } catch {
+          return false;
+        }
         redirectToRelayLogin();
         return true;
       }

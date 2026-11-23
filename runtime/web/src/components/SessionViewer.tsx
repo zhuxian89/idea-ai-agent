@@ -1205,8 +1205,23 @@ function SessionViewerInner({
     };
     updateStickiness();
     el.addEventListener("scroll", updateStickiness, { passive: true });
+    // The distance to the bottom also changes with no scroll at all: a reader expands a running
+    // detail, or its log grows. Measuring only when the reader taps (before the content grows) or
+    // scrolls left the button hidden while the latest message was out of sight. Re-measure when the
+    // content's height changes. A viewer that is following is scrolled by the stick logic instead, so
+    // only a paused one is touched here (otherwise the button would flash while streaming).
+    const content = el.firstElementChild;
+    const observer = content && typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => {
+          if (!shouldStickToBottomRef.current) {
+            setShowJumpToLatest(distanceFromSessionBottom(el) > NEAR_BOTTOM_DISTANCE);
+          }
+        })
+      : null;
+    if (content) observer?.observe(content);
     return () => {
       el.removeEventListener("scroll", updateStickiness);
+      observer?.disconnect();
     };
   }, [sessionKey]);
 

@@ -69,7 +69,24 @@
 .remote-published-update p { margin: 0; }
 .remote-published-update .remote-note { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
 .remote-published-update > [role=status] { flex-basis: 100%; margin: 0 !important; display: flex; align-items: center; gap: 6px; min-height: 24px; }
-.remote-published-update > p.remote-note[role=status]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #2fb67c; flex: none; }
+/* Up to date: version, a green check, the button at the far end, on one line when it fits. When the
+   row is too narrow the button drops to a second line on the right; the version is never clipped. */
+.remote-published-update { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 3px; }
+.remote-published-update .remote-setting-body { order: 0; flex: 0 0 auto; max-width: 100%; }
+.remote-published-update .remote-version { overflow-wrap: anywhere; }
+.remote-published-update > p.remote-up-to-date { order: 1; flex: none; min-height: 24px; }
+.remote-published-update > button.remote-text-button { order: 2; margin-inline-start: auto; flex: none; white-space: nowrap; }
+/* A thin check with no badge behind it, tinted green but pulled most of the way to the secondary
+   text colour, so it reads as a calm "all good" on both themes instead of a bright badge. */
+.remote-published-update > p.remote-up-to-date::before {
+  content: ""; width: 14px; height: 14px; flex: none;
+  background-color: color-mix(in srgb, #2fb67c 40%, var(--text-secondary));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.8 7.3l2.9 2.9 5.5-6' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.8 7.3l2.9 2.9 5.5-6' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* Everything else in the published row (a new version, its action, an error) takes its own line. */
+.remote-published-update > .remote-release, .remote-published-update > .remote-update-action, .remote-published-update > .remote-update-error, .remote-published-update > [role=status]:not(.remote-up-to-date) { order: 3; flex-basis: 100%; }
+.remote-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .remote-published-update > button.remote-text-button {
   min-height: 24px;
   padding: 2px 0;

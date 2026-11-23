@@ -211,7 +211,14 @@ html[data-remote-ui][data-theme="moss"] {
 .remote-menu-heading { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
 
 /* ---------- 右栏：会话卡片 ---------- */
-.remote-side .workspace-project-sessions { margin-left: 0; padding-left: 0; border-left: 0; }
+/* A project's sessions hang from it: indented, with a guide line under the project's arrow. The line
+   turns to the accent colour for the project that holds the open session. */
+.remote-side .workspace-project-sessions { margin-left: 14px; padding-left: 6px; border-left: 2px solid color-mix(in srgb, var(--rd-edge) 85%, transparent); }
+.remote-side .workspace-session-project:has([data-selected="true"]) > .workspace-project-sessions { border-left-color: var(--accent-color); }
+.remote-side .workspace-session-project + .workspace-session-project { margin-top: 18px; }
+.remote-side .workspace-project-heading { min-height: 38px; padding: 4px 2px 2px; }
+.remote-side .workspace-project-name { font-size: 15px; font-weight: 700; }
+.remote-side .workspace-project-count { font-size: 12px; }
 .remote-side .workspace-session-row:not(.workspace-child-session) {
   background: color-mix(in srgb, var(--rd-surface) 55%, transparent) !important;
   border: 1px solid color-mix(in srgb, var(--rd-edge) 90%, transparent);

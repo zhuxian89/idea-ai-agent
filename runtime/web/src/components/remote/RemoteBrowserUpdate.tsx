@@ -50,7 +50,12 @@ export function RemoteBrowserUpdate({ state, version, zh, publicAccess = false }
   const { latest, checking, error, available, check } = state;
   const update = useStandaloneUpdate(version);
   const releaseURL = `https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v${latest}`;
-  const status = latest && !error ? <p className={available ? "remote-release" : "remote-note"} role="status">{available ? label(`有新版本 ${latest}`, `New version: ${latest}`) : label("已是最新版本", "Up to date")}</p> : null;
+  const upToDate = label("已是最新版本", "Up to date");
+  // Up to date is a small mark next to the version (the words stay for screen readers and as the
+  // tooltip); a new version is news, so it keeps its own visible line.
+  const status = latest && !error ? (available
+    ? <p className="remote-release" role="status">{label(`有新版本 ${latest}`, `New version: ${latest}`)}</p>
+    : <p className="remote-note remote-up-to-date" role="status" title={upToDate}><span className="remote-sr-only">{upToDate}</span></p>) : null;
   return <section className={`remote-setting-row remote-update-row${publicAccess ? " remote-published-update" : ""}`} aria-label={label("独立后台更新", "Standalone updates")}>
     <div className="remote-setting-body">{!publicAccess && <p>{label("独立后台", "Standalone service")}</p>}<p className="remote-note remote-version">{version}</p>
       {!publicAccess && status}
