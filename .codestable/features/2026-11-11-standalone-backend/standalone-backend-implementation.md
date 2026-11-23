@@ -349,3 +349,14 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 
 - 本机 0.1.59 的实际包重现了输入框圆点。新 macOS arm64 包移除圆点，增加 App 前台续期并修正断线后的登录跳转判断。归档、SHA-256、包内网页、旧库迁移和迁移 race 检查通过。[浏览器回归](../../../build/reports/standalone-0.1.60-standalone.1-macos-ui/browser-regressions.log)
 - 0.1.59 → 0.1.60-standalone.1 隔离升级、重装和缺文件恢复通过。本机升级后核对端口、7 个项目、二进制、网页资源和 Relay 状态。用户在 iPhone 上确认圆点消失。[隔离验证](../../../build/reports/standalone-0.1.60-standalone.1-macos-ui/isolated-install.log) · [本机部署](../../../build/reports/standalone-0.1.60-standalone.1-live-upgrade/result.txt)
+
+### 0.1.60 正式发布
+
+- 六个平台从 `6985545` 的干净克隆构建（Go 构建信息 `vcs.modified=false`，前端依赖 `corepack pnpm install --frozen-lockfile`）。最终包 112 项检查通过：24 个附件齐全、SHA-256 文件一致、六个程序的格式与架构正确且与同提交同参数重新编译逐字节一致、包内安装脚本与源码逐字节一致、Windows 脚本带 UTF-8 BOM、每包 305 个网页文件且无 `/mindfs-assets/` 引用、四个自解压安装器内嵌归档与对应压缩包一致、在线入口与源码一致。[检查记录](../../../build/reports/release60/package-verification.log)
+- 24 个公开附件匿名回读，与本地构建和 GitHub 记录的 SHA-256 三方一致。[公开附件核验](../../../build/reports/release60/public-verification.json)
+- Go 全量测试、旧库迁移（含 race）、Bark 与更新接口的 race 检查通过；干净克隆中前端整套 404 个全部通过，用最终包里的网页跑 Relay 入口回归 4 项通过。[前端](../../../build/reports/release60/frontend-final.log) · [迁移](../../../build/reports/release60/go-migration.log)
+- macOS arm64 与 Rosetta x64 在临时 HOME 中从公开的 0.1.59 升级、同包重装、缺文件失败后恢复及空前缀首次安装均通过，端口和用户数据保留。公开的固定在线入口显式指定版本、以及不带版本参数的默认安装，在两种架构下都装上 0.1.60 且程序和网页与构建逐字节相同；x64 安装器在 Rosetta 下运行并断言所装程序为 x86_64。验证期间本机正在运行的服务没有被触碰。[arm64](../../../build/reports/release60/macos-arm64.log) · [x64](../../../build/reports/release60/macos-amd64.log) · [公开入口](../../../build/reports/release60/macos-public-online.log) · [默认安装](../../../build/reports/release60/macos-public-default.log)
+- Windows x64 最终 ZIP 在 PowerShell 5.1 中通过首次安装、升级、缺文件失败后服务恢复和计划任务自更新；Linux x64 最终包通过 systemd 自更新。Windows 下载器另以 PowerShell 5.1（5.1.26100.33822）从正式 Release 下载 0.1.60，覆盖重定向与错误处理并校验 SHA-256。[最终包 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45095798420) · [Windows 公开下载 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45096399235)
+- `3068757` 将固定安装入口切到 0.1.60。不带参数的固定地址连续八次读到新值后才验证默认安装，节点的版本查询接口返回 0.1.60。0.1.59 Release 已归档下架，Git 标签保留。插件 `v0.1.27` 仍是 GitHub Latest，`releases/latest` 指向插件。[0.1.59 快照](../../../build/reports/release60/standalone-v0.1.59-before-withdraw.json)
+- **未验证：** Windows 计划任务的真实登录自启（CI 只覆盖安装脚本、计划任务注册、升级和自更新）；Windows ARM64、Linux ARM64 和 macOS x64 的真机运行（Windows 与 Linux 只核对了程序架构，macOS x64 经 Rosetta 验证）。
+- 验证中两处自己的错误已更正：版本号检查最初依赖构建信息里的 `-ldflags`，去符号构建不记录它，改为与重新编译逐字节比较；默认版本最初用带随机参数的请求轮询，会绕过安装器实际读取的缓存地址，改为读安装器使用的原始地址。

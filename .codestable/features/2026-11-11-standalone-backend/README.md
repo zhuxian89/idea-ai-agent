@@ -2,8 +2,8 @@
 
 ## 当前状态（2026-11-21）
 
-- **0.1.60-standalone.1 macOS arm64 本地测试包已安装。** 输入框连接圆点已移除，iPhone 用户确认生效。包内网页回归、旧库迁移、隔离升级与失败恢复通过。本机原端口可访问，7 个项目可读，Relay 已重连。[部署结果](../../../build/reports/standalone-0.1.60-standalone.1-live-upgrade/result.txt)
-- **独立后台 0.1.59 已正式发布并成为默认安装版本。** 包含 Bark 通知、单行手机顶栏、按活动状态排列的快速切换及更新检查修复。六平台 24 个附件已匿名下载回验，Windows PowerShell 5.1、Linux x64 systemd、macOS 两种架构的隔离升级及旧库迁移检查通过。固定在线入口已实装验证，0.1.52 Release 已归档下架。[0.1.59 正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.59) · [验证记录](standalone-backend-implementation.md#0159-正式发布)
+- **独立后台 0.1.60 已正式发布并成为默认安装版本（2026-11-23）。** 修复手机和网页网络不稳时反复断开重连（指数退避、连接稳定 10 秒才恢复），会话列表恢复项目缩进与引导线并暂不显示子会话，版本行改为一行低饱和对勾，展开运行中详情后「回到底部」按钮正确出现，移除输入框连接圆点，iOS App 回前台续期登录。六平台 24 个附件匿名下载回验与本地构建逐字节一致，Windows PowerShell 5.1、Linux x64 systemd、macOS 两种架构的隔离升级及旧库迁移检查通过。固定在线入口已实装验证，0.1.59 Release 已归档下架，Git 标签保留。[0.1.60 正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.60) · [验证记录](standalone-backend-implementation.md#0160-正式发布)
+- **本机升级到 0.1.60 正式版已排程，结果待核实。** 升级前本机运行测试包 0.1.60-standalone.5（内容相同、版本号较旧）。结果以 `build/reports/standalone-0.1.60-live-upgrade/result.txt` 为准，写本条时尚未核实。
 - **网页直接更新独立后台**随 0.1.52 同版换包上线。macOS、Linux、Windows 支持网页调用固定安装脚本。更早的构建可用固定安装命令升级后使用这个入口。[0.1.52 测试记录](../../../build/reports/release52-web-update/final-ci.log)
 - **独立后台 0.1.51** 修复了手机键盘弹出后遮住输入框的问题，经 iPhone 实机验收后发布。Hostdzire-linux 节点的实际升级状态待核实。
 - **0.1.51 同版重打包已发布**。Relay 公网项目页可检查独立后台更新，电脑和平板在侧栏底部，手机在「更多」。24 个公开附件均已回读验证。按用户要求，本机继续运行此前的 0.1.51 构建，后续单独升级。[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.51)
