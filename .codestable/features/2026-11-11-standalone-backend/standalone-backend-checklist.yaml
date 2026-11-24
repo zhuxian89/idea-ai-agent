@@ -9,6 +9,9 @@ steps:
 - id: standalone-0160-release
   description: 0.1.60 已正式发布并成为默认安装版本。六平台包、24 个公开附件回读、PowerShell 5.1、Linux systemd、macOS 隔离安装及旧库迁移验证通过。0.1.59 Release 已下架，Git 标签保留。Windows 计划任务的真实登录自启仍需实体机，未验证。
   status: done
+- id: standalone-0160-macos-live
+  description: 本机已从 0.1.60-standalone.5 升级到公开的 0.1.60 正式包。原端口可访问，7 个项目可读，Relay 已重连，运行程序和网页资源与公开包一致。
+  status: done
 - id: standalone-0159-release
   description: 0.1.59 已正式发布并成为默认安装版本。六平台包、24 个公开附件回读、PowerShell 5.1、Linux systemd、macOS 隔离安装及旧库迁移验证通过。0.1.52 Release 已下架，Git 标签保留。
   status: done
