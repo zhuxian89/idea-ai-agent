@@ -771,6 +771,8 @@ export const zhCN = {
   "agent.refreshModelsLabel": "刷新 {name} 的模型列表",
   "agent.refreshModelsHint": "重新读取 {name} 的模型列表；检测到 Codex 已更新时自动重启，进行中的 Codex 对话会中断",
   "agent.modelsRefreshed": "模型列表已更新",
+  "agent.restartLabel": "重启 {name}",
+  "agent.restartHint": "重启 {name}；进行中的对话会中断",
   "agent.modelsRefreshFailed": "刷新失败，请重试。",
   "agent.mode": "模式",
   "agent.effort": "思考强度",

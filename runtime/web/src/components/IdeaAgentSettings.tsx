@@ -14,8 +14,10 @@ type Props = {
   projectReady: boolean;
   notice: string;
   probingAgent: string;
+  restartingAgent: string;
   error: string;
   onProbe: (agent: string) => void | Promise<void>;
+  onRestart: (agent: string) => void | Promise<void>;
   onRun: (agent: AgentStatus, action: "install" | "update") => void;
 };
 
@@ -81,6 +83,7 @@ export function IdeaAgentSettings(props: Props) {
         {updateCheck.phase === "error" ? <p className="idea-agent-status idea-agent-error" role="alert">{t("agentConfig.updateCheckFailed")}</p> : null}
         <div className="idea-agent-actions">
           {agent.installed && agent.available && !probing ? <button type="button" onClick={() => setTestingAgent(agent)}>{t("agentTest.title")}</button> : null}
+          {agent.installed && !probing ? <button type="button" disabled={props.busy || !!props.restartingAgent} onClick={() => void props.onRestart(agent.name)}>{t(props.restartingAgent === agent.name ? "agentConfig.restarting" : "agentConfig.restart")}</button> : null}
           {agent.installed && agent.available && agent.update_check_supported && !updatingAvailable ? <button type="button" disabled={props.busy || updateCheck.phase === "checking"} onClick={() => void runUpdateCheck(agent)}>{t(updateCheck.phase === "checking" ? "agentConfig.checkingUpdate" : "agentConfig.checkUpdate")}</button> : null}
           {agent.installed && agent.available && updatingAvailable ? <button type="button" disabled={props.busy || !props.projectReady || updateCommands.length === 0} title={updateCommands.length === 0 ? t("agentConfig.noCommand") : undefined} onClick={() => {
             setUpdateChecks((current) => ({ ...current, [agent.name]: { phase: "idle" } }));

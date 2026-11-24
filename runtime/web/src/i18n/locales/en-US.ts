@@ -772,6 +772,8 @@ export const enUS = {
   "agent.refreshModelsLabel": "Refresh {name} model list",
   "agent.refreshModelsHint": "Reload {name} models; if Codex has been updated, automatically restart it and interrupt active Codex conversations",
   "agent.modelsRefreshed": "Model list updated",
+  "agent.restartLabel": "Restart {name}",
+  "agent.restartHint": "Restart {name}; active conversations will be interrupted",
   "agent.modelsRefreshFailed": "Refresh failed. Please retry.",
   "agent.mode": "Mode",
   "agent.effort": "Reasoning effort",

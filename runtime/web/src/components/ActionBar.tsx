@@ -8,7 +8,7 @@ import { AgentSelector } from "./AgentSelector";
 import { PermissionSelector } from "./PermissionSelector";
 import { getAgentDefaults } from "../services/agentDefaults";
 import { nativePermissionChoices } from "../services/nativePermissions";
-import { fetchAgents, fetchShells, probeAgent, type AgentStatus, type ShellStatus } from "../services/agents";
+import { fetchAgents, fetchShells, probeAgent, restartAgent, type AgentStatus, type ShellStatus } from "../services/agents";
 import { refreshAgentModels } from "../services/agentModelRefresh";
 import { fetchAgentCatalog } from "../services/agents";
 import { agentsForPicker } from "../services/agentSetup";
@@ -1804,6 +1804,13 @@ export function ActionBar({
                     onFastServiceChange={(nextFastService) => setFastService(nextFastService || "")}
                     onAgentRestart={async (targetAgent) => {
                       await probeAgent(targetAgent);
+                      const items = compactWorkbench
+                        ? agentsForPicker(await fetchAgentCatalog(true, { throwOnError: true }))
+                        : await fetchAgents(true, { throwOnError: true });
+                      setAgents(items);
+                    }}
+                    onAgentProcessRestart={async (targetAgent) => {
+                      await restartAgent(targetAgent);
                       const items = compactWorkbench
                         ? agentsForPicker(await fetchAgentCatalog(true, { throwOnError: true }))
                         : await fetchAgents(true, { throwOnError: true });

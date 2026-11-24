@@ -14,6 +14,7 @@ import { AgentSetupGuide } from "./AgentSetupGuide";
 import { AgentSelectorRow } from "./AgentSelectorRow";
 import { AgentConnectionTest } from "./AgentConnectionTest";
 import { AgentModelRefresh } from "./AgentModelRefresh";
+import { AgentRestartAction } from "./AgentRestartAction";
 import { agentDisplayName, agentSetupState, agentSetupStatusKey } from "../services/agentSetup";
 import { getAgentDefaults } from "../services/agentDefaults";
 
@@ -29,6 +30,7 @@ type AgentSelectorProps = {
   onEffortChange?: (effort?: string) => void;
   onFastServiceChange?: (fastService?: "" | "on" | "off") => void;
   onAgentRestart?: (agent: string) => void | Promise<void>;
+  onAgentProcessRestart?: (agent: string) => Promise<void>;
   onModelsRefresh?: (agent: string) => Promise<void>;
   compact?: boolean;
   warnUnavailable?: boolean;
@@ -87,6 +89,7 @@ export function AgentSelector({
   onEffortChange,
   onFastServiceChange,
   onAgentRestart,
+  onAgentProcessRestart,
   onModelsRefresh,
   compact = false,
   warnUnavailable = false,
@@ -680,6 +683,8 @@ export function AgentSelector({
               <>
                 {onModelsRefresh ? <AgentModelRefresh key={submenuAgentStatus.name}
                   agent={submenuAgentStatus.name} onRefresh={onModelsRefresh} /> : null}
+                {onAgentProcessRestart && submenuAgentStatus.installed ? <AgentRestartAction key={`restart-${submenuAgentStatus.name}`}
+                  agent={submenuAgentStatus.name} onRestart={onAgentProcessRestart} /> : null}
                 <SectionHeader
                   title={t("agent.model")}
                   expanded={modelSectionExpanded}

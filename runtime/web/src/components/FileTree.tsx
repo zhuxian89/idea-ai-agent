@@ -2622,8 +2622,9 @@ export function FileTree({
     return <IdeaAgentSettings agents={agentLifecycleAgents} busy={agentLifecycleBusy || agentConfigBusy}
       projectReady={!!rootId} notice={agentLifecycleNotice}
       probingAgent={agentProbingAgent}
+      restartingAgent={agentConfigRestartingAgent}
       error={agentLifecycleError || agentConfigError}
-      onProbe={probeAgentFromSettings} onRun={runAgentLifecycleCommand} />;
+      onProbe={probeAgentFromSettings} onRestart={restartAgentFromConfigList} onRun={runAgentLifecycleCommand} />;
   }
 
   return (

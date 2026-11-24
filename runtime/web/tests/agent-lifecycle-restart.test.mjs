@@ -101,8 +101,26 @@ assert.match(
 
 assert.doesNotMatch(
   ideaSettings,
-  /idea\.configure|idea\.addConfig|agentConfig\.restart|onConfigure|onRestart/,
-  "IDEA Agent settings must not expose config-profile or restart actions",
+  /idea\.configure|idea\.addConfig|onConfigure/,
+  "IDEA Agent settings must not expose config-profile actions",
+);
+
+assert.match(
+  ideaSettings,
+  /agent\.installed && !probing[\s\S]*?props\.onRestart\(agent\.name\)[\s\S]*?agentConfig\.restart/,
+  "IDEA Agent settings must offer a per-agent restart button",
+);
+
+assert.match(
+  fileTree,
+  /<IdeaAgentSettings[\s\S]*?restartingAgent=\{agentConfigRestartingAgent\}[\s\S]*?onRestart=\{restartAgentFromConfigList\}/,
+  "IDEA Agent settings must reuse the existing config-list restart flow",
+);
+
+assert.match(
+  actionBar,
+  /onAgentProcessRestart=\{async \(targetAgent\) => \{\s*await restartAgent\(targetAgent\);/,
+  "model picker restart must call the restart endpoint, not the re-detection probe",
 );
 
 assert.match(
