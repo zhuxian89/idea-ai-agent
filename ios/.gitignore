@@ -1,0 +1,5 @@
+*.xcodeproj/
+DerivedData/
+build/
+Generated/
+TestSupport/__pycache__/

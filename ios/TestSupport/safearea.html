@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root { --mindfs-safe-area-top: 0px; --mindfs-safe-area-bottom: 0px; }
+  html, body { margin: 0; height: 100%; background: #0b1020; color: #e6e6e6; font: 16px -apple-system, sans-serif; }
+  /* Same expression the web uses (AppShell / remotePhone.css). */
+  .top { position: fixed; inset: 0 0 auto 0; padding-top: var(--mindfs-safe-area-top, env(safe-area-inset-top, 0px)); background: #1d3a73; }
+  .top div { height: 44px; display: flex; align-items: center; padding: 0 16px; }
+  .bottom { position: fixed; inset: auto 0 0 0; padding-bottom: max(8px, var(--mindfs-safe-area-bottom, env(safe-area-inset-bottom, 0px))); background: #1d3a73; }
+  .bottom div { height: 49px; display: flex; align-items: center; justify-content: space-around; }
+  pre { margin: 140px 16px 0; font-size: 13px; white-space: pre-wrap; }
+</style>
+<div class="top"><div>TOP BAR</div></div>
+<pre id="out"></pre>
+<div class="bottom"><div><span>对话</span><span>会话</span><span>项目</span><span>更多</span></div></div>
+<script>
+  const out = document.getElementById('out');
+  // What the layout saw the moment the page started: the value a page builds its height from.
+  const atLoad = { inner: innerHeight, screen: screen.height };
+  const show = () => {
+    const root = getComputedStyle(document.documentElement);
+    out.textContent = JSON.stringify({
+      top: root.getPropertyValue('--mindfs-safe-area-top'),
+      bottom: root.getPropertyValue('--mindfs-safe-area-bottom'),
+      innerHeight: innerHeight, innerWidth: innerWidth,
+    }, null, 1);
+    document.title = 'startup-viewport:' + (atLoad.inner === atLoad.screen ? 'full' : 'short ' + atLoad.inner + '/' + atLoad.screen);
+    marker.textContent = document.title;
+  };
+  const marker = document.createElement('p');
+  marker.style.cssText = 'position:fixed;top:300px;left:16px;margin:0';
+  document.body.appendChild(marker);
+  show();
+  addEventListener('mindfs:safe-area-updated', show);
+  addEventListener('resize', show);
+  // Report what the layout actually sees, so a test can compare entry paths.
+  const report = (when) => fetch('/report?when=' + when + '&inner=' + innerHeight + '&visual=' + Math.round(visualViewport.height) + '&screen=' + screen.height).catch(() => {});
+  report('load');
+  [100, 600, 2500].forEach((ms) => setTimeout(() => report('+' + ms), ms));
+  addEventListener('resize', () => report('resize'));
+</script>

@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101827"><title>Shell Test Fixture</title>
+<style>body{font:17px -apple-system;background:#101827;color:white;padding:70px 20px 40px}button,a{display:block;margin:10px 0;padding:12px;background:#d8f3e6;color:#10251d;border:0;border-radius:8px;font:inherit;text-decoration:none}p{margin:8px 0}</style></head><body>
+<p>Shell Test Fixture</p>
+<button onclick="document.querySelector('#result').textContent='confirm='+confirm('Confirm fixture')">Confirm</button>
+<button onclick="alert('Alert fixture');document.querySelector('#result').textContent='alert=done'">Alert</button>
+<button onclick="document.querySelector('#result').textContent='prompt='+prompt('Prompt fixture','seed')">Prompt</button>
+<a href="/real.txt" download="real.txt">Real file download</a>
+<button onclick="const a=document.createElement('a');a.href=window.URL.createObjectURL(new Blob(['blob fixture bytes\n'],{type:'text/plain'}));a.download='blob.txt';document.body.append(a);a.click();a.remove();">Blob download</button>
+<a href="/attachment">Attachment download</a>
+<a href="https://example.com/" target="_blank" rel="noopener noreferrer">External blank</a>
+<button onclick="const p=window.open('','_blank');if(p){p.document.body.innerHTML='<button onclick=window.close()>Close popup</button>';setTimeout(()=>p.location.replace('/popup'),300)}">Blank then replace</button>
+<button onclick="closableBlank()">Closable blank</button>
+<p id="result">Ready</p><script>
+function closableBlank() {
+  const popup = window.open('', '_blank');
+  if (!popup) return;
+  popup.document.write(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="padding:180px 20px;font:24px -apple-system;background:white;color:black"><button style="padding:20px;font:inherit" onclick="window.close()">Close popup</button></body></html>`);
+  popup.document.close();
+}
+window.addEventListener('error', e => fetch('/report?error=' + encodeURIComponent(e.message)));
+document.addEventListener('click', e => fetch('/report?click=' + encodeURIComponent(e.target.textContent)));
+</script></body></html>

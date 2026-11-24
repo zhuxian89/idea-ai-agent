@@ -1,0 +1,89 @@
+name: LocalAIAgent
+options:
+  bundleIdPrefix: com.localaiagent
+  developmentLanguage: zh-Hans
+  deploymentTarget:
+    iOS: '16.0'
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Version.xcconfig
+  Release: Version.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    TARGETED_DEVICE_FAMILY: '1'
+    CODE_SIGNING_ALLOWED: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+targets:
+  LocalAIAgent:
+    type: application
+    platform: iOS
+    sources: [LocalAIAgent]
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: '1'
+        PRODUCT_BUNDLE_IDENTIFIER: com.localaiagent.app
+        PRODUCT_NAME: LocalAIAgent
+        INFOPLIST_KEY_CFBundleDisplayName: Local AI Agent
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: Local AI Agent
+        # The app's UI is the web page, which has its own language setting. What iOS needs to know
+        # is which languages the app supports: it picks the system UI language (attachment sheet)
+        # and the starting keyboard from this list, and a bundle that lists only English gets English.
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [zh-Hans, en]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UIViewControllerBasedStatusBarAppearance: true
+        UIApplicationSupportsIndirectInputEvents: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        CFBundleURLTypes:
+          - CFBundleURLName: com.localaiagent.app
+            CFBundleURLSchemes: [localaiagent]
+        NSCameraUsageDescription: 拍摄照片或视频并上传到会话。
+        NSMicrophoneUsageDescription: 拍摄视频时录制声音。
+        NSPhotoLibraryUsageDescription: 选择照片或视频并上传到会话。
+        NSPhotoLibraryAddUsageDescription: 将图片保存到相册。
+  LocalAIAgentTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [LocalAIAgentTests]
+    dependencies:
+      - target: LocalAIAgent
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  LocalAIAgentUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [LocalAIAgentUITests]
+    dependencies:
+      - target: LocalAIAgent
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  LocalAIAgent:
+    build:
+      targets:
+        LocalAIAgent: all
+    test:
+      targets: [LocalAIAgentTests, LocalAIAgentUITests]

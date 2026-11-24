@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Take photos or videos to upload to a conversation.";
+"NSMicrophoneUsageDescription" = "Record sound while taking a video.";
+"NSPhotoLibraryUsageDescription" = "Choose photos or videos to upload to a conversation.";
+"NSPhotoLibraryAddUsageDescription" = "Save images to your photo library.";

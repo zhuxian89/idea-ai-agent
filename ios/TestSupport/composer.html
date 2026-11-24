@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  /* The web's own rules: remotePhone.css (composer padding) and services/viewport.ts (root height). */
+  :root { --mindfs-safe-area-top: 0px; --mindfs-safe-area-bottom: 0px; --mindfs-viewport-height: 100dvh; }
+  html, body { margin: 0; background: #0b1020; color: #e6e6e6; font: 16px -apple-system, sans-serif; }
+  #root { position: fixed; inset: 0 0 auto 0; height: var(--mindfs-viewport-height); display: flex; flex-direction: column;
+          box-sizing: border-box; padding-top: var(--mindfs-safe-area-top, env(safe-area-inset-top, 0px)); }
+  #spacer { flex: 1; }
+  #composer { padding: 0 12px max(5px, var(--mindfs-safe-area-bottom, env(safe-area-inset-bottom, 0px))); }
+  #field { width: 100%; height: 44px; box-sizing: border-box; border-radius: 12px; border: 1px solid #3b82f6;
+           background: #0f172a; color: inherit; padding: 0 12px; font: inherit; }
+</style>
+<div id="root"><div id="spacer"></div><div id="composer"><input id="field" enterkeyhint="done" aria-label="composer" placeholder="给 agent 发消息..."></div></div>
+<p id="marker" style="position:fixed;top:120px;left:16px;margin:0"></p>
+<script>
+  // gap = distance between the input and the bottom of what the user can see: the space left
+  // under the composer. With the keyboard up it should be the small fixed padding, not the home indicator's.
+  const measure = () => {
+    const vv = window.visualViewport;
+    const gap = Math.round(vv.offsetTop + vv.height - document.getElementById('field').getBoundingClientRect().bottom);
+    const keyboard = innerHeight - vv.height > 100;
+    const sab = getComputedStyle(document.documentElement).getPropertyValue('--mindfs-safe-area-bottom').trim();
+    document.getElementById('marker').textContent = 'keyboard:' + (keyboard ? 'shown' : 'hidden') + ' gap:' + gap + ' sab:' + sab;
+  };
+  const sync = () => {
+    document.documentElement.style.setProperty('--mindfs-viewport-height', visualViewport.height + 'px');
+    measure();
+  };
+  addEventListener('resize', sync);
+  visualViewport.addEventListener('resize', sync);
+  visualViewport.addEventListener('scroll', sync);
+  addEventListener('mindfs:safe-area-updated', sync);
+  // Return closes the keyboard, like sending a message does.
+  document.getElementById('field').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+  sync();
+</script>

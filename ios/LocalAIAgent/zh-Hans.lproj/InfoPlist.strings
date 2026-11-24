@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "拍摄照片或视频并上传到会话。";
+"NSMicrophoneUsageDescription" = "拍摄视频时录制声音。";
+"NSPhotoLibraryUsageDescription" = "选择照片或视频并上传到会话。";
+"NSPhotoLibraryAddUsageDescription" = "将图片保存到相册。";
