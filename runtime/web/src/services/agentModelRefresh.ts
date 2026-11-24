@@ -1,10 +1,13 @@
-import { probeAgent, type AgentStatus } from "./agents";
+import { restartAgent, type AgentStatus } from "./agents";
 import { protectedJSON } from "./api";
 import { appPath } from "./base";
 
 const pendingRefreshes = new Map<string, Promise<void>>();
 
-// Use the existing startup/probe pipeline, not a second model discovery path.
+// Claude keeps the model list from the session it initialised with and ACP agents keep the one
+// from session setup, so a plain probe only rereads that cache and never sees new models.
+// Refresh therefore restarts the agent for every agent type (interrupting its conversations),
+// then reuses the startup/probe pipeline to rediscover the models.
 // The POST only acknowledges the request; wait for its published status before
 // reporting success. Polling also works when a WebSocket event is missed.
 export function refreshAgentModels(agent: string): Promise<void> {
@@ -13,7 +16,7 @@ export function refreshAgentModels(agent: string): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
   const request = (async () => {
-    await probeAgent(agent, controller.signal);
+    await restartAgent(agent);
     while (!controller.signal.aborted) {
       const data = await protectedJSON<{ agents: AgentStatus[] }>(appPath("/api/agents"), {
         signal: controller.signal, cache: "no-store",

@@ -14,7 +14,6 @@ import { AgentSetupGuide } from "./AgentSetupGuide";
 import { AgentSelectorRow } from "./AgentSelectorRow";
 import { AgentConnectionTest } from "./AgentConnectionTest";
 import { AgentModelRefresh } from "./AgentModelRefresh";
-import { AgentRestartAction } from "./AgentRestartAction";
 import { agentDisplayName, agentSetupState, agentSetupStatusKey } from "../services/agentSetup";
 import { getAgentDefaults } from "../services/agentDefaults";
 
@@ -148,6 +147,7 @@ export function AgentSelector({
     () => agents.find((item) => item.name === submenuAgent) ?? null,
     [agents, submenuAgent],
   );
+  const canProcessRestart = !!onAgentProcessRestart && !!submenuAgentStatus?.installed;
   const setupAgentStatus = useMemo(
     () => agents.find((item) => item.name === setupAgent) ?? null,
     [agents, setupAgent],
@@ -681,10 +681,9 @@ export function AgentSelector({
               </div>
             ) : submenuAgentStatus ? (
               <>
-                {onModelsRefresh ? <AgentModelRefresh key={submenuAgentStatus.name}
-                  agent={submenuAgentStatus.name} onRefresh={onModelsRefresh} /> : null}
-                {onAgentProcessRestart && submenuAgentStatus.installed ? <AgentRestartAction key={`restart-${submenuAgentStatus.name}`}
-                  agent={submenuAgentStatus.name} onRestart={onAgentProcessRestart} /> : null}
+                {onModelsRefresh || canProcessRestart ? <AgentModelRefresh key={submenuAgentStatus.name}
+                  agent={submenuAgentStatus.name} onRefresh={onModelsRefresh}
+                  onRestart={canProcessRestart ? onAgentProcessRestart : undefined} /> : null}
                 <SectionHeader
                   title={t("agent.model")}
                   expanded={modelSectionExpanded}

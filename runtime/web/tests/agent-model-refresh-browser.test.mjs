@@ -24,11 +24,11 @@ test('composer refresh button uses startup discovery without changing session or
         const path = String(url);
         if (path.includes('/api/agents')) {
           window.calls.push({ path, method: options.method, body: options.body });
-          if (path.endsWith('/probe')) {
+          if (path.endsWith('/restart')) {
             if (window.fail) return Response.json({ error: 'Discovery unavailable' }, { status: 503 });
             window.phase = 'pending';
             await new Promise(resolve => { window.acceptProbe = resolve; });
-            return Response.json({ probing: true });
+            return Response.json({ restarting: true });
           }
           const model = window.phase === 'new' ? 'new-model' : 'old-model';
           return Response.json({ agents: ['codex', 'claude'].map(name => ({ name, installed: true,
@@ -74,7 +74,7 @@ test('composer refresh button uses startup discovery without changing session or
   await expect(refresh).toBeDisabled();
   await expect(refresh).toContainText('刷新中');
   await expect(menu.getByRole('button', { name: 'old-model', exact: true })).toBeVisible();
-  assert.equal(await page.evaluate(() => window.calls.filter(call => call.path.endsWith('/probe')).length), 1);
+  assert.equal(await page.evaluate(() => window.calls.filter(call => call.path.endsWith('/restart')).length), 1);
   await page.evaluate(() => window.acceptProbe());
   await expect(refresh).toBeDisabled();
   await page.evaluate(() => { window.phase = 'new'; window.notifyStatus(); });
@@ -83,7 +83,7 @@ test('composer refresh button uses startup discovery without changing session or
   await expect(menu.getByRole('button', { name: 'new-model', exact: true })).toBeVisible();
   await expect(trigger).toContainText('Codex · old-model');
   await expect(editor).toHaveText('Keep my draft');
-  assert.ok((await page.evaluate(() => window.calls)).every(call => !/restart|test-connection|refresh-models/.test(call.path)));
+  assert.ok((await page.evaluate(() => window.calls)).every(call => !/probe|test-connection|refresh-models/.test(call.path)));
 
   await page.evaluate(() => { window.fail = true; });
   await refresh.click();

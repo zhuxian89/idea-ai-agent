@@ -29,17 +29,17 @@ function setup() {
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const status = (pending = false, extra = {}) => ({ agents: [{ name: 'codex', installed: true, available: !pending, probe_pending: pending, models: [{ id: 'new' }], ...extra }] });
 
-test('manual refresh reuses probe endpoint and waits for completion, not just acceptance', async () => {
+test('manual refresh restarts the agent and waits for completion, not just acceptance', async () => {
   const { refreshAgentModels, calls, tick } = setup();
   const refresh = refreshAgentModels('codex');
   assert.equal(refresh, refreshAgentModels('codex'));
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, '/api/agents/probe');
+  assert.equal(calls[0].url, '/api/agents/restart');
   assert.equal(calls[0].options.method, 'POST');
   assert.deepEqual(JSON.parse(calls[0].options.body), { agent: 'codex' });
   let done = false;
   refresh.then(() => { done = true; });
-  calls[0].resolve({ probing: true });
+  calls[0].resolve({ restarting: true });
   await flush();
   assert.equal(done, false);
   assert.equal(calls[1].url, '/api/agents');
@@ -52,7 +52,7 @@ test('manual refresh reuses probe endpoint and waits for completion, not just ac
   calls[2].resolve(status());
   await refresh;
   assert.equal(done, true);
-  assert.ok(calls.every(call => !/restart|test-connection|refresh-models/.test(call.url)));
+  assert.ok(calls.every(call => !/probe|test-connection|refresh-models/.test(call.url)));
 });
 
 test('discovery errors and network failure allow retry, and waiting is bounded', async () => {
@@ -62,7 +62,7 @@ test('discovery errors and network failure allow retry, and waiting is bounded',
     const rejected = assert.rejects(refresh, failure === 'timeout' ? /Aborted/ : /failed/);
     if (failure === 'network') calls[0].reject(new Error('network failed'));
     else {
-      calls[0].resolve({ probing: true });
+      calls[0].resolve({ restarting: true });
       await flush();
       if (failure === 'timeout') tick(120000);
       else calls[1].resolve(status(false, { models_error: 'models failed' }));
@@ -70,9 +70,22 @@ test('discovery errors and network failure allow retry, and waiting is bounded',
     await rejected;
     const index = calls.length;
     const retry = refreshAgentModels('codex');
-    calls[index].resolve({ probing: true });
+    calls[index].resolve({ restarting: true });
     await flush();
     calls[index + 1].resolve(status());
     await retry;
+  }
+});
+
+test('every agent type restarts on refresh, never just rereads the cached list', async () => {
+  for (const agent of ['codex', 'claude', 'antigravity']) {
+    const { refreshAgentModels, calls } = setup();
+    const refresh = refreshAgentModels(agent);
+    assert.equal(calls[0].url, '/api/agents/restart');
+    assert.deepEqual(JSON.parse(calls[0].options.body), { agent });
+    calls[0].resolve({ restarting: true });
+    await flush();
+    calls[1].resolve({ agents: [{ name: agent, installed: true, available: true, probe_pending: false }] });
+    await refresh;
   }
 });

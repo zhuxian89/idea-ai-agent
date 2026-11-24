@@ -2,12 +2,16 @@
   padding: 4px 8px;
   border-bottom: 1px solid var(--menu-divider);
 }
+.agent-model-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
 .agent-model-refresh button {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  margin-left: auto;
   min-height: 28px;
   padding: 4px 6px;
   border: 0;
