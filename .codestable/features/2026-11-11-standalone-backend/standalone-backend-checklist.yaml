@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: standalone-0165-plugin-0127-release
+  description: 独立后台 0.1.65 经 release-standalone.yml formal 全自动发布并切为默认版本（Run 45538561445，含真实 Windows ACP Job Object 进程树与文件锁单测、24 附件匿名回读、无参数默认安装核验及 0.1.64 归档下架）；IDEA 插件 v0.1.27 经 release-plugin.yml formal 同版替换 6 个附件并保持 Latest（Run 45540134877，双端内嵌后台 305 HTTP 资源、Windows PowerShell 5.1 三包对 0.1.65 验证及 6 附件公开回读通过）。
+  status: done
 - id: standalone-promote-and-plugin-release-ci
   description: 补齐 release-standalone.yml 云端公开/转正闭环（mode=draft/prerelease/formal）与新增 release-plugin.yml 插件全自动发版流水线及门禁脚本。已推送 main，release-plugin.yml 云端全流程（Linux 构建门禁、macOS + Windows 双端内嵌后台 305 HTTP 资源、Windows PowerShell 5.1 三包校验、安全草稿生成与回读）验证通过（Run 45530752471），测试草稿已清理。
   status: done
