@@ -1,12 +1,77 @@
 package acp
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	acpsdk "github.com/coder/acp-go-sdk"
 )
+
+func TestProcessInitializeAdvertisesTerminalFalse(t *testing.T) {
+	serverR, clientW := io.Pipe()
+	clientR, serverW := io.Pipe()
+	defer serverR.Close()
+	defer clientW.Close()
+	defer clientR.Close()
+	defer serverW.Close()
+
+	proc := &Process{agentName: "init-test"}
+	proc.client = &mindfsClient{proc: proc}
+	proc.conn = acpsdk.NewClientSideConnection(proc.client, clientW, clientR)
+
+	reqCh := make(chan map[string]any, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		line, err := bufio.NewReader(serverR).ReadBytes('\n')
+		if err != nil {
+			errCh <- err
+			return
+		}
+		var req map[string]any
+		if err := json.Unmarshal(line, &req); err != nil {
+			errCh <- err
+			return
+		}
+		reqCh <- req
+		resp := map[string]any{
+			"jsonrpc": "2.0",
+			"id":      req["id"],
+			"result": map[string]any{
+				"protocolVersion":   acpsdk.ProtocolVersionNumber,
+				"agentCapabilities": map[string]any{},
+			},
+		}
+		payload, _ := json.Marshal(resp)
+		_, err = serverW.Write(append(payload, '\n'))
+		if err != nil {
+			errCh <- err
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := proc.Initialize(ctx); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	select {
+	case err := <-errCh:
+		t.Fatalf("fake ACP server: %v", err)
+	case req := <-reqCh:
+		params, _ := req["params"].(map[string]any)
+		caps, _ := params["clientCapabilities"].(map[string]any)
+		if terminal, ok := caps["terminal"].(bool); ok && terminal {
+			t.Fatalf("clientCapabilities.terminal = true, want false: %#v", caps)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for initialize request")
+	}
+}
 
 func TestProcessCloseReceivesChildExit(t *testing.T) {
 	executable, err := os.Executable()

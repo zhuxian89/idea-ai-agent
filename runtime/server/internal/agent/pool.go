@@ -315,7 +315,7 @@ func (p *Pool) KillAgentProcess(agentName string, wait time.Duration) (string, b
 		log.Printf("[agent/pool] kill_agent_process.claude_closed agent=%s", agentName)
 		return "", true
 	case ProtocolCodexSDK:
-		p.closeSessionsForAgent(agentName, ProtocolCodexSDK)
+		p.discardSessionsForAgent(agentName, ProtocolCodexSDK)
 		_ = p.codex.Close(agentName)
 		log.Printf("[agent/pool] kill_agent_process.codex_closed agent=%s", agentName)
 		return "", true
@@ -339,6 +339,18 @@ func (p *Pool) closeSessionsForAgent(agentName string, protocol Protocol) {
 			return entry.agentName == agentName && entry.protocol == protocol
 		}),
 	)
+}
+
+func (p *Pool) discardSessionsForAgent(agentName string, protocol Protocol) {
+	entries := p.takeSessions(func(entry *sessionEntry) bool {
+		return entry.agentName == agentName && entry.protocol == protocol
+	})
+	for _, entry := range entries {
+		if entry == nil || entry.session == nil {
+			continue
+		}
+		_ = entry.session.CancelCurrentTurn()
+	}
 }
 
 // RestartUpdatedCodex replaces an older running CLI before an explicit model refresh.
@@ -378,7 +390,7 @@ func (p *Pool) RestartUpdatedCodex(ctx context.Context, agentName string) error 
 		return nil
 	}
 	// 只替换 Codex 的运行资源；持久化会话由原有恢复链路继续加载。
-	p.closeSessionsForAgent(agentName, ProtocolCodexSDK)
+	p.discardSessionsForAgent(agentName, ProtocolCodexSDK)
 	if err := p.codex.Close(agentName); err != nil {
 		return err
 	}

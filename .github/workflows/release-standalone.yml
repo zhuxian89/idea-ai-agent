@@ -222,6 +222,11 @@ jobs:
         with:
           go-version-file: runtime/go.mod
           cache-dependency-path: runtime/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run Windows ACP process-tree and lock cleanup tests
+        run: node scripts/test-runtime.mjs ./server/internal/agent/acp -count=1
       - uses: actions/download-artifact@v4
         with:
           name: standalone-${{ inputs.version }}

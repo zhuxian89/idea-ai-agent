@@ -561,3 +561,58 @@ func TestLoadConfigWithExtraMergesSingleExtraConfigAfterDefaultConfig(t *testing
 		t.Fatalf("token station url = %q", cfg.TokenStationURL)
 	}
 }
+
+type restartDiscardTestSession struct {
+	idleReleaseTestSession
+	closeCalls  int
+	cancelCalls int
+}
+
+func (s *restartDiscardTestSession) Close() error {
+	s.closeCalls++
+	return nil
+}
+
+func (s *restartDiscardTestSession) CancelCurrentTurn() error {
+	s.cancelCalls++
+	return nil
+}
+
+func TestPoolKillCodexProcessSkipsPerSessionCloseWait(t *testing.T) {
+	pool := NewPool(Config{Agents: []Definition{{
+		Name:     "codex",
+		Command:  "codex",
+		Protocol: ProtocolCodexSDK,
+	}}})
+	defer pool.CloseAll()
+
+	first := &restartDiscardTestSession{}
+	second := &restartDiscardTestSession{}
+	pool.sessions["codex-s1"] = &sessionEntry{
+		agentName:  "codex",
+		sessionKey: "codex-s1",
+		protocol:   ProtocolCodexSDK,
+		session:    first,
+		lastUsedAt: time.Now(),
+	}
+	pool.sessions["codex-s2"] = &sessionEntry{
+		agentName:  "codex",
+		sessionKey: "codex-s2",
+		protocol:   ProtocolCodexSDK,
+		session:    second,
+		lastUsedAt: time.Now(),
+	}
+
+	if _, ok := pool.KillAgentProcess("codex", 0); !ok {
+		t.Fatal("expected KillAgentProcess to report codex closed")
+	}
+	if len(pool.sessions) != 0 {
+		t.Fatalf("expected codex sessions evicted, got %d", len(pool.sessions))
+	}
+	if first.closeCalls != 0 || second.closeCalls != 0 {
+		t.Fatalf("expected 0 per-session Close calls during whole-agent restart, got %d and %d", first.closeCalls, second.closeCalls)
+	}
+	if first.cancelCalls != 1 || second.cancelCalls != 1 {
+		t.Fatalf("expected local turn cancellation for each evicted session, got %d and %d", first.cancelCalls, second.cancelCalls)
+	}
+}

@@ -68,7 +68,8 @@ func (h *HTTPHandler) openConnectionSession(ctx context.Context, req agentConnec
 func (h *HTTPHandler) handleAgentConnectionModels(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
-	sess, cleanup, err := h.openConnectionSession(ctx, agentConnectionRequest{Agent: r.URL.Query().Get("agent")})
+	agentName := strings.TrimSpace(r.URL.Query().Get("agent"))
+	sess, cleanup, err := h.openConnectionSession(ctx, agentConnectionRequest{Agent: agentName})
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -78,6 +79,17 @@ func (h *HTTPHandler) handleAgentConnectionModels(w http.ResponseWriter, r *http
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err)
 		return
+	}
+	if h.AppContext != nil {
+		if prefs := h.AppContext.GetPreferences(); prefs != nil {
+			var protocol agent.Protocol
+			if pool := h.AppContext.GetAgentPool(); pool != nil {
+				if def, ok := pool.Config().GetAgent(agentName); ok {
+					protocol = def.Protocol
+				}
+			}
+			models.Models = prefs.SupplementAgentModels(agentName, protocol, models.Models)
+		}
 	}
 	respondJSON(w, http.StatusOK, models)
 }

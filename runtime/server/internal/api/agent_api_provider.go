@@ -7,36 +7,21 @@ import (
 	"fmt"
 	"io"
 	"mindfs/server/internal/agent"
-	"mindfs/server/internal/apperr"
-	configpkg "mindfs/server/internal/config"
 	"mindfs/server/internal/preferences"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 )
 
 const (
-	apiProviderProtocolOpenAICompatible    = "openai-compatible"
-	apiProviderProtocolAnthropicCompatible = "anthropic-compatible"
-	apiProviderProtocolGeminiCompatible    = "gemini-compatible"
+	apiProviderProtocolOpenAICompatible    = preferences.APIProviderProtocolOpenAICompatible
+	apiProviderProtocolAnthropicCompatible = preferences.APIProviderProtocolAnthropicCompatible
+	apiProviderProtocolGeminiCompatible    = preferences.APIProviderProtocolGeminiCompatible
 )
 
-type agentAPIProvider struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	BaseURL        string   `json:"baseUrl"`
-	APIKey         string   `json:"apiKey,omitempty"`
-	Protocols      []string `json:"protocols,omitempty"`
-	ModelFamilies  []string `json:"modelFamilies"`
-	Models         []string `json:"models"`
-	CreatedAt      string   `json:"createdAt"`
-	UpdatedAt      string   `json:"updatedAt"`
-	activeProtocol string
-}
+type agentAPIProvider = preferences.APIProvider
 
 type agentAPIProviderPublic struct {
 	ID            string   `json:"id"`
@@ -126,6 +111,7 @@ func (h *HTTPHandler) handleAgentAPIProvidersSync(w http.ResponseWriter, r *http
 	for _, provider := range providers {
 		out = append(out, publicAgentAPIProvider(provider))
 	}
+	broadcastBoundAPIProviderAgents(h.AppContext)
 	respondJSON(w, http.StatusOK, map[string]any{"providers": out})
 }
 
@@ -146,7 +132,17 @@ func (h *HTTPHandler) handleAgentAPIProviderDelete(w http.ResponseWriter, r *htt
 	for _, provider := range providers {
 		out = append(out, publicAgentAPIProvider(provider))
 	}
+	broadcastBoundAPIProviderAgents(h.AppContext)
 	respondJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": id, "providers": out})
+}
+
+func broadcastBoundAPIProviderAgents(app *AppContext) {
+	if app == nil || app.GetProber() == nil {
+		return
+	}
+	for _, status := range app.GetProber().GetConfiguredStatuses() {
+		app.BroadcastAgentStatusChanged(status.Name)
+	}
 }
 
 func (h *HTTPHandler) handleAgentAPIProviderSwitch(w http.ResponseWriter, r *http.Request) {
@@ -368,7 +364,7 @@ func switchAgentAPIProvider(req agentAPIProviderSwitchRequest, app *AppContext) 
 	if !ok {
 		return agentAPIProvider{}, fmt.Errorf("provider protocols %s are not compatible with agent %s", strings.Join(agentAPIProviderProtocols(provider), ", "), agentName)
 	}
-	provider.activeProtocol = selectedProtocol
+	provider.ActiveProtocol = selectedProtocol
 	if err := applyAgentAPIProvider(agentName, provider, app); err != nil {
 		return agentAPIProvider{}, err
 	}
@@ -389,62 +385,15 @@ func switchAgentAPIProvider(req agentAPIProviderSwitchRequest, app *AppContext) 
 }
 
 func readAgentAPIProviders() ([]agentAPIProvider, error) {
-	path, err := agentAPIProvidersPath()
-	if err != nil {
-		return nil, err
-	}
-	payload, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []agentAPIProvider{}, nil
-		}
-		return nil, apperr.Wrap("read", path, err)
-	}
-	if len(strings.TrimSpace(string(payload))) == 0 {
-		return []agentAPIProvider{}, nil
-	}
-	var providers []agentAPIProvider
-	if err := json.Unmarshal(payload, &providers); err != nil {
-		return nil, err
-	}
-	for i := range providers {
-		providers[i].Protocols = agentAPIProviderProtocols(providers[i])
-	}
-	return providers, nil
+	return preferences.ReadAPIProviders()
 }
 
 func writeAgentAPIProviders(providers []agentAPIProvider) error {
-	path, err := agentAPIProvidersPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return apperr.Wrap("mkdir", filepath.Dir(path), err)
-	}
-	payload, err := json.MarshalIndent(providers, "", "  ")
-	if err != nil {
-		return err
-	}
-	payload = append(payload, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
-		return apperr.Wrap("write", tmp, err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(path)
-		if retryErr := os.Rename(tmp, path); retryErr != nil {
-			return apperr.Wrap("rename", path, err)
-		}
-	}
-	return nil
+	return preferences.WriteAPIProviders(providers)
 }
 
 func agentAPIProvidersPath() (string, error) {
-	configDir, err := configpkg.MindFSConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configDir, "api-providers.json"), nil
+	return preferences.APIProvidersPath()
 }
 
 func publicAgentAPIProvider(provider agentAPIProvider) agentAPIProviderPublic {
@@ -517,21 +466,11 @@ func selectAPIProviderProtocolForAgent(provider agentAPIProvider, agentName stri
 }
 
 func agentAPIProviderProtocols(provider agentAPIProvider) []string {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(provider.Protocols))
-	for _, protocol := range provider.Protocols {
-		protocol = strings.TrimSpace(protocol)
-		if protocol == "" || seen[protocol] {
-			continue
-		}
-		seen[protocol] = true
-		out = append(out, protocol)
-	}
-	return out
+	return preferences.NormalizeAPIProviderProtocols(provider.Protocols)
 }
 
 func agentAPIProviderActiveProtocol(provider agentAPIProvider) string {
-	if protocol := strings.TrimSpace(provider.activeProtocol); protocol != "" {
+	if protocol := strings.TrimSpace(provider.ActiveProtocol); protocol != "" {
 		return protocol
 	}
 	protocols := agentAPIProviderProtocols(provider)

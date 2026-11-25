@@ -165,7 +165,9 @@ func (r *Runtime) Close(agentName string) {
 	delete(r.closeHints, agentName)
 	r.mu.Unlock()
 	if proc != nil {
-		_ = proc.Close()
+		if err := proc.Close(); err != nil {
+			log.Printf("[agent/acp] runtime.close.error agent=%s err=%v", agentName, err)
+		}
 		if hint, ok := waitForRecentStderrHint(proc, 750*time.Millisecond); ok {
 			r.mu.Lock()
 			r.closeHints[agentName] = hint

@@ -422,7 +422,13 @@ func (s *Service) validateAgentModel(agentName, model string) error {
 		return nil
 	}
 	status, ok := prober.GetStatus(agentName)
-	if !ok || len(status.Models) == 0 {
+	if !ok {
+		return nil
+	}
+	if prefs := s.Registry.GetPreferences(); prefs != nil {
+		status = prefs.ApplyAgentDefaults([]agent.Status{status})[0]
+	}
+	if len(status.Models) == 0 {
 		return nil
 	}
 	for _, item := range status.Models {

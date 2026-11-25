@@ -242,13 +242,27 @@ func (s *Store) ApplyAgentDefaults(statuses []agent.Status) []agent.Status {
 		return statuses
 	}
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if len(s.data.Agents) == 0 {
+	agents := make(map[string]AgentDefaults, len(s.data.Agents))
+	for key, val := range s.data.Agents {
+		if val.LastConfigSelection != nil {
+			copied := *val.LastConfigSelection
+			val.LastConfigSelection = &copied
+		}
+		agents[key] = val
+	}
+	s.mu.RUnlock()
+	if len(agents) == 0 {
 		return statuses
 	}
+
+	var (
+		providers       []APIProvider
+		providersLoaded bool
+	)
 	out := append([]agent.Status(nil), statuses...)
 	for i := range out {
-		defaults := s.data.Agents[strings.TrimSpace(out[i].Name)]
+		name := strings.TrimSpace(out[i].Name)
+		defaults := agents[name]
 		if defaults.Model != "" {
 			out[i].DefaultModelID = defaults.Model
 		}
@@ -260,6 +274,15 @@ func (s *Store) ApplyAgentDefaults(statuses []agent.Status) []agent.Status {
 		}
 		if defaults.LastConfigSelection != nil {
 			out[i].LastConfigSelection = *defaults.LastConfigSelection
+			if defaults.LastConfigSelection.Type == "api_provider" && strings.TrimSpace(defaults.LastConfigSelection.ID) != "" {
+				if requiredProtocol, ok := requiredAPIProviderProtocolForSupplement(name, out[i].Protocol); ok {
+					if !providersLoaded {
+						providers, _ = ReadAPIProviders()
+						providersLoaded = true
+					}
+					out[i].Models = appendBoundProviderModels(out[i].Models, providers, defaults.LastConfigSelection.ID, requiredProtocol)
+				}
+			}
 		}
 	}
 	return out

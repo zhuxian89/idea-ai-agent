@@ -21,17 +21,25 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 )
 
+type processTree interface {
+	Kill() error
+	Close() error
+}
+
 // Process manages an agent process using ACP.
 // This implementation works with any ACP-compatible agent:
 // - claude (via claude-code-acp wrapper)
 // - gemini (via --experimental-acp flag)
 // - codex (via codex-acp wrapper)
 type Process struct {
-	agentName string
-	cmd       *exec.Cmd
-	conn      *acp.ClientSideConnection
-	client    *mindfsClient
-	waitCh    chan error
+	agentName  string
+	cmd        *exec.Cmd
+	conn       *acp.ClientSideConnection
+	client     *mindfsClient
+	waitCh     chan struct{}
+	waitErr    error
+	cleanupErr error
+	tree       processTree
 
 	mu            sync.RWMutex
 	sessions      map[string]*sessionState // sessionKey -> state
@@ -420,7 +428,18 @@ func Start(ctx context.Context, agentName, command string, args []string, cwd st
 		return nil, err
 	}
 
-	if err := cmd.Start(); err != nil {
+	tree, err := startProcessCommand(cmd)
+	if err != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
+		// Platform setup can fail before cmd.Start gets a chance to close the
+		// child ends of the pipes it owns.
+		for _, stream := range []any{cmd.Stdin, cmd.Stdout, cmd.Stderr} {
+			if closer, ok := stream.(io.Closer); ok {
+				_ = closer.Close()
+			}
+		}
 		return nil, err
 	}
 
@@ -429,13 +448,25 @@ func Start(ctx context.Context, agentName, command string, args []string, cwd st
 		cmd:          cmd,
 		sessions:     make(map[string]*sessionState),
 		sessionsByID: make(map[string]*sessionState),
-		waitCh:       make(chan error, 1),
+		waitCh:       make(chan struct{}),
+		tree:         tree,
 	}
 	proc.client = &mindfsClient{proc: proc}
 	go streamProcessStderr(proc, stderr)
 	waitCh := proc.waitCh
 	go func() {
-		waitCh <- cmd.Wait()
+		err := cmd.Wait()
+		// Single lifecycle owner: release the process tree after cmd.Wait so
+		// wrapper exit and explicit Close share one cleanup path.
+		cleanupErr := tree.Close()
+		if cleanupErr != nil {
+			log.Printf("[agent/acp] process.cleanup_error agent=%s err=%v", agentName, cleanupErr)
+		}
+		proc.mu.Lock()
+		proc.waitErr = err
+		proc.cleanupErr = cleanupErr
+		proc.mu.Unlock()
+		close(waitCh)
 	}()
 
 	proc.conn = acp.NewClientSideConnection(proc.client, stdin, stdout)
@@ -449,7 +480,7 @@ func (p *Process) Initialize(ctx context.Context) error {
 	resp, err := p.conn.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{
-			Terminal: true,
+			Terminal: false,
 		},
 		ClientInfo: &acp.Implementation{
 			Name:    "mindfs",
@@ -654,12 +685,11 @@ func (p *Process) CloseSession(ctx context.Context, sessionKey string) error {
 
 // Close terminates the process.
 func (p *Process) Close() error {
-	p.mu.Lock()
+	p.mu.RLock()
 	cmd := p.cmd
 	waitCh := p.waitCh
-	p.cmd = nil
-	p.waitCh = nil
-	p.mu.Unlock()
+	tree := p.tree
+	p.mu.RUnlock()
 
 	if cmd == nil || cmd.Process == nil {
 		return nil
@@ -667,30 +697,36 @@ func (p *Process) Close() error {
 
 	pid := cmd.Process.Pid
 	log.Printf("[agent/acp] process.close.begin agent=%s pid=%d", p.agentLabel(), pid)
-	if err := killProcess(cmd.Process); err != nil && !strings.Contains(strings.ToLower(err.Error()), "process already finished") {
+	if err := tree.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		log.Printf("[agent/acp] process.close.kill_error agent=%s pid=%d err=%v", p.agentLabel(), pid, err)
-		return err
+		return errors.Join(err, tree.Close())
 	}
 
 	select {
-	case err := <-waitCh:
-		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "signal: killed") {
+	case <-waitCh:
+		p.mu.Lock()
+		err := p.waitErr
+		cleanupErr := p.cleanupErr
+		p.cmd = nil
+		p.waitCh = nil
+		p.tree = nil
+		p.mu.Unlock()
+		if cleanupErr != nil {
+			return cleanupErr
+		}
+		// Forced termination is expected on both Unix and Windows.
+		var exitErr *exec.ExitError
+		if err != nil && !errors.As(err, &exitErr) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			log.Printf("[agent/acp] process.close.wait_error agent=%s pid=%d err=%v", p.agentLabel(), pid, err)
 			return err
 		}
 		log.Printf("[agent/acp] process.close.done agent=%s pid=%d", p.agentLabel(), pid)
 		return nil
 	case <-time.After(10 * time.Second):
-		log.Printf("[agent/acp] process.close.timeout agent=%s pid=%d", p.agentLabel(), pid)
-		return nil
+		cleanupErr := tree.Close()
+		log.Printf("[agent/acp] process.close.timeout agent=%s pid=%d err=%v", p.agentLabel(), pid, cleanupErr)
+		return errors.Join(errors.New("ACP process did not exit after kill"), cleanupErr)
 	}
-}
-
-func killProcess(proc *os.Process) error {
-	if proc == nil {
-		return nil
-	}
-	return killProcessTree(proc)
 }
 
 // SessionID returns the ACP session ID for a MindFS session key.
