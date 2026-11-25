@@ -47,9 +47,9 @@ function usage() {
   console.log(`Local AI Agent packaging
 
 Usage:
-  node scripts/package-plugin.mjs local mac [--version VERSION] [--verify] [--dry-run]
-  node scripts/package-plugin.mjs local win [--version VERSION] [--verify] [--dry-run]
-  node scripts/package-plugin.mjs release [--version VERSION] [--skip-tests] [--dry-run]
+  node scripts/package-plugin.mjs local mac [--version VERSION] [--verify] [--online|--offline] [--dry-run]
+  node scripts/package-plugin.mjs local win [--version VERSION] [--verify] [--online|--offline] [--dry-run]
+  node scripts/package-plugin.mjs release [--version VERSION] [--skip-tests] [--online|--offline] [--dry-run]
 
 Commands:
   local mac    Build one macOS Apple Silicon test package
@@ -81,12 +81,14 @@ function parseArguments(argv) {
     target = targets[targetId];
     if (!target) fail(`unknown local target: ${rawTarget || '(missing)'}`);
   }
-  const options = { version: '', dryRun: false, verify: mode === 'release' };
+  const options = { version: '', dryRun: false, verify: mode === 'release', offline: !process.env.CI };
   while (index < argv.length) {
     const arg = argv[index++];
     if (arg === '--dry-run') options.dryRun = true;
     else if (arg === '--verify') options.verify = true;
     else if (arg === '--skip-tests') options.verify = false;
+    else if (arg === '--online') options.offline = false;
+    else if (arg === '--offline') options.offline = true;
     else if (arg === '--version') options.version = argv[index++] || '';
     else if (arg.startsWith('--version=')) options.version = arg.slice('--version='.length);
     else fail(`unknown option: ${arg}`);
@@ -218,10 +220,12 @@ function buildRuntime(target, env) {
   });
 }
 
-function buildPlugin(version, env) {
+function buildPlugin(version, env, offline = true) {
   const distribution = path.join(distributionsDir, `idea-ai-agent-${version}.zip`);
   rmSync(distribution, { force: true });
-  run(gradleCommand, [`-PpluginVersion=${version}`, 'buildPlugin', '-x', 'buildRuntime', '--offline'], { env });
+  const args = [`-PpluginVersion=${version}`, 'buildPlugin', '-x', 'buildRuntime'];
+  if (offline) args.push('--offline');
+  run(gradleCommand, args, { env });
   if (!existsSync(distribution)) throw new Error(`Gradle did not create ${distribution}`);
   return distribution;
 }
@@ -372,7 +376,9 @@ function main() {
 
   buildFrontend(env);
   if (config.verify) {
-    run(gradleCommand, [`-PpluginVersion=${version}`, 'test', 'verifyPluginProjectConfiguration', '--offline'], { env });
+    const testArgs = [`-PpluginVersion=${version}`, 'test', 'verifyPluginProjectConfiguration'];
+    if (config.offline) testArgs.push('--offline');
+    run(gradleCommand, testArgs, { env });
   }
 
   const runtimeCache = mkdtempSync(path.join(os.tmpdir(), 'idea-agent-runtimes-'));
@@ -384,7 +390,7 @@ function main() {
       const runtime = path.join(localRuntimeDir, target.binary);
       copyFileSync(runtime, path.join(runtimeCache, target.binary));
       chmodSync(path.join(runtimeCache, target.binary), 0o755);
-      const distribution = buildPlugin(version, env);
+      const distribution = buildPlugin(version, env, config.offline);
       const output = path.join(destination, outputName(version, target));
       copyFileSync(distribution, output);
       normalizePackage(output, [target]);
@@ -399,7 +405,7 @@ function main() {
         copyFileSync(path.join(runtimeCache, target.binary), runtime);
         chmodSync(runtime, 0o755);
       }
-      const distribution = buildPlugin(version, env);
+      const distribution = buildPlugin(version, env, config.offline);
       const output = path.join(destination, `idea-ai-agent-${version}.zip`);
       copyFileSync(distribution, output);
       normalizePackage(output, releaseTargets);

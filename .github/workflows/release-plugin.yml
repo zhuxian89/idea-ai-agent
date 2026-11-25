@@ -1,0 +1,274 @@
+name: Release plugin
+# Builds all 5 IDEA plugin ZIPs (macos-arm64, macos-amd64, windows-amd64, windows-arm64, and universal Marketplace)
+# plus SHA256SUMS.txt from a clean checkout, runs the AGENTS.md release gates:
+#   - old-database kanban migration + race tests, Gradle plugin tests, optional full Go & web test suites
+#   - static gates on all 6 files: checksums, Mach-O/PE headers, Go vcs.modified=false, installers/install.ps1 BOM &
+#     byte match, 305 web files matching dist with zero /mindfs-assets/
+#   - live embedded backend boot + 305 HTTP web asset byte-for-byte check on BOTH macOS Apple Silicon and Windows x64
+#   - Windows PowerShell 5.1 verification (verify-windows-plugin-installer.ps1) on ALL THREE Windows/universal ZIPs
+# Then publishes according to `mode`:
+#   - draft (default): creates a safe draft release (never unpublishing an existing live Latest release)
+#   - formal: creates or updates `v<version>` as GitHub Latest, snapshots replaced assets when `replace_existing=true`,
+#     and anonymously re-downloads all 6 public assets over HTTPS to verify byte-for-byte match.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Plugin version, for example 0.1.27 (same-version update needs replace_existing=true) or 0.1.28
+        required: true
+        default: '0.1.27'
+      mode:
+        description: draft (safe draft release) or formal (publish/update v<version> as Latest)
+        required: true
+        type: choice
+        options:
+          - draft
+          - formal
+        default: draft
+      replace_existing:
+        description: Allow replacing assets of an existing v<version> release (required for same-version updates like 0.1.27)
+        type: boolean
+        default: false
+      changes:
+        description: What this plugin update changes (Markdown). Leave empty to use .github/release-notes/plugin-<version>.md
+        required: false
+        default: ''
+      skip_full_tests:
+        description: Skip the full Go and web test suites (migration tests and Gradle plugin tests always run)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: release-plugin-${{ inputs.version }}
+  cancel-in-progress: false
+env:
+  VERSION: ${{ inputs.version }}
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      notes_source: ${{ steps.plan.outputs.notes_source }}
+      release_exists: ${{ steps.plan.outputs.release_exists }}
+      draft_tag: ${{ steps.plan.outputs.draft_tag }}
+      standalone_version: ${{ steps.plan.outputs.standalone_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check the request
+        id: plan
+        env:
+          MODE: ${{ inputs.mode }}
+          REPLACE_EXISTING: ${{ inputs.replace_existing }}
+          CHANGES: ${{ inputs.changes }}
+          REF_NAME: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/plugin/plugin-plan.mjs
+
+  gates-and-package:
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: runtime/go.mod
+          cache-dependency-path: runtime/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+      - name: Install frontend dependencies
+        working-directory: runtime/web
+        run: corepack pnpm install --frozen-lockfile
+      # AGENTS.md: a release is not deliverable without the old-database migration tests.
+      - name: Database migration tests
+        run: |
+          node scripts/test-runtime.mjs ./server/internal/kanban -count=1
+          node scripts/test-runtime.mjs -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1
+      - name: Release script tests
+        run: node --test scripts/plugin/*.test.mjs scripts/standalone/verify-public-release.test.mjs
+      - name: Full Go tests
+        if: ${{ !inputs.skip_full_tests }}
+        run: node scripts/test-runtime.mjs
+      - name: Install the browser the frontend tests drive
+        if: ${{ !inputs.skip_full_tests }}
+        working-directory: runtime/web
+        run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Frontend type check and tests
+        if: ${{ !inputs.skip_full_tests }}
+        working-directory: runtime/web
+        run: |
+          corepack pnpm typecheck
+          node --test tests/*.test.mjs
+      - name: Build and test all 5 IDEA plugin packages
+        run: node scripts/package-plugin.mjs release --version "$VERSION" --online
+      - name: The checkout must still be clean, or the embedded programs would not be reproducible
+        run: test -z "$(git status --porcelain)" || { git status --short; exit 1; }
+      - name: Static release gates on the 6 final plugin files
+        run: node scripts/plugin/verify-plugin-assets.mjs "build/releases/$VERSION" "$VERSION" --commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ inputs.version }}
+          path: build/releases/${{ inputs.version }}
+          if-no-files-found: error
+          retention-days: 14
+
+  verify-macos-builtin:
+    needs: [plan, gates-and-package]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-${{ inputs.version }}
+          path: assets
+      - name: Boot embedded macOS Apple Silicon backend and verify all HTTP web assets
+        run: node scripts/plugin/verify-builtin-runtime.mjs "assets/idea-ai-agent-$VERSION-macos-arm64.zip"
+
+  verify-windows:
+    needs: [plan, gates-and-package]
+    runs-on: windows-latest
+    env:
+      STANDALONE_VERSION: ${{ needs.plan.outputs.standalone_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-${{ inputs.version }}
+          path: assets
+      # AGENTS.md: every Windows-usable plugin ZIP (including universal) must pass real Windows PowerShell 5.1 before release.
+      - name: Verify all 3 Windows/universal plugin ZIPs with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $zips = @(
+            "assets/idea-ai-agent-$env:VERSION-windows-amd64.zip",
+            "assets/idea-ai-agent-$env:VERSION-windows-arm64.zip",
+            "assets/idea-ai-agent-$env:VERSION.zip"
+          )
+          foreach ($z in $zips) {
+            Write-Host "Verifying $z in Windows PowerShell 5.1 against standalone $env:STANDALONE_VERSION..."
+            & ./scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip (Resolve-Path -LiteralPath $z).Path -Version $env:STANDALONE_VERSION
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Boot embedded Windows x64 backend and verify all HTTP web assets
+        run: node scripts/plugin/verify-builtin-runtime.mjs "assets/idea-ai-agent-$VERSION-windows-amd64.zip"
+      - name: Verify PowerShell 7 redirects
+        shell: pwsh
+        run: |
+          $env:INSTALL_TEST_POWERSHELL = (Get-Process -Id $PID).Path
+          node --test scripts/standalone/download-redirect.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  publish:
+    needs: [plan, gates-and-package, verify-macos-builtin, verify-windows]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      MODE: ${{ needs.plan.outputs.mode }}
+      NOTES_SOURCE: ${{ needs.plan.outputs.notes_source }}
+      RELEASE_EXISTS: ${{ needs.plan.outputs.release_exists }}
+      DRAFT_TAG: ${{ needs.plan.outputs.draft_tag }}
+      STANDALONE_VERSION: ${{ needs.plan.outputs.standalone_version }}
+      REPLACE_EXISTING: ${{ inputs.replace_existing }}
+      CHANGES: ${{ inputs.changes }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-${{ inputs.version }}
+          path: assets
+      - name: Write the plugin release notes
+        run: |
+          if [ "$NOTES_SOURCE" = input ]; then printf '%s\n' "$CHANGES" > changes.md; else cp "$NOTES_SOURCE" changes.md; fi
+          extra_flags=()
+          if [ "$MODE" = "formal" ]; then extra_flags+=(--formal); fi
+          if [ "$RELEASE_EXISTS" = "true" ] || [ "$REPLACE_EXISTING" = "true" ]; then extra_flags+=(--replace-existing); fi
+          node scripts/plugin/plugin-release-notes.mjs \
+            --version "$VERSION" \
+            --changes-file changes.md \
+            --standalone-version "$STANDALONE_VERSION" \
+            --commit "$GITHUB_SHA" \
+            "${extra_flags[@]}" > notes.md
+          cat notes.md
+      - name: Create or update draft release (draft mode)
+        if: ${{ needs.plan.outputs.mode == 'draft' }}
+        run: |
+          gh release delete "$DRAFT_TAG" --yes >/dev/null 2>&1 || true
+          files=(assets/*)
+          gh release create "$DRAFT_TAG" --draft --prerelease --latest=false \
+            --target "$GITHUB_SHA" --title "IDEA 插件 $VERSION (草稿)" --notes-file notes.md "${files[@]}"
+          mkdir redownload
+          gh release download "$DRAFT_TAG" --dir redownload
+          (cd assets && sha256sum * | sort -k2) > expected.sums
+          (cd redownload && sha256sum * | sort -k2) > actual.sums
+          diff expected.sums actual.sums
+          echo "Verified $(wc -l < actual.sums) files in draft $DRAFT_TAG byte-for-byte"
+      - name: Publish or update v$VERSION as GitHub Latest (formal mode)
+        if: ${{ needs.plan.outputs.mode == 'formal' }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            git fetch origin main
+            if ! git merge-base --is-ancestor origin/main "$GITHUB_SHA"; then
+              echo "::error::Branch $GITHUB_REF_NAME cannot fast-forward origin/main. Rebase onto main first."
+              exit 1
+            fi
+            git push origin "$GITHUB_SHA:refs/heads/main"
+          fi
+          mkdir -p snapshot
+          files=(assets/*)
+          if [ "$RELEASE_EXISTS" = "true" ]; then
+            gh release view "v$VERSION" --json tagName,name,isDraft,isPrerelease,publishedAt,targetCommitish,url,body,assets > "snapshot/v${VERSION}-before-replace.json"
+            gh release upload "v$VERSION" --clobber "${files[@]}"
+            gh release edit "v$VERSION" --draft=false --prerelease=false --latest=true --title "IDEA 插件 $VERSION" --notes-file notes.md
+          else
+            gh release create "v$VERSION" --latest=true --target "$GITHUB_SHA" --title "IDEA 插件 $VERSION" --notes-file notes.md "${files[@]}"
+          fi
+          node scripts/standalone/verify-public-release.mjs --tag "v$VERSION" --assets-dir assets
+          latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          test "$latest_tag" = "v$VERSION"
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            git push origin --delete "$GITHUB_REF_NAME" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: ${{ needs.plan.outputs.mode == 'formal' && needs.plan.outputs.release_exists == 'true' }}
+        with:
+          name: plugin-replaced-snapshot-${{ inputs.version }}
+          path: snapshot
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Summary
+        run: |
+          {
+            echo "## IDEA Plugin $VERSION ($MODE)"
+            echo
+            if [ "$MODE" = "formal" ]; then
+              echo "- Published Latest release: https://github.com/$GITHUB_REPOSITORY/releases/tag/v$VERSION"
+              echo "- Reminder: users already on $VERSION must reinstall the ZIP from disk and restart IDEA"
+            else
+              echo "- Draft release (\`$DRAFT_TAG\`): https://github.com/$GITHUB_REPOSITORY/releases"
+            fi
+            echo "- Built from \`$GITHUB_SHA\`"
+            echo "- Verified Gradle tests, static gates, macOS + Windows embedded backend 305 HTTP web assets, and Windows PowerShell 5.1 on all 3 Windows/universal ZIPs"
+          } >> "$GITHUB_STEP_SUMMARY"

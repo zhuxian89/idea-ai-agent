@@ -14,13 +14,10 @@
 
 独立后台与插件独立发版，Release 标签为 `standalone-v<版本>`。
 
-**自动化流水线。** `.github/workflows/release-standalone.yml`（手动触发，填版本号）从干净检出构建、跑下面“发布前验证”的静态门禁、
-在隔离环境安装最终包，并在 Windows PowerShell 5.1 与 Linux systemd 上验证，全部通过后只生成**草稿预发布**，不会公开发布。
-必须从 `standalone-<版本>` 分支触发，不能从 `main`（工作流文件首次合入 `main` 后，GitHub 才开放按分支手动触发）；已存在的版本号（含草稿）会被拒绝。
-`targets` 可只出一个或几个平台（如 `macos-arm64`、`windows-amd64` 或 `macos-arm64,windows-amd64`），只运行对应平台的验证，
-草稿会标明“仅提供某平台”，发布说明自动按所含平台生成。门禁脚本在 `scripts/standalone/verify-release-assets.mjs`，
-自动化范围、没有自动化的部分（公开发布、合并 `main`、转正与下架旧版、Linux/Windows ARM64 与 macOS Intel 的运行验证、
-macOS 真实服务的启动与升级）见该工作流运行摘要。手工流程仍然有效，下面各条是流水线的依据。
+**自动化流水线。**
+- **独立后台（`.github/workflows/release-standalone.yml`）**：手动触发（可从 `standalone-<版本>` 分支或 `main` 触发；未验证改动或修改了在线安装脚本时先推 `standalone-<版本>` 分支，已存在的版本号含草稿会被拒绝）。从干净检出构建、跑下面“发布前验证”的静态门禁（`scripts/standalone/verify-release-assets.mjs`）、在隔离环境安装最终包，并在 Windows PowerShell 5.1 与 Linux systemd 上验证。`mode` 支持三档：`draft`（默认，只生成草稿预发布）、`prerelease`（快进合并 `main`、公开预发布、云端匿名回读全部附件并在 Windows 5.1 验证公开下载）、`formal`（要求 `targets=all`，跑完 `prerelease` 后自动更新 `scripts/standalone/version.txt`、转正 Release、等 `raw.githubusercontent.com` 连续读到新值后验证无参数默认安装、留存旧版快照至工作流产物并下架旧 `standalone-v*` Release，保留 Git 标签与插件 `Latest`）。`targets` 可只出一个或几个平台（仅限 `draft` / `prerelease`）。
+- **IDEA 插件（`.github/workflows/release-plugin.yml`）**：手动触发（从 `main` 或 `plugin-<版本>` 分支触发）。从干净检出运行旧库迁移测试、Gradle 测试与 `scripts/package-plugin.mjs release --online` 构建 5 个插件包（四平台 + 通用包）与 `SHA256SUMS.txt`，跑 `scripts/plugin/verify-plugin-assets.mjs` 静态门禁、在 `macos-latest` 与 `windows-latest` 双端隔离启动内嵌后台逐字节核验 305 个 HTTP 网页资源，并在真实 Windows PowerShell 5.1 对三个 Windows/通用插件包运行 `verify-windows-plugin-installer.ps1`。`mode=draft` 生成安全草稿（若 `v<版本>` 已公开则用 `plugin-draft-v<版本>`，不碰线上 `Latest`）；`mode=formal` 发布新版本或同版本更新 `v<版本>`（同版本替换须勾 `replace_existing=true`，自动归档替换前快照并匿名回读核验 6 个公开附件）。
+- **仍需手工确认的范围**：Linux/Windows ARM64 与 macOS Intel 物理真机运行、macOS 真实服务升级与 Windows 真实登录自启、以及同版本替换插件后从磁盘重装并重启 IDEA。手工流程仍然有效，下面各条是两条流水线的依据。
 
 **只保留一个正式版。** 新版本验证通过并成为默认安装版本后，下架所有旧的独立后台 Release（含测试预发布）：
 先把旧 Release 的元数据快照（`gh release view --json ...`）存到 `build/reports/`，再 `gh release delete <标签> --yes`，

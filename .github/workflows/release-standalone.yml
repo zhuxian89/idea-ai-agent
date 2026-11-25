@@ -1,18 +1,29 @@
 name: Release standalone
 # Builds the standalone backend packages from a clean checkout, runs the release gates of AGENTS.md on the
-# final archives and leaves a DRAFT pre-release. It never publishes: making the draft public, merging into main
-# and promoting a version to the default stay manual steps (see the end of the run summary).
-#
-# Run it from a branch named standalone-<version> (never from main). `targets` can build a single platform, for
-# example a Windows or macOS test package; only the verification that applies to the chosen platforms runs.
+# final archives, and produces a release according to `mode`:
+#   - draft (default): stops at a verified DRAFT pre-release.
+#   - prerelease: fast-forwards main (if run from standalone-<version>), publishes the pre-release, anonymously
+#     re-downloads all assets byte-for-byte, and verifies public downloads on Linux + Windows PowerShell 5.1.
+#   - formal: runs everything in `prerelease` (requires `targets=all`), switches scripts/standalone/version.txt,
+#     promotes the release, waits for raw.githubusercontent.com cache convergence, verifies default online install,
+#     and snapshots + withdraws older standalone-* releases while preserving Git tags and the plugin Latest release.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to build, for example 0.1.64. A version that was published is never reused.
+        description: Version to build, for example 0.1.65. A version that was published is never reused.
         required: true
+      mode:
+        description: draft (stop at draft), prerelease (publish pre-release), or formal (set as default and withdraw old standalone releases)
+        required: true
+        type: choice
+        options:
+          - draft
+          - prerelease
+          - formal
+        default: draft
       targets:
-        description: all, or a comma separated list of linux-amd64, linux-arm64, macos-amd64, macos-arm64, windows-amd64, windows-arm64
+        description: all, or a comma separated list of linux-amd64, linux-arm64, macos-amd64, macos-arm64, windows-amd64, windows-arm64 (formal requires all)
         required: true
         default: all
       changes:
@@ -20,7 +31,7 @@ on:
         required: false
         default: ''
       skip_full_tests:
-        description: Skip the full Go and web test suites (the migration tests of AGENTS.md always run). The run summary records it.
+        description: Skip the full Go and web test suites (the migration tests of AGENTS.md always run).
         type: boolean
         default: false
 permissions:
@@ -35,6 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       targets: ${{ steps.plan.outputs.targets }}
+      mode: ${{ steps.plan.outputs.mode }}
       notes_source: ${{ steps.plan.outputs.notes_source }}
       linux_amd64: ${{ steps.plan.outputs.linux_amd64 }}
       macos_arm64: ${{ steps.plan.outputs.macos_arm64 }}
@@ -48,6 +60,7 @@ jobs:
         id: plan
         env:
           TARGETS: ${{ inputs.targets }}
+          MODE: ${{ inputs.mode }}
           CHANGES: ${{ inputs.changes }}
           REF_NAME: ${{ github.ref_name }}
         run: node scripts/standalone/release-plan.mjs
@@ -85,7 +98,7 @@ jobs:
           node scripts/test-runtime.mjs ./server/internal/kanban -count=1
           node scripts/test-runtime.mjs -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1
       - name: Release script tests
-        run: node --test scripts/standalone/verify-release-assets.test.mjs scripts/standalone/release-notes.test.mjs scripts/standalone/release-plan.test.mjs
+        run: node --test scripts/standalone/verify-release-assets.test.mjs scripts/standalone/release-notes.test.mjs scripts/standalone/release-plan.test.mjs scripts/standalone/verify-public-release.test.mjs
       - name: Full Go tests
         if: ${{ !inputs.skip_full_tests }}
         run: node scripts/test-runtime.mjs
@@ -238,8 +251,10 @@ jobs:
       contents: write
     env:
       TARGETS: ${{ needs.plan.outputs.targets }}
+      MODE: ${{ needs.plan.outputs.mode }}
       NOTES_SOURCE: ${{ needs.plan.outputs.notes_source }}
       CHANGES: ${{ inputs.changes }}
+      SKIP_FULL_TESTS: ${{ inputs.skip_full_tests }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -270,24 +285,190 @@ jobs:
           diff expected.sums actual.sums
           echo "$(wc -l < actual.sums) files in the draft are byte for byte the verified ones"
       - name: Summary
+        if: ${{ needs.plan.outputs.mode == 'draft' }}
         run: |
           {
             echo "## Draft release standalone-v$VERSION"
             echo
+            echo "- Mode: \`$MODE\`"
             echo "- Platforms: \`$TARGETS\`"
             echo "- Built from \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`"
-            echo "- Full test suites skipped: \`${{ inputs.skip_full_tests }}\`"
+            echo "- Full test suites skipped: \`$SKIP_FULL_TESTS\`"
             echo "- Draft: https://github.com/$GITHUB_REPOSITORY/releases"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: [plan, draft]
+    if: ${{ needs.plan.outputs.mode == 'prerelease' || needs.plan.outputs.mode == 'formal' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      LINUX_AMD64: ${{ needs.plan.outputs.linux_amd64 }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-${{ inputs.version }}
+          path: assets
+      - name: Fast-forward main to the verified commit before publishing
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            git fetch origin main
+            if ! git merge-base --is-ancestor origin/main "$GITHUB_SHA"; then
+              echo "::error::Branch $GITHUB_REF_NAME cannot fast-forward origin/main. Rebase onto main first."
+              exit 1
+            fi
+            git push origin "$GITHUB_SHA:refs/heads/main"
+          fi
+      - name: Publish the release (keeping Latest on the plugin release)
+        run: |
+          gh release edit "standalone-v$VERSION" --draft=false --prerelease --latest=false
+          latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          case "$latest_tag" in
+            standalone-v*) echo "::error::Standalone release unexpectedly became Latest ($latest_tag)"; exit 1 ;;
+          esac
+          echo "Latest release remains: $latest_tag"
+      - name: Anonymously re-download all public assets and compare byte-for-byte
+        run: node scripts/standalone/verify-public-release.mjs --tag "standalone-v$VERSION" --assets-dir assets
+      - name: Verify public online installer with explicit version in isolated HOME
+        if: ${{ env.LINUX_AMD64 == 'true' }}
+        run: |
+          tmp_home=$(mktemp -d)
+          trap 'rm -rf "$tmp_home"' EXIT
+          mkdir -p "$tmp_home/run" && chmod 700 "$tmp_home/run"
+          env -i PATH="$PATH" HOME="$tmp_home" XDG_CONFIG_HOME="$tmp_home/.config" \
+            XDG_RUNTIME_DIR="$tmp_home/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp_home/run/bus" TMPDIR="${TMPDIR:-/tmp}" \
+            sh -c "curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/install.sh | sh -s -- --version \"$VERSION\" --prefix \"\$HOME/prefix\" --defer-start"
+          test "$("$tmp_home/prefix/local-ai-agent" -version)" = "Local AI Agent $VERSION"
+          cmp -s "$tmp_home/prefix/local-ai-agent" <(tar -xzOf "assets/local-ai-agent-$VERSION-linux-amd64.tar.gz" "local-ai-agent-$VERSION-linux-amd64/local-ai-agent")
+
+  verify-windows-public-download:
+    needs: [plan, publish]
+    if: ${{ (needs.plan.outputs.mode == 'prerelease' || needs.plan.outputs.mode == 'formal') && needs.plan.outputs.windows_amd64 == 'true' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare candidate from the published Windows plugin
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import io, json, os, pathlib, urllib.request, zipfile
+          repo = os.environ['GITHUB_REPOSITORY']
+          request = urllib.request.Request(f'https://api.github.com/repos/{repo}/releases/latest', headers={'User-Agent':'installer-validation', 'Authorization':'Bearer ' + os.environ['GH_TOKEN']})
+          release = json.load(urllib.request.urlopen(request))
+          name = 'idea-ai-agent-' + release['tag_name'].removeprefix('v') + '-windows-amd64.zip'
+          asset = next(a for a in release['assets'] if a['name'] == name)
+          original = urllib.request.urlopen(asset['browser_download_url']).read()
+          installer = pathlib.Path('scripts/standalone/download.ps1').read_bytes()
+          assert installer.startswith(b'\xef\xbb\xbf')
+          out = pathlib.Path('build/installer-validation')
+          out.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(out / 'candidate.zip', 'w') as target:
+            jars = [n for n in source.namelist() if n.startswith('idea-ai-agent/lib/idea-ai-agent-') and n.endswith('.jar')]
+            assert len(jars) == 1
+            for entry in source.infolist():
+              data = source.read(entry.filename)
+              if entry.filename == jars[0]:
+                buffer = io.BytesIO()
+                with zipfile.ZipFile(io.BytesIO(data)) as jar, zipfile.ZipFile(buffer, 'w') as patched:
+                  for item in jar.infolist():
+                    patched.writestr(item, installer if item.filename == 'installers/install.ps1' else jar.read(item.filename))
+                data = buffer.getvalue()
+              target.writestr(entry, data)
+      - name: Verify public GitHub download of standalone-v$VERSION with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $plugin = Get-Item ./build/installer-validation/candidate.zip
+          & ./scripts/standalone/verify-windows-plugin-installer.ps1 -PluginZip $plugin.FullName -Version $env:VERSION
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  promote-formal:
+    needs: [plan, publish, verify-windows-public-download]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.mode == 'formal' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      NOTES_SOURCE: ${{ needs.plan.outputs.notes_source }}
+      CHANGES: ${{ inputs.changes }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-${{ inputs.version }}
+          path: assets
+      - name: Switch scripts/standalone/version.txt on main
+        run: |
+          printf '%s\n' "$VERSION" > scripts/standalone/version.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/standalone/version.txt
+          git commit -m "将独立后台 $VERSION 设为默认安装版本"
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Promote standalone-v$VERSION to formal release (keeping Latest on the plugin)
+        run: |
+          if [ "$NOTES_SOURCE" = input ]; then printf '%s\n' "$CHANGES" > changes.md; else cp "$NOTES_SOURCE" changes.md; fi
+          node scripts/standalone/release-notes.mjs --version "$VERSION" --targets all --formal --changes-file changes.md > notes.md
+          gh release edit "standalone-v$VERSION" --prerelease=false --latest=false --title "独立后台 $VERSION" --notes-file notes.md
+          latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          case "$latest_tag" in
+            standalone-v*) echo "::error::Standalone release unexpectedly became Latest ($latest_tag)"; exit 1 ;;
+          esac
+      - name: Wait for raw.githubusercontent.com version.txt convergence and verify default online install
+        run: |
+          node scripts/standalone/wait-online-version.mjs "$VERSION"
+          tmp_home=$(mktemp -d)
+          trap 'rm -rf "$tmp_home"' EXIT
+          mkdir -p "$tmp_home/run" && chmod 700 "$tmp_home/run"
+          env -i PATH="$PATH" HOME="$tmp_home" XDG_CONFIG_HOME="$tmp_home/.config" \
+            XDG_RUNTIME_DIR="$tmp_home/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp_home/run/bus" TMPDIR="${TMPDIR:-/tmp}" \
+            sh -c "curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/install.sh | sh -s -- --prefix \"\$HOME/prefix\" --defer-start"
+          test "$("$tmp_home/prefix/local-ai-agent" -version)" = "Local AI Agent $VERSION"
+          cmp -s "$tmp_home/prefix/local-ai-agent" <(tar -xzOf "assets/local-ai-agent-$VERSION-linux-amd64.tar.gz" "local-ai-agent-$VERSION-linux-amd64/local-ai-agent")
+      - name: Archive metadata snapshots and withdraw older standalone releases (preserving Git tags)
+        run: |
+          mkdir -p withdrawn
+          old_tags=$(gh release list --limit 50 --json tagName --jq '.[] | .tagName' | grep '^standalone-v' | grep -v "^standalone-v${VERSION}$" || true)
+          for tag in $old_tags; do
+            echo "Archiving and withdrawing $tag (preserving Git tag)..."
+            gh release view "$tag" --json tagName,name,isDraft,isPrerelease,publishedAt,targetCommitish,url,body,assets > "withdrawn/${tag}-before-withdraw.json"
+            gh release delete "$tag" --yes
+          done
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            git push origin --delete "$GITHUB_REF_NAME" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: withdrawn-standalone-releases-${{ inputs.version }}
+          path: withdrawn
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Summary
+        run: |
+          {
+            echo "## Formal release standalone-v$VERSION"
             echo
-            echo "### Verified in this run"
-            echo "- release scripts, migration tests (and the full Go and web suites unless skipped)"
-            echo "- static gates on every archive: checksums, program architecture, clean build, scripts, web files, self-extracting installers, online entries"
-            echo "- isolated installation of the final package: Linux x64, macOS Apple Silicon (if built)"
-            echo "- Linux x64 through systemd, Windows x64 through Windows PowerShell 5.1 including the scheduled self-update (if built)"
-            echo
-            echo "### Not verified here, still manual"
-            echo "- Linux ARM64, macOS Intel, Windows ARM64: only the static gates ran (they cannot run on the hosted runners)"
-            echo "- starting and upgrading a real macOS service, real Windows sign-in start: use the local upgrade of the installed service"
-            echo "- publishing: \`gh release edit standalone-v$VERSION --draft=false --prerelease --latest=false\`, after merging the branch into main"
-            echo "- promoting to the default version and withdrawing older releases (AGENTS.md)"
+            echo "- Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/standalone-v$VERSION"
+            echo "- Default version (\`scripts/standalone/version.txt\`): \`$VERSION\`"
+            echo "- Verified 24 public assets anonymously, Windows PowerShell 5.1 public download, and default online installation"
+            echo "- Older \`standalone-v*\` releases archived and withdrawn; Git tags and plugin \`Latest\` preserved"
           } >> "$GITHUB_STEP_SUMMARY"
