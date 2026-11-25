@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: standalone-release-ci-pipeline
+  description: 独立后台 GitHub Actions 发版流水线（release-standalone.yml）在云端通过六平台构建、门禁、Linux 隔离安装与 systemd 自更新、macOS 隔离安装、Windows PowerShell 5.1 安装与计划任务自更新、草稿预发布 24 附件回读全流程验证（Run 45517283091）。测试草稿与临时分支已清理，修复已同步回主工作区，待合入 main 后开放手动触发。
+  status: done
 - id: standalone-0160-1-macos
   description: 0.1.60-standalone.1 macOS arm64 本地包已安装。包内手机入口、旧库迁移、隔离升级和失败恢复通过，用户在 iPhone 上确认输入框圆点消失。
   status: done

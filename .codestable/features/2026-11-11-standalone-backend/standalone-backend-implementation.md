@@ -361,3 +361,9 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 - 11 月 23 日 11:14，本机从 0.1.60-standalone.5 升级到公开下载并校验过的 0.1.60 macOS arm64 包。原端口、7 个项目和 Relay 绑定验证通过，Relay 已重连，运行程序与实际提供的网页资源和公开包一致。[本机部署](../../../build/reports/standalone-0.1.60-live-upgrade/result.txt)
 - **未验证：** Windows 计划任务的真实登录自启（CI 只覆盖安装脚本、计划任务注册、升级和自更新）；Windows ARM64、Linux ARM64 和 macOS x64 的真机运行（Windows 与 Linux 只核对了程序架构，macOS x64 经 Rosetta 验证）。
 - 验证中两处自己的错误已更正：版本号检查最初依赖构建信息里的 `-ldflags`，去符号构建不记录它，改为与重新编译逐字节比较；默认版本最初用带随机参数的请求轮询，会绕过安装器实际读取的缓存地址，改为读安装器使用的原始地址。
+
+### 独立后台自动化发版流水线云端验证（2026-11-25）
+
+- 在基于 `8a0bb0e` 的隔离测试分支上运行 `.github/workflows/release-standalone.yml`，六平台全量验证通过（[Run 45517283091](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45517283091)）：`plan`、`gates`（`kanban` 迁移与 `-race`、发版脚本单测、Go 全量测试、Playwright Chromium、前端类型检查与 405 个网页测试）、`package`（6 平台共 24 个附件、工作树干净检查、`verify-release-assets.mjs` 全部静态门禁）、`verify-linux-install`、`verify-linux-systemd`、`verify-macos-install`、`verify-windows`（Windows PowerShell 5.1 首次安装/升级/失败恢复与计划任务自更新）、`draft`（生成草稿预发布 `standalone-v0.1.64` 并重新下载 24 个附件逐字节比对 SHA-256）8 个作业全部绿灯。
+- 云端实跑定位并修复 6 处问题，均已同步回主工作区：`kanban/service_test.go` 13 处异步调度等待预算由 2s 放宽至 10s；`gates` 运行前端测试前安装 `playwright chromium`；`activity-detail-lifecycle.test.mjs`、`activity-history.test.mjs`、`activity-segment-grouping.test.mjs` 显式传入 `locale: 'zh-CN'` 避免 Ubuntu Runner 默认英文环境导致断言失败；`verify-linux-systemd` 补拷 `.tar.gz.sha256` 供 `verify-linux-self-update.py` 校验；`release-plan.mjs` 增加分支名必须等于 `standalone-<版本>` 校验；`verify-package-install.mjs` 创建独立 `XDG_RUNTIME_DIR` 与 `DBUS_SESSION_BUS_ADDRESS`，避免 Linux Runner 连接宿主机真实 `systemd --user`。
+- 测试生成的草稿预发布元数据留存于 [ci-0.1.64-test-draft.json](../../../build/reports/ci-0.1.64-test-draft.json)（确认 `isDraft: true`、`isPrerelease: true`、24 个附件及自动发布说明无误），随后已删除测试草稿、远端/本地测试分支与临时工作树，未触碰现有正式版 `0.1.60`、`0.1.61` 预发布与插件 `v0.1.27`。

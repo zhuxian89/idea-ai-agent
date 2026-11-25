@@ -1,0 +1,293 @@
+name: Release standalone
+# Builds the standalone backend packages from a clean checkout, runs the release gates of AGENTS.md on the
+# final archives and leaves a DRAFT pre-release. It never publishes: making the draft public, merging into main
+# and promoting a version to the default stay manual steps (see the end of the run summary).
+#
+# Run it from a branch named standalone-<version> (never from main). `targets` can build a single platform, for
+# example a Windows or macOS test package; only the verification that applies to the chosen platforms runs.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build, for example 0.1.64. A version that was published is never reused.
+        required: true
+      targets:
+        description: all, or a comma separated list of linux-amd64, linux-arm64, macos-amd64, macos-arm64, windows-amd64, windows-arm64
+        required: true
+        default: all
+      changes:
+        description: What this version changes (Markdown). Leave empty to use .github/release-notes/standalone-<version>.md
+        required: false
+        default: ''
+      skip_full_tests:
+        description: Skip the full Go and web test suites (the migration tests of AGENTS.md always run). The run summary records it.
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: release-standalone-${{ inputs.version }}
+  cancel-in-progress: false
+env:
+  VERSION: ${{ inputs.version }}
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.plan.outputs.targets }}
+      notes_source: ${{ steps.plan.outputs.notes_source }}
+      linux_amd64: ${{ steps.plan.outputs.linux_amd64 }}
+      macos_arm64: ${{ steps.plan.outputs.macos_arm64 }}
+      windows_amd64: ${{ steps.plan.outputs.windows_amd64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check the request
+        id: plan
+        env:
+          TARGETS: ${{ inputs.targets }}
+          CHANGES: ${{ inputs.changes }}
+          REF_NAME: ${{ github.ref_name }}
+        run: node scripts/standalone/release-plan.mjs
+      - name: Refuse a version that already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "standalone-v$VERSION" >/dev/null 2>&1; then
+            echo "::error::A release standalone-v$VERSION already exists (draft or public). Delete the draft or choose a new version."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/standalone-v$VERSION" >/dev/null 2>&1; then
+            echo "::error::The tag standalone-v$VERSION already exists. A published version is never reused."
+            exit 1
+          fi
+
+  gates:
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: runtime/go.mod
+          cache-dependency-path: runtime/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        working-directory: runtime/web
+        run: corepack pnpm install --frozen-lockfile
+      # AGENTS.md: a release is not deliverable without the old-database migration tests.
+      - name: Database migration tests
+        run: |
+          node scripts/test-runtime.mjs ./server/internal/kanban -count=1
+          node scripts/test-runtime.mjs -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1
+      - name: Release script tests
+        run: node --test scripts/standalone/verify-release-assets.test.mjs scripts/standalone/release-notes.test.mjs scripts/standalone/release-plan.test.mjs
+      - name: Full Go tests
+        if: ${{ !inputs.skip_full_tests }}
+        run: node scripts/test-runtime.mjs
+      - name: Install the browser the frontend tests drive
+        if: ${{ !inputs.skip_full_tests }}
+        working-directory: runtime/web
+        run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Frontend type check and tests
+        if: ${{ !inputs.skip_full_tests }}
+        working-directory: runtime/web
+        run: |
+          corepack pnpm typecheck
+          node --test tests/*.test.mjs
+
+  package:
+    needs: [plan, gates]
+    runs-on: ubuntu-latest
+    env:
+      TARGETS: ${{ needs.plan.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: runtime/go.mod
+          cache-dependency-path: runtime/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        working-directory: runtime/web
+        run: corepack pnpm install --frozen-lockfile
+      - name: Build the packages
+        run: |
+          export LOCAL_AI_AGENT_VERSION="$VERSION"
+          first=1
+          for target in $(echo "$TARGETS" | tr ',' ' '); do
+            if [ "$first" = 1 ]; then
+              node scripts/package-standalone.mjs "$target"   # the first target also builds the web
+              first=0
+            else
+              node scripts/package-standalone.mjs "$target" --skip-web
+            fi
+          done
+      - name: The checkout must still be clean, or the programs would not be reproducible
+        run: test -z "$(git status --porcelain)" || { git status --short; exit 1; }
+      - name: Collect the release assets
+        run: |
+          mkdir assets
+          find "build/standalone/$VERSION" -maxdepth 1 -type f -exec cp -p {} assets/ \;
+          ls -l assets
+      - name: Static release gates on the final archives
+        run: node scripts/standalone/verify-release-assets.mjs assets "$VERSION" --targets "$TARGETS"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: standalone-${{ inputs.version }}
+          path: assets
+          if-no-files-found: error
+          retention-days: 14
+
+  verify-linux-install:
+    needs: [plan, package]
+    if: ${{ needs.plan.outputs.linux_amd64 == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-${{ inputs.version }}
+          path: assets
+      - name: Install the final Linux x64 package in an isolated HOME
+        run: node scripts/standalone/verify-package-install.mjs "assets/local-ai-agent-$VERSION-linux-amd64.tar.gz"
+
+  verify-linux-systemd:
+    needs: [plan, package]
+    if: ${{ needs.plan.outputs.linux_amd64 == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: runtime/go.mod
+          cache-dependency-path: runtime/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-${{ inputs.version }}
+          path: assets
+      - name: Verify the final Linux x64 package through systemd
+        run: |
+          archive="local-ai-agent-$VERSION-linux-amd64.tar.gz"
+          (cd assets && sha256sum -c "$archive.sha256")
+          cp "assets/$archive" "assets/$archive.sha256" "$RUNNER_TEMP/"
+          (cd runtime && go build -trimpath -ldflags="-X main.version=$VERSION-standalone.1" -o "$RUNNER_TEMP/old-agent" ./server/cmd/mindfs-server)
+          sudo python3 scripts/standalone/verify-linux-self-update.py "$RUNNER_TEMP/$archive" "$RUNNER_TEMP/old-agent" "$VERSION"
+
+  verify-macos-install:
+    needs: [plan, package]
+    if: ${{ needs.plan.outputs.macos_arm64 == 'true' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-${{ inputs.version }}
+          path: assets
+      - name: Install the final macOS Apple Silicon package in an isolated HOME
+        run: node scripts/standalone/verify-package-install.mjs "assets/local-ai-agent-$VERSION-macos-arm64.tar.gz"
+
+  verify-windows:
+    needs: [plan, package]
+    if: ${{ needs.plan.outputs.windows_amd64 == 'true' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: runtime/go.mod
+          cache-dependency-path: runtime/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-${{ inputs.version }}
+          path: assets
+      # AGENTS.md: the Windows package is only deliverable after Windows PowerShell 5.1 ran it.
+      - name: Verify the final Windows x64 package with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $zip = Join-Path $PWD "assets/local-ai-agent-$env:VERSION-windows-amd64.zip"
+          $expected = ((Get-Content -LiteralPath "$zip.sha256" -Raw).Trim() -split '\s+')[0]
+          if ($expected -ine (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash) { throw 'SHA-256 mismatch for the Windows package' }
+          & ./scripts/standalone/verify-windows-standalone-package.ps1 -Zip $zip -Version $env:VERSION
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify the scheduled self-update with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $zip = Join-Path $PWD "assets/local-ai-agent-$env:VERSION-windows-amd64.zip"
+          & ./scripts/standalone/verify-windows-self-update.ps1 -Zip $zip -Version $env:VERSION
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  draft:
+    # Runs when every verification that applies to the chosen platforms passed (the others are skipped, not failed).
+    needs: [plan, package, verify-linux-install, verify-linux-systemd, verify-macos-install, verify-windows]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TARGETS: ${{ needs.plan.outputs.targets }}
+      NOTES_SOURCE: ${{ needs.plan.outputs.notes_source }}
+      CHANGES: ${{ inputs.changes }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-${{ inputs.version }}
+          path: assets
+      - name: Write the release notes
+        run: |
+          if [ "$NOTES_SOURCE" = input ]; then printf '%s\n' "$CHANGES" > changes.md; else cp "$NOTES_SOURCE" changes.md; fi
+          node scripts/standalone/release-notes.mjs --version "$VERSION" --targets "$TARGETS" --changes-file changes.md \
+            --default-version "$(cat scripts/standalone/version.txt)" > notes.md
+          cat notes.md
+      - name: Create the draft pre-release
+        run: |
+          files=(assets/*)
+          gh release create "standalone-v$VERSION" --draft --prerelease --latest=false \
+            --target "$GITHUB_SHA" --title "独立后台 $VERSION" --notes-file notes.md "${files[@]}"
+      - name: The draft holds exactly the verified files
+        run: |
+          mkdir redownload
+          gh release download "standalone-v$VERSION" --dir redownload
+          (cd assets && sha256sum * | sort -k2) > expected.sums
+          (cd redownload && sha256sum * | sort -k2) > actual.sums
+          diff expected.sums actual.sums
+          echo "$(wc -l < actual.sums) files in the draft are byte for byte the verified ones"
+      - name: Summary
+        run: |
+          {
+            echo "## Draft release standalone-v$VERSION"
+            echo
+            echo "- Platforms: \`$TARGETS\`"
+            echo "- Built from \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`"
+            echo "- Full test suites skipped: \`${{ inputs.skip_full_tests }}\`"
+            echo "- Draft: https://github.com/$GITHUB_REPOSITORY/releases"
+            echo
+            echo "### Verified in this run"
+            echo "- release scripts, migration tests (and the full Go and web suites unless skipped)"
+            echo "- static gates on every archive: checksums, program architecture, clean build, scripts, web files, self-extracting installers, online entries"
+            echo "- isolated installation of the final package: Linux x64, macOS Apple Silicon (if built)"
+            echo "- Linux x64 through systemd, Windows x64 through Windows PowerShell 5.1 including the scheduled self-update (if built)"
+            echo
+            echo "### Not verified here, still manual"
+            echo "- Linux ARM64, macOS Intel, Windows ARM64: only the static gates ran (they cannot run on the hosted runners)"
+            echo "- starting and upgrading a real macOS service, real Windows sign-in start: use the local upgrade of the installed service"
+            echo "- publishing: \`gh release edit standalone-v$VERSION --draft=false --prerelease --latest=false\`, after merging the branch into main"
+            echo "- promoting to the default version and withdrawing older releases (AGENTS.md)"
+          } >> "$GITHUB_STEP_SUMMARY"

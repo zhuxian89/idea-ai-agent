@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
-const fileTree = readFileSync(new URL("../src/components/FileTree.tsx", import.meta.url), "utf8");
+const fileTreeSources = (() => {
+  const dir = new URL("../src/components/fileTree/", import.meta.url);
+  return [readFileSync(new URL("../src/components/FileTree.tsx", import.meta.url), "utf8"),
+    ...readdirSync(dir).sort().map((name) => readFileSync(new URL(name, dir), "utf8"))].join("\n");
+})();
+const fileTree = fileTreeSources;
+const fileTreeModel = readFileSync(new URL("../src/components/fileTreeModel.ts", import.meta.url), "utf8");
+const agentConfigPopover = readFileSync(new URL("../src/components/AgentConfigPopover.tsx", import.meta.url), "utf8");
+const agentLifecyclePopover = readFileSync(new URL("../src/components/AgentLifecyclePopover.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const agentCatalog = readFileSync(new URL("../src/app/workbench/useAgentCatalog.ts", import.meta.url), "utf8");
 const actionBar = readFileSync(new URL("../src/components/ActionBar.tsx", import.meta.url), "utf8");
 const ideaSettings = readFileSync(new URL("../src/components/IdeaAgentSettings.tsx", import.meta.url), "utf8");
 const agentService = readFileSync(new URL("../src/services/agents.ts", import.meta.url), "utf8");
@@ -40,13 +49,13 @@ assert.match(
 );
 
 assert.match(
-  fileTree,
+  fileTreeModel,
   /onRestartAgent\?: \(agentName: string\) => void \| Promise<void>/,
   "FileTree should expose an agent restart callback",
 );
 
 assert.match(
-  fileTree,
+  agentConfigPopover,
   /renderEnd=\{\(agent\) => \{[\s\S]*?const restarting = agent\.name === restartingAgent;[\s\S]*?event\.stopPropagation\(\);[\s\S]*?void onRestartAgent\(agent\.name\);[\s\S]*?restarting \? <RestartSpinner \/> : t\("agentConfig\.restart"\)/,
   "Agent config switch agent list should render a spinner while restarting",
 );
@@ -76,21 +85,21 @@ assert.doesNotMatch(
 );
 
 assert.doesNotMatch(
-  fileTree,
+  agentLifecyclePopover,
   /onRun\(item, "restart"\)/,
   "install/update lifecycle popover should not render a restart action",
 );
 
 assert.doesNotMatch(
-  fileTree,
+  agentConfigPopover,
   /onClick=\{onRestart\}/,
   "Agent config switch detail view should not render the restart button",
 );
 
 assert.match(
-  app,
-  /import \{ fetchAgents, restartAgent, type AgentStatus \} from "\.\/services\/agents";/,
-  "App should import the existing restartAgent service",
+  agentCatalog,
+  /import \{[^}]*\brestartAgent\b[^}]*\} from "\.\.\/\.\.\/services\/agents";[\s\S]*?const handleRestartAgent = useCallback\(async \(agentName: string\) => \{\s*await restartAgent\(agentName\);/,
+  "the agent catalog hook should use the existing restartAgent service",
 );
 
 assert.match(

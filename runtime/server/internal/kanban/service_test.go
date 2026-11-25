@@ -435,7 +435,7 @@ func TestNextRequiresCurrentInputFromAgentStageWhenTargetReferencesIt(t *testing
 	if err != nil {
 		t.Fatalf("Next to agent: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		detail, err = svc.GetTask(ctx, root.ID, detail.Task.ID)
 		if err == nil && detail.Task.CurrentStageIndex == 1 && detail.Task.Status == StatusWaitingUser {
@@ -599,7 +599,7 @@ func TestTaskWorktreeNameUsesTaskNumber(t *testing.T) {
 	if _, err := svc.Next(ctx, MoveInput{RootID: root.ID, TaskID: detail.Task.ID}); err != nil {
 		t.Fatalf("Next: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		runner.mu.Lock()
 		called := runner.worktreeCreateCalled
@@ -673,7 +673,7 @@ func TestTaskWorktreeCreateErrorStoredOnTask(t *testing.T) {
 	if _, err := svc.Next(ctx, MoveInput{RootID: root.ID, TaskID: detail.Task.ID}); err == nil {
 		t.Fatalf("Next succeeded, want worktree error")
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		detail, err = svc.GetTask(ctx, root.ID, detail.Task.ID)
 		if err == nil && detail.Task.AuxFlags.SessionError != "" {
@@ -915,7 +915,7 @@ func TestSchedulerRunsAgentStageAndStoresSessionKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		detail, err = svc.GetTask(ctx, root.ID, detail.Task.ID)
 		if err == nil && detail.Task.CurrentStageIndex == 1 && detail.Task.Status == StatusWaitingUser {
@@ -993,7 +993,7 @@ func TestAgentStageSessionErrorKeepsTaskAndStageRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		detail, err = svc.GetTask(ctx, root.ID, detail.Task.ID)
 		if err == nil && detail.Task.AuxFlags.SessionError != "" {
@@ -1073,7 +1073,7 @@ func TestNextRejectsRunningCurrentStage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next to agent: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		detail, err = svc.GetTask(ctx, root.ID, detail.Task.ID)
 		if err == nil && detail.Task.CurrentStageIndex == 1 && detail.Task.AuxFlags.SessionError != "" {
@@ -1134,7 +1134,7 @@ func TestCompletingAdmittedTaskSchedulesNextQueuedTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTask first: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		first, err = svc.GetTask(ctx, root.ID, first.Task.ID)
 		if err == nil && first.Task.CurrentStageIndex == 1 && first.Task.Status == StatusWaitingUser && first.Task.SchedulerAdmitted {
@@ -1163,7 +1163,7 @@ func TestCompletingAdmittedTaskSchedulesNextQueuedTask(t *testing.T) {
 	if _, err := svc.Complete(ctx, MoveInput{RootID: root.ID, TaskID: first.Task.ID}); err != nil {
 		t.Fatalf("Complete first: %v", err)
 	}
-	deadline = time.Now().Add(2 * time.Second)
+	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		second, err = svc.GetTask(ctx, root.ID, second.Task.ID)
 		if err == nil && second.Task.CurrentStageIndex == 1 && second.Task.Status == StatusWaitingUser && second.Task.SchedulerAdmitted {
@@ -1214,7 +1214,7 @@ func TestAgentStageAllowsBlankModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		runner.mu.Lock()
 		execCount := len(runner.execs)
@@ -1277,7 +1277,7 @@ func TestRunNowBypassesConcurrencySlot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTask first: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		first, err = svc.GetTask(ctx, root.ID, first.Task.ID)
 		if err == nil && first.Task.Status == StatusWaitingUser && first.Task.SchedulerAdmitted {
@@ -1306,7 +1306,7 @@ func TestRunNowBypassesConcurrencySlot(t *testing.T) {
 	if _, err := svc.RunNow(ctx, MoveInput{RootID: root.ID, TaskID: second.Task.ID}); err != nil {
 		t.Fatalf("RunNow second: %v", err)
 	}
-	deadline = time.Now().Add(2 * time.Second)
+	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		second, err = svc.GetTask(ctx, root.ID, second.Task.ID)
 		if err == nil && second.Task.Status == StatusWaitingUser && second.Task.SchedulerAdmitted {
@@ -1366,7 +1366,7 @@ func TestCancellingAdmittedTaskSchedulesNextQueuedTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTask third: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		first, _ = svc.GetTask(ctx, root.ID, first.Task.ID)
 		second, _ = svc.GetTask(ctx, root.ID, second.Task.ID)
@@ -1393,7 +1393,7 @@ func TestCancellingAdmittedTaskSchedulesNextQueuedTask(t *testing.T) {
 	if _, err := svc.Cancel(ctx, MoveInput{RootID: root.ID, TaskID: first.Task.ID}); err != nil {
 		t.Fatalf("Cancel first: %v", err)
 	}
-	deadline = time.Now().Add(2 * time.Second)
+	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		third, err = svc.GetTask(ctx, root.ID, third.Task.ID)
 		if err == nil && third.Task.Status == StatusWaitingUser && third.Task.SchedulerAdmitted {

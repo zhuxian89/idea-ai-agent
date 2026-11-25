@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { isIdeaChromeHost } from "../services/ideaBridge";
 import { useIdeaComposerContext } from "../hooks/useIdeaComposerContext";
-import type { RemoteDevice } from "../services/remoteDevice";
+
 import { type SessionMode } from "./ModeSelector";
 import { ModeSelector } from "./ModeSelector";
 import { AgentSelector } from "./AgentSelector";
@@ -21,283 +21,26 @@ import {
   getAppearanceMode,
   getEffectiveAppearanceMode,
 } from "../services/appearance";
-import TokenEditor, {
-  type TokenEditorHandle,
-} from "./editor/TokenEditor";
+import TokenEditor, { type TokenEditorHandle } from "./editor/TokenEditor";
 import { renderToolIcon } from "./stream/ToolCallCard";
 import { useI18n, type MessageKey } from "../i18n";
 import { VoiceRecordingPopover } from "./VoiceRecordingPopover";
 import { CompactUploadProgress } from "./CompactUploadProgress";
 import { deletePrompt, savePrompt } from "../services/prompts";
-
-type SessionInfo = {
-  key: string;
-  session_key?: string;
-  root_id?: string;
-  name: string;
-  type: "chat" | "plugin" | "command";
-  agent: string;
-  model?: string;
-  shell?: string;
-  mode?: string;
-  effort?: string;
-  fast_service?: string;
-  plan_mode?: boolean;
-  pending?: boolean;
-};
-
-type PendingAttachment = {
-  id: string;
-  file: File;
-  previewUrl?: string;
-  isImage: boolean;
-};
-
-type AttachedFileContext = {
-  filePath: string;
-  fileName: string;
-  startLine?: number;
-  endLine?: number;
-  text?: string;
-};
-
-type QueuedMessageInfo = {
-  id: string;
-  content: string;
-  created_at?: string;
-};
-
-type WSStatus = "connecting" | "connected" | "reconnecting" | "disconnected";
-
-function getSelectionPreview(text?: string): string {
-  const trimmed = String(text || "").trim();
-  if (!trimmed) {
-    return "...";
-  }
-  return `${Array.from(trimmed).slice(0, 3).join("")}...`;
-}
-
-type ActionBarProps = {
-  compactWorkbench?: boolean;
-  status?: WSStatus;
-  agentsVersion?: number;
-  currentRootId?: string | null;
-  currentSession?: SessionInfo | null;
-  pendingPlanMode?: boolean;
-  attachedFileContext?: AttachedFileContext | null;
-  canOpenSessionDrawer?: boolean;
-  sessionDrawerOpen?: boolean;
-  detachedBoundSession?: boolean;
-  editDraftRequest?: {
-    id: number;
-    content: string;
-    mode?: "replace" | "append";
-  } | null;
-  queuedMessages?: QueuedMessageInfo[];
-  inputHistory?: string[];
-  onSendMessage?: (
-    message: string,
-    mode: SessionMode,
-    agent: string,
-    model?: string,
-    agentMode?: string,
-    effort?: string,
-    fastService?: "" | "on" | "off",
-    shell?: string,
-  ) => void | Promise<void>;
-  onSetPlanMode?: (
-    enabled: boolean,
-    sessionKey?: string,
-    rootId?: string,
-  ) => void | Promise<void>;
-  onCancelCurrentTurn?: (sessionKey: string) => void;
-  onRemoveQueuedMessage?: (queueId: string) => void | Promise<void>;
-  onUpdateQueuedMessage?: (queueId: string, content: string) => void | Promise<void>;
-  onSendQueuedMessageNow?: (queueId: string) => void | Promise<void>;
-  onNewSession?: () => void;
-  onRequestFileContext?: () => void;
-  onClearFileContext?: () => void;
-  onSessionClick?: () => void;
-  onToggleLeftSidebar?: () => void;
-  onToggleRightSidebar?: () => void;
-  sidebarsSwapped?: boolean;
-  remoteDevice?: RemoteDevice | null;
-};
-
-const modePlaceholderKeys: Record<SessionMode, MessageKey> = {
-  chat: "action.placeholder.chat",
-  plugin: "action.placeholder.plugin",
-  command: "action.placeholder.command",
-};
-
-const chatBlurPlaceholderKeys: MessageKey[] = [
-  "action.placeholder.chat",
-  "action.placeholder.tip",
-];
-
-const MOBILE_BREAKPOINT = 768;
-const CANDIDATE_FETCH_DEBOUNCE_MS = 512;
-
-function buildPendingAttachment(file: File): PendingAttachment {
-  const isImage = file.type.startsWith("image/");
-  const fallbackExt = file.type.split("/")[1] || "png";
-  const fileName = file.name || `pasted-image-${Date.now()}.${fallbackExt}`;
-  const normalizedFile = file.name
-    ? file
-    : new File([file], fileName, {
-      type: file.type || "image/png",
-      lastModified: file.lastModified || Date.now(),
-    });
-  return {
-    id: `${normalizedFile.name}-${normalizedFile.size}-${normalizedFile.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
-    file: normalizedFile,
-    isImage,
-    previewUrl: isImage ? URL.createObjectURL(normalizedFile) : undefined,
-  };
-}
-
-function ShellSelector({
-  shell,
-  shells,
-  onShellChange,
-  compact = false,
-}: {
-  shell: string;
-  shells: ShellStatus[];
-  onShellChange: (shell: string) => void;
-  compact?: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const selected = shells.find((item) => item.id === shell || item.command === shell || item.resolved_command === shell) || shells.find((item) => item.default) || shells[0];
-
-  useEffect(() => {
-    const handlePointerOutside = (event: PointerEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener("pointerdown", handlePointerOutside);
-      return () => document.removeEventListener("pointerdown", handlePointerOutside);
-    }
-  }, [isOpen]);
-
-  return (
-    <div ref={dropdownRef} style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => shells.length > 0 && setIsOpen((prev) => !prev)}
-        disabled={shells.length === 0}
-        title="Shell"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          maxWidth: compact ? "72px" : "92px",
-          height: compact ? "24px" : "28px",
-          border: "none",
-          borderRadius: "8px",
-          background: "transparent",
-          color: "inherit",
-          fontSize: "11px",
-          fontWeight: 700,
-          lineHeight: 1,
-          padding: "0 3px",
-          outline: "none",
-          cursor: shells.length === 0 ? "default" : "pointer",
-          opacity: shells.length === 0 ? 0.45 : 1,
-        }}
-      >
-        <span
-          style={{
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            display: "inline-block",
-            maxWidth: "100%",
-            padding: "1px 4px",
-            borderRadius: "6px",
-            background: "#1d4ed8",
-            color: "#fff",
-            lineHeight: 1.2,
-            boxSizing: "border-box",
-          }}
-        >
-          {selected?.label || "shell"}
-        </span>
-      </button>
-
-      {isOpen && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: "calc(100% + 8px)",
-            right: 0,
-            background: "var(--menu-bg)",
-            border: "1px solid var(--menu-border)",
-            borderRadius: "12px",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
-            zIndex: 1000,
-            width: "max-content",
-            minWidth: "104px",
-            maxWidth: "min(72vw, 180px)",
-            padding: "8px 0",
-          }}
-        >
-          <div
-            style={{
-              padding: "6px 12px",
-              fontSize: "11px",
-              fontWeight: 600,
-              color: "var(--text-secondary)",
-              textTransform: "uppercase",
-            }}
-          >
-            Shell
-          </div>
-          {shells.map((item) => {
-            const isSelected = item.id === selected?.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  onShellChange(item.id);
-                  setIsOpen(false);
-                }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "9px 12px",
-                  border: "none",
-                  background: isSelected ? "rgba(59, 130, 246, 0.08)" : "transparent",
-                  color: isSelected ? "var(--accent-color)" : "var(--text-primary)",
-                  fontSize: "13px",
-                  fontWeight: isSelected ? 700 : 500,
-                  textAlign: "left",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-                onMouseEnter={(event) => {
-                  if (!isSelected) {
-                    event.currentTarget.style.background = "rgba(0,0,0,0.04)";
-                  }
-                }}
-                onMouseLeave={(event) => {
-                  event.currentTarget.style.background = isSelected ? "rgba(59, 130, 246, 0.08)" : "transparent";
-                }}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+import { PendingAttachment, QueuedMessageInfo, ActionBarProps } from "./actionBarTypes";
+import { ShellSelector } from "./ShellSelector";
+import {
+  getSelectionPreview,
+  modePlaceholderKeys,
+  chatBlurPlaceholderKeys,
+  MOBILE_BREAKPOINT,
+  CANDIDATE_FETCH_DEBOUNCE_MS,
+  buildPendingAttachment,
+  candidateNameColor,
+  replaceActiveTokenText,
+  parsePlanCommand,
+  stripPlanCommandPrefix,
+} from "./actionBarUtils";
 
 function useResponsive() {
   const [isMobile, setIsMobile] = useState(false);
@@ -310,50 +53,6 @@ function useResponsive() {
     return () => window.removeEventListener("resize", checkSize);
   }, []);
   return { isMobile };
-}
-
-function candidateNameColor(candidateType: CandidateItem["type"], isDark: boolean): string {
-  switch (candidateType) {
-    case "slash_command":
-      return isDark ? "#93c5fd" : "#1d4ed8";
-    case "prompt":
-      return isDark ? "#fcd34d" : "#b45309";
-    case "skill":
-      return isDark ? "#c4b5fd" : "#7c3aed";
-    default:
-      return "var(--text-primary)";
-  }
-}
-
-function replaceActiveTokenText(input: string, activeToken: { type: "file" | "slash" | "prompt" | "command"; query: string } | null, value: string): string {
-  if (!activeToken) return input;
-  const trigger = activeToken.type === "file" ? "@" : activeToken.type === "prompt" ? "#" : activeToken.type === "slash" ? "/" : "";
-  if (!trigger) return value;
-  const needle = `${trigger}${activeToken.query}`;
-  const index = input.lastIndexOf(needle);
-  if (index < 0) {
-    return `${input}${value} `;
-  }
-  return `${input.slice(0, index)}${value} ${input.slice(index + needle.length)}`;
-}
-
-function parsePlanCommand(input: string): boolean | null {
-  const normalized = input.trim().toLowerCase();
-  if (normalized === "/plan" || normalized.startsWith("/plan ")) {
-    return true;
-  }
-  return null;
-}
-
-function stripPlanCommandPrefix(input: string): string {
-  const trimmed = input.trim();
-  if (trimmed.toLowerCase() === "/plan") {
-    return "";
-  }
-  if (trimmed.toLowerCase().startsWith("/plan ")) {
-    return trimmed.slice(5).trimStart();
-  }
-  return trimmed;
 }
 
 export function ActionBar({

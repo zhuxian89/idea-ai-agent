@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const listView = readFileSync(new URL('../src/components/DefaultListView.tsx', import.meta.url), 'utf8');
-const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+const app = readFileSync(new URL('../src/components/workbench/WorkspaceView.tsx', import.meta.url), 'utf8');
+const managedRoots = readFileSync(new URL('../src/app/workbench/useManagedRootActions.ts', import.meta.url), 'utf8');
 
 // Removing a project is only offered for standalone/relay projects; IDEA-managed roots keep registration in IDEA.
 test('remove-project entry is rendered only when a handler is supplied', () => {
@@ -17,7 +18,7 @@ test('App hides remove-project for IDEA-managed projects', () => {
 });
 
 test('remove-project calls DELETE /api/dirs with the current root path and confirms first', () => {
-  const handler = app.slice(app.indexOf('const handleRemoveCurrentRoot'), app.indexOf('const applyManagedRootRename'));
+  const handler = managedRoots.slice(managedRoots.indexOf('const handleRemoveCurrentRoot'), managedRoots.indexOf('const applyManagedRootRename'));
   assert.match(handler, /window\.confirm\(t\("root\.confirmRemove"/);
   assert.match(handler, /appURL\("\/api\/dirs", new URLSearchParams\(\{ path: rootPath \}\)\)/);
   assert.match(handler, /method: "DELETE"/);

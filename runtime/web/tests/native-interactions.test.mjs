@@ -45,7 +45,7 @@ async function fixtureBundle() {
       import React from "react";
       import {createRoot} from "react-dom/client";
       import {I18nProvider} from "./src/i18n";
-      import {AskUserQuestionCard} from "./src/components/SessionViewer";
+      import {AskUserQuestionCard} from "./src/components/AskUserQuestionCard";
       const root = createRoot(document.getElementById("root"));
       window.answers = [];
       window.mount = (interaction, status = "running") => root.render(<I18nProvider><AskUserQuestionCard key={interaction.title} active={true} rootId="root" sessionKey="session" agent="codex"
@@ -55,7 +55,6 @@ async function fixtureBundle() {
     loader: {".css":"empty"},
     bundle: true, write: false, format: "iife", platform: "browser", jsx: "automatic",
     define: {"process.env.NODE_ENV": '"test"', "import.meta.env": '{}'},
-    plugins: [{name:"export-question-fixture",setup(build){build.onLoad({filter:/SessionViewer\.tsx$/}, args=>({contents:readFileSync(args.path,"utf8").replace("function AskUserQuestionCard(","export function AskUserQuestionCard("),loader:"tsx"}));}}],
   });
   bundle = result.outputFiles[0].text;
   return bundle;

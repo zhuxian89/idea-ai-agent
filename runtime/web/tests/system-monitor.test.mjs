@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { after, test } from 'node:test';
 import { rmSync } from 'node:fs';
+
+// The sidebar's markup lives in FileTree.tsx and the components under components/fileTree/.
+const readFileTreeSources = () => {
+  const dir = new URL('../src/components/fileTree/', import.meta.url);
+  return [readFileSync(new URL('../src/components/FileTree.tsx', import.meta.url), 'utf8'),
+    ...readdirSync(dir).sort().map(name => readFileSync(new URL(name, dir), 'utf8'))].join('\n');
+};
 
 const require = createRequire(import.meta.url);
 const { build } = createRequire(require.resolve('vite'))('esbuild');
@@ -121,7 +128,7 @@ test('while the first reading is pending the card spins and cannot open', () => 
 });
 
 test('the monitor is wired into the sidebar footer above the phone button, desktop only', () => {
-  const tree = readFileSync(new URL('../src/components/FileTree.tsx', import.meta.url), 'utf8');
+  const tree = readFileTreeSources();
   assert.ok(tree.indexOf('{footerTop}') > 0 && tree.indexOf('{footerTop}') < tree.indexOf('file-tree-relay-action"'));
   assert.match(tree, /!!footerTop \|\|/);
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
@@ -140,7 +147,7 @@ test('the footer shares one left axis: card, phone-QR button, version and notes'
   const sidebar = read('../src/components/workspaceSidebar.css');
   const monitor = read('../src/components/systemMonitor.css');
   const update = read('../src/components/remote/remoteAccess.css');
-  const tree = read('../src/components/FileTree.tsx');
+  const tree = readFileTreeSources();
   // The card and the button carry the same 10px inset (the button's 1px border is taken off its padding).
   assert.match(monitor, /\.sysmon-card \{[^}]*padding: 0 10px;[^}]*background: transparent;/, 'the card has no fill of its own');
   assert.match(sidebar, /\.remote-shell \.file-tree-relay-action \{[^}]*justify-content: flex-start;[^}]*padding: 0 9px;/);

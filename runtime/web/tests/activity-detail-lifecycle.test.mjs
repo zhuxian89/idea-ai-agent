@@ -20,7 +20,7 @@ test('detail lifecycle in real shared cards and SessionViewer', async t => {
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   t.after(() => browser.close());
   async function open(t, width = 375, theme = 'light') {
-    const context = await browser.newContext({ viewport: { width, height: 720 }, reducedMotion: 'reduce' });
+    const context = await browser.newContext({ locale: 'zh-CN', viewport: { width, height: 720 }, reducedMotion: 'reduce' });
     t.after(() => context.close());
     const page = await context.newPage();
     const errors = [];

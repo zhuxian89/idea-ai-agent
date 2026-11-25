@@ -109,7 +109,7 @@ test("historical activity survives backfill, IndexedDB reload and mixed-agent se
   t.after(() => new Promise(resolve => server.close(resolve)));
   const browser = await chromium.launch({ headless: true, channel: "chrome" });
   t.after(() => browser.close());
-  const context = await browser.newContext({ viewport: { width: 375, height: 760 } });
+  const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 375, height: 760 } });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));

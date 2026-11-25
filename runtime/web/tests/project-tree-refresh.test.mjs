@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
-const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const app = readFileSync(new URL("../src/app/workbench/useProjectSidebarModel.tsx", import.meta.url), "utf8");
 const git = readFileSync(new URL("../src/app/useWorkspaceGit.ts", import.meta.url), "utf8");
-const fileTree = readFileSync(new URL("../src/components/FileTree.tsx", import.meta.url), "utf8");
+const fileTreeSources = (() => {
+  const dir = new URL("../src/components/fileTree/", import.meta.url);
+  return [readFileSync(new URL("../src/components/FileTree.tsx", import.meta.url), "utf8"),
+    ...readdirSync(dir).sort().map((name) => readFileSync(new URL(name, dir), "utf8"))].join("\n");
+})();
+const fileTree = fileTreeSources;
+const fileTreeModel = readFileSync(new URL("../src/components/fileTreeModel.ts", import.meta.url), "utf8");
 const fileService = readFileSync(new URL("../src/services/file.ts", import.meta.url), "utf8");
 
 assert.match(
-  fileTree,
+  fileTreeModel,
   /onRefresh\?: \(tab: ProjectTreeTab\) => void \| Promise<void>/,
   "FileTree refresh should identify the active project tab",
 );

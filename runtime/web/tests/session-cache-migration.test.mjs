@@ -20,7 +20,7 @@ const reconnectPolicy = (() => {
 })();
 const service = { exports: {} };
 vm.runInNewContext(
-  ts.transpileModule(fs.readFileSync("src/services/session.ts", "utf8"), {
+  ts.transpileModule(fs.readFileSync("src/services/sessionCache.ts", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText,
   {

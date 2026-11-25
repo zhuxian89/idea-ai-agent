@@ -1,6 +1,6 @@
 # 独立后端计划与进度
 
-## 当前状态（2026-11-24）
+## 当前状态（2026-11-25）
 
 - **选择模型界面单行按钮与全 Agent 刷新统一重启（2026-11-24，源码已更新，未公开重新发包）。** 将选择模型菜单中的「刷新模型」与「重启」合并到同一行（移除 `AgentRestartAction.tsx`）；所有 Agent 的「刷新模型」统一走重启接口再等待重新探测，中英文悬停与完成提示均写明会中断进行中的对话。独立后台与插件内置后台共用 `runtime/web/src`，后续打插件包会自动带入。
   已验证：前端 `tsc --noEmit` 与相关 3 个测试文件（`agent-model-refresh.test.mjs`、`agent-lifecycle-restart.test.mjs`、`agent-model-refresh-browser.test.mjs`，5/5）通过；本机已构建 macOS arm64 本地测试包（版本号沿用 `0.1.61`）并升级运行于 `http://127.0.0.1:7441`（[本机部署](../../../build/reports/standalone-0.1.61-live-upgrade/result.txt)）。
@@ -8,6 +8,22 @@
 - **独立后台 0.1.61 测试预发布，仅 Windows x64（2026-11-24）。** 插件 Agent 配置页与选择模型界面增加单 Agent「重启」按钮（复用网页版已有的重启接口，前端改动，后端未改）。提交 `9973b35`，已快进合并 `main`；`version.txt` 仍为 0.1.60，0.1.60 未下架，Release 为预发布且不占 latest。
   已验证：干净克隆构建（`vcs.modified=false`）；包内网页 305 个文件、无 `/mindfs-assets/`、含新按钮脚本；GitHub Actions 在 Windows PowerShell 5.1 验证包内安装脚本通过；匿名下载 4 个附件与构建产物逐字节一致；`kanban` 迁移测试与 race 测试通过。
   **未做：** macOS、Linux、Windows ARM64 包；用公开在线入口安装验证；真实 Windows IDEA 里看到按钮；转正（改 `version.txt` 并下架 0.1.60）。独立后台模式的界面来自独立包，所以插件包里的同一改动在独立模式下不会生效，只有内置模式会。
+
+- **大文件拆分与前端核心拆解（可维护性，2026-11-24，源码完成，本机已升 0.1.62 测试包，未提交、未公开发布）。** 只搬家、不改行为，用编译器工具按依赖图完成，语句原文逐字移动。
+  - Go：15 个超大文件按职责拆成同包新文件（`http.go`、`usecase/session.go`、`ws.go`、`appcontext.go`、`gitview.go`、`probe.go`、`kanban/service.go`、`stream_hub.go`、`update/service.go` 等），现无超过 1100 行的 Go 文件。
+  - 前端：`App()` 原为 6100 行的单个函数、371 条顶层语句。依赖图无环，只有 2 处向后引用。按功能域拆成 36 个 hook（`src/app/workbench/`），`App.tsx` 从 6743 行降到 509 行，只剩“调用 hook、解构、最终 JSX”。每个 hook 的输入类型由前面 hook 的返回类型推导（`ReturnType<typeof useX>`），依赖关系在类型里可见。`FileTree()` 从 2149 行降到 300 行：14 个 hook 与 8 个子组件在 `src/components/fileTree/`。`SessionViewer`、`SessionList`、`ActionBar`、`services/session.ts` 的类型、辅助函数、子组件各自成模块。
+  - 效果顺序：75 个有副作用的语句（effect 与自定义 hook 调用）按功能域归位后顺序有变化，工具逐对检查是否共享 ref、setter 等可变对象，共享的逐个读代码判断，已记录的 8 处均为只读或仅注册监听。`FileTree` 里两个会先后设置同一菜单状态的 effect 保持了原顺序。
+  - 验证：Go 35 个包与 `HEAD` 逐声明、逐行比对一致，`vet`、30 个包测试、`kanban` 迁移竞态测试、六平台交叉编译通过；前端类型检查、生产构建、整套 405 个网页测试通过；`scripts/smoke-runtime.mjs` 真实后台加真实浏览器的 12 项冒烟通过（运行时需清掉继承来的 `IDE_AGENT_REMOTE_HOST_DIR`、`MINDFS_STATIC_DIR`、`IDE_AGENT_DATA_DIR`，否则会撞已装服务的数据锁）。六个按源码文本匹配的测试改为读取新文件位置，断言内容未变。本机 macOS arm64 已从 `0.1.61` 升级到 `0.1.62` 测试包，原地址 `http://127.0.0.1:7441`、8 个项目、二进制/网页资源及 Relay 状态均核验通过（[本机部署](../../../build/reports/standalone-0.1.62-live-upgrade/result.txt)）。
+  - **第二轮（2026-11-25）：** 重构工具进了仓库（`scripts/refactor/`，含说明）。`useAppFoundation` 里只被单个 hook 使用的 6 个 ref 挪回各自的 hook（`fileEditStore` 放进 `useFileViewerState`，不放进会被条件渲染的组件，否则重新挂载会丢未保存的编辑）。3 个返回 JSX 的 hook 改成组件（`components/workbench/` 的 `SelectedSessionView`、`WorkspaceView`、`SessionSidebar`），派生数据留作 `useSessionSidebarModel`，纯函数 `slashCommandResultForSession` 提到 `app/slashCommandResults.ts`。`useProjectSidebarModel` 返回的是给 `FileTree` 用的渲染函数（render props），保留。重构前基线标签：`pre-refactor-20261124`。
+  - **整包 `*Api` 透传的评估：** 304 个 `xApi` 参数共读取 1013 个字段，中位数每个参数只读 2 个，71% 不超过 3 个，已无完全没用到的参数（新拆出的两个文件里删掉了 8 个）。依赖本身是细的，只是传得宽。试过把 `Deps` 收窄成 `Pick<...>`：能编译，但每个字段要在 `Pick` 和解构里各写一遍，要手工保持一致，不减少真实依赖，不采用。真正的解耦（让各域自己订阅事件，而不是 `useWorkspaceEvents` 一个路由器依赖 18 个域）是接口设计，有事件顺序风险，有具体痛点再做。
+  - **重渲染的评估：** 用 `render-bench.mjs` 在重构前基线和现在的代码上测同一个 App 级状态更新（视口宽度切换）：基线每次中位 8.3–9.0ms（p90 约 18ms），现在 5.7–7.4ms（p90 约 12ms），没有退步。这是近乎空项目的开发构建，不代表流式输出时的真实负载；没有性能痛点，不做状态下沉。
+  - **验证：** 类型检查、生产构建、整套 405 个网页测试通过；`smoke-runtime` 12 项通过。
+  - **未做：** 在真实 IDEA 与手机上手点验证；`useSessionList`（527 行）、`useActionHandlers`（594 行）、`usePlugins`（426 行）等单个 hook 仍偏大；`useWorkspaceEvents` 依赖 18 个域；`useProjectSidebarModel` 的 render props 未改成组件。
+
+- **独立后台发版流水线（2026-11-25，源码完成，GitHub Actions 全平台端到端验证通过，主分支未提交）。** `.github/workflows/release-standalone.yml`：手动触发，`targets` 可只出一个或几个平台。流程：计划（版本号、分支等于 `standalone-<版本>`、目标、发布说明校验，拒绝已存在的版本）→ 门禁（迁移测试、`-race` 迁移测试，可选全量 Go 与网页测试）→ 打包并跑静态门禁 → 隔离安装（Linux x64、macOS Apple Silicon）、Linux systemd、Windows 5.1（含计划任务自更新）→ 生成草稿预发布并核对草稿里的文件与已验证的逐字节一致。**不会公开发布。**
+  新增脚本（`scripts/standalone/`）：`verify-release-assets.mjs`（静态门禁：附件齐全、校验、架构头、干净构建、脚本逐字节一致与 BOM、网页等于 `dist` 且无 `/mindfs-assets/`、自解压归档一致、在线入口一致）、`verify-package-install.mjs`（隔离 HOME 与 `XDG_RUNTIME_DIR` 里安装最终包，只用 `--defer-start`）、`release-notes.mjs`、`release-plan.mjs`，各有单元测试。
+  本地与云端验证：本地干净克隆构建六平台与单平台门禁、`actionlint`、macOS 隔离安装通过；基于 `8a0bb0e` 的隔离分支完成 GitHub Actions 六平台全量验证（[Run 45517283091](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45517283091)），`plan`、`gates`（含迁移与 `-race`、Go 全量、405 个网页测试）、`package`（24 个附件与全部静态门禁）、`verify-linux-install`、`verify-linux-systemd`、`verify-macos-install`、`verify-windows`（PowerShell 5.1 安装/升级/恢复与计划任务自更新）、`draft`（草稿预发布创建与 24 个附件回读逐字节核验）8 个作业全部通过。测试草稿快照见 [ci-0.1.64-test-draft.json](../../../build/reports/ci-0.1.64-test-draft.json)，验证后草稿与临时测试分支已清理，云端实跑修掉的 6 处环境与脚本问题已同步回主工作区。[验证记录](standalone-backend-implementation.md#独立后台自动化发版流水线云端验证2026-11-25)
+  **注意与未验证：** GitHub `workflow_dispatch` 需等 `.github/workflows/release-standalone.yml` 合入默认分支 `main` 后才能在界面或命令行按分支手动触发（主工作区因含未提交重构改动暂未提交）；macOS 真实服务启动与升级、Windows 真实登录自启，以及 Linux/Windows ARM64 与 macOS Intel 实际运行仍只做静态门禁；本机测试包的编号规则尚未定。
 
 ## 此前状态（2026-11-23）
 

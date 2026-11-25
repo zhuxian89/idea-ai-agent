@@ -14,6 +14,14 @@
 
 独立后台与插件独立发版，Release 标签为 `standalone-v<版本>`。
 
+**自动化流水线。** `.github/workflows/release-standalone.yml`（手动触发，填版本号）从干净检出构建、跑下面“发布前验证”的静态门禁、
+在隔离环境安装最终包，并在 Windows PowerShell 5.1 与 Linux systemd 上验证，全部通过后只生成**草稿预发布**，不会公开发布。
+必须从 `standalone-<版本>` 分支触发，不能从 `main`（工作流文件首次合入 `main` 后，GitHub 才开放按分支手动触发）；已存在的版本号（含草稿）会被拒绝。
+`targets` 可只出一个或几个平台（如 `macos-arm64`、`windows-amd64` 或 `macos-arm64,windows-amd64`），只运行对应平台的验证，
+草稿会标明“仅提供某平台”，发布说明自动按所含平台生成。门禁脚本在 `scripts/standalone/verify-release-assets.mjs`，
+自动化范围、没有自动化的部分（公开发布、合并 `main`、转正与下架旧版、Linux/Windows ARM64 与 macOS Intel 的运行验证、
+macOS 真实服务的启动与升级）见该工作流运行摘要。手工流程仍然有效，下面各条是流水线的依据。
+
 **只保留一个正式版。** 新版本验证通过并成为默认安装版本后，下架所有旧的独立后台 Release（含测试预发布）：
 先把旧 Release 的元数据快照（`gh release view --json ...`）存到 `build/reports/`，再 `gh release delete <标签> --yes`，
 不加 `--cleanup-tag`，Git 标签保留。插件 Release（`v<版本>`）不动。

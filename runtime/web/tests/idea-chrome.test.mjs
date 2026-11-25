@@ -245,7 +245,7 @@ test("IDE chrome workbench keeps one AI Agent title and serves native commands",
     await command(page, "settings");
     await expect(page.getByRole("button", { name: "Configure", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Add Agent config", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Restart", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Restart", exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Update to v1.1.0", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Check for updates", exact: true }).click();
     await expect(page.getByText("Version v1.1.0 is available", { exact: true })).toBeVisible();
