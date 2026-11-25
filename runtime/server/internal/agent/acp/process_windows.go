@@ -16,8 +16,11 @@ import (
 )
 
 type windowsProcessTree struct {
-	mu  sync.Mutex
-	job windows.Handle
+	mu       sync.Mutex
+	job      windows.Handle
+	killed   bool
+	seenPIDs map[uint32]struct{}
+	procs    []windows.Handle
 }
 
 func startProcessCommand(cmd *exec.Cmd) (processTree, error) {
@@ -25,7 +28,10 @@ func startProcessCommand(cmd *exec.Cmd) (processTree, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create ACP job: %w", err)
 	}
-	tree := &windowsProcessTree{job: job}
+	tree := &windowsProcessTree{
+		job:      job,
+		seenPIDs: make(map[uint32]struct{}),
+	}
 	limits := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
 	limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
@@ -105,7 +111,15 @@ func (t *windowsProcessTree) Kill() error {
 	if t.job == 0 {
 		return os.ErrProcessDone
 	}
-	return windows.TerminateJobObject(t.job, 1)
+	t.captureJobProcessesLocked(t.job)
+	if t.killed {
+		return nil
+	}
+	if err := windows.TerminateJobObject(t.job, 1); err != nil {
+		return err
+	}
+	t.killed = true
+	return nil
 }
 
 func (t *windowsProcessTree) Close() error {
@@ -116,15 +130,31 @@ func (t *windowsProcessTree) Close() error {
 		return nil
 	}
 	t.job = 0
+	defer func() {
+		for _, h := range t.procs {
+			_ = windows.CloseHandle(h)
+		}
+		t.procs = nil
+	}()
+
+	t.captureJobProcessesLocked(job)
 
 	var termErr, waitErr error
-	if err := windows.TerminateJobObject(job, 1); err != nil {
-		termErr = fmt.Errorf("terminate ACP job: %w", err)
-	} else {
-		// Waiting only for cmd.exe does not guarantee descendants have released
-		// their session locks. Keep the job until all its processes have exited.
+	if !t.killed {
+		if err := windows.TerminateJobObject(job, 1); err != nil {
+			termErr = fmt.Errorf("terminate ACP job: %w", err)
+		} else {
+			t.killed = true
+		}
+	}
+	if termErr == nil {
+		// Waiting only for cmd.exe or ActiveProcesses == 0 is not enough on
+		// Windows: job accounting drops to 0 before kernel address-space teardown
+		// signals each descendant EPROCESS object. Poll ActiveProcesses == 0 and
+		// then wait on every captured process handle until signaled.
 		deadline := time.Now().Add(5 * time.Second)
 		for {
+			t.captureJobProcessesLocked(job)
 			active, err := activeJobProcesses(job)
 			if err != nil {
 				waitErr = fmt.Errorf("query ACP job: %w", err)
@@ -139,11 +169,92 @@ func (t *windowsProcessTree) Close() error {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
+		if waitErr == nil {
+			waitErr = waitProcessHandles(t.procs, deadline)
+		}
 	}
 	// Always release the non-inheritable job handle even on terminate/query/wait
 	// errors so the handle never leaks and KILL_ON_JOB_CLOSE still takes effect.
 	closeErr := windows.CloseHandle(job)
 	return errors.Join(termErr, waitErr, closeErr)
+}
+
+func (t *windowsProcessTree) captureJobProcessesLocked(job windows.Handle) {
+	pids, err := queryJobProcessIDs(job)
+	if err != nil {
+		return
+	}
+	for _, pid := range pids {
+		if pid == 0 {
+			continue
+		}
+		if _, seen := t.seenPIDs[pid]; seen {
+			continue
+		}
+		h, err := windows.OpenProcess(windows.SYNCHRONIZE, false, pid)
+		if err != nil {
+			continue
+		}
+		t.seenPIDs[pid] = struct{}{}
+		t.procs = append(t.procs, h)
+	}
+}
+
+func queryJobProcessIDs(job windows.Handle) ([]uint32, error) {
+	const headerSize = 8 // two uint32 fields: NumberOfAssignedProcesses, NumberOfProcessIdsInList
+	ptrSize := int(unsafe.Sizeof(uintptr(0)))
+	capacity := 64
+	for range 4 {
+		buf := make([]byte, headerSize+capacity*ptrSize)
+		err := windows.QueryInformationJobObject(
+			job,
+			windows.JobObjectBasicProcessIdList,
+			uintptr(unsafe.Pointer(&buf[0])),
+			uint32(len(buf)),
+			nil,
+		)
+		assigned := *(*uint32)(unsafe.Pointer(&buf[0]))
+		count := *(*uint32)(unsafe.Pointer(&buf[4]))
+		if errors.Is(err, windows.ERROR_MORE_DATA) {
+			if int(assigned) >= capacity {
+				capacity = int(assigned) + 16
+			} else {
+				capacity *= 2
+			}
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if int(count) > capacity {
+			count = uint32(capacity)
+		}
+		ids := unsafe.Slice((*uintptr)(unsafe.Pointer(&buf[headerSize])), int(count))
+		out := make([]uint32, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, uint32(id))
+		}
+		return out, nil
+	}
+	return nil, windows.ERROR_MORE_DATA
+}
+
+func waitProcessHandles(handles []windows.Handle, deadline time.Time) error {
+	for _, h := range handles {
+		remaining := time.Until(deadline)
+		if remaining < 0 {
+			remaining = 0
+		}
+		ms := uint32(remaining / time.Millisecond)
+		state, err := windows.WaitForSingleObject(h, ms)
+		if err != nil {
+			return fmt.Errorf("wait ACP job process: %w", err)
+		}
+		if state != windows.WAIT_OBJECT_0 {
+			return fmt.Errorf("ACP job process did not exit after kill: wait_state=%d", state)
+		}
+	}
+	return nil
 }
 
 func activeJobProcesses(job windows.Handle) (uint32, error) {
