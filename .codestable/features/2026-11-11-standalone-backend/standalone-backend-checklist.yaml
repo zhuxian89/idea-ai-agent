@@ -3,6 +3,9 @@ status: in_progress
 entrypoint: README.md
 current_step: windows-first-install-acceptance
 steps:
+- id: standalone-0164-release
+  description: 0.1.64 已正式发布并成为默认安装版本。六平台 24 个公开附件匿名回读、Windows PowerShell 5.1 安装/自更新与公开下载、Linux systemd 自更新、macOS arm64 与 Rosetta x64 隔离及默认在线安装、旧库迁移（含 race）全部通过。0.1.60 与 0.1.61 Release 已归档下架，Git 标签保留，插件 v0.1.27 仍为 Latest。
+  status: done
 - id: standalone-release-ci-pipeline
   description: 独立后台 GitHub Actions 发版流水线（release-standalone.yml）在云端通过六平台构建、门禁、Linux 隔离安装与 systemd 自更新、macOS 隔离安装、Windows PowerShell 5.1 安装与计划任务自更新、草稿预发布 24 附件回读全流程验证（Run 45517283091）。测试草稿与临时分支已清理，修复已同步回主工作区，待合入 main 后开放手动触发。
   status: done

@@ -2,6 +2,8 @@
 
 ## 当前状态（2026-11-25）
 
+- **独立后台 0.1.64 已正式发布并成为默认安装版本（2026-11-25）。** 包含 Agent 配置页单 Agent「重启」按钮、选择模型菜单「刷新模型」与「重启」单行合并及刷新统一先重启再探测、以及前后端超大文件按职责模块化拆分。六平台共 24 个附件从 `7bf9df4` 干净检出构建并通过全部静态门禁、Linux 隔离安装与 systemd 自更新、macOS arm64 与 Rosetta x64 隔离安装、Windows PowerShell 5.1 安装/升级/失败恢复/计划任务自更新及插件公开下载验证；24 个公开附件匿名回读与构建逐字节一致；`version.txt` 切到 `0.1.64` 后连续 8 次读到新值，macOS arm64 与 Rosetta x64 默认在线安装逐字节一致。旧独立后台 Release `0.1.60`、`0.1.61` 已归档快照后下架，Git 标签保留，插件 `v0.1.27` 保持 Latest。本机当前仍运行 `0.1.63` 本地测试包，可在远程页面或用固定命令升级到 `0.1.64`。[0.1.64 正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.64) · [构建验证 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45520963423) · [Windows 公开下载 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45523740204) · [验证记录](standalone-backend-implementation.md#0164-正式发布2026-11-25)
+
 - **选择模型界面单行按钮与全 Agent 刷新统一重启（2026-11-24，源码已更新，未公开重新发包）。** 将选择模型菜单中的「刷新模型」与「重启」合并到同一行（移除 `AgentRestartAction.tsx`）；所有 Agent 的「刷新模型」统一走重启接口再等待重新探测，中英文悬停与完成提示均写明会中断进行中的对话。独立后台与插件内置后台共用 `runtime/web/src`，后续打插件包会自动带入。
   已验证：前端 `tsc --noEmit` 与相关 3 个测试文件（`agent-model-refresh.test.mjs`、`agent-lifecycle-restart.test.mjs`、`agent-model-refresh-browser.test.mjs`，5/5）通过；本机已构建 macOS arm64 本地测试包（版本号沿用 `0.1.61`）并升级运行于 `http://127.0.0.1:7441`（[本机部署](../../../build/reports/standalone-0.1.61-live-upgrade/result.txt)）。
   **未做：** GitHub 公开的 `standalone-v0.1.61` Windows 预发布包不含本次改动；未重新发布多平台独立包或重打 IDEA 插件包；英文界面与最窄菜单宽度、以及界面交互效果待实机确认。
