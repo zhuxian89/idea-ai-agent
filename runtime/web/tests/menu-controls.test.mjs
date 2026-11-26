@@ -93,6 +93,7 @@ async function bundleFixture() {
               <output data-testid="value">{value}</output>
               <output data-testid="changes">{JSON.stringify(changes)}</output>
               <output data-testid="agent">{agent}</output>
+              <output data-testid="model">{model}</output>
               <output data-testid="mode">{mode}</output>
             </div>
             <div id="fixture-controls" style={{ justifyContent: options.edge === "right" ? "flex-end" : "flex-start" }}>
@@ -347,9 +348,11 @@ test("isolated menu controls in headless Chromium", { timeout: 90_000 }, async (
     await expect(button).toContainText("second-fixture");
     await menu.getByRole("button", { name: "Test model", exact: true }).click();
     await expect(menu).toBeVisible();
-    await expect(button).toContainText("test-model");
+    await expect(button).toContainText("Test model");
+    await expect(page.getByTestId("model")).toHaveText("test-model");
     await menu.getByText("second-fixture", { exact: true }).click();
-    await expect(button).toContainText("test-model");
+    await expect(button).toContainText("Test model");
+    await expect(page.getByTestId("model")).toHaveText("test-model");
     await expect(menu).toBeVisible();
 
     await menu.getByRole("button", { name: /^Mode / }).click();
