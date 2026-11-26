@@ -1,6 +1,7 @@
 package webpush
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -223,8 +224,7 @@ func TestSendTestToEndpointRequiresRegisteredSubscription(t *testing.T) {
 
 func TestEnsureConfigAutoGeneratesVAPIDKeys(t *testing.T) {
 	configRoot := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", configRoot)
-	t.Setenv("HOME", configRoot)
+	t.Setenv("IDE_AGENT_DATA_DIR", configRoot)
 
 	first, err := EnsureConfig(true)
 	if err != nil {
@@ -232,6 +232,9 @@ func TestEnsureConfigAutoGeneratesVAPIDKeys(t *testing.T) {
 	}
 	if !first.Enabled || first.PublicKey == "" || first.PrivateKey == "" {
 		t.Fatalf("first config not enabled/generated: %#v", first)
+	}
+	if _, err := os.Stat(filepath.Join(configRoot, vapidKeysFileName)); err != nil {
+		t.Fatalf("keys not saved in the test directory: %v", err)
 	}
 
 	second, err := EnsureConfig(true)

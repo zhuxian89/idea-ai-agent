@@ -81,6 +81,8 @@ func TestModelRefreshAutomaticallyReplacesOlderCodex(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			dir := t.TempDir()
 			t.Setenv("IDE_AGENT_DATA_DIR", dir)
+			t.Setenv("CODEX_HOME", t.TempDir())
+			t.Setenv("OPENAI_BASE_URL", "")
 			versionFile := filepath.Join(dir, "version.txt")
 			writeVersion := func(version string) {
 				t.Helper()

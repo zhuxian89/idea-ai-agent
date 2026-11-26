@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { compareTurnDiffInIdea, openIdeaFile, isIdeaRuntime } from "../services/ideaBridge";
-import { IdeaIconButton } from "./RelatedFileCompareButton";
+import { IdeaIconButton } from "./IdeaIconButton";
 import type { TurnDiffUpdate } from "../services/session";
 import { DiffCodeTable } from "./DiffCodeTable";
 import { parseTurnDiff, type TurnDiffFile } from "./turnDiffModel";
@@ -17,15 +17,17 @@ function TurnDiffSummaryInner({
   update,
   rootId,
   sessionKey,
+  initialFile,
 }: {
   update: TurnDiffUpdate;
+  initialFile?: string;
   rootId?: string | null;
   sessionKey?: string | null;
 }) {
   const { t } = useI18n();
   const summary = useMemo(() => parseTurnDiff(update.diff), [update.diff]);
-  const [expanded, setExpanded] = useState(false);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(Boolean(initialFile));
+  const [selectedPath, setSelectedPath] = useState<string | null>(() => summary.files.find((f) => f.path === initialFile || (initialFile && f.oldPath === initialFile))?.path ?? null);
   const [sideBySide, setSideBySide] = useState(true);
   const selected = summary.files.find((file) => file.path === selectedPath) || null;
   const canCompare = Boolean(

@@ -6,7 +6,7 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  padding-top: var(--mindfs-safe-area-top, env(safe-area-inset-top, 0px));
+  padding-top: max(var(--mindfs-safe-area-top, 0px), env(safe-area-inset-top, 0px));
   background: var(--content-bg);
   color: var(--text-primary);
   --mindfs-actionbar-bottom-padding: max(5px, var(--mindfs-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
@@ -22,7 +22,7 @@
   background: var(--content-bg);
 }
 .remote-phone button, .remote-phone-sheet button { touch-action: manipulation; }
-.remote-phone-icon, .remote-phone-title, .remote-phone-nav button, .remote-phone-attention button {
+.remote-phone-icon, .remote-phone-nav button, .remote-phone-attention button {
   border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer;
 }
 /* The two header icons stay quiet so the conversation is what holds the eye; they brighten while pressed. */
@@ -34,7 +34,6 @@
   align-items: center; gap: 4px; text-align: left; padding: 3px 2px;
 }
 .remote-phone-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
-.remote-phone-title svg { flex: none; color: var(--text-secondary); }
 .remote-phone-thread { flex: 1; display: flex; position: relative; overflow: hidden; min-height: 0; min-width: 0; }
 .remote-phone-composer { flex: none; min-width: 0; padding-inline: 8px; background: var(--content-bg); }
 .remote-phone-activity { margin: 2px 0 6px; border-radius: 8px; }
@@ -96,6 +95,11 @@
   padding: 0 12px max(8px, var(--mindfs-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
   background: var(--menu-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 18px 18px 0 0;
   overflow: hidden;
+}
+.remote-phone-sheet[data-side="left"] {
+  inset: var(--mindfs-viewport-offset-top, 0px) auto auto 0;
+  width: min(84vw, 292px); height: var(--mindfs-viewport-height, 100dvh); max-height: none;
+  border-radius: 0; padding-top: max(var(--mindfs-safe-area-top, 0px), env(safe-area-inset-top, 0px));
 }
 .remote-phone-sheet[open] { display: flex; flex-direction: column; }
 .remote-phone-sheet::backdrop { background: rgba(2, 6, 23, .49); }

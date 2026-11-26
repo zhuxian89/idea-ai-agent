@@ -80,6 +80,7 @@ func (s *Service) ensureAgentSession(
 	mode string,
 	effort string,
 	fastService string,
+	readOnly bool,
 	rootAbs string,
 	developerInstructions string,
 	onResumeFallback func(),
@@ -89,7 +90,10 @@ func (s *Service) ensureAgentSession(
 	nextMode := resolveRuntimeMode(current, mode)
 	nextEffort := resolveRuntimeEffort(agentName, current, effort)
 	nextFastService := resolveRuntimeFastService(agentName, current, fastService)
-	nextPlanMode := current != nil && current.PlanMode
+	nextPlanMode := current != nil && current.PlanMode && !readOnly
+	if readOnly {
+		nextMode = ""
+	}
 	var binding *session.AgentBinding
 	if manager != nil {
 		var err error
@@ -113,8 +117,8 @@ func (s *Service) ensureAgentSession(
 		currentFastService = inferFastServiceFromSession(current)
 		currentPlanMode = current.PlanMode
 	}
-	if existing, ok := pool.Get(poolSessionKey); ok {
-		if !shouldReopenSessionForSetting(pool, agentName, currentEffort, nextEffort) &&
+	if existing, existingReadOnly, ok := pool.GetWithReadOnly(poolSessionKey); ok {
+		if existingReadOnly == readOnly && !shouldReopenSessionForSetting(pool, agentName, currentEffort, nextEffort) &&
 			currentFastService == nextFastService {
 			if current != nil && currentModel != nextModel {
 				log.Printf("[session/model] switch.detected session=%s agent=%s from=%q to=%q action=set_runtime_model", current.Key, agentName, currentModel, nextModel)
@@ -127,7 +131,7 @@ func (s *Service) ensureAgentSession(
 				}
 				log.Printf("[session/model] switch.done session=%s agent=%s model=%q pool_session=%s", current.Key, agentName, nextModel, poolSessionKey)
 			}
-			if current != nil && currentMode != nextMode {
+			if !readOnly && current != nil && currentMode != nextMode {
 				log.Printf("[session/mode] switch.detected session=%s agent=%s from=%q to=%q action=set_runtime_mode", current.Key, agentName, currentMode, nextMode)
 				if err := existing.SetMode(ctx, nextMode); err != nil {
 					if prober := s.Registry.GetProber(); prober != nil {
@@ -138,7 +142,7 @@ func (s *Service) ensureAgentSession(
 				}
 				log.Printf("[session/mode] switch.done session=%s agent=%s mode=%q pool_session=%s", current.Key, agentName, nextMode, poolSessionKey)
 			}
-			if current != nil && currentPlanMode != nextPlanMode {
+			if !readOnly && current != nil && currentPlanMode != nextPlanMode {
 				log.Printf("[session/plan] switch.detected session=%s agent=%s from=%t to=%t action=set_plan_mode", current.Key, agentName, currentPlanMode, nextPlanMode)
 				if err := existing.SetPlanMode(ctx, nextPlanMode); err != nil {
 					if prober := s.Registry.GetProber(); prober != nil {
@@ -152,12 +156,14 @@ func (s *Service) ensureAgentSession(
 			// The transcript mode can drift from the live runtime (CLI reset,
 			// native plan entry, dropped bypass). Re-check before the next send
 			// and abort the turn when the runtime refuses to re-sync.
-			if err := ensureRuntimePermissionMode(ctx, current, agentName, nextMode, existing); err != nil {
-				if prober := s.Registry.GetProber(); prober != nil {
-					prober.ReportRuntimeFailure(agentName, err)
+			if !readOnly {
+				if err := ensureRuntimePermissionMode(ctx, current, agentName, nextMode, existing); err != nil {
+					if prober := s.Registry.GetProber(); prober != nil {
+						prober.ReportRuntimeFailure(agentName, err)
+					}
+					log.Printf("[session/mode] verify.error session=%s agent=%s mode=%q pool_session=%s err=%v", poolSessionKey, agentName, nextMode, poolSessionKey, err)
+					return nil, nil, err
 				}
-				log.Printf("[session/mode] verify.error session=%s agent=%s mode=%q pool_session=%s err=%v", poolSessionKey, agentName, nextMode, poolSessionKey, err)
-				return nil, nil, err
 			}
 			var currentSeq *int
 			if current != nil {
@@ -166,7 +172,7 @@ func (s *Service) ensureAgentSession(
 			}
 			return existing, currentSeq, nil
 		}
-		log.Printf("[session/settings] reopen.detected session=%s agent=%s effort_from=%q effort_to=%q fast_service_from=%q fast_service_to=%q action=resume_runtime_session", current.Key, agentName, currentEffort, nextEffort, currentFastService, nextFastService)
+		log.Printf("[session/settings] reopen.detected session=%s agent=%s effort_from=%q effort_to=%q fast_service_from=%q fast_service_to=%q read_only_from=%t read_only_to=%t action=resume_runtime_session", current.Key, agentName, currentEffort, nextEffort, currentFastService, nextFastService, existingReadOnly, readOnly)
 		pool.Close(poolSessionKey)
 	}
 
@@ -183,6 +189,7 @@ func (s *Service) ensureAgentSession(
 		Effort:                nextEffort,
 		FastService:           nextFastService,
 		PlanMode:              nextPlanMode,
+		ReadOnly:              readOnly,
 		RootPath:              rootAbs,
 		DeveloperInstructions: developerInstructions,
 		AgentSessionID: strings.TrimSpace(func() string {

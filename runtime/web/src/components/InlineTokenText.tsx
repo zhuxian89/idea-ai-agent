@@ -1,4 +1,5 @@
 import React from "react";
+import { findInlineTokenSpans } from "./sessionViewerUtils";
 
 type TokenPart =
   | { type: "text"; value: string }
@@ -13,16 +14,14 @@ function basename(path: string): string {
 
 function parseTokenText(content: string): TokenPart[] {
   const parts: TokenPart[] = [];
-  const pattern = /\[(read file|file|use skill):\s*([^\]]+)\]/g;
+  const spans = findInlineTokenSpans(content, true);
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: "text", value: content.slice(lastIndex, match.index) });
+  for (const span of spans) {
+    if (span.start > lastIndex) {
+      parts.push({ type: "text", value: content.slice(lastIndex, span.start) });
     }
-    const kind = match[1] === "use skill" ? "skill" : "file";
-    parts.push({ type: kind, value: match[2].trim() });
-    lastIndex = pattern.lastIndex;
+    parts.push({ type: span.kind, value: span.value });
+    lastIndex = span.end;
   }
   if (lastIndex < content.length) {
     parts.push({ type: "text", value: content.slice(lastIndex) });

@@ -1,6 +1,5 @@
 import {
   type QueuedUserMessage,
-  type RelatedFile,
   type RelatedWorktree,
   type Session,
 } from "../services/session";
@@ -48,7 +47,6 @@ export type SessionItem = {
   search_target_id?: string;
   search_snippet?: string;
   search_match_type?: "name" | "user" | "reply";
-  related_files?: RelatedFile[];
   related_worktree?: RelatedWorktree | null;
   exchanges?: Array<{
     seq?: number;
@@ -235,9 +233,6 @@ export function toSessionItem(
       session?.search_match_type === "reply"
         ? session.search_match_type
         : undefined,
-    related_files: Array.isArray(session?.related_files)
-      ? session.related_files
-      : undefined,
     related_worktree:
       session?.related_worktree === null
         ? null

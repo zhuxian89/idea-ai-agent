@@ -37,9 +37,11 @@ export type RemoteTopBarProps = {
   rightToggle?: { open: boolean; label: string; onClick?: () => void } | null;
   multiProjectSessionsEnabled?: boolean;
   onMultiProjectSessionsChange?: (enabled: boolean) => void;
+  onOpenCollab?: () => void;
+  collabWaitingCount?: number;
 };
 
-export function RemoteTopBar({ leftToggle, rightToggle, multiProjectSessionsEnabled = false, onMultiProjectSessionsChange }: RemoteTopBarProps) {
+export function RemoteTopBar({ leftToggle, rightToggle, multiProjectSessionsEnabled = false, onMultiProjectSessionsChange, onOpenCollab, collabWaitingCount = 0 }: RemoteTopBarProps) {
   const { t } = useI18n();
   const [mode, setMode] = useState<AppearanceMode>(() => getAppearanceMode());
 
@@ -54,46 +56,70 @@ export function RemoteTopBar({ leftToggle, rightToggle, multiProjectSessionsEnab
 
   return (
     <header className="remote-topbar" data-remote-topbar>
-      {leftToggle ? <PanelToggle side="left" {...leftToggle} /> : <span className="remote-topbar-gap" />}
-      <span className="remote-topbar-grow" />
-      <button
-        type="button"
-        className="remote-topbar-action"
-        aria-label={t("fileTree.switchAgentConfig")}
-        aria-haspopup="dialog"
-        onClick={() => window.dispatchEvent(new Event(OPEN_AGENT_CONFIG_SWITCH_EVENT))}
-      >
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h14m-4-4 4 4-4 4M20 16H6m4-4-4 4 4 4" /></svg>
-        <span>{t("fileTree.switchAgentConfig")}</span>
-      </button>
-      <button
-        type="button"
-        role="switch"
-        aria-label={t("fileTree.multiProjectSessions")}
-        aria-checked={multiProjectSessionsEnabled}
-        className="remote-topbar-action remote-topbar-switch"
-        onClick={() => onMultiProjectSessionsChange?.(!multiProjectSessionsEnabled)}
-      >
-        <span>{t("fileTree.multiProjectSessions")}</span>
-        <span className="remote-switch" aria-hidden="true" />
-      </button>
-      <label className="remote-topbar-theme">
-        <span>{t("remote.topbar.theme")}</span>
-        <select
-          value={mode}
-          aria-label={t("remote.topbar.theme")}
-          onChange={(event) => {
-            const next = event.target.value as AppearanceMode;
-            setMode(next);
-            setAppearanceMode(next);
-          }}
+      <div className="remote-topbar-left">
+        {leftToggle ? <PanelToggle side="left" {...leftToggle} /> : <span className="remote-topbar-gap" />}
+      </div>
+      <div className="remote-topbar-center">
+        {onOpenCollab ? (
+          <button
+            type="button"
+            className="collab-entry-btn collab-entry-btn--topcenter"
+            onClick={onOpenCollab}
+            title={t("collab.entryTitle")}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="9" cy="8" r="3" />
+              <path d="M3.5 18.5c.8-2.7 2.9-4.2 5.5-4.2s4.7 1.5 5.5 4.2" />
+              <circle cx="17" cy="9" r="2.5" />
+              <path d="M15.5 14.8c2.1.2 3.8 1.4 4.6 3.7" />
+            </svg>
+            <span>{t("collab.entryMode")}</span>
+            {collabWaitingCount > 0 ? (
+              <span className="collab-entry-badge">{collabWaitingCount}</span>
+            ) : null}
+          </button>
+        ) : null}
+      </div>
+      <div className="remote-topbar-right">
+        <button
+          type="button"
+          className="remote-topbar-action"
+          aria-label={t("fileTree.switchAgentConfig")}
+          aria-haspopup="dialog"
+          onClick={() => window.dispatchEvent(new Event(OPEN_AGENT_CONFIG_SWITCH_EVENT))}
         >
-          {THEME_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
-          ))}
-        </select>
-      </label>
-      {rightToggle ? <PanelToggle side="right" {...rightToggle} /> : <span className="remote-topbar-gap" />}
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h14m-4-4 4 4-4 4M20 16H6m4-4-4 4 4 4" /></svg>
+          <span>{t("fileTree.switchAgentConfig")}</span>
+        </button>
+        <button
+          type="button"
+          role="switch"
+          aria-label={t("fileTree.multiProjectSessions")}
+          aria-checked={multiProjectSessionsEnabled}
+          className="remote-topbar-action remote-topbar-switch"
+          onClick={() => onMultiProjectSessionsChange?.(!multiProjectSessionsEnabled)}
+        >
+          <span>{t("fileTree.multiProjectSessions")}</span>
+          <span className="remote-switch" aria-hidden="true" />
+        </button>
+        <label className="remote-topbar-theme">
+          <span>{t("remote.topbar.theme")}</span>
+          <select
+            value={mode}
+            aria-label={t("remote.topbar.theme")}
+            onChange={(event) => {
+              const next = event.target.value as AppearanceMode;
+              setMode(next);
+              setAppearanceMode(next);
+            }}
+          >
+            {THEME_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+            ))}
+          </select>
+        </label>
+        {rightToggle ? <PanelToggle side="right" {...rightToggle} /> : <span className="remote-topbar-gap" />}
+      </div>
     </header>
   );
 }

@@ -6,7 +6,6 @@ import { reportError } from "../services/error";
 import {
   sessionService,
   syncSession,
-  type RelatedFile,
   type RelatedWorktree,
   type Session,
   type SyncSessionResult,
@@ -429,52 +428,6 @@ export function useSessionCache({
       resolvePendingForSession,
       rootSessionKey,
     ],
-  );
-
-  const updateSessionRelatedFilesForKey = useCallback(
-    (rootID: string, sessionKey: string, relatedFiles: RelatedFile[]) => {
-      if (!rootID || !sessionKey) return;
-      const cacheKey = rootSessionKey(rootID, sessionKey);
-      const cached = sessionCacheRef.current[cacheKey];
-      const nextRelatedFiles = Array.isArray(relatedFiles)
-        ? [...relatedFiles]
-        : [];
-      if (cached) {
-        sessionCacheRef.current[cacheKey] = {
-          ...(cached as any),
-          related_files: nextRelatedFiles,
-        } as Session;
-      }
-      const lastMain = lastMainSessionSnapshotRef.current;
-      const lastMainKey = lastMain?.key || lastMain?.session_key;
-      const lastMainRoot =
-        (lastMain?.root_id as string | undefined) || currentRootIdRef.current;
-      if (lastMain && lastMainKey === sessionKey && lastMainRoot === rootID) {
-        lastMainSessionSnapshotRef.current = {
-          ...(lastMain as any),
-          related_files: nextRelatedFiles,
-        } as Session;
-      }
-      setSelectedSession((prev) => {
-        const prevKey = prev?.key || prev?.session_key;
-        const prevRoot =
-          (prev?.root_id as string | undefined) || currentRootIdRef.current;
-        if (!prev || prevKey !== sessionKey || prevRoot !== rootID) return prev;
-        return {
-          ...(prev as any),
-          related_files: nextRelatedFiles,
-        } as SessionItem;
-      });
-      const current = drawerSessionByRootRef.current[rootID];
-      if (current && current.key === sessionKey) {
-        setDrawerSessionForRoot(rootID, {
-          ...(current as any),
-          related_files: nextRelatedFiles,
-        } as Session);
-      }
-      bumpCacheVersion();
-    },
-    [rootSessionKey, setDrawerSessionForRoot, bumpCacheVersion],
   );
 
   const updateSessionRelatedWorktreeForKey = useCallback(
@@ -1482,7 +1435,6 @@ export function useSessionCache({
     clearSessionStale,
     isSessionStale,
     restoreActiveSession,
-    updateSessionRelatedFilesForKey,
     updateSessionRelatedWorktreeForKey,
     updateSessionAgentForKey,
     handleSetPlanMode,

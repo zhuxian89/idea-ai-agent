@@ -95,7 +95,7 @@ test("shipped HTML opens Relay nodes and projects without pairing and preserves 
       await page.setViewportSize({ width, height });
       await page.goto(`https://entry.test/n/N/p/A/?device=${device}`);
       if (device === "phone") {
-        await page.getByRole("button", { name: "Sessions", exact: true }).click();
+        await page.getByRole("button", { name: "Projects", exact: true }).click();
         await page.getByRole("button", { name: "More", exact: true }).click();
       }
       const update = page.getByRole("region", { name: "Standalone updates" });

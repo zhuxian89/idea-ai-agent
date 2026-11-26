@@ -46,6 +46,7 @@ type OpenOptions struct {
 	Mode                  string
 	Effort                string
 	PlanMode              bool
+	ReadOnly              bool
 	RootPath              string
 	Command               string
 	Args                  []string
@@ -69,14 +70,23 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 	if err := validateCLIArguments(opts.Args); err != nil {
 		return nil, err
 	}
-	if err := validatePermissionMode(opts.Mode); err != nil {
-		return nil, err
+	if !opts.ReadOnly {
+		if err := validatePermissionMode(opts.Mode); err != nil {
+			return nil, err
+		}
 	}
 
-	permission := initialPermissionState(opts.Mode, opts.PlanMode)
+	effectiveMode := opts.Mode
+	effectivePlan := opts.PlanMode
+	if opts.ReadOnly {
+		effectiveMode = string(claudeagent.PermissionModeDefault)
+		effectivePlan = false
+	}
+	permission := initialPermissionState(effectiveMode, effectivePlan)
 	s := &session{
 		sessionKey:             opts.SessionKey,
 		model:                  strings.TrimSpace(opts.Model),
+		readOnly:               opts.ReadOnly,
 		planMode:               permission.planMode,
 		permissionMode:         permission.permissionMode,
 		previousPermissionMode: permission.previousPermissionMode,
@@ -137,7 +147,7 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 			return nil, err
 		}
 	}
-	if opts.PlanMode {
+	if opts.PlanMode && !opts.ReadOnly {
 		if err := stream.SetPermissionMode(ctx, claudeagent.PermissionModePlan); err != nil {
 			client.Close()
 			return nil, err
@@ -175,6 +185,7 @@ type session struct {
 	sessionID              string
 	sessionKey             string
 	model                  string
+	readOnly               bool
 	planMode               bool
 	permissionMode         claudeagent.PermissionMode
 	previousPermissionMode claudeagent.PermissionMode
@@ -213,7 +224,6 @@ func (s *session) SendMessage(ctx context.Context, content string) error {
 	}
 	turnCtx, turnID := s.turn.Begin(ctx)
 	defer s.turn.End(turnID)
-	s.sawMessageText = false
 	log.Printf("[agent/claude] input session=%s bytes=%d", s.sessionKey, len(content))
 
 	waiter := make(chan error, 1)
@@ -384,12 +394,19 @@ func (s *session) SetPlanMode(ctx context.Context, enabled bool) error {
 		return errors.New("claude session not initialized")
 	}
 	s.mu.RLock()
+	readOnly := s.readOnly
 	transition := resolveSetPlanMode(permissionState{
 		planMode:               s.planMode,
 		permissionMode:         s.permissionMode,
 		previousPermissionMode: s.previousPermissionMode,
 	}, enabled)
 	s.mu.RUnlock()
+	if readOnly {
+		if !enabled {
+			return nil
+		}
+		return errors.New("read-only session cannot change permission mode")
+	}
 	if err := s.stream.SetPermissionMode(ctx, transition.send); err != nil {
 		// Without a successful ack the runtime keeps its current mode, so the
 		// recorded state must stay untouched.
@@ -457,6 +474,14 @@ func validatePermissionMode(mode string) error {
 }
 
 func (s *session) SetMode(ctx context.Context, mode string) error {
+	if s != nil {
+		s.mu.RLock()
+		readOnly := s.readOnly
+		s.mu.RUnlock()
+		if readOnly {
+			return errors.New("read-only session cannot change permission mode")
+		}
+	}
 	if err := validatePermissionMode(mode); err != nil {
 		return err
 	}
@@ -495,9 +520,9 @@ func (s *session) SetMode(ctx context.Context, mode string) error {
 
 func (s *session) ListModes(_ context.Context) (types.ModeList, error) {
 	return types.ModeList{Modes: []types.ModeInfo{
-		{ID: "bypassPermissions", Name: "Full access", Description: "Run commands and edit files without approval prompts."},
-		{ID: "default", Name: "Standard permissions", Description: "Claude requests approval when needed."},
-		{ID: "acceptEdits", Name: "Accept edits", Description: "Allow file edits; keep command approval checks."},
+		{ID: "bypassPermissions", Name: "bypassPermissions", Description: "Run commands and edit files without approval prompts."},
+		{ID: "default", Name: "default", Description: "Claude requests approval when needed."},
+		{ID: "acceptEdits", Name: "acceptEdits", Description: "Allow file edits; keep command approval checks."},
 	}}, nil
 }
 

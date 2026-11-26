@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func populateProbeModels(ctx context.Context, sess agenttypes.Session, status *Status) {
+func populateProbeModels(ctx context.Context, def Definition, sess agenttypes.Session, status *Status) {
 	modelsCtx, modelsCancel := context.WithTimeout(ctx, probeModelListTimeout)
 	defer modelsCancel()
 
@@ -16,9 +16,10 @@ func populateProbeModels(ctx context.Context, sess agenttypes.Session, status *S
 		status.ModelsError = err.Error()
 		return
 	}
+	mergedModels := SupplementActiveRelayModels(ctx, status.Name, def, models.Models)
 	status.CurrentModelID = models.CurrentModelID
-	status.Models = models.Models
-	status.Efforts = inferAgentEfforts(models.Models)
+	status.Models = mergedModels
+	status.Efforts = inferAgentEfforts(mergedModels)
 	status.SupportsFastService = supportsAgentFastService(status.Name)
 
 	modes, err := sess.ListModes(modelsCtx)

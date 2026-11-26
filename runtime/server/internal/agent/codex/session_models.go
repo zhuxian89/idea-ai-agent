@@ -9,6 +9,15 @@ import (
 	"strings"
 )
 
+func (s *session) isReadOnly() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.readOnly
+}
+
 func (s *session) SetModel(_ context.Context, model string) error {
 	if s == nil || s.client == nil {
 		return errors.New("codex session not initialized")
@@ -24,6 +33,9 @@ func (s *session) SetModel(_ context.Context, model string) error {
 	opts := s.threadOpts
 	opts.Model = strings.TrimSpace(model)
 	opts.CollaborationMode = codexCollaborationMode(s.planMode)
+	if s.isReadOnly() {
+		opts.SandboxMode, opts.ApprovalPolicy = "read-only", "never"
+	}
 	thread := s.client.ResumeThread(threadID, opts)
 	s.mu.Lock()
 	s.thread = thread
@@ -36,6 +48,9 @@ func (s *session) SetModel(_ context.Context, model string) error {
 func (s *session) SetPlanMode(ctx context.Context, enabled bool) error {
 	if s == nil || s.client == nil {
 		return errors.New("codex session not initialized")
+	}
+	if s.isReadOnly() && enabled {
+		return errors.New("read-only session cannot enter plan mode")
 	}
 	threadID := strings.TrimSpace(s.SessionID())
 	if threadID == "" {
@@ -175,6 +190,13 @@ func (s *session) SetMode(_ context.Context, mode string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.readOnly {
+		trimmed := strings.TrimSpace(mode)
+		if trimmed != "" && trimmed != "read-only" {
+			return errors.New("read-only session cannot change permission mode")
+		}
+		return nil
+	}
 	opts := s.threadOpts
 	if err := applyPermissionMode(&opts, mode); err != nil {
 		return err
@@ -194,9 +216,9 @@ func (s *session) SetMode(_ context.Context, mode string) error {
 
 func (s *session) ListModes(_ context.Context) (types.ModeList, error) {
 	return types.ModeList{Modes: []types.ModeInfo{
-		{ID: "full-access", Name: "Full access", Description: "Run commands and edit files without approval prompts."},
-		{ID: "default", Name: "Standard permissions", Description: "Workspace access; Codex requests approval when needed."},
-		{ID: "read-only", Name: "Read only", Description: "Read files; request approval for changes."},
+		{ID: "full-access", Name: "full-access", Description: "Run commands and edit files without approval prompts."},
+		{ID: "default", Name: "default", Description: "Workspace access; Codex requests approval when needed."},
+		{ID: "read-only", Name: "read-only", Description: "Read files; request approval for changes."},
 	}}, nil
 }
 

@@ -23,12 +23,15 @@ func TestNativePermissionModeChoices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range modes.Modes {
-		if mode.ID == "full-access" {
-			return
+	want := []string{"full-access", "default", "read-only"}
+	if len(modes.Modes) != len(want) {
+		t.Fatalf("Codex modes = %+v, want %v", modes.Modes, want)
+	}
+	for i, mode := range modes.Modes {
+		if mode.ID != want[i] || mode.Name != want[i] {
+			t.Fatalf("Codex mode[%d] = {ID:%q Name:%q}, want native %q", i, mode.ID, mode.Name, want[i])
 		}
 	}
-	t.Fatal("Codex full-access permission choice is missing")
 }
 
 func TestNativeFullAccessAndPermissionDowngrade(t *testing.T) {

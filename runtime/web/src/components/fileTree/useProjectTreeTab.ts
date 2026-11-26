@@ -4,11 +4,11 @@ import { useRefreshSpin } from "../../hooks";
 import type { FileTreeProps } from "../fileTreeModel";
 
 type Deps = {
-  props: Pick<FileTreeProps, "onProjectTreeTabChange" | "onRefresh"> & Required<Pick<FileTreeProps, "projectTreeTabRequest">>;
+  props: Pick<FileTreeProps, "onProjectTreeTabChange" | "onRefresh">;
 };
 
 export function useProjectTreeTab({ props }: Deps) {
-  const { onProjectTreeTabChange, onRefresh, projectTreeTabRequest } = props;
+  const { onProjectTreeTabChange, onRefresh } = props;
 
   const [projectTreeTab, setProjectTreeTab] = React.useState<ProjectTreeTab>(() => {
     if (typeof window === "undefined") {
@@ -31,12 +31,6 @@ export function useProjectTreeTab({ props }: Deps) {
     setPressed: setTreePressed,
     handleClick: handleRefreshClick,
   } = useRefreshSpin(handleTabRefresh);
-  React.useEffect(() => {
-    if (!projectTreeTabRequest || !isProjectTreeTab(projectTreeTabRequest.tab)) {
-      return;
-    }
-    setProjectTreeTab(projectTreeTabRequest.tab);
-  }, [projectTreeTabRequest?.nonce, projectTreeTabRequest?.tab]);
   React.useEffect(() => {
     onProjectTreeTabChange?.(projectTreeTab);
   }, [onProjectTreeTabChange, projectTreeTab]);

@@ -7,6 +7,8 @@ import { RemoteAccessDialog } from "../components/remote/RemoteAccessDialog";
 export type IdeaWorkbenchOptions = {
   projectName: string;
   onNewSession: () => void;
+  onOpenCollab?: () => void;
+  collabWaitingCount?: number;
   composerAction?: React.ReactNode;
 };
 
@@ -118,11 +120,41 @@ export function IdeaWorkbench(props: Props) {
       {!networkOnline || networkRestored ? <div className="idea-network-notice" role="status">{t(networkOnline ? "session.networkRestoredNotice" : "session.networkOfflineNotice")}</div> : null}
       {!chrome ? <header className="idea-toolbar">
         <strong>AI Agent</strong>
+        {props.onOpenCollab ? (
+          <button type="button" className="collab-entry-btn collab-entry-btn--topcenter" onClick={props.onOpenCollab} title={t("collab.entryTitle")}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="9" cy="8" r="3" />
+              <path d="M3.5 18.5c.8-2.7 2.9-4.2 5.5-4.2s4.7 1.5 5.5 4.2" />
+              <circle cx="17" cy="9" r="2.5" />
+              <path d="M15.5 14.8c2.1.2 3.8 1.4 4.6 3.7" />
+            </svg>
+            <span>{t("collab.entryMode")}</span>
+            {(props.collabWaitingCount || 0) > 0 ? (
+              <span className="collab-entry-badge">{props.collabWaitingCount}</span>
+            ) : null}
+          </button>
+        ) : null}
+        <span className="idea-toolbar-spacer" />
         <button type="button" onClick={() => setRemoteOpen(true)}>{locale === "zh-CN" ? "远程访问" : "Remote access"}</button>
         <ToolbarButton kind="new" label={t("session.new")} onClick={newSession} />
         <ToolbarButton kind="history" label={t("idea.history")} pressed={view === "history"} onClick={toggleHistory} />
         <ToolbarButton kind="settings" label={t("idea.settings")} pressed={view === "settings"} onClick={toggleSettings} />
-      </header> : null}
+      </header> : props.onOpenCollab && view === "chat" ? (
+        <header className="idea-collab-topbar">
+          <button type="button" className="collab-entry-btn collab-entry-btn--topcenter" onClick={props.onOpenCollab} title={t("collab.entryTitle")}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="9" cy="8" r="3" />
+              <path d="M3.5 18.5c.8-2.7 2.9-4.2 5.5-4.2s4.7 1.5 5.5 4.2" />
+              <circle cx="17" cy="9" r="2.5" />
+              <path d="M15.5 14.8c2.1.2 3.8 1.4 4.6 3.7" />
+            </svg>
+            <span>{t("collab.entryMode")}</span>
+            {(props.collabWaitingCount || 0) > 0 ? (
+              <span className="collab-entry-badge">{props.collabWaitingCount}</span>
+            ) : null}
+          </button>
+        </header>
+      ) : null}
       {view !== "chat" ? <header className="idea-view-heading">
         <button type="button" className="idea-icon-button" aria-label={t("idea.backToChat")} title={t("idea.backToChat")} onClick={backToChat}><Icon kind="back" /></button>
         <div className="idea-view-heading-title">

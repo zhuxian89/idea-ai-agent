@@ -1,7 +1,37 @@
 # 独立后端计划与进度
 
-## 当前状态（2026-11-25）
+## 当前状态（2026-11-26）
 
+- 正式发布通过 GitHub Actions 执行。独立后台 `0.1.67` 先完成六平台验证并成为默认安装版本，IDEA 插件再以 `0.1.27` 同版本更新正式附件。
+
+- **本机已升级至 `0.1.66-local.16`。** 快速模式合并逐条回应时过滤控制块，最终报告补齐已记录的测试命令。已核验 9 个既有项目、模板接口、网页资源和 Relay。[验证记录](standalone-backend-implementation.md#0166-local16-快速模式交接文档)
+
+- API 测试进程默认隔离 Agent 和后台配置路径，Web Push 密钥测试显式使用自己的临时数据目录。[修复与验证记录](../../issues/2026-11-26-runtime-test-isolation/runtime-test-isolation-fix-note.md)
+
+- **本机已升级至 `0.1.66-local.15`。** 快速模式即时更新阶段，当前卡片可检查进度并继续。主模型的原生权限档位随模板保存，在手机和桌面回显。运行圆点随流光设置明暗呼吸。已核验 9 个既有项目、网页资源与 Relay。[验证记录](standalone-backend-implementation.md#0166-local15-协作进度与模板权限)
+
+- **本机已升级至 `0.1.66-local.14`。** 网页快速模式的运行卡片和列表状态点共用单聊流光配置，跟随开关、样式、颜色和速度。浏览器回归、旧库迁移和隔离安装通过，已核验 9 个项目、网页资源和 Relay。[验证记录](standalone-backend-implementation.md#0166-local14-快速模式共用流光设置)
+
+- 快速模式第 02 轮已恢复旧 Skill 单行简介的读取，并校正版本顺序和 R3 出处。交付复跑通过 11 个 Go 包的竞态测试、Skill 简介和看板旧库迁移专项、TypeScript 检查及 4 项前端回归。真实双模型流程、安装包、Windows 与手机实机待验收。[审核与验证记录](standalone-backend-implementation.md#第-02-轮逐条回应与验证)
+
+- **本机已升级至 `0.1.66-local.13`。** 快速模式点「再审一轮」后可补充文字、上传多个文件或图片，再启动下一轮。意见与附件路径进入本轮审核材料。最终包浏览器回归、后端竞态、旧库迁移和隔离安装通过，已核验 9 个既有项目、网页资源和 Relay。[验证记录](standalone-backend-implementation.md#0166-local13-再审补充意见与附件)
+
+- **`0.1.66-local.11` 本机测试包已由 local.13 接替。** 修复快速模式 4 处交接文档问题并加固阶段流程控制：移除指令文件中 `mindfs-control` 外层的四反引号围栏；按工具调用边界切分聊天实时流与落盘交付正文（过滤掉阶段交付文档开头的工具等待过渡语，同时保留聊天完整流）；移除 `02-审核意见.md` 与单轮 `03-逐条回应.md` 尾部对正文的重复拼接；修正第 3 步首次执行误标“继续补齐”、保留第 2 步审核续跑的已有正文、未产生有效审核控制块时不提前输出 `阶段交付路径`、阶段回合取消时透传 `context.Canceled` 暂停状态机而不误推进下一步、以及 Claude 只读审核禁用 `run_in_background` 异步子任务防止提前结轮。`go vet`、四包 `-race`、`kanban` 全量与 `-race` 旧库迁移门禁、8 项前端与浏览器回归、`macos-arm64` 6 附件及 305 网页文件静态门禁、临时 HOME 隔离安装与 `upgrade.py --check` 预检全部通过，已调度独立 `launchd` 任务从 `local.10` 热升级至 `local.11`（回执写入 `build/reports/standalone-0.1.66-local.11-live-upgrade/result.txt`）。[验证记录](standalone-backend-implementation.md#0166-local11-快速模式交接文档清理与阶段流程控制加固2026-11-26)
+
+- **`0.1.66-local.10` 本机测试包已由 local.13 接替。** 收敛快速模式 `02-审核依据.md` 体积（从 1,300+ 行压回约 40 行）：移除跨 Agent 全局规则文件的自动扫描与内联（避免不同 Agent 全局规则冲突），以项目根目录 `AGENTS.md` 路径作为唯一共享规范引用；模板勾选的 Skill 改为仅输出“名称 + 简介 + 路径索引”（不再内联 `SKILL.md` 全文，审核时按需读取），同时带入前端 `CollabSkillPicker` 分类/全选交互与同步修正后的说明文案。`go vet`、`collab` / `api` `-race`、`kanban` 全量与 `-race` 旧库迁移门禁、10 项前端与浏览器回归、`macos-arm64` 6 附件及 305 网页文件静态门禁、临时 HOME 隔离安装与 `upgrade.py --check` 预检全部通过；本机已从 `local.9` 热升级至 `local.10`（`http://127.0.0.1:7441`，9 个项目、二进制、`/api/collab/templates`、网页资源与 Relay 状态均已核验）。[验证记录](standalone-backend-implementation.md#0166-local10-审核依据去内联精简与-skill-分组选择2026-11-26)
+
+- **`0.1.66-local.9` 本机测试包已由 local.13 接替。** 在保留原生对话区实时正文输出与步骤卡片原样的基础上，于每个成功完成的阶段回复末尾重新追加 `阶段交付路径：<相对路径>`（通过 `ControlStreamFilter.CompletionSuffix()` 与 `usecase.StreamCompletionSuffixer`，在回合成功且有正文时实时推送并保存至会话记录；回合取消/失败不输出，且不污染 `.mindfs/runs/` 交付文档正文）。`go vet`、`collab` / `api/usecase` / `api` `-race`、`kanban` 全量与 `-race` 旧库迁移门禁、`macos-arm64` 6 个附件及 305 网页文件静态门禁、临时 HOME 隔离安装及 `upgrade.py --check` 预检全部通过；本机已从 `local.8` 热升级至 `local.9`（`http://127.0.0.1:7441`，9 个项目、二进制、`/api/collab/templates`、网页资源与 Relay 状态均已核验）。[验证记录](standalone-backend-implementation.md#0166-local9-阶段对话末尾恢复阶段交付路径提示)
+
+- **`0.1.66-local.8` 本机测试包已由 local.13 接替。** 撤销 `local.7` 把正文塞进步骤卡片的改动，步骤卡片恢复原样，新阶段输出继续按 `ControlStreamFilter` 实时推送并保存至原生对话区。`collab` / `api/usecase` / `api` 竞态测试、最终包 7 项浏览器回归、6 个 `macos-arm64` 附件及 305 网页文件静态门禁、临时 HOME 隔离安装通过；本机已从 `local.7` 热升级至 `local.8`（`http://127.0.0.1:7441`，9 个项目、二进制、网页资源与 Relay 状态已核验）。页面交互验收以当前版本为准。[验证记录](standalone-backend-implementation.md#0166-local8-步骤卡片还原与原生对话区显示)
+
+- `0.1.66-local.7` 恢复快速模式阶段正文的实时显示与会话保存，已交付的正文直接显示在步骤卡片。服务端竞态测试、看板旧库迁移、最终包浏览器回归与隔离安装通过，本机已升级，已打开既有第二轮运行并核对四张阶段卡的正文。
+
+- 本机已安装 `0.1.66-local.6`，9 个既有项目和 Relay 连接验证通过。手机单聊左上三横线打开左侧会话列表，标题只显示名称。快速模式按轮次进行文件交接，支持手动复核。[本机验证记录](standalone-backend-implementation.md#0166-local6-手机会话列表与快速模式手动复核)
+
+- **本机 macOS arm64 独立后台测试包 `0.1.66-local.3` 生成并热升级进入实机测试（2026-11-25，未提交、未公开发布）。**
+  - 包含多模型协作“快速模式（一写一审一轮）”完整实现、自审与 Codex 交叉审核修复，以及按实机反馈将入口移至顶栏正中央并改名「多Agent模式」、补齐 `CollabShell` 手机灵动岛（`--mindfs-safe-area-top`）与底部安全区及现有 App 顶栏按钮复用（详见 [多模型协作计划与进度](../2026-11-25-agent-group/README.md)）。
+  - **已验证：** `kanban` 旧库迁移与 `-race` 迁移测试、`TestFrontendAssetsStayWithBackend` 通过；前端 `tsc`、生产构建（305 个网页文件、零 `/mindfs-assets/`）与 18 项浏览器回归（含 `1440px` 顶栏正中央坐标核验、`59px/34px` 灵动岛与 Home Indicator 安全区及 `44x44` 触控区核验）全部通过；最终产物 `build/standalone/0.1.66-local.3/` 通过 `verify-release-assets.mjs --targets macos-arm64 --skip-build-info`、`verify-package-install.mjs` 临时 HOME 隔离安装验证及 `upgrade.py --check` 预检，经独立 `launchd` 任务热升级至 `http://127.0.0.1:7441`（[升级结果](../../../build/reports/standalone-0.1.66-local.3-live-upgrade/result.txt)）。
+  - **未做：** 仅构建本机 `macos-arm64` 本地测试包（未构建其余五平台、未改 `scripts/standalone/version.txt`、未发 GitHub Release、未重打 IDEA 插件包）；后续实机验收以当前版本为准。
 - **独立后台 0.1.65 正式发布并成为默认安装版本 + IDEA 插件 0.1.27 同版本更新全平台附件（2026-11-25）。**
   - **独立后台 0.1.65**：包含 ACP 握手 `Terminal: false` 修复、Windows Job Object 子进程树与文件锁释放（含等待子进程内核句柄进入终止信号态）、Codex 空闲释放后 `thread/loaded/list` 卸载确认与整进程重启跳过逐会话等待、以及按当前绑定的本地 `api-providers.json` 为 Claude 与 Codex 动态补全模型列表。经分支 `standalone-0.1.65` 触发 `release-standalone.yml` `mode=formal`（[Run 45538561445](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45538561445)），六平台 24 个附件通过旧库迁移与竞态测试、Go 与 405 个前端测试、静态门禁、Linux 隔离安装与 systemd 自更新、macOS arm64 隔离安装、真实 Windows `acp` 进程树与文件锁测试（`TestWindowsACPProcessTreeCleanup`）及 PowerShell 5.1 安装/升级/自更新与公开下载验证；快进合入 `main`、`scripts/standalone/version.txt` 升为 `0.1.65`、公开无参数默认在线安装核验通过，旧 `standalone-v0.1.64` 已归档快照至工作流产物后下架（Git 标签保留）。[0.1.65 正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.65)
   - **IDEA 插件 0.1.27 同版更新**：基于 `7d8ae9b` 触发 `release-plugin.yml` `mode=formal` + `replace_existing=true`（[Run 45540134877](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45540134877)），5 个插件 ZIP 与 `SHA256SUMS.txt` 通过旧库迁移与竞态测试、Go 与前端测试、Gradle 测试、静态门禁、`macos-latest` 与 `windows-latest` 双端内嵌后台 305 个 HTTP 网页资源逐字节核验，以及真实 Windows PowerShell 5.1 对三个 Windows/通用包针对 `0.1.65` 的安装器验证；替换前快照已归档至工作流产物，6 个公开附件匿名回读逐字节一致，继续保持 GitHub `Latest`。**已安装 0.1.27 的用户需从磁盘重装 ZIP 并重启 IDEA。**[插件下载](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27) · [验证记录](standalone-backend-implementation.md#0165-正式发布与插件-0127-同版更新2026-11-25)

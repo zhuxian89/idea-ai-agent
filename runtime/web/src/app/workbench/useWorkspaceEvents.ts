@@ -58,7 +58,7 @@ export function useWorkspaceEvents({ appFoundationApi, workbenchLayoutApi, curre
   const { applyManagedRootRename } = managedRootsApi;
   const { loadMultiProjectSessionGroups, loadSessionsForRoot, multiProjectSessionsEnabled, refreshMultiProjectReplyingSessions, sessionListModeRef, sessionsRef, setMultiProjectSessionPending, setSessions } = sessionListApi;
   const { playCompletionSound, refreshRelatedWorktree, setUpdateState } = appServicesApi;
-  const { appendAgentChunkForSession, appendCompactNoticeForSession, appendPlanUpdateForSession, appendThoughtChunkForSession, appendTodoUpdateForSession, appendToolCallForSession, attachContextWindowToLatestAssistant, clearSessionStale, markSessionStale, promotePendingSessionForRoot, resolvePendingForSession, restoreActiveSession, setSelectedPendingByKey, updateSessionAgentForKey, updateSessionRelatedFilesForKey, updateSessionRelatedWorktreeForKey } = sessionCacheStateApi;
+  const { appendAgentChunkForSession, appendCompactNoticeForSession, appendPlanUpdateForSession, appendThoughtChunkForSession, appendTodoUpdateForSession, appendToolCallForSession, attachContextWindowToLatestAssistant, clearSessionStale, markSessionStale, promotePendingSessionForRoot, resolvePendingForSession, restoreActiveSession, setSelectedPendingByKey, updateSessionAgentForKey, updateSessionRelatedWorktreeForKey } = sessionCacheStateApi;
   const { gitDiff, refreshGitStatus, setGitDiff } = gitApi;
   const { externalImportAgentRef, loadExternalSessions, setConfirmingExternalImport, setImportingExternalSessionKeys, setSelectedExternalImportKeys } = externalSessionImportApi;
   const { markSessionPending } = sessionMessagingApi;
@@ -74,7 +74,6 @@ export function useWorkspaceEvents({ appFoundationApi, workbenchLayoutApi, curre
       advanceTurnVersion,
       reloadSessionForReplay,
       replayTargetsForAllRoots,
-      refreshSessionRelatedFiles,
     } = createSessionReplay({
       rootSessionKey,
       isCancelled: () => cancelled,
@@ -92,7 +91,6 @@ export function useWorkspaceEvents({ appFoundationApi, workbenchLayoutApi, curre
       currentRootIdRef,
       managedRootIdsRef,
       markSessionStale,
-      updateSessionRelatedFilesForKey,
     });
 
     const { handleSessionStreamDone, handleSessionStream } =
@@ -195,7 +193,6 @@ export function useWorkspaceEvents({ appFoundationApi, workbenchLayoutApi, curre
       setSelectedSession,
       boundSessionByRootRef,
       refreshRelatedWorktree,
-      refreshSessionRelatedFiles,
       updateSessionRelatedWorktreeForKey,
     });
     const handleWorkspaceEvent = createWorkspaceEventHandler({
@@ -304,7 +301,6 @@ export function useWorkspaceEvents({ appFoundationApi, workbenchLayoutApi, curre
     refreshGitStatus,
     refreshManagedRoots,
     updateSessionRelatedWorktreeForKey,
-    updateSessionRelatedFilesForKey,
     updateSessionAgentForKey,
     treeCacheKey,
     t,

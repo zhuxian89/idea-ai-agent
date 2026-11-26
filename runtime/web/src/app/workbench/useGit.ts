@@ -22,7 +22,7 @@ export function useGit({ appFoundationApi, workbenchLayoutApi, currentRootApi, s
   const { isMobile, setIsLeftOpen } = workbenchLayoutApi;
   const { currentRootIdRef, replaceURLState, setCurrentRootId } = currentRootApi;
   const { setMainViewPreferenceForRoot, setSelectedSession, setSelectedSessionLoading } = sessionSelectionApi;
-  const { refreshTreeDir, setRelatedSelectedFileKey } = projectTreeApi;
+  const { refreshTreeDir } = projectTreeApi;
   const { setFile } = fileViewerStateApi;
   const { managedRootByIdRef } = managedRootsApi;
 
@@ -56,7 +56,6 @@ export function useGit({ appFoundationApi, workbenchLayoutApi, currentRootApi, s
     currentRootIdRef,
     managedRootByIdRef,
     fileOpenRequestRef,
-    setRelatedSelectedFileKey,
     setMainViewPreferenceForRoot,
     setSelectedSession,
     setSelectedSessionLoading,

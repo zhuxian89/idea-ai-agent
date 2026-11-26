@@ -231,6 +231,7 @@ export function createSessionStreamHandlers({
     const suppressedAutoBindKey =
       suppressedAutoBindSessionByRootRef.current[activeRoot] || "";
     if (
+      !streamKey.startsWith("collab-") &&
       streamKey !== suppressedAutoBindKey &&
       (!boundKey ||
         (typeof boundKey === "string" && boundKey.startsWith("pending-")))

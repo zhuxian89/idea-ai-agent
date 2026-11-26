@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // 仅保留基础组件校验，移除布局组件。
-// AI 定制视图通常只需要 Container, AssociationView, Button, Markdown 等功能性组件。
+// AI 定制视图通常只需要 Container, Button, Markdown 等功能性组件。
 
 export const ComponentSchema = z.object({
   type: z.string(),

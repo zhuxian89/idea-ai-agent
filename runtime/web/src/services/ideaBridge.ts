@@ -112,15 +112,6 @@ export function compareTurnDiffInIdea(input: {
   postToHost({ action: "compareTurnDiff", ...input });
 }
 
-export function compareGitFileInIdea(input: {
-  rootId: string;
-  path: string;
-  repoPath?: string;
-  repoKind?: string;
-}): void {
-  postToHost({ action: "compareGitFile", ...input });
-}
-
 /** The shared remote entry starts lazily; ask the IDE to start it when the remote panel opens. */
 export function requestIdeaRemoteHost(): void {
   postToHost({ action: "remoteAccess", updateUI: true });

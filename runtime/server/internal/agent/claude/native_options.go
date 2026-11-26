@@ -24,18 +24,34 @@ func claudeEnvironment(uid int, env map[string]string) map[string]string {
 	return withSandbox
 }
 
+func readOnlyDisallowedTools() []string {
+	return []string{
+		"Write",
+		"Edit",
+		"MultiEdit",
+		"NotebookEdit",
+		"Bash",
+		"EnterPlanMode",
+		"ExitPlanMode",
+	}
+}
+
 func (s *session) nativeOptions(opts OpenOptions) []claudeagent.Option {
 	permissionMode := claudeagent.PermissionMode(strings.TrimSpace(opts.Mode))
-	if opts.PlanMode {
+	allowBypass := true
+	if opts.ReadOnly {
+		permissionMode = claudeagent.PermissionModeDefault
+		allowBypass = false
+	} else if opts.PlanMode {
 		permissionMode = claudeagent.PermissionModePlan
 	}
-	return []claudeagent.Option{
+	options := []claudeagent.Option{
 		// Empty values omit SDK flags, so the local CLI chooses its own defaults.
 		claudeagent.WithModel(""),
 		claudeagent.WithPermissionMode(permissionMode),
 		// Enable switching to the native bypass mode when explicitly selected.
 		// This flag alone does not activate bypassPermissions.
-		claudeagent.WithAllowDangerouslySkipPermissions(true),
+		claudeagent.WithAllowDangerouslySkipPermissions(allowBypass),
 		// This SDK's transport consumes SkillsConfig, not Options.SettingSources.
 		claudeagent.WithSkills(claudeagent.SkillsConfig{EnableSkills: true, SettingSources: []string{"user", "project", "local"}}),
 		claudeagent.WithCwd(opts.RootPath),
@@ -49,4 +65,8 @@ func (s *session) nativeOptions(opts OpenOptions) []claudeagent.Option {
 		claudeagent.WithOnUserDialog(s.handleUserDialog),
 		claudeagent.WithSupportedDialogKinds("refusal_fallback_prompt"),
 	}
+	if opts.ReadOnly {
+		options = append(options, claudeagent.WithDisallowedTools(readOnlyDisallowedTools()))
+	}
+	return options
 }

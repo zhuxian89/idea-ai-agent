@@ -10,6 +10,9 @@ import (
 // The native server decides when approval is necessary and which decisions
 // are available. Keep its command, paths and reason visible to the user.
 func (s *session) handleApprovalRequest(req codexsdk.ApprovalRequest) (codexsdk.ApprovalDecision, error) {
+	if s.isReadOnly() {
+		return codexsdk.ApprovalDecisionRejected, nil
+	}
 	var params struct {
 		AvailableDecisions []json.RawMessage `json:"availableDecisions"`
 	}

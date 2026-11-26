@@ -20,7 +20,6 @@ export type SessionItem = {
   pinned_at?: string | null;
   closed_at?: string;
   pending?: boolean;
-  related_files?: Array<{ path: string }>;
   search_seq?: number;
   search_snippet?: string;
   search_match_type?: "name" | "user" | "reply";

@@ -36,7 +36,7 @@ export type RootSessionIndicator = {
   pending?: boolean;
 };
 
-export type ProjectTreeTab = "files" | "git" | "worktrees" | "related";
+export type ProjectTreeTab = "files" | "git" | "worktrees";
 
 export type AgentConfigSwitchRequest = {
   nonce: number;
@@ -50,7 +50,7 @@ export const PROJECT_TREE_ROOT_PADDING_LEFT = 0;
 export const PROJECT_TREE_INDENT = 16;
 
 export function isProjectTreeTab(value: unknown): value is ProjectTreeTab {
-  return value === "files" || value === "git" || value === "worktrees" || value === "related";
+  return value === "files" || value === "git" || value === "worktrees";
 }
 
 export type FileTreeProps = {
@@ -77,8 +77,6 @@ export type FileTreeProps = {
   onToggleDir?: (entry: FileEntry, rootId: string) => void;
   renderRootExtraContent?: (rootId: string) => React.ReactNode;
   renderRootWorktreeContent?: (rootId: string) => React.ReactNode;
-  renderRootRelatedContent?: (rootId: string) => React.ReactNode;
-  projectTreeTabRequest?: { tab: ProjectTreeTab; nonce: number } | null;
   agentConfigSwitchRequest?: AgentConfigSwitchRequest | null;
   agentMenuRequest?: number | null;
   onAgentMenuOpened?: () => void;

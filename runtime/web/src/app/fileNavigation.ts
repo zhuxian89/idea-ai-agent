@@ -13,32 +13,6 @@ export type AttachedFileContext = {
   text?: string;
 };
 
-export type GitFileStat = {
-  status: string;
-  additions: number;
-  deletions: number;
-};
-
-export type RelatedFileClickTarget = {
-  path: string;
-  head?: string;
-  repo_path?: string;
-  repo_name?: string;
-  repo_kind?: string;
-};
-
-export function relatedFileSelectionKey(
-  file: RelatedFileClickTarget | null | undefined,
-): string {
-  if (!file?.path) return "";
-  return [
-    file.repo_kind || "",
-    file.repo_path || "",
-    file.head || "",
-    file.path,
-  ].join("\0");
-}
-
 export const FILE_TOKEN_PATTERN = /\[(?:read file|file):\s*[^\]]+\]/i;
 
 export function buildFileScrollKey(
@@ -67,41 +41,6 @@ export function normalizePathForRoot(value: string, rootPath?: string): string {
     return normalized.slice(normalizedRoot.length + 1);
   }
   return normalized;
-}
-
-export function relativeDisplayPathFromRoot(
-  rootPath: string | undefined,
-  absolutePath: string,
-): string {
-  const root = normalizePath(rootPath || "");
-  const target = normalizePath(absolutePath);
-  if (!target) return "";
-  if (!root) return target;
-  if (target === root) return ".";
-  if (target.startsWith(`${root}/`)) {
-    return target.slice(root.length + 1);
-  }
-  const rootParts = root.split("/").filter(Boolean);
-  const targetParts = target.split("/").filter(Boolean);
-  let shared = 0;
-  while (
-    shared < rootParts.length &&
-    shared < targetParts.length &&
-    rootParts[shared] === targetParts[shared]
-  ) {
-    shared += 1;
-  }
-  const upward = Array(Math.max(0, rootParts.length - shared)).fill("..");
-  const downward = targetParts.slice(shared);
-  return [...upward, ...downward].join("/") || ".";
-}
-
-export function joinDisplayPath(base: string, path: string): string {
-  const normalizedBase = normalizePath(base);
-  const normalizedPath = normalizePath(path);
-  if (!normalizedBase) return normalizedPath;
-  if (!normalizedPath) return normalizedBase;
-  return `${normalizedBase}/${normalizedPath}`;
 }
 
 export function parseFileLocation(path: string): {

@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import { basenameOfPath } from "./app/fileNavigation";
 import { ActionBar } from "./components/ActionBar";
 import { BottomSheet } from "./components/BottomSheet";
@@ -59,7 +60,10 @@ import { SlashCommandResultBanner } from "./components/SlashCommandResultBanner"
 import { useProjectSidebarModel } from "./app/workbench/useProjectSidebarModel";
 import { useRelayChrome } from "./app/workbench/useRelayChrome";
 import { useSessionSidebarModel } from "./app/workbench/useSessionSidebarModel";
+import { useCollabState } from "./app/workbench/useCollabState";
 import { SessionSidebar } from "./components/workbench/SessionSidebar";
+import { CollabShell, type CollabProjectOption } from "./components/collab/CollabShell";
+import "./components/collab/CollabShell.css";
 import type { AppProps } from "./app/workbench/appProps";
 
 export function App(props: AppProps) {
@@ -88,25 +92,25 @@ export function App(props: AppProps) {
   const pluginsApi = usePlugins({ appFoundationApi, currentRootApi, pluginStateApi, fileViewerStateApi, managedRootsApi, sessionListApi, workbenchSessionNavigationApi, actionHandlersApi });
   const fileViewerActionsApi = useFileViewerActions({ appFoundationApi, currentRootApi, fileViewerStateApi, gitApi, actionHandlersApi });
   const managedRootActionsApi = useManagedRootActions({ appFoundationApi, currentRootApi, sessionSelectionApi, projectTreeApi, fileViewerStateApi, managedRootsApi, sessionListApi, rootResetApi, actionHandlersApi });
-  const gitFileStatsApi = useGitFileStats({ currentRootApi, sessionListApi, gitApi, externalSessionImportApi });
+  useGitFileStats({ currentRootApi, sessionListApi, gitApi, externalSessionImportApi });
   useWorkspaceEvents({ appFoundationApi, workbenchLayoutApi, currentRootApi, sessionSelectionApi, projectTreeApi, fileViewerStateApi, relayConnectionApi, managedRootsApi, sessionListApi, appServicesApi, sessionCacheStateApi, gitApi, externalSessionImportApi, sessionMessagingApi, agentCatalogApi, actionHandlersApi, pluginsApi, managedRootActionsApi });
   useAppBootstrap({ appFoundationApi, currentRootApi, projectTreeApi, pluginStateApi, relayConnectionApi, managedRootsApi, sessionListApi, workbenchSessionNavigationApi, agentCatalogApi, actionHandlersApi, pluginsApi });
   useUrlNavigation({ appFoundationApi, currentRootApi, projectTreeApi, pluginStateApi, sessionListApi, workbenchSessionNavigationApi, actionHandlersApi });
   const actionBarModelApi = useActionBarModel({ appFoundationApi, currentRootApi, sessionSelectionApi, sessionCacheStateApi });
   const sessionRestoreApi = useSessionRestore({ appFoundationApi, currentRootApi, sessionSelectionApi, sessionListApi, sessionCacheStateApi, actionHandlersApi });
-  const sessionViewModelApi = useSessionViewModel({ appFoundationApi, currentRootApi, sessionSelectionApi, projectTreeApi, managedRootsApi, sessionListApi, sessionCacheStateApi, actionHandlersApi, sessionRestoreApi });
-  const projectSidebarModelApi = useProjectSidebarModel({ appFoundationApi, currentRootApi, sessionSelectionApi, projectTreeApi, pluginStateApi, fileViewerStateApi, managedRootsApi, appServicesApi, sessionCacheStateApi, gitApi, actionHandlersApi, gitFileStatsApi, sessionRestoreApi, sessionViewModelApi });
+  const sessionViewModelApi = useSessionViewModel({ appFoundationApi, currentRootApi, sessionSelectionApi, managedRootsApi, sessionListApi, sessionCacheStateApi, actionHandlersApi, sessionRestoreApi });
+  const projectSidebarModelApi = useProjectSidebarModel({ appFoundationApi, currentRootApi, projectTreeApi, pluginStateApi, managedRootsApi, appServicesApi, gitApi, actionHandlersApi, sessionRestoreApi, sessionViewModelApi });
   const relayChromeApi = useRelayChrome({ appFoundationApi, currentRootApi, relayConnectionApi, managedRootsApi, appServicesApi });
   const sessionSidebarModelApi = useSessionSidebarModel({ appFoundationApi, workbenchLayoutApi, currentRootApi, sessionSelectionApi, managedRootsApi, sessionListApi, sessionCacheStateApi, sessionRestoreApi });
-  const { didInitRef, drawerOpenByRootRef, interactionModeRef, t } = appFoundationApi;
+  const { didInitRef, drawerOpenByRootRef, interactionModeRef, selectedSessionRef, t } = appFoundationApi;
   const { handoffSession, scheduledAgentDialogOpen, scheduledAgentSession, setHandoffSession, setScheduledAgentDialogOpen } = sessionDialogsApi;
   const { gitDiffSideBySide, isLeftOpen, isMobile, isRightOpen, phoneFilter, remoteDevice, remotePhone, setGitDiffSideBySide, setIsLeftOpen, setIsRightOpen, setPhoneFilter, setSidebarsSwapped, sidebarsSwapped } = workbenchLayoutApi;
-  const { currentRootId, currentRootIdRef } = currentRootApi;
-  const { activeBoundSessionKey, currentSession, drawerLoadingSessionByRoot, editDraftRequest, interactionMode, isDrawerOpen, pendingPlanMode, rootSessionKey, selectedSession, setDrawerOpenForRoot, setEditDraftRequest, setInteractionMode, slashCommandResults } = sessionSelectionApi;
-  const { entriesByPath, expanded, projectTreeTabRequest, selectedDirKey, setProjectTreeTab, setShowHiddenFiles, setTreeSortMode, showHiddenFiles, treeSortMode } = projectTreeApi;
+  const { currentRootId, currentRootIdRef, replaceURLState, setCurrentRootId } = currentRootApi;
+  const { activeBoundSessionKey, currentSession, drawerLoadingSessionByRoot, editDraftRequest, interactionMode, isDrawerOpen, pendingPlanMode, rootSessionKey, selectedSession, setDrawerOpenForRoot, setEditDraftRequest, setInteractionMode, setSelectedSession, setSelectedSessionLoading, slashCommandResults } = sessionSelectionApi;
+  const { entriesByPath, expanded, selectedDirKey, setProjectTreeTab, setShowHiddenFiles, setTreeSortMode, showHiddenFiles, treeSortMode } = projectTreeApi;
   const { attachedFileContext, file, status } = fileViewerStateApi;
   const { bootstrapState, relayStatus } = relayConnectionApi;
-  const { managedRootByIdRef, rootEntries } = managedRootsApi;
+  const { managedRootByIdRef, managedRootIds, rootEntries } = managedRootsApi;
   const { multiProjectSessionsEnabled, sessionListMode, sessionSearchResultsMode, setMultiProjectSessionsEnabled } = sessionListApi;
   const { handleStartUpdate } = appServicesApi;
   const { handleSetPlanMode } = sessionCacheStateApi;
@@ -114,15 +118,96 @@ export function App(props: AppProps) {
   const { handleForkAgentMessage, handleSelectSession } = workbenchSessionNavigationApi;
   const { handleCancelCurrentTurn, handleCloseSessionTab, handleNewSession, handleRemoveQueuedMessage, handleSelectSessionTab, handleSendMessage, handleSendQueuedMessageNow, handleUpdateQueuedMessage } = sessionMessagingApi;
   const { agentsVersion, availableAgents, handleRestartAgent, handleRunAgentLifecycleCommand } = agentCatalogApi;
-  const { actionHandlers, actionHandlersRef } = actionHandlersApi;
+  const { actionHandlers, actionHandlersRef, openProject } = actionHandlersApi;
   const { handleClearFileContext, handleRequestFileContext } = fileViewerActionsApi;
   const { refreshManagedRoots } = managedRootActionsApi;
-  const { gitFileStatsByPath } = gitFileStatsApi;
   const { actionBarInputHistory, actionBarQueuedMessages, actionBarSession, canOpenSessionDrawer, detachedBoundSession, selectedKey, selectedRoot } = actionBarModelApi;
-  const { drawerSessionSnapshot, handleAskUserAnswer, handleDrawerSessionFileClick, handleEditUserMessage, handleRemoveSessionRelatedFile, ideaUserMessageSummaries, rootSessionIndicators } = sessionViewModelApi;
-  const { handleProjectTreeRefresh, renderRootGitContent, renderRootRelatedContent, renderRootWorktreeContent } = projectSidebarModelApi;
+  const { drawerSessionSnapshot, handleAskUserAnswer, handleDrawerSessionFileClick, handleEditUserMessage, ideaUserMessageSummaries, rootSessionIndicators } = sessionViewModelApi;
+  const { handleProjectTreeRefresh, renderRootGitContent, renderRootWorktreeContent } = projectSidebarModelApi;
   const { handleRelayAction, publicStandaloneVersion, relayActionDisabled, relayActionLabel, setStandaloneRemoteOpen, showUpdateButton, standalonePage, standaloneRemoteOpen, updateBusy, updateHelp, updateLabel, updateSummary } = relayChromeApi;
   const { activeSessionTabKey, currentOpenSessionTabs, getPhoneFacts, phoneGroups } = sessionSidebarModelApi;
+  const handleClearCollabStageSession = useCallback(() => {
+    selectedSessionRef.current = null;
+    setSelectedSession(null);
+    setSelectedSessionLoading(false);
+  }, [selectedSessionRef, setSelectedSession, setSelectedSessionLoading]);
+  const handleReturnToSwitchedProject = useCallback(
+    (nextRootId: string) => {
+      void openProject(nextRootId);
+    },
+    [openProject],
+  );
+  const { collabOpen, collabWaitingCount, latestRunEvent, setCollabWaitingCount, openCollab, bindStageSession, closeCollab } = useCollabState({
+    currentRootId,
+    selectedSession,
+    handleSelectSession,
+    handleNewSession,
+    onClearStageSession: handleClearCollabStageSession,
+    onReturnToSwitchedProject: handleReturnToSwitchedProject,
+  });
+  const collabProjects = useMemo<CollabProjectOption[]>(() => {
+    const seen = new Set<string>();
+    const list: CollabProjectOption[] = [];
+    for (const id of managedRootIds) {
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const info = managedRootByIdRef.current[id];
+      const entry = rootEntries.find((item) => item.path === id);
+      const name =
+        info?.display_name ||
+        entry?.name ||
+        basenameOfPath(info?.root_path || id) ||
+        id;
+      list.push({
+        id,
+        name,
+        path: info?.root_path || "",
+      });
+    }
+    if (currentRootId && !seen.has(currentRootId)) {
+      const info = managedRootByIdRef.current[currentRootId];
+      list.unshift({
+        id: currentRootId,
+        name:
+          info?.display_name ||
+          basenameOfPath(info?.root_path || currentRootId) ||
+          currentRootId,
+        path: info?.root_path || "",
+      });
+    }
+    return list;
+  }, [managedRootIds, managedRootByIdRef, rootEntries, currentRootId]);
+  const handleSelectCollabProject = useCallback(
+    (nextRootId: string) => {
+      if (!nextRootId || nextRootId === currentRootIdRef.current) return;
+      currentRootIdRef.current = nextRootId;
+      setCurrentRootId(nextRootId);
+      selectedSessionRef.current = null;
+      setSelectedSession(null);
+      setSelectedSessionLoading(false);
+      replaceURLState({
+        root: nextRootId,
+        file: "",
+        session: "",
+        cursor: 0,
+        pluginQuery: {},
+      });
+    },
+    [
+      currentRootIdRef,
+      replaceURLState,
+      selectedSessionRef,
+      setCurrentRootId,
+      setSelectedSession,
+      setSelectedSessionLoading,
+    ],
+  );
+  const currentRootInfo = currentRootId
+    ? managedRootByIdRef.current[currentRootId]
+    : undefined;
+  const currentProjectName =
+    currentRootInfo?.display_name ||
+    basenameOfPath(currentRootInfo?.root_path || currentRootId || "");
 
   const currentRootSlashCommandResult = slashCommandResultForSession(
     slashCommandResults,
@@ -133,16 +218,74 @@ export function App(props: AppProps) {
 
   return (
     <>
+      {collabOpen ? (
+        <CollabShell
+          rootId={currentRootId}
+          projectName={currentProjectName}
+          projects={collabProjects}
+          onSelectProject={handleSelectCollabProject}
+          agents={availableAgents}
+          isMobile={isMobile}
+          remotePhone={remotePhone}
+          latestRunEvent={latestRunEvent}
+          onWaitingCountChange={setCollabWaitingCount}
+          onBindStageSession={bindStageSession}
+          onExit={closeCollab}
+          conversationView={
+            <SelectedSessionView
+              workbenchLayoutApi={workbenchLayoutApi}
+              currentRootApi={currentRootApi}
+              sessionSelectionApi={sessionSelectionApi}
+              fileViewerStateApi={fileViewerStateApi}
+              managedRootsApi={managedRootsApi}
+              workbenchSessionNavigationApi={workbenchSessionNavigationApi}
+              agentCatalogApi={agentCatalogApi}
+              actionHandlersApi={actionHandlersApi}
+              sessionRestoreApi={sessionRestoreApi}
+              sessionViewModelApi={sessionViewModelApi}
+            />
+          }
+          composerView={
+            <ActionBar
+              compactWorkbench={isIdeaRuntime}
+              remoteDevice={remoteDevice}
+              status={status}
+              agentsVersion={agentsVersion}
+              currentRootId={currentRootId}
+              currentSession={actionBarSession}
+              pendingPlanMode={pendingPlanMode}
+              attachedFileContext={attachedFileContext}
+              canOpenSessionDrawer={false}
+              sessionDrawerOpen={false}
+              detachedBoundSession={false}
+              editDraftRequest={editDraftRequest}
+              queuedMessages={actionBarQueuedMessages}
+              inputHistory={actionBarInputHistory}
+              onSendMessage={handleSendMessage}
+              onSetPlanMode={handleSetPlanMode}
+              onCancelCurrentTurn={handleCancelCurrentTurn}
+              onRemoveQueuedMessage={handleRemoveQueuedMessage}
+              onUpdateQueuedMessage={handleUpdateQueuedMessage}
+              onSendQueuedMessageNow={handleSendQueuedMessageNow}
+              onNewSession={handleNewSession}
+              onRequestFileContext={handleRequestFileContext}
+              onClearFileContext={handleClearFileContext}
+              onToggleLeftSidebar={() => {}}
+              onToggleRightSidebar={() => {}}
+              sidebarsSwapped={sidebarsSwapped}
+              onSessionClick={() => {}}
+            />
+          }
+        />
+      ) : (
       <AppShell
         ideaWorkbench={
           isIdeaRuntime
             ? {
-                projectName: basenameOfPath(
-                  managedRootByIdRef.current[currentRootId || ""]?.root_path ||
-                    currentRootId ||
-                    "",
-                ),
+                projectName: currentProjectName,
                 onNewSession: handleNewSession,
+                onOpenCollab: openCollab,
+                collabWaitingCount,
                 composerAction: ideaUserMessageSummaries.length ? (
                   <UserMessageSummaryButton
                     key={activeSessionTabKey}
@@ -173,10 +316,14 @@ export function App(props: AppProps) {
           importOpen: sessionListMode === "import" || sessionSearchResultsMode,
           connection: status,
           multiProjectSessionsEnabled,
+          onOpenCollab: openCollab,
+          collabWaitingCount,
         } : undefined}
         remoteTopBar={{
           multiProjectSessionsEnabled,
           onMultiProjectSessionsChange: setMultiProjectSessionsEnabled,
+          onOpenCollab: openCollab,
+          collabWaitingCount,
         }}
         sidebar={
           <FileTree
@@ -222,8 +369,6 @@ export function App(props: AppProps) {
             }
             renderRootExtraContent={renderRootGitContent}
             renderRootWorktreeContent={renderRootWorktreeContent}
-            renderRootRelatedContent={renderRootRelatedContent}
-            projectTreeTabRequest={projectTreeTabRequest}
             onProjectTreeTabChange={setProjectTreeTab}
             relayActionLabel={relayActionLabel}
             relayActionDisabled={relayActionDisabled}
@@ -274,6 +419,8 @@ export function App(props: AppProps) {
           agentCatalogApi={agentCatalogApi}
           actionHandlersApi={actionHandlersApi}
           sessionSidebarModelApi={sessionSidebarModelApi}
+          onOpenCollab={openCollab}
+          collabWaitingCount={collabWaitingCount}
           />
         }
         main={
@@ -332,7 +479,6 @@ export function App(props: AppProps) {
                   workbenchSessionNavigationApi={workbenchSessionNavigationApi}
                   agentCatalogApi={agentCatalogApi}
                   actionHandlersApi={actionHandlersApi}
-                  gitFileStatsApi={gitFileStatsApi}
                   sessionRestoreApi={sessionRestoreApi}
                   sessionViewModelApi={sessionViewModelApi}
                 />
@@ -485,7 +631,6 @@ export function App(props: AppProps) {
                   null
                 }
                 interactionMode="drawer"
-                gitFileStatsByPath={gitFileStatsByPath}
                 onFileClick={handleDrawerSessionFileClick}
                 onRootClick={(root) => {
                   void actionHandlers.open_dir({
@@ -496,17 +641,6 @@ export function App(props: AppProps) {
                     suppressTreeExpand: true,
                   });
                 }}
-                onRemoveRelatedFile={(path, head, repoPath, repoKind) =>
-                  void handleRemoveSessionRelatedFile(
-                    currentRootId,
-                    drawerSessionSnapshot?.key ||
-                      drawerSessionSnapshot?.session_key,
-                    path,
-                    head,
-                    repoPath,
-                    repoKind,
-                  )
-                }
                 onAskUserAnswer={handleAskUserAnswer}
                 onEditUserMessage={handleEditUserMessage}
                 onForkAgentMessage={(seq) =>
@@ -526,6 +660,7 @@ export function App(props: AppProps) {
           </BottomSheet>
         }
       />
+      )}
 
       {bootstrapState.phase === "error" ? (
         <ConnectionErrorDialog

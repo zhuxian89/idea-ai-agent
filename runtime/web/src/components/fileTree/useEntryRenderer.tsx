@@ -9,32 +9,28 @@ import type { FileTreeProps } from "../fileTreeModel";
 type Deps = {
   fileTreeMenusApi: ReturnType<typeof useFileTreeMenus>;
   projectTreeTabApi: ReturnType<typeof useProjectTreeTab>;
-  props: Pick<FileTreeProps, "activeSessionKey" | "childrenByPath" | "expanded" | "onSelectFile" | "onSelectRoot" | "onToggleDir" | "renderRootExtraContent" | "renderRootRelatedContent" | "renderRootWorktreeContent" | "rootId" | "selectedDirKey" | "selectedPath" | "sortMode"> & Required<Pick<FileTreeProps, "fileMetas" | "rootSessionIndicators" | "showHiddenFiles">>;
+  props: Pick<FileTreeProps, "activeSessionKey" | "childrenByPath" | "expanded" | "onSelectFile" | "onSelectRoot" | "onToggleDir" | "renderRootExtraContent" | "renderRootWorktreeContent" | "rootId" | "selectedDirKey" | "selectedPath" | "sortMode"> & Required<Pick<FileTreeProps, "fileMetas" | "rootSessionIndicators" | "showHiddenFiles">>;
 };
 
 export function useEntryRenderer({ fileTreeMenusApi, projectTreeTabApi, props }: Deps) {
   const { t } = fileTreeMenusApi;
   const { projectTreeTab } = projectTreeTabApi;
-  const { activeSessionKey, childrenByPath, expanded, fileMetas, onSelectFile, onSelectRoot, onToggleDir, renderRootExtraContent, renderRootRelatedContent, renderRootWorktreeContent, rootId, rootSessionIndicators, selectedDirKey, selectedPath, showHiddenFiles, sortMode } = props;
+  const { activeSessionKey, childrenByPath, expanded, fileMetas, onSelectFile, onSelectRoot, onToggleDir, renderRootExtraContent, renderRootWorktreeContent, rootId, rootSessionIndicators, selectedDirKey, selectedPath, showHiddenFiles, sortMode } = props;
 
   const expandedSet = new Set(expanded);
   const childKeyFor = (entry: FileEntry, entryRoot: string) => {
     if (entry.is_root) return `${entry.path}:.`;
     return `${entryRoot}:${entry.path}`;
   };
-  const visibleEntries = React.useCallback((items: FileEntry[], depth = 0) => {
-    const hiddenFiltered = showHiddenFiles
+  const visibleEntries = React.useCallback((items: FileEntry[]) => {
+    return showHiddenFiles
       ? items
       : items.filter((entry) => !entry.name.startsWith("."));
-    if (projectTreeTab !== "related" || depth !== 0) {
-      return hiddenFiltered;
-    }
-    return hiddenFiltered.filter((entry) => !!rootId && entry.path === rootId);
-  }, [projectTreeTab, rootId, showHiddenFiles]);
+  }, [showHiddenFiles]);
   const renderEntries = (items: FileEntry[], depth: number, branchRoot: string) => (
     <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
 
-      {sortDirectoryEntries(visibleEntries(items, depth), sortMode).map((entry) => {
+      {sortDirectoryEntries(visibleEntries(items), sortMode).map((entry) => {
         const isManagedRootNode = entry.is_root === true;
         const entryRoot = isManagedRootNode ? entry.path : branchRoot;
         const expandedKey = isManagedRootNode ? entry.path : `${entryRoot}:${entry.path}`;
@@ -82,8 +78,6 @@ export function useEntryRenderer({ fileTreeMenusApi, projectTreeTabApi, props }:
             ? renderRootExtraContent?.(entry.path)
             : projectTreeTab === "worktrees"
               ? renderRootWorktreeContent?.(entry.path)
-            : projectTreeTab === "related"
-              ? renderRootRelatedContent?.(entry.path)
               : null
           : null;
         const shouldRenderChildren = projectTreeTab === "files" || !isManagedRootNode;

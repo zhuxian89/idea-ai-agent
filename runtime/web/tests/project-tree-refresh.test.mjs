@@ -58,10 +58,15 @@ assert.match(
   /fetchGitHistory\(rootID,\s*\{\s*afterCommit: newest,?\s*\}\)[\s\S]*?options\?\.waitForIncremental[\s\S]*?return refreshAfterNewest\(\)/,
   "manual history refresh should await the existing after_commit probe",
 );
-assert.match(
-  app,
-  /case "related":[\s\S]*?refreshProjectTreeRelatedFiles\(\)[\s\S]*?refreshGitStatus\(root\)/,
-  "related refresh should reload relationships and current file statistics",
+assert.doesNotMatch(
+  fileTreeModel,
+  /"related"/,
+  "project tree tabs should not include the removed related-files tab",
+);
+assert.doesNotMatch(
+  fileTree,
+  /"related"/,
+  "FileTree should not expose the removed related-files tab or menu item",
 );
 
 assert.match(

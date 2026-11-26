@@ -156,6 +156,7 @@ type ListOptions struct {
 	AfterTime        time.Time
 	ParentSessionKey string
 	TopLevelOnly     bool
+	IncludeCollab    bool
 	Limit            int
 }
 
@@ -412,7 +413,7 @@ func (m *Manager) deleteSessionUnsafe(key string) error {
 		return err
 	}
 	if rowsAffected == 0 {
-		return errSessionNotFound
+		return ErrSessionNotFound
 	}
 	if _, err := db.Exec(deleteBindingsBySessionSQL, key); err != nil {
 		return err
@@ -450,6 +451,12 @@ func (m *Manager) Shutdown() error {
 	return db.Close()
 }
 
+func (m *Manager) MetaDB() (*sql.DB, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ensureSessionMetaDBUnsafe()
+}
+
 func (m *Manager) MetaDir() string {
 	return m.root.MetaDir()
 }
@@ -478,7 +485,7 @@ func (m *Manager) ExchangeLogAbsolutePath(key string) string {
 	return filepath.Join(metaDir, filepath.FromSlash(path))
 }
 
-var errSessionNotFound = errors.New("session not found")
+var ErrSessionNotFound = errors.New("session not found")
 
 func generateKey() string {
 	now := time.Now().UTC().Unix()

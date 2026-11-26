@@ -73,7 +73,6 @@ export function FileTreeSettingsMenu({ agentConfigFlowApi, agentLifecycleApi, ag
                 {([
                   ["git", t("git.changes")],
                   ["worktrees", t("fileTree.worktrees")],
-                  ["related", t("fileTree.relatedFiles")],
                 ] as const).map(([value, label]) => (
                   <button key={value} type="button" style={fileTreeMenuButtonStyle} onClick={() => { setProjectTreeTab(value); setIsMenuOpen(false); }}>
                     <span>{label}</span>

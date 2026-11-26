@@ -84,7 +84,7 @@ func (m *Manager) GetAgentBinding(_ context.Context, sessionKey, agent string) (
 	var binding AgentBinding
 	if err := scanAgentBinding(row, &binding); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errSessionNotFound
+			return nil, ErrSessionNotFound
 		}
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (m *Manager) GetAgentBinding(_ context.Context, sessionKey, agent string) (
 
 func (m *Manager) FindAgentBinding(ctx context.Context, sessionKey, agent string) (*AgentBinding, error) {
 	binding, err := m.GetAgentBinding(ctx, sessionKey, agent)
-	if errors.Is(err, errSessionNotFound) {
+	if errors.Is(err, ErrSessionNotFound) {
 		return nil, nil
 	}
 	return binding, err

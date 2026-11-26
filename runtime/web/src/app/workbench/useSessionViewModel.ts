@@ -1,12 +1,10 @@
 import { useCallback, useMemo } from "react";
-import { RelatedFileClickTarget } from "../fileNavigation";
 import { isIdeaRuntime, openIdeaFile } from "../../services/ideaBridge";
 import { buildBaseTimeline } from "../../hooks/useSessionStream";
-import { type Session, sessionService, setCachedSessionRelatedFiles } from "../../services/session";
+import { type Session, sessionService } from "../../services/session";
 import type { useAppFoundation } from "./useAppFoundation";
 import type { useCurrentRoot } from "./useCurrentRoot";
 import type { useSessionSelection } from "./useSessionSelection";
-import type { useProjectTree } from "./useProjectTree";
 import type { useManagedRoots } from "./useManagedRoots";
 import type { useSessionList } from "./useSessionList";
 import type { useSessionCacheState } from "./useSessionCacheState";
@@ -17,7 +15,6 @@ type Deps = {
   appFoundationApi: ReturnType<typeof useAppFoundation>;
   currentRootApi: ReturnType<typeof useCurrentRoot>;
   sessionSelectionApi: ReturnType<typeof useSessionSelection>;
-  projectTreeApi: ReturnType<typeof useProjectTree>;
   managedRootsApi: ReturnType<typeof useManagedRoots>;
   sessionListApi: ReturnType<typeof useSessionList>;
   sessionCacheStateApi: ReturnType<typeof useSessionCacheState>;
@@ -25,36 +22,31 @@ type Deps = {
   sessionRestoreApi: ReturnType<typeof useSessionRestore>;
 };
 
-export function useSessionViewModel({ appFoundationApi, currentRootApi, sessionSelectionApi, projectTreeApi, managedRootsApi, sessionListApi, sessionCacheStateApi, actionHandlersApi, sessionRestoreApi }: Deps) {
+export function useSessionViewModel({ appFoundationApi, currentRootApi, sessionSelectionApi, managedRootsApi, sessionListApi, sessionCacheStateApi, actionHandlersApi, sessionRestoreApi }: Deps) {
   const { boundSessionByRootRef, drawerSessionByRootRef, selectedSessionRef, t } = appFoundationApi;
   const { currentRootId, currentRootIdRef } = currentRootApi;
   const { activeBoundSessionKey, cacheVersion, currentSession, rootSessionKey, selectedSession, setEditDraftRequest } = sessionSelectionApi;
-  const { setExpanded, setProjectTreeTabRequest } = projectTreeApi;
   const { managedRootIds } = managedRootsApi;
   const { multiProjectPendingByKey } = sessionListApi;
-  const { getSessionSnapshot, updateSessionRelatedFilesForKey } = sessionCacheStateApi;
-  const { openRelatedFileDiff } = actionHandlersApi;
+  const { getSessionSnapshot } = sessionCacheStateApi;
+  const { actionHandlers } = actionHandlersApi;
   const { selectedSessionSnapshot } = sessionRestoreApi;
 
   const handleSelectedSessionFileClick = useCallback(
-    (target: string | RelatedFileClickTarget) => {
+    (target: string | { path: string }) => {
       const root =
         (selectedSessionRef.current?.root_id as string | undefined) ||
         currentRootIdRef.current;
       if (!root) return;
-      const file = typeof target === "string" ? { path: target } : target;
+      const path = typeof target === "string" ? target : target?.path;
+      if (!path) return;
       if (isIdeaRuntime) {
-        openIdeaFile(root, file.path);
+        openIdeaFile(root, path);
         return;
       }
-      setProjectTreeTabRequest((prev) => ({
-        tab: "related",
-        nonce: (prev?.nonce || 0) + 1,
-      }));
-      setExpanded((prev) => Array.from(new Set([...prev, root])));
-      void openRelatedFileDiff(root, file);
+      void actionHandlers.open({ path, root });
     },
-    [openRelatedFileDiff],
+    [actionHandlers],
   );
   const drawerSessionSnapshot = useMemo(
     () =>
@@ -132,51 +124,18 @@ export function useSessionViewModel({ appFoundationApi, currentRootApi, sessionS
     rootSessionKey,
   ]);
   const handleDrawerSessionFileClick = useCallback(
-    (target: string | RelatedFileClickTarget) => {
+    (target: string | { path: string }) => {
       const root = currentRootIdRef.current;
       if (!root) return;
-      const file = typeof target === "string" ? { path: target } : target;
+      const path = typeof target === "string" ? target : target?.path;
+      if (!path) return;
       if (isIdeaRuntime) {
-        openIdeaFile(root, file.path);
+        openIdeaFile(root, path);
         return;
       }
-      void openRelatedFileDiff(root, file);
+      void actionHandlers.open({ path, root });
     },
-    [openRelatedFileDiff],
-  );
-  const handleRemoveSessionRelatedFile = useCallback(
-    async (
-      rootID: string | null | undefined,
-      sessionKey: string | undefined,
-      path: string,
-      head = "",
-      repoPath = "",
-      repoKind = "",
-    ) => {
-      const resolvedRoot = rootID || currentRootIdRef.current;
-      const resolvedKey = sessionKey || "";
-      if (!resolvedRoot || !resolvedKey || !path) return;
-      const removed = await sessionService.removeSessionRelatedFile(
-        resolvedRoot,
-        resolvedKey,
-        path,
-        head,
-        repoPath,
-        repoKind,
-      );
-      if (!removed) return;
-      const relatedFiles = await sessionService.getSessionRelatedFiles(
-        resolvedRoot,
-        resolvedKey,
-      );
-      await setCachedSessionRelatedFiles(
-        resolvedRoot,
-        resolvedKey,
-        relatedFiles,
-      );
-      updateSessionRelatedFilesForKey(resolvedRoot, resolvedKey, relatedFiles);
-    },
-    [updateSessionRelatedFilesForKey],
+    [actionHandlers],
   );
   const handleAskUserAnswer = useCallback(
     async (input: {
@@ -203,5 +162,5 @@ export function useSessionViewModel({ appFoundationApi, currentRootApi, sessionS
     }));
   }, []);
 
-  return { drawerSessionSnapshot, handleAskUserAnswer, handleDrawerSessionFileClick, handleEditUserMessage, handleRemoveSessionRelatedFile, handleSelectedSessionFileClick, ideaUserMessageSummaries, rootSessionIndicators };
+  return { drawerSessionSnapshot, handleAskUserAnswer, handleDrawerSessionFileClick, handleEditUserMessage, handleSelectedSessionFileClick, ideaUserMessageSummaries, rootSessionIndicators };
 }

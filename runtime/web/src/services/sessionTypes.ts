@@ -13,17 +13,6 @@ export type QueuedUserMessage = {
   timestamp: string;
 };
 
-export type RelatedFile = {
-  root_id?: string;
-  repo_path?: string;
-  repo_name?: string;
-  repo_kind?: "git" | "plain" | string;
-  path: string;
-  head?: string;
-  relation?: string;
-  created_by_session?: boolean;
-};
-
 export type RelatedWorktree = {
   root_id: string;
   path: string;
@@ -80,7 +69,6 @@ export type Session = {
     totalTokens: number;
     modelContextWindow: number;
   };
-  related_files?: RelatedFile[];
   related_worktree?: RelatedWorktree | null;
   pinned_at?: string | null;
   exchange_aux?: Record<string, ExchangeAux[]>;

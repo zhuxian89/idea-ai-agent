@@ -41,6 +41,8 @@ func TestStartupDiscoversModelsWithoutManualRestart(t *testing.T) {
 			name = "config-added"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Setenv("CODEX_HOME", t.TempDir())
+			t.Setenv("OPENAI_BASE_URL", "")
 			executable, err := os.Executable()
 			if err != nil {
 				t.Fatal(err)

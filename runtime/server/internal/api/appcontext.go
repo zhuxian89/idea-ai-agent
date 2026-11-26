@@ -8,6 +8,7 @@ import (
 	agenttypes "mindfs/server/internal/agent/types"
 	"mindfs/server/internal/api/usecase"
 	"mindfs/server/internal/barknotify"
+	"mindfs/server/internal/collab"
 	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/fs"
 	"mindfs/server/internal/githubimport"
@@ -30,6 +31,7 @@ import (
 type RootContext struct {
 	Root    fs.RootInfo
 	Session *session.Manager
+	Collab  *collab.Store
 	Watcher *fs.SharedFileWatcher
 }
 
@@ -52,6 +54,7 @@ type AppContext struct {
 	Prefs         *preferences.Store
 	Scheduled     *scheduled.Service
 	Kanban        *kanban.Service
+	Collab        *collab.Service
 
 	mu                       sync.RWMutex
 	sessionWorktreeMu        sync.Mutex

@@ -33,7 +33,6 @@ type Options = {
   currentRootIdRef: React.RefObject<string | null>;
   managedRootByIdRef: React.RefObject<Record<string, ManagedRootPayload>>;
   fileOpenRequestRef: React.RefObject<number>;
-  setRelatedSelectedFileKey: React.Dispatch<React.SetStateAction<string>>;
   setMainViewPreferenceForRoot: (
     rootID: string | null | undefined,
     preference: "session" | "file" | "directory" | "git-diff",
@@ -58,7 +57,6 @@ export function useWorkspaceGit({
   currentRootIdRef,
   managedRootByIdRef,
   fileOpenRequestRef,
-  setRelatedSelectedFileKey,
   setMainViewPreferenceForRoot,
   setSelectedSession,
   setSelectedSessionLoading,
@@ -316,15 +314,12 @@ export function useWorkspaceGit({
     async (
       rootID: string,
       item: GitStatusItem,
-      options?: { preserveRelatedSelection?: boolean; repoPath?: string },
+      options?: { repoPath?: string },
     ) => {
       if (!rootID || !item?.path) {
         return;
       }
       fileOpenRequestRef.current += 1;
-      if (!options?.preserveRelatedSelection) {
-        setRelatedSelectedFileKey("");
-      }
       setMainViewPreferenceForRoot(rootID, "git-diff");
       setSelectedSession(null);
       setSelectedSessionLoading(false);
@@ -362,7 +357,6 @@ export function useWorkspaceGit({
         return;
       }
       fileOpenRequestRef.current += 1;
-      setRelatedSelectedFileKey("");
       setMainViewPreferenceForRoot(rootID, "git-diff");
       setSelectedSession(null);
       setSelectedSessionLoading(false);

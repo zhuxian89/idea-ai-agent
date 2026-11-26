@@ -8,7 +8,6 @@ import type { useManagedRoots } from "../../app/workbench/useManagedRoots";
 import type { useWorkbenchSessionNavigation } from "../../app/workbench/useWorkbenchSessionNavigation";
 import type { useAgentCatalog } from "../../app/workbench/useAgentCatalog";
 import type { useActionHandlers } from "../../app/workbench/useActionHandlers";
-import type { useGitFileStats } from "../../app/workbench/useGitFileStats";
 import type { useSessionRestore } from "../../app/workbench/useSessionRestore";
 import type { useSessionViewModel } from "../../app/workbench/useSessionViewModel";
 
@@ -21,12 +20,11 @@ type Deps = {
   workbenchSessionNavigationApi: ReturnType<typeof useWorkbenchSessionNavigation>;
   agentCatalogApi: ReturnType<typeof useAgentCatalog>;
   actionHandlersApi: ReturnType<typeof useActionHandlers>;
-  gitFileStatsApi: ReturnType<typeof useGitFileStats>;
   sessionRestoreApi: ReturnType<typeof useSessionRestore>;
   sessionViewModelApi: ReturnType<typeof useSessionViewModel>;
 };
 
-export function SelectedSessionView({ workbenchLayoutApi, currentRootApi, sessionSelectionApi, fileViewerStateApi, managedRootsApi, workbenchSessionNavigationApi, agentCatalogApi, actionHandlersApi, gitFileStatsApi, sessionRestoreApi, sessionViewModelApi }: Deps) {
+export function SelectedSessionView({ workbenchLayoutApi, currentRootApi, sessionSelectionApi, fileViewerStateApi, managedRootsApi, workbenchSessionNavigationApi, agentCatalogApi, actionHandlersApi, sessionRestoreApi, sessionViewModelApi }: Deps) {
   const { remotePhone } = workbenchLayoutApi;
   const { currentRootId } = currentRootApi;
   const { rootSessionKey, selectedSession, selectedSessionLoading, slashCommandResults } = sessionSelectionApi;
@@ -35,9 +33,8 @@ export function SelectedSessionView({ workbenchLayoutApi, currentRootApi, sessio
   const { handleForkAgentMessage } = workbenchSessionNavigationApi;
   const { availableAgents } = agentCatalogApi;
   const { actionHandlers } = actionHandlersApi;
-  const { gitFileStatsByPath } = gitFileStatsApi;
   const { selectedSessionSnapshot } = sessionRestoreApi;
-  const { handleAskUserAnswer, handleEditUserMessage, handleRemoveSessionRelatedFile, handleSelectedSessionFileClick } = sessionViewModelApi;
+  const { handleAskUserAnswer, handleEditUserMessage, handleSelectedSessionFileClick } = sessionViewModelApi;
 
   return (
     <SessionViewer
@@ -60,7 +57,6 @@ export function SelectedSessionView({ workbenchLayoutApi, currentRootApi, sessio
           selectedSession?.root_id || currentRootId || ""
         ]?.root_path || null
       }
-      gitFileStatsByPath={gitFileStatsByPath}
       onFileClick={handleSelectedSessionFileClick}
       onRootClick={(root) => {
         void actionHandlers.open_dir({
@@ -71,16 +67,6 @@ export function SelectedSessionView({ workbenchLayoutApi, currentRootApi, sessio
           suppressTreeExpand: true,
         });
       }}
-      onRemoveRelatedFile={(path, head, repoPath, repoKind) =>
-        void handleRemoveSessionRelatedFile(
-          selectedSession?.root_id || currentRootId,
-          selectedSessionSnapshot?.key || selectedSessionSnapshot?.session_key,
-          path,
-          head,
-          repoPath,
-          repoKind,
-        )
-      }
       onAskUserAnswer={handleAskUserAnswer}
       onEditUserMessage={handleEditUserMessage}
       onForkAgentMessage={(seq) =>

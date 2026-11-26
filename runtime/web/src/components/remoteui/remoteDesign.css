@@ -83,9 +83,10 @@ html[data-remote-ui][data-theme="moss"] {
 
 /* ---------- 顶部栏 ---------- */
 .remote-topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(auto, 1fr) auto minmax(auto, 1fr);
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 44px;
   padding: 0 8px;
   box-sizing: border-box;
@@ -94,7 +95,9 @@ html[data-remote-ui][data-theme="moss"] {
   font-size: 12.5px;
   min-width: 0;
 }
-.remote-topbar-grow { flex: 1; min-width: 0; }
+.remote-topbar-left { justify-self: start; display: flex; align-items: center; min-width: 0; }
+.remote-topbar-center { justify-self: center; display: flex; align-items: center; min-width: 0; }
+.remote-topbar-right { justify-self: end; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .remote-topbar-gap { width: 32px; flex: none; }
 .remote-topbar-action {
   display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px;
@@ -262,9 +265,9 @@ html[data-remote-ui][data-theme="moss"] {
 .remote-glow-frame::before { padding: 1px; --glow-lo: 0.12; --glow-hi: 0.9; }
 .remote-glow-frame::after { padding: 2px; filter: blur(5px); --glow-lo: 0.04; --glow-hi: 0.5; }
 
-html[data-glow="on"] .remote-glow-frame:has([data-session-activity][data-activity-kind="work"]) { --glow-gate: 1; }
-html[data-glow="on"] .remote-glow-frame:has([data-session-activity][data-activity-kind="work"])::before,
-html[data-glow="on"] .remote-glow-frame:has([data-session-activity][data-activity-kind="work"])::after,
+html[data-glow="on"] .remote-glow-frame:is([data-glow-active], :has([data-session-activity][data-activity-kind="work"])) { --glow-gate: 1; }
+html[data-glow="on"] .remote-glow-frame:is([data-glow-active], :has([data-session-activity][data-activity-kind="work"]))::before,
+html[data-glow="on"] .remote-glow-frame:is([data-glow-active], :has([data-session-activity][data-activity-kind="work"]))::after,
 .remote-glow-demo::before, .remote-glow-demo::after { visibility: visible; transition-delay: 0s; }
 
 /* 效果：环绕 / 双向 / 扫光（默认是呼吸） */

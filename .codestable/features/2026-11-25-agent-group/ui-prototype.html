@@ -1,0 +1,1864 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MindFS 多模型协作 · 极简原型</title>
+<style>
+  :root {
+    --stage-bg: #e4e6eb;
+    --canvas: #f1f2f5;          /* Crisp Apple grouped canvas contrast */
+    --sidebar-bg: #f9f9fb;
+    --surface: #ffffff;
+    --surface-subtle: #f7f7f9;
+    --surface-hover: rgba(0, 0, 0, 0.04);
+    --border: #dfe1e6;
+    --card-border: #c7cad1;     /* Unmistakable, clean 1px card border */
+    --card-border-hover: #aeb2bc;
+    --text: #1d1d1f;
+    --text-secondary: #515154;
+    --text-tertiary: #86868b;
+    --accent: #0071e3;
+    --accent-hover: #0077ed;
+    --accent-soft: rgba(0, 113, 227, 0.08);
+    --accent-ring: rgba(0, 113, 227, 0.18);
+    --green: #1d8348;
+    --amber: #c26a00;
+    --amber-soft: rgba(194, 106, 0, 0.07);
+    --amber-border: #e09132;
+    --red: #c9342b;
+    --red-soft: rgba(201, 52, 43, 0.07);
+    --code-bg: #f5f5f7;
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.025);
+    --shadow-selected: 0 4px 18px rgba(0, 113, 227, 0.10);
+    --shadow-float: 0 12px 36px rgba(0, 0, 0, 0.12);
+    --radius-card: 14px;
+    --radius-ctrl: 9px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  [data-theme="dark"] {
+    --stage-bg: #050608;
+    --canvas: #0d0f13;
+    --sidebar-bg: #12151b;
+    --surface: #181c24;
+    --surface-subtle: #14171e;
+    --surface-hover: rgba(255, 255, 255, 0.05);
+    --border: #252a35;
+    --card-border: #323948;
+    --card-border-hover: #495368;
+    --text: #f5f5f7;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #6e6e77;
+    --accent: #2997ff;
+    --accent-hover: #47a5ff;
+    --accent-soft: rgba(41, 151, 255, 0.12);
+    --accent-ring: rgba(41, 151, 255, 0.25);
+    --green: #32d74b;
+    --amber: #ff9f0a;
+    --amber-soft: rgba(255, 159, 10, 0.10);
+    --amber-border: #d98200;
+    --red: #ff453a;
+    --red-soft: rgba(255, 69, 58, 0.12);
+    --code-bg: #11141a;
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.28);
+    --shadow-selected: 0 4px 20px rgba(41, 151, 255, 0.18);
+    --shadow-float: 0 16px 42px rgba(0, 0, 0, 0.55);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--stage-bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  .mono, code { font-family: var(--font-mono); font-size: 12px; }
+
+  /* ===== Quiet Prototype Preview Switcher (outside the product UI) ===== */
+  .proto-bar {
+    height: 40px;
+    padding: 0 16px;
+    background: #161618;
+    color: #d2d2d7;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    overflow-x: auto;
+  }
+  .proto-group { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .proto-label { color: #86868b; font-weight: 500; margin-right: 4px; }
+  .p-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: #a1a1a6;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .p-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+  .p-btn.active { background: rgba(255, 255, 255, 0.16); color: #fff; font-weight: 600; }
+  .p-btn.demo { color: #64d2ff; }
+
+  /* ===== Stage & Device Frames ===== */
+  .stage {
+    padding: 12px;
+    height: calc(100vh - 40px);
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+  }
+  .stage[data-viewport="idea"] { justify-content: flex-end; }
+
+  .device {
+    position: relative;
+    width: 100%;
+    max-width: 1460px;
+    height: 100%;
+    background: var(--surface);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-float);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .device[data-viewport="idea"] {
+    width: var(--idea-w, 760px);
+    max-width: 100%;
+    border-radius: 10px;
+    overflow: visible;
+  }
+  .device[data-viewport="phone"] {
+    width: 390px;
+    max-width: 100%;
+    border-radius: 32px;
+    border-width: 2px;
+  }
+  .device > .app-shell { border-radius: inherit; overflow: hidden; }
+
+  /* IDEA Chrome */
+  .idea-chrome {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--sidebar-bg);
+    border-bottom: 1px solid var(--border);
+    border-radius: 10px 10px 0 0;
+  }
+  .device[data-viewport="idea"] .idea-chrome { display: flex; }
+  .idea-title { flex: 1; font-size: 12px; font-weight: 600; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .idea-resize {
+    display: none; position: absolute; left: -5px; top: 0; bottom: 0; width: 10px;
+    cursor: col-resize; z-index: 60; touch-action: none;
+  }
+  .idea-resize:hover::after, .idea-resize.dragging::after {
+    content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: var(--accent);
+  }
+  .device[data-viewport="idea"] .idea-resize { display: block; }
+
+  .phone-notch {
+    display: none;
+    justify-content: space-between;
+    padding: 10px 24px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--canvas);
+  }
+  .device[data-viewport="phone"] .phone-notch { display: flex; }
+
+  /* ===== 3-Pane Shell: [Run List] | [Cards Canvas] | [Conversation Detail] ===== */
+  .app-shell { position: relative; flex: 1; min-height: 0; display: flex; background: var(--canvas); }
+  .sidebar {
+    flex: 0 0 var(--sb-w, 236px);
+    width: var(--sb-w, 236px);
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .sidebar-rail { display: none; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; }
+  .device[data-viewport="desktop"] .app-shell[data-sb="closed"] > .sidebar { flex-basis: 44px; width: 44px; }
+  .device[data-viewport="desktop"] .app-shell[data-sb="closed"] .sidebar-full { display: none; }
+  .device[data-viewport="desktop"] .app-shell[data-sb="closed"] .sidebar-rail { display: flex; }
+  .device:not([data-viewport="desktop"]) .app-shell[data-sb="closed"] > .sidebar { display: none; }
+  .app-shell[data-sb="closed"] #h1 { display: none; }
+
+  .app-shell[data-narrow="1"] > .sidebar {
+    position: absolute; z-index: 40; left: 0; top: 0; bottom: 0;
+    width: min(82%, 280px); box-shadow: var(--shadow-float);
+  }
+  .app-shell[data-narrow="1"][data-sb="closed"] > .sidebar { display: none; }
+  .app-shell[data-narrow="1"] #h1 { display: none; }
+  .drawer-scrim { display: none; position: absolute; inset: 0; z-index: 35; background: rgba(0, 0, 0, 0.28); backdrop-filter: blur(2px); }
+  .app-shell[data-narrow="1"][data-sb="open"] .drawer-scrim { display: block; }
+
+  /* Splitters */
+  .split-handle {
+    flex: 0 0 7px; margin: 0 -3px; position: relative; z-index: 10;
+    cursor: col-resize; touch-action: none; outline: none;
+  }
+  .split-handle::after {
+    content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px;
+    background: transparent; transition: background 0.15s, width 0.15s, left 0.15s;
+  }
+  .split-handle:hover::after, .split-handle.dragging::after {
+    background: var(--accent); width: 3px; left: 2px;
+  }
+
+  /* ===== Left Sidebar: Clean Run List ===== */
+  .sb-top {
+    padding: 12px 12px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .ghost-btn {
+    padding: 5px 9px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ghost-btn:hover { background: var(--surface-hover); color: var(--text); }
+  .icon-btn {
+    width: 28px; height: 28px; border-radius: 7px; border: none;
+    background: transparent; color: var(--text-secondary);
+    display: inline-grid; place-items: center; cursor: pointer; font-size: 14px;
+  }
+  .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+  .sb-new {
+    padding: 0 12px 10px;
+  }
+  .new-run-btn {
+    width: 100%;
+    padding: 7px 12px;
+    border-radius: var(--radius-ctrl);
+    border: 1px solid var(--card-border);
+    background: var(--surface);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  }
+  .new-run-btn:hover { border-color: var(--card-border-hover); background: var(--surface-subtle); }
+
+  .run-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .run-item {
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+  }
+  .run-item:hover { background: var(--surface-hover); }
+  .run-item.active { background: var(--accent-soft); }
+  .run-dot {
+    width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex-shrink: 0;
+    background: transparent;
+  }
+  .run-dot.wait { background: var(--amber); }
+  .run-dot.running { background: var(--accent); animation: pulseDot 1.8s ease-in-out infinite; }
+  .run-item-body { flex: 1; min-width: 0; }
+  .run-item-title {
+    font-size: 13px; font-weight: 500; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .run-item.active .run-item-title { color: var(--accent); font-weight: 600; }
+  .run-item-sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 1px; }
+
+  .sb-foot {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+
+  /* ===== Workspace: Cards (Left) + Detail (Right) ===== */
+  .workspace { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
+  .cards-pane {
+    flex: 0 0 var(--cards-w, 46%);
+    min-width: 0; min-height: 0;
+    display: flex; flex-direction: column;
+    background: var(--canvas);
+    position: relative;
+    container: cards / inline-size;
+  }
+  .detail-pane {
+    flex: 1 1 0;
+    min-width: 0; min-height: 0;
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+  }
+
+  .workspace[data-mode="split"] .cards-pane { min-width: 300px; max-width: calc(100% - 320px); }
+  .workspace[data-mode="split"][data-detail="collapsed"] .cards-pane { max-width: none; flex: 1; }
+  .workspace[data-mode="split"][data-detail="collapsed"] #h2 { display: none; }
+  .workspace[data-mode="split"][data-detail="collapsed"] .detail-pane { flex: 0 0 40px; }
+  .workspace[data-mode="split"][data-detail="collapsed"] .detail-full { display: none; }
+  .workspace[data-mode="split"][data-detail="collapsed"] .detail-rail { display: flex; }
+
+  .workspace[data-single="1"] .detail-pane,
+  .workspace[data-single="1"] #h2 { display: none; }
+  .workspace[data-single="1"] .cards-pane { max-width: none; flex: 1; }
+
+  /* Two-layer mode (Phone & Narrow IDEA) */
+  .workspace[data-mode="stacked"] #h2 { display: none; }
+  .workspace[data-mode="stacked"] .cards-pane,
+  .workspace[data-mode="stacked"] .detail-pane { flex: 1 1 100%; max-width: none; border-left: none; }
+  .workspace[data-mode="stacked"][data-level="cards"] .detail-pane { display: none; }
+  .workspace[data-mode="stacked"][data-level="detail"] .cards-pane { display: none; }
+  .back-btn, .hamburger { display: none; }
+  .workspace[data-mode="stacked"] .back-btn { display: inline-flex; }
+  .workspace[data-mode="stacked"] .collapse-detail { display: none; }
+  .app-shell[data-narrow="1"] .hamburger { display: inline-grid; }
+  .device[data-viewport="idea"] .hamburger { display: none !important; }
+
+  /* ===== Minimalist Header ===== */
+  .pane-head {
+    padding: 14px 20px 12px;
+    background: var(--canvas);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .pane-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .pane-title {
+    font-size: 15px; font-weight: 650; letter-spacing: -0.01em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pane-sub { font-size: 12px; color: var(--text-tertiary); flex-shrink: 0; }
+
+  /* ===== Minimalist Cards Stream ===== */
+  .cards-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  @container cards (max-width: 480px) {
+    .pane-head { padding: 12px 14px 10px; }
+    .cards-scroll { padding: 4px 14px 24px; gap: 10px; }
+  }
+
+  /* THE CARD: Crisp border, pure surface, generous padding, unmistakable states */
+  .t-card {
+    background: var(--surface);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-card);
+    padding: 15px 17px;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .t-card:hover {
+    border-color: var(--card-border-hover);
+  }
+  /* Selected card: crisp Apple blue 2px border */
+  .workspace[data-mode="split"] .t-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), var(--shadow-selected);
+  }
+  /* Running card: calm breathing border */
+  @keyframes breatheCard {
+    0%, 100% { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft), var(--shadow-card); }
+    50%      { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-ring), var(--shadow-selected); }
+  }
+  @keyframes pulseDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.85); }
+  }
+  .t-card.st-running {
+    animation: breatheCard 2.4s ease-in-out infinite;
+  }
+  /* Waiting-for-you card: clear warm amber frame */
+  .t-card.st-wait {
+    border-color: var(--amber-border);
+    box-shadow: 0 0 0 1px rgba(224, 145, 50, 0.25), var(--shadow-card);
+    cursor: default;
+  }
+  /* Pending card: quiet single line */
+  .t-card.st-pending {
+    background: transparent;
+    border: 1px dashed var(--card-border);
+    box-shadow: none;
+    padding: 11px 16px;
+    opacity: 0.62;
+    cursor: default;
+  }
+
+  .tc-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .tc-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  .step-dot {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: inline-grid; place-items: center;
+    font-size: 11px; font-weight: 600; flex-shrink: 0;
+    background: var(--canvas); color: var(--text-secondary);
+    border: 1px solid var(--card-border);
+  }
+  .step-dot.done {
+    background: rgba(29, 131, 72, 0.10);
+    color: var(--green);
+    border-color: transparent;
+  }
+  .step-dot.running {
+    background: var(--accent);
+    color: #fff;
+    border-color: transparent;
+  }
+  .step-dot.wait {
+    background: var(--amber-soft);
+    color: var(--amber);
+    border-color: var(--amber-border);
+  }
+  .tc-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .tc-model {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tc-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+  .tc-chevron {
+    color: var(--text-tertiary);
+    font-size: 15px;
+    line-height: 1;
+  }
+  .t-card.selected .tc-chevron { color: var(--accent); font-weight: 600; }
+
+  .tc-summary {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    padding-left: 29px;
+  }
+  .tc-foot {
+    padding-left: 29px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+  }
+  .quiet-link {
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .quiet-link:hover { color: var(--accent); text-decoration: underline; }
+
+  /* Minimalist Dispute Resolution inside Card 4 */
+  .dispute-list {
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .d-item {
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    padding: 12px 14px;
+    background: var(--surface-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .d-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .d-warn {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--amber);
+  }
+  .d-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .d-lines b {
+    color: var(--text);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  /* Apple Segmented Control */
+  .seg-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    padding: 3px;
+    border-radius: 9px;
+    background: var(--canvas);
+    border: 1px solid var(--border);
+    gap: 2px;
+    align-self: flex-start;
+  }
+  .seg-btn {
+    padding: 5px 11px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+  }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Minimalist Test List */
+  .test-clean {
+    padding-left: 29px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 12.5px;
+  }
+  .test-clean-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--text-secondary);
+  }
+  .test-clean-row > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .test-clean-row > span:last-child {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    padding: 7px 15px;
+    border-radius: var(--radius-ctrl);
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-secondary {
+    padding: 6px 12px;
+    border-radius: var(--radius-ctrl);
+    border: 1px solid var(--card-border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-secondary:hover { background: var(--surface-subtle); border-color: var(--card-border-hover); }
+
+  /* Floating "Back to running step" pill */
+  .follow-chip {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: var(--surface);
+    color: var(--accent);
+    box-shadow: var(--shadow-float);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ===== Right Pane: Reused Single-Chat Stack (SessionViewer + SessionActivity + ActionBar) ===== */
+  .detail-full { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .detail-rail { display: none; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; background: var(--sidebar-bg); height: 100%; }
+  .rail-label { writing-mode: vertical-rl; font-size: 11.5px; color: var(--text-tertiary); letter-spacing: 1px; }
+
+  .detail-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .detail-title { flex: 1; min-width: 0; }
+  .detail-title .t { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .detail-title .m { font-size: 11.5px; color: var(--text-tertiary); font-family: var(--font-mono); }
+
+  .detail-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Clean Conversation Messages & Tool Calls (Reused SessionViewer) */
+  .chat-user {
+    align-self: flex-end;
+    max-width: 86%;
+    padding: 9px 13px;
+    border-radius: 14px 14px 4px 14px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+  }
+  .chat-agent {
+    font-size: 13.5px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .chat-think {
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+    padding-left: 10px;
+    border-left: 2px solid var(--border);
+  }
+  .chat-tool {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-subtle);
+    overflow: hidden;
+  }
+  .chat-tool summary {
+    padding: 7px 11px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    list-style: none;
+  }
+  .chat-tool summary > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chat-tool summary > span:last-child {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .chat-tool summary::-webkit-details-marker { display: none; }
+  .chat-tool pre {
+    margin: 0;
+    padding: 9px 11px;
+    border-top: 1px solid var(--border);
+    background: var(--code-bg);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    color: var(--text-secondary);
+  }
+
+  /* Reused SessionActivity (subtle single/two-line status above composer) */
+  .session-activity-bar {
+    margin: 0 14px 8px;
+    padding: 7px 11px;
+    border-radius: 9px;
+    background: var(--surface-subtle);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* Reused ActionBar */
+  .actionbar {
+    padding: 0 14px 14px;
+  }
+  .ab-box {
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 9px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .ab-box:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .ab-input {
+    width: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    resize: none;
+    min-height: 38px;
+    font-size: 13px;
+  }
+  .ab-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .ab-pills { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pill-btn {
+    padding: 3px 8px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface-subtle);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .pill-btn:hover { border-color: var(--card-border-hover); color: var(--text); }
+
+  /* ===== New Run / Template Clean Setup ===== */
+  .setup-wrap {
+    max-width: 640px;
+    width: 100%;
+    margin: 24px auto;
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .slot-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  @container cards (max-width: 500px) {
+    .slot-row { grid-template-columns: 1fr; }
+  }
+  .slot-card {
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: var(--surface);
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .slot-card:hover { border-color: var(--accent); }
+  .slot-card.invalid { border-color: var(--red); background: var(--red-soft); }
+
+  /* ===== Single-Chat Untouched Preview ===== */
+  .single-chat-shell {
+    display: none; flex: 1; min-height: 0; grid-template-columns: 236px minmax(0, 1fr); background: var(--surface);
+  }
+  .device:not([data-viewport="desktop"]) .single-chat-shell { grid-template-columns: 1fr; }
+  .device:not([data-viewport="desktop"]) .sc-left { display: none; }
+  .app-shell[data-host="single"] > .sidebar,
+  .app-shell[data-host="single"] > #h1,
+  .app-shell[data-host="single"] > .workspace { display: none !important; }
+  .app-shell[data-host="single"] > .single-chat-shell { display: grid; }
+
+  /* ===== Modals (AgentSelector & Doc Preview) ===== */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0, 0, 0, 0.32); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    width: 100%; max-width: 480px;
+    background: var(--surface);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-float);
+    overflow: hidden;
+  }
+  .modal-head {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; font-weight: 600;
+  }
+  .agent-cols { display: grid; grid-template-columns: 150px 1fr; min-height: 300px; max-height: 380px; }
+  .agent-left { border-right: 1px solid var(--border); background: var(--sidebar-bg); padding: 6px; }
+  .agent-right { overflow-y: auto; padding: 8px 0; }
+  .ag-item {
+    width: 100%; padding: 7px 10px; border-radius: 7px; border: none; background: transparent;
+    text-align: left; cursor: pointer; font-family: var(--font-mono); font-size: 12.5px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .ag-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .sec-label { padding: 6px 14px 4px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
+  .md-item {
+    width: 100%; padding: 7px 14px; border: none; background: transparent; text-align: left;
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 12.5px;
+  }
+  .md-item:hover { background: var(--surface-hover); }
+  .md-item.selected { color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; z-index: 300;
+    padding: 9px 15px; border-radius: 10px; background: #1d1d1f; color: #fff;
+    font-size: 12.5px; box-shadow: var(--shadow-float);
+    opacity: 0; transform: translateY(6px); pointer-events: none; transition: 0.18s ease;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .t-card.st-running, .run-dot.running { animation: none; }
+  }
+</style>
+</head>
+<body data-theme="light">
+
+<!-- Slim Prototype Bar (Simulation controls kept strictly OUTSIDE product chrome) -->
+<div class="proto-bar">
+  <div class="proto-group">
+    <span class="proto-label">预览视图</span>
+    <button class="p-btn" data-scene="single-chat">普通单聊（入口）</button>
+    <button class="p-btn active" data-scene="quick-review">快速模式（运行详情）</button>
+    <button class="p-btn" data-scene="quick-start">新建快速任务</button>
+    <button class="p-btn" data-scene="group-chat">群组讨论</button>
+  </div>
+  <div class="proto-group">
+    <button class="p-btn demo" id="demoBtn" onclick="toggleDemo()">▶ 演示步骤自动推进</button>
+    <span class="proto-label" style="margin-left:8px;">设备</span>
+    <button class="p-btn active" data-vp="desktop">桌面</button>
+    <button class="p-btn" data-vp="idea">IDEA（左缘可拖宽）</button>
+    <button class="p-btn" data-vp="phone">手机（两层）</button>
+    <button class="p-btn" id="themeBtn" onclick="toggleTheme()">🌙 深色</button>
+  </div>
+</div>
+
+<div class="stage" id="stage" data-viewport="desktop">
+  <div class="device" id="device" data-viewport="desktop">
+    <div class="idea-resize" id="ideaResize" title="拖动调整 IDEA 工具窗口宽度"></div>
+
+    <!-- IDEA Compact Toolbar (Reused IdeaWorkbench) -->
+    <div class="idea-chrome">
+      <button class="ghost-btn" id="ideaBackBtn" onclick="toggleSingleHost()">← 单聊</button>
+      <span class="idea-title">idea-ai-agent</span>
+      <span class="mono" style="font-size:11px; color:var(--text-tertiary);" id="ideaWidthLabel"></span>
+      <button class="icon-btn" title="新建协作" onclick="switchScene('quick-start')">＋</button>
+      <button class="icon-btn" id="ideaHistoryBtn" title="运行列表" onclick="toggleSidebar()">☰</button>
+    </div>
+
+    <div class="phone-notch"><span>9:41</span><span>5G ▮▮▮</span></div>
+
+    <div class="app-shell" id="appShell" data-sb="open" data-narrow="0" data-host="collab">
+      <!-- Scene 0: Untouched Single-Chat Workspace -->
+      <section class="single-chat-shell" id="singleChatShell"></section>
+
+      <!-- Left Pane: Minimalist Run List -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-full" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+          <div class="sb-top">
+            <button class="ghost-btn" onclick="switchScene('single-chat')">← 返回单聊</button>
+            <button class="icon-btn" title="收起列表" onclick="toggleSidebar(false)">‹</button>
+          </div>
+          <div class="sb-new">
+            <button class="new-run-btn" onclick="switchScene('quick-start')">＋ 新建协作任务</button>
+          </div>
+          <div class="run-list">
+            <button class="run-item active" id="s-quick-review" onclick="switchScene('quick-review')">
+              <span class="run-dot wait" id="quickRunDot"></span>
+              <div class="run-item-body">
+                <div class="run-item-title">修复 Gemini 中转密钥脱敏</div>
+                <div class="run-item-sub" id="quickRunSub">快速 · 2 项待你拍板</div>
+              </div>
+            </button>
+            <button class="run-item" id="s-group-chat" onclick="switchScene('group-chat')">
+              <span class="run-dot wait"></span>
+              <div class="run-item-body">
+                <div class="run-item-title">群组表结构与迁移方案</div>
+                <div class="run-item-sub">群组 · 待确认结论</div>
+              </div>
+            </button>
+          </div>
+          <div class="sb-foot">
+            <span>idea-ai-agent</span>
+            <button class="ghost-btn" style="padding:3px 6px; font-size:11.5px;" onclick="switchScene('quick-start')">模板管理</button>
+          </div>
+        </div>
+        <div class="sidebar-rail">
+          <button class="icon-btn" title="展开列表" onclick="toggleSidebar(true)">›</button>
+          <button class="icon-btn" title="返回单聊" onclick="switchScene('single-chat')">←</button>
+          <button class="icon-btn" title="新建" onclick="switchScene('quick-start')">＋</button>
+        </div>
+      </aside>
+
+      <div class="split-handle" id="h1" tabindex="0" aria-label="调整运行列表宽度"></div>
+      <div class="drawer-scrim" onclick="toggleSidebar(false)"></div>
+
+      <!-- Center (Cards) + Right (Reused Conversation) -->
+      <section class="workspace" id="workspace" data-mode="split" data-level="cards" data-detail="open" data-single="0">
+        <div class="cards-pane" id="cardsPane"></div>
+        <div class="split-handle" id="h2" tabindex="0" aria-label="调整卡片与对话宽度"></div>
+        <aside class="detail-pane" id="detailPane"></aside>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- Reused Two-Column AgentSelector Modal -->
+<div class="modal-backdrop" id="slotModal" onclick="if(event.target===this)closeSlotModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <span id="slotModalTitle">选择模型</span>
+      <button class="ghost-btn" onclick="closeSlotModal()">完成</button>
+    </div>
+    <div class="agent-cols" id="agentMenuBody"></div>
+  </div>
+</div>
+
+<!-- Quiet Document / Diff Preview Modal (Reused FileViewer / GitDiffViewer) -->
+<div class="modal-backdrop" id="docModal" onclick="if(event.target===this)closeDocModal()">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-head">
+      <span class="mono" id="docModalTitle">01-impl.md</span>
+      <button class="ghost-btn" onclick="closeDocModal()">关闭</button>
+    </div>
+    <div style="padding:14px 16px;">
+      <div class="mono" style="font-size:11.5px; color:var(--text-tertiary); margin-bottom:8px;" id="docModalPath"></div>
+      <pre style="margin:0; padding:12px; border-radius:10px; background:var(--code-bg); border:1px solid var(--border); font-family:var(--font-mono); font-size:12px; max-height:360px; overflow:auto; white-space:pre-wrap;" id="docModalBody"></pre>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CATALOG = {
+  codex: {
+    modes: ["full-access", "default", "read-only"],
+    efforts: ["low", "medium", "high", "xhigh"],
+    models: [
+      { id: "gpt-5.4", source: "native" },
+      { id: "gpt-5.4-mini", source: "native" },
+      { id: "gpt-5.3-codex", source: "native" },
+      { id: "GLM-5.4", source: "relay" },
+      { id: "DeepSeek-V4-Pro", source: "relay" }
+    ]
+  },
+  claude: {
+    modes: ["bypassPermissions", "default", "acceptEdits"],
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    models: [
+      { id: "claude-opus-4-6", source: "native" },
+      { id: "claude-sonnet-4-6", source: "native" },
+      { id: "claude-haiku-4-5", source: "native" },
+      { id: "GLM-5.4", source: "relay" },
+      { id: "Kimi-K3.1-Pro", source: "relay" }
+    ]
+  },
+  gemini: {
+    modes: ["default", "yolo"],
+    efforts: ["low", "medium", "high"],
+    models: [
+      { id: "gemini-2.5-pro", source: "native" },
+      { id: "gemini-2.5-flash", source: "native" }
+    ]
+  }
+};
+
+const DOCS = {
+  "01-impl.md": {
+    path: ".mindfs/runs/run-042/01-impl.md",
+    body: `# 实现说明\n\n1. 拆分 relay_models.go 为合并、配置发现、协议拉取三个文件\n2. Gemini 模型拉取改用 x-goog-api-key 请求头，不再拼入 URL query\n3. api 包直接复用 agent 包的拉取实现`
+  },
+  "02-review.md": {
+    path: ".mindfs/runs/run-042/02-review.md（后台代写 · 审核模型只读）",
+    body: `# 审核意见（共 4 条）\n\n1. [功能] relay_fetch.go:135-146（✓ 源码已核对）\n   多层错误包装时也应清理 query/fragment，避免泄露密钥。\n\n2. [规范] relay_endpoints.go:1-564（✓ 源码已核对）\n   引用代码规范 Skill：建议拆分为核心与扩展两个文件。\n\n3. [功能] relay_fetch.go:290（⚠ 查无此行，文件共 163 行）\n   声称未区分 404 与超时。\n\n4. [规范] agent_api_provider_probe.go:12-25（✓ 源码已核对）\n   引用 AGENTS.md：保留各协议探测失败的原始状态码。`
+  },
+  "03-response.md": {
+    path: ".mindfs/runs/run-042/03-response.md",
+    body: `# 主模型逐条回应（4/4 完整）\n\n- #1 认同并已修改：已补充 Fragment 与嵌套错误清理\n- #2 有分歧（交你拍板）：11 个平行函数无状态共享，放在同文件更易维护\n- #3 拿不准（交你拍板）：第 290 行不存在，现有 128 行已返回状态码\n- #4 认同并已修改：已保留原始 HTTP 状态码`
+  },
+  "05-report.md": {
+    path: ".mindfs/runs/run-042/05-report.md",
+    body: `# 最终修改与验证报告\n\n- 已按你的拍板处理 #2、#3\n- go test -race ./server/internal/agent/... ./server/internal/api：通过 (14.2s)\n- go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration：通过 (1.5s)\n- verify-windows-standalone-package.ps1：跳过（本机为 macOS）`
+  },
+  "turndiff": {
+    path: "工作区真实改动（复用 GitDiffViewer）",
+    body: `--- a/runtime/server/internal/agent/relay_fetch.go\n+++ b/runtime/server/internal/agent/relay_fetch.go\n@@ -69,4 +69,5 @@\n-  q.Set("key", apiKey)\n+  if key != "" {\n+    req.Header.Set("x-goog-api-key", key)\n+  }`
+  }
+};
+
+const STREAMS = {
+  "quick-step1": {
+    title: "1. 主模型实现",
+    agent: "codex", model: "gpt-5.4", effort: "high", mode: "full-access",
+    activity: "已完成实现并写入 01-impl.md",
+    events: [
+      { kind: "think", text: "检查 relay_models.go 与 api 探测逻辑的重复代码，将 Gemini 密钥从 URL 参数移到 x-goog-api-key 请求头。" },
+      { kind: "tool", name: "read_file · agent_api_provider_probe.go", out: "113: func probeGeminiCompatibleModels...\n119: q.Set(\"key\", apiKey)" },
+      { kind: "tool", name: "edit_file · relay_fetch.go (+163/-0)", out: "+ req.Header.Set(\"x-goog-api-key\", key)\n+ parsed.RawQuery = \"\"" },
+      { kind: "agent", text: "已完成文件拆分、请求头改造与 api 包复用，变更说明已写入 `.mindfs/runs/run-042/01-impl.md`。" }
+    ]
+  },
+  "quick-step2": {
+    title: "2. 只读审核",
+    agent: "claude", model: "claude-opus-4-6", effort: "high", mode: "default (只读)",
+    activity: "已完成只读审查，共提出 4 条意见",
+    events: [
+      { kind: "think", text: "先读取 AGENTS.md 与代码规范 Skill，再核对 01-impl.md 与真实 Diff。" },
+      { kind: "tool", name: "read_file · AGENTS.md", out: "核对错误日志规范与数据库迁移要求。" },
+      { kind: "tool", name: "read_file · relay_fetch.go (1-163)", out: "核对 x-goog-api-key 头与 sanitizeRelayError 实现。" },
+      { kind: "agent", text: "审查完毕，共 4 条意见：\n• **#1（功能）** `relay_fetch.go:135` ✓ 已核对：补充 Fragment 脱敏。\n• **#2（规范）** `relay_endpoints.go:1-564` ✓ 已核对：建议拆分为两个文件（引用代码规范 Skill）。\n• **#3（功能）** `relay_fetch.go:290` ⚠ 查无此行：建议区分 404 与超时。\n• **#4（规范）** `agent_api_provider_probe.go:12` ✓ 已核对：保留原始状态码（引用 AGENTS.md）。" }
+    ]
+  },
+  "quick-step3": {
+    title: "3. 逐条回应",
+    agent: "codex", model: "gpt-5.4", effort: "high", mode: "full-access",
+    activity: "已修复 2 条，其余 2 条交由你拍板",
+    events: [
+      { kind: "think", text: "读取 02-review.md：#1、#4 直接改掉；#2 拆太碎不利维护，#3 行号不存在，均不能擅自驳回，提交给作者决定。" },
+      { kind: "tool", name: "edit_file · relay_fetch.go (+3/-1)", out: "+ parsed.Fragment = \"\"" },
+      { kind: "agent", text: "已修复 #1 与 #4；#2 与 #3 存在分歧，已在左侧卡片列出双方理由等你拍板。如果你有别的改法，也可以直接在这里告诉我。" }
+    ]
+  },
+  "quick-step5": {
+    title: "5. 最终修改与验证",
+    agent: "codex", model: "gpt-5.4", effort: "high", mode: "full-access",
+    activity: "全部必跑测试通过（1 项非当前平台已跳过）",
+    events: [
+      { kind: "tool", name: "run_command · go test -race ./server/internal/agent/... ./server/internal/api", out: "ok  mindfs/server/internal/agent  14.2s\nok  mindfs/server/internal/api    10.4s" },
+      { kind: "tool", name: "run_command · go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration", out: "ok  mindfs/server/internal/kanban  1.5s" },
+      { kind: "agent", text: "已按你的决定完成处理并跑完回归测试。需要顺手删掉 `.mindfs/runs/run-042/` 下的过程文档吗？直接点卡片上的「清理过程文档」或跟我说一声就行。" }
+    ]
+  },
+  "group-codex": {
+    title: "codex-1 的对话",
+    agent: "codex", model: "gpt-5.4", effort: "high", mode: "read-only",
+    activity: "已提交盲评 v1 与第 2 轮互评",
+    events: [
+      { kind: "tool", name: "read_file · session_list_store.go:42", out: "确认现有 session-list.db 幂等迁移结构。" },
+      { kind: "agent", text: "主张复用 `session-list.db` 存索引、文档落盘项目运行目录；反对 `gemini-1` 新建第二个 SQLite 库（且其引用的 `store_v2.go:88` 不存在）。" }
+    ]
+  },
+  "group-claude": {
+    title: "claude-1 的对话（结论作者）",
+    agent: "claude", model: "claude-opus-4-6", effort: "high", mode: "default (只读)",
+    activity: "已吸收风险更新至 v2，并起草最终结论",
+    events: [
+      { kind: "tool", name: "read_file · session_store.go:118", out: "核对原子写盘流程。" },
+      { kind: "agent", text: "采纳 `codex-1` 提出的崩溃一致性风险，已在 v2 中加入 `.tmp + rename` 原子写盘，并汇总生成最终结论文档。" }
+    ]
+  },
+  "group-gemini": {
+    title: "gemini-1 的对话",
+    agent: "gemini", model: "gemini-2.5-pro", effort: "high", mode: "default",
+    activity: "第 2 轮表态未附核对内容，记为未确认",
+    events: [
+      { kind: "agent", text: "我同意 claude-1 的方案。（系统提示：未附检查内容与剩余风险，不计入有效同意）" }
+    ]
+  }
+};
+
+const state = {
+  scene: "quick-review",
+  viewport: "desktop",
+  theme: "light",
+  sel: "quick-step3",
+  follow: true,
+  run: { step: 4, status: "wait", demo: false, timer: null },
+  level: "cards",
+  cardsScroll: 0,
+  ui: { sbOpen: true, sbW: 236, cardsW: null, ideaW: 760, detailCollapsed: false, stacked: false },
+  newRun: {
+    mode: "quick",
+    templateName: "默认 · Codex 主写 + Claude 审",
+    modified: false,
+    members: [
+      { role: "主模型", agent: "codex", model: "gpt-5.4", effort: "high" },
+      { role: "审核模型（只读）", agent: "claude", model: "claude-opus-4-6", effort: "high" }
+    ],
+    task: "给独立后台的代理模型拉取增加超时控制，超时时保留原生模型列表。"
+  },
+  decisions: { d1: "", d2: "" },
+  docsCleaned: false,
+  groupRound: "round2",
+  picker: { target: null, agent: "codex", model: "gpt-5.4", effort: "high", mode: "full-access" }
+};
+
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const SCENES_WITH_DETAIL = new Set(["quick-review", "group-chat"]);
+const STEP_STREAM = { 1: "quick-step1", 2: "quick-step2", 3: "quick-step3", 4: "quick-step3", 5: "quick-step5" };
+
+function showToast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ===== Layout & Resizable Splitters ===== */
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function applyVars() {
+  $("device").style.setProperty("--idea-w", state.ui.ideaW + "px");
+  $("appShell").style.setProperty("--sb-w", state.ui.sbW + "px");
+  $("workspace").style.setProperty("--cards-w", state.ui.cardsW ? state.ui.cardsW + "px" : "46%");
+}
+function measure() {
+  const shell = $("appShell"), ws = $("workspace");
+  shell.dataset.narrow = shell.clientWidth < 620 ? "1" : "0";
+  const stacked = state.viewport === "phone" || ws.clientWidth < 600;
+  ws.dataset.mode = stacked ? "stacked" : "split";
+  state.ui.stacked = stacked;
+  const lbl = $("ideaWidthLabel");
+  if (lbl) lbl.textContent = Math.round($("device").getBoundingClientRect().width) + "px";
+}
+function applyLayout() {
+  const isSingle = state.scene === "single-chat";
+  $("appShell").dataset.host = isSingle ? "single" : "collab";
+  const ib = $("ideaBackBtn");
+  if (ib) ib.textContent = isSingle ? "⚡ 协作 (2)" : "← 单聊";
+  const hasDetail = SCENES_WITH_DETAIL.has(state.scene);
+  if (!hasDetail) state.level = "cards";
+  $("stage").dataset.viewport = state.viewport;
+  $("device").dataset.viewport = state.viewport;
+  const ws = $("workspace");
+  ws.dataset.single = hasDetail ? "0" : "1";
+  ws.dataset.level = state.level;
+  ws.dataset.detail = state.ui.detailCollapsed ? "collapsed" : "open";
+  $("appShell").dataset.sb = state.ui.sbOpen ? "open" : "closed";
+  applyVars();
+  measure();
+}
+
+function initDrag(handle, { get, set, reset, invert }) {
+  let active = false, startX = 0, startV = 0;
+  handle.addEventListener("pointerdown", (e) => {
+    active = true; startX = e.clientX; startV = get();
+    handle.setPointerCapture(e.pointerId); handle.classList.add("dragging");
+    document.body.style.userSelect = "none"; e.preventDefault();
+  });
+  handle.addEventListener("pointermove", (e) => {
+    if (!active) return;
+    set(startV + (invert ? -(e.clientX - startX) : (e.clientX - startX)));
+  });
+  const stop = () => { active = false; handle.classList.remove("dragging"); document.body.style.userSelect = ""; };
+  handle.addEventListener("pointerup", stop);
+  handle.addEventListener("pointercancel", stop);
+  handle.addEventListener("dblclick", reset);
+}
+
+function initControls() {
+  initDrag($("h1"), {
+    get: () => state.ui.sbW,
+    set: (v) => { state.ui.sbW = clamp(v, 180, 340); applyVars(); measure(); },
+    reset: () => { state.ui.sbW = 236; applyVars(); measure(); }
+  });
+  initDrag($("h2"), {
+    get: () => $("cardsPane").offsetWidth,
+    set: (v) => { state.ui.cardsW = clamp(v, 300, $("workspace").clientWidth - 320); applyVars(); measure(); },
+    reset: () => { state.ui.cardsW = null; applyVars(); measure(); }
+  });
+  initDrag($("ideaResize"), {
+    get: () => state.ui.ideaW,
+    set: (v) => { state.ui.ideaW = clamp(v, 360, Math.min(1120, $("stage").clientWidth - 24)); applyVars(); measure(); },
+    reset: () => { state.ui.ideaW = 760; applyVars(); measure(); },
+    invert: true
+  });
+  new ResizeObserver(() => measure()).observe($("workspace"));
+
+  $("cardsPane").addEventListener("scroll", (e) => {
+    if (e.target.classList?.contains("cards-scroll")) state.cardsScroll = e.target.scrollTop;
+  }, true);
+  ["wheel", "touchmove"].forEach(ev => $("cardsPane").addEventListener(ev, () => {
+    if (state.run.demo && state.follow) { state.follow = false; renderFollowChip(); }
+  }, { passive: true }));
+}
+
+/* ===== Navigation ===== */
+function switchScene(sc) {
+  state.scene = sc;
+  state.level = "cards";
+  if (sc === "quick-review" && !state.sel.startsWith("quick-")) state.sel = "quick-step3";
+  if (sc === "group-chat" && !state.sel.startsWith("group-")) state.sel = "group-claude";
+  if ($("appShell").dataset.narrow === "1") state.ui.sbOpen = false;
+  document.querySelectorAll("[data-scene]").forEach(b => b.classList.toggle("active", b.dataset.scene === sc));
+  document.querySelectorAll(".run-item").forEach(el => el.classList.remove("active"));
+  const nav = $("s-" + sc);
+  if (nav) nav.classList.add("active");
+  render();
+}
+function toggleSingleHost() { switchScene(state.scene === "single-chat" ? "quick-review" : "single-chat"); }
+function toggleSidebar(force) { state.ui.sbOpen = typeof force === "boolean" ? force : !state.ui.sbOpen; applyLayout(); }
+function toggleDetail() { state.ui.detailCollapsed = !state.ui.detailCollapsed; applyLayout(); }
+function toggleTheme() {
+  state.theme = state.theme === "light" ? "dark" : "light";
+  document.body.dataset.theme = state.theme;
+  $("themeBtn").textContent = state.theme === "light" ? "🌙 深色" : "☀️ 浅色";
+}
+function setViewport(vp) {
+  state.viewport = vp;
+  state.ui.sbOpen = vp === "desktop";
+  state.level = "cards";
+  document.querySelectorAll("[data-vp]").forEach(b => b.classList.toggle("active", b.dataset.vp === vp));
+  render();
+}
+
+function openCard(streamId, focusComposerText) {
+  if (!STREAMS[streamId]) return;
+  state.sel = streamId;
+  if (state.run.demo && STEP_STREAM[state.run.step] !== streamId) state.follow = false;
+  if (state.ui.stacked) state.level = "detail";
+  else state.ui.detailCollapsed = false;
+  render();
+  if (focusComposerText !== undefined) {
+    const input = $("abInput");
+    if (input) {
+      if (focusComposerText) input.value = focusComposerText;
+      input.focus();
+    }
+  }
+}
+function backToCards() {
+  state.level = "cards";
+  applyLayout();
+  const sc = document.querySelector("#cardsPane .cards-scroll");
+  if (sc) sc.scrollTop = state.cardsScroll || 0;
+}
+
+/* ===== Step Auto-Follow & Breathing Demo ===== */
+function toggleDemo() {
+  if (state.run.demo) {
+    clearInterval(state.run.timer);
+    state.run.demo = false;
+    $("demoBtn").textContent = "▶ 演示步骤自动推进";
+    render();
+    return;
+  }
+  if (state.scene !== "quick-review") switchScene("quick-review");
+  state.decisions = { d1: "", d2: "" };
+  state.run.demo = true;
+  state.follow = true;
+  $("demoBtn").textContent = "■ 停止演示";
+  advanceStep(1, "running");
+  state.run.timer = setInterval(() => {
+    const r = state.run;
+    if (r.status !== "running") return;
+    if (r.step === 3) {
+      advanceStep(4, "wait");
+      showToast("轮到你拍板了");
+    } else if (r.step === 5) {
+      advanceStep(5, "done");
+      clearInterval(state.run.timer);
+      state.run.demo = false;
+      $("demoBtn").textContent = "▶ 演示步骤自动推进";
+    } else {
+      advanceStep(r.step + 1, "running");
+    }
+  }, 2400);
+}
+
+function advanceStep(step, status) {
+  state.run.step = step;
+  state.run.status = status;
+  if (state.follow && STEP_STREAM[step]) state.sel = STEP_STREAM[step];
+  render();
+  if (state.follow) scrollToCurrentStep();
+}
+function scrollToCurrentStep() {
+  const sc = document.querySelector("#cardsPane .cards-scroll");
+  const card = document.querySelector(`#cardsPane [data-step="${state.run.step}"]`);
+  if (sc && card) {
+    const top = sc.scrollTop + card.getBoundingClientRect().top - sc.getBoundingClientRect().top - 8;
+    sc.scrollTo({ top, behavior: "smooth" });
+  }
+}
+function renderFollowChip() {
+  const cp = $("cardsPane");
+  cp.querySelector(".follow-chip")?.remove();
+  if (state.scene !== "quick-review" || state.follow || !state.run.demo) return;
+  const btn = document.createElement("button");
+  btn.className = "follow-chip";
+  btn.innerHTML = `<span class="run-dot running" style="margin:0;"></span>回到当前步骤 ↓`;
+  btn.onclick = () => { state.follow = true; if (STEP_STREAM[state.run.step]) state.sel = STEP_STREAM[state.run.step]; render(); scrollToCurrentStep(); };
+  cp.appendChild(btn);
+}
+
+/* ===== Quick Mode Cards View (Apple Minimalist) ===== */
+function stepStatus(n) {
+  const r = state.run;
+  if (n < r.step) return "done";
+  if (n === r.step) return r.status;
+  return "pending";
+}
+
+function renderStepCard({ n, streamId, title, model, summary, runningText, metaLinks }) {
+  const st = stepStatus(n);
+  if (st === "pending") {
+    return `
+      <div class="t-card st-pending" data-step="${n}">
+        <div class="tc-top">
+          <div class="tc-head"><span class="step-dot">${n}</span><span class="tc-title">${title}</span><span class="tc-model">${model}</span></div>
+          <span class="tc-right">等待上一步</span>
+        </div>
+      </div>`;
+  }
+  const isSel = state.sel === streamId;
+  const dotCls = st === "done" ? "done" : st === "running" ? "running" : "";
+  const dotTxt = st === "done" ? "✓" : n;
+  return `
+    <div class="t-card st-${st} ${isSel ? "selected" : ""}" data-step="${n}" onclick="openCard('${streamId}')">
+      <div class="tc-top">
+        <div class="tc-head">
+          <span class="step-dot ${dotCls}">${dotTxt}</span>
+          <span class="tc-title">${title}</span>
+          <span class="tc-model">${model}</span>
+        </div>
+        <div class="tc-right">
+          ${st === "running" ? `<span style="color:var(--accent); font-weight:500;">执行中</span>` : ""}
+          <span class="tc-chevron">›</span>
+        </div>
+      </div>
+      <div class="tc-summary">${st === "running" ? runningText : summary}</div>
+      ${st === "done" && metaLinks ? `<div class="tc-foot" onclick="event.stopPropagation()">${metaLinks}</div>` : ""}
+    </div>`;
+}
+
+function chooseDispute(key, val) {
+  state.decisions[key] = val;
+  render();
+}
+function confirmDisputes() {
+  if (state.run.demo) {
+    advanceStep(5, "running");
+  } else {
+    advanceStep(5, "done");
+  }
+  showToast("已确认，主模型正在处理并运行项目测试");
+}
+
+function renderDisputeStep() {
+  const st = stepStatus(4);
+  if (st === "pending") {
+    return `<div class="t-card st-pending" data-step="4"><div class="tc-top"><div class="tc-head"><span class="step-dot">4</span><span class="tc-title">分歧拍板</span></div><span class="tc-right">等待上一步</span></div></div>`;
+  }
+  if (st === "done" || state.run.step > 4) {
+    return `
+      <div class="t-card" data-step="4" onclick="openCard('quick-step3')">
+        <div class="tc-top">
+          <div class="tc-head"><span class="step-dot done">✓</span><span class="tc-title">分歧拍板</span></div>
+          <div class="tc-right"><span>已处理 2 项</span><span class="tc-chevron">›</span></div>
+        </div>
+        <div class="tc-summary">你已对 2 项分歧做出决定，交由主模型执行。</div>
+      </div>`;
+  }
+  const ready = state.decisions.d1 && state.decisions.d2;
+  return `
+    <div class="t-card st-wait" data-step="4">
+      <div class="tc-top">
+        <div class="tc-head">
+          <span class="step-dot wait">4</span>
+          <span class="tc-title">需要你拍板</span>
+        </div>
+        <span style="font-size:12px; font-weight:600; color:var(--amber);">2 项分歧</span>
+      </div>
+      <div class="dispute-list">
+        <div class="d-item">
+          <div class="d-head">
+            <span>relay_endpoints.go 是否再拆成两个文件</span>
+            <span class="mono" style="font-size:11.5px; color:var(--text-tertiary);">规范</span>
+          </div>
+          <div class="d-lines">
+            <div><b>审核</b> 564 行含 11 个 CLI 解析，建议按核心与扩展拆成两文件。</div>
+            <div><b>主模</b> 11 个函数平行无共享状态，同文件对照维护更直观。</div>
+          </div>
+          <div class="row-Foot" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;">
+            <div class="seg-group">
+              <button class="seg-btn ${state.decisions.d1 === 'accept' ? 'active' : ''}" onclick="chooseDispute('d1','accept')">按审核改</button>
+              <button class="seg-btn ${state.decisions.d1 === 'keep' ? 'active' : ''}" onclick="chooseDispute('d1','keep')">保留现状</button>
+            </div>
+            <button class="quiet-link" onclick="openCard('quick-step3', '关于分歧 1（文件拆分），按这个方式改：')">有其他想法？在右侧对话里说 ›</button>
+          </div>
+        </div>
+
+        <div class="d-item">
+          <div class="d-head">
+            <span>relay_fetch.go:290 区分 404 与超时</span>
+            <span class="d-warn">⚠ 查无第 290 行（共 163 行）</span>
+          </div>
+          <div class="d-lines">
+            <div><b>审核</b> 建议在第 290 行对空响应补充 404 分支。</div>
+            <div><b>主模</b> 该行号不存在，现有第 128 行已原样返回 HTTP 状态码。</div>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;">
+            <div class="seg-group">
+              <button class="seg-btn ${state.decisions.d2 === 'accept' ? 'active' : ''}" onclick="chooseDispute('d2','accept')">补充 404 说明</button>
+              <button class="seg-btn ${state.decisions.d2 === 'keep' ? 'active' : ''}" onclick="chooseDispute('d2','keep')">无需改动</button>
+            </div>
+            <button class="quiet-link" onclick="openCard('quick-step2')">看审核上下文 ›</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+        <button class="btn-primary" id="confirmDisputesBtn" ${ready ? "" : "disabled"} onclick="confirmDisputes()">确认并继续</button>
+      </div>
+    </div>`;
+}
+
+function renderFinalStep() {
+  const st = stepStatus(5);
+  if (st === "pending") {
+    return `<div class="t-card st-pending" data-step="5"><div class="tc-top"><div class="tc-head"><span class="step-dot">5</span><span class="tc-title">修改与项目测试</span><span class="tc-model">codex / gpt-5.4</span></div><span class="tc-right">等待拍板</span></div></div>`;
+  }
+  const isSel = state.sel === "quick-step5";
+  if (st === "running") {
+    return `
+      <div class="t-card st-running ${isSel ? "selected" : ""}" data-step="5" onclick="openCard('quick-step5')">
+        <div class="tc-top"><div class="tc-head"><span class="step-dot running">5</span><span class="tc-title">修改与项目测试</span><span class="tc-model">codex / gpt-5.4</span></div><span style="color:var(--accent); font-size:12px; font-weight:500;">运行测试中</span></div>
+        <div class="tc-summary">正在按你的拍板执行修改，并运行 AGENTS.md 要求的回归测试…</div>
+      </div>`;
+  }
+  return `
+    <div class="t-card ${isSel ? "selected" : ""}" data-step="5" onclick="openCard('quick-step5')">
+      <div class="tc-top">
+        <div class="tc-head"><span class="step-dot done">✓</span><span class="tc-title">已完成修改与验证</span><span class="tc-model">codex / gpt-5.4</span></div>
+        <div class="tc-right"><span style="color:var(--green); font-weight:500;">一轮结束</span><span class="tc-chevron">›</span></div>
+      </div>
+      <div class="test-clean">
+        <div class="test-clean-row"><span class="mono">go test -race ./server/internal/agent/... ./api</span><span style="color:var(--green); font-weight:500;">✓ 通过</span></div>
+        <div class="test-clean-row"><span class="mono">TestTaskStoreSnapshotMigration (旧库迁移)</span><span style="color:var(--green); font-weight:500;">✓ 通过</span></div>
+        <div class="test-clean-row"><span class="mono">verify-windows-standalone-package.ps1</span><span style="color:var(--text-tertiary);">– 跳过（macOS）</span></div>
+      </div>
+      <div class="tc-foot" onclick="event.stopPropagation()">
+        <button class="quiet-link" onclick="openDoc('05-report.md')">📄 05-report.md</button>
+        ${state.docsCleaned
+          ? `<span>已清理过程文档</span>`
+          : `<button class="quiet-link" id="cleanDocsLink" onclick="state.docsCleaned=true; render(); showToast('已清理 .mindfs/runs/run-042 过程文档');">清理过程文档</button>`}
+      </div>
+    </div>`;
+}
+
+function renderQuickReview() {
+  return `
+    <header class="pane-head">
+      <div class="pane-head-left">
+        <button class="icon-btn hamburger" onclick="toggleSidebar(true)">☰</button>
+        <span class="pane-title">修复 Gemini 中转密钥脱敏</span>
+      </div>
+      <span class="pane-sub">快速模式 · 严格一轮</span>
+    </header>
+    <div class="cards-scroll">
+      ${renderStepCard({
+        n: 1, streamId: "quick-step1", title: "主模型实现", model: "codex / gpt-5.4",
+        runningText: "正在拆分模块并改造 x-goog-api-key 请求头…",
+        summary: "已拆分为三个聚焦文件，Gemini 改用请求头传密钥并由 api 包复用拉取逻辑。",
+        metaLinks: `<button class="quiet-link" onclick="openDoc('01-impl.md')">📄 01-impl.md</button><button class="quiet-link" onclick="openDoc('turndiff')">3 个文件 +184 -92</button>`
+      })}
+      ${renderStepCard({
+        n: 2, streamId: "quick-step2", title: "只读审核", model: "claude / claude-opus-4-6",
+        runningText: "正在只读核对 AGENTS.md、代码规范与改动文件…",
+        summary: "共提出 4 条意见（3 处源码已核对，1 处行号查无此处）。点此在右侧查看完整审核单。",
+        metaLinks: `<button class="quiet-link" onclick="openDoc('02-review.md')">📄 02-review.md</button>`
+      })}
+      ${renderStepCard({
+        n: 3, streamId: "quick-step3", title: "逐条回应", model: "codex / gpt-5.4",
+        runningText: "正在逐条处理审核意见…",
+        summary: "已直接修复 #1、#4 两处问题；其余 #2、#3 存在异议，留给你下方拍板。",
+        metaLinks: `<button class="quiet-link" onclick="openDoc('03-response.md')">📄 03-response.md</button>`
+      })}
+      ${renderDisputeStep()}
+      ${renderFinalStep()}
+    </div>`;
+}
+
+/* ===== New Collaboration Task (Clean Minimalist Setup) ===== */
+function renderQuickStart() {
+  const nr = state.newRun;
+  return `
+    <header class="pane-head">
+      <div class="pane-head-left">
+        <button class="icon-btn hamburger" onclick="toggleSidebar(true)">☰</button>
+        <span class="pane-title">新建协作任务</span>
+      </div>
+      <div class="seg-group">
+        <button class="seg-btn ${nr.mode === 'quick' ? 'active' : ''}" onclick="state.newRun.mode='quick'; render();">快速（一写一审）</button>
+        <button class="seg-btn ${nr.mode === 'group' ? 'active' : ''}" onclick="state.newRun.mode='group'; render();">群组讨论</button>
+      </div>
+    </header>
+    <div class="cards-scroll">
+      <div class="setup-wrap">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <span style="font-size:13px; color:var(--text-secondary);">全局模板：<strong>${escapeHtml(nr.templateName)}</strong>${nr.modified ? "（本次已调整）" : ""}</span>
+          ${nr.modified ? `<button class="quiet-link" style="color:var(--accent); font-family:var(--font-sans);" onclick="nr.modified=false; render(); showToast('已更新到全局默认模板');">保存回模板</button>` : ""}
+        </div>
+
+        <div class="slot-row">
+          ${nr.members.map((m, idx) => `
+            <button class="slot-card" onclick="openSlotPicker(${idx})">
+              <span style="font-size:11.5px; color:var(--text-tertiary); font-weight:600;">${escapeHtml(m.role)}</span>
+              <span class="mono" style="font-size:13px; font-weight:600; color:var(--text);">${escapeHtml(m.agent)} / ${escapeHtml(m.model)}</span>
+              <span class="mono" style="font-size:11.5px; color:var(--text-tertiary);">思考强度: ${escapeHtml(m.effort)} · 点击更换</span>
+            </button>
+          `).join("")}
+        </div>
+
+        <div class="ab-box" style="padding:12px 14px;">
+          <textarea class="ab-input" style="min-height:88px; font-size:13.5px;" placeholder="直接描述你要做的事…">${escapeHtml(nr.task)}</textarea>
+          <div class="ab-foot">
+            <span style="font-size:12px; color:var(--text-tertiary);">阶段间自动以项目内文档交接，全程可在右侧对话干预</span>
+            <button class="btn-primary" onclick="switchScene('quick-review'); toggleDemo();">开始运行</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ===== Group Discussion Cards View (Clean Minimalist) ===== */
+function renderGroupChat() {
+  const r = state.groupRound;
+  const members = [
+    { id: "group-codex", slot: "codex-1", model: "codex / gpt-5.4", right: "✓ 出处全部核对", summary: "主张复用现有 session-list.db 幂等加表；指出 gemini-1 引用的文件不存在。" },
+    { id: "group-claude", slot: "claude-1 · 结论作者", model: "claude / claude-opus-4-6", right: "v1 → v2", summary: "采纳 codex-1 的崩溃风险建议，补充 .tmp + rename 原子落盘并汇总最终方案。" },
+    { id: "group-gemini", slot: "gemini-1", model: "gemini / gemini-2.5-pro", right: "未有效确认", warn: true, summary: "仅回复「我同意」，未写明核对内容与剩余风险，按防盲从规则不计入有效同意。" }
+  ];
+  return `
+    <header class="pane-head">
+      <div class="pane-head-left">
+        <button class="icon-btn hamburger" onclick="toggleSidebar(true)">☰</button>
+        <span class="pane-title">群组表结构与迁移方案</span>
+      </div>
+      <div class="seg-group">
+        <button class="seg-btn ${r === 'round1' ? 'active' : ''}" onclick="state.groupRound='round1'; render();">盲评</button>
+        <button class="seg-btn ${r === 'round2' ? 'active' : ''}" onclick="state.groupRound='round2'; render();">互评</button>
+        <button class="seg-btn ${r === 'final' ? 'active' : ''}" onclick="state.groupRound='final'; render();">结论</button>
+      </div>
+    </header>
+    <div class="cards-scroll">
+      ${r !== "final" ? members.map(m => `
+        <div class="t-card ${state.sel === m.id ? "selected" : ""}" onclick="openCard('${m.id}')">
+          <div class="tc-top">
+            <div class="tc-head">
+              <span class="step-dot ${m.warn ? 'wait' : 'done'}">${m.warn ? '!' : '✓'}</span>
+              <span class="tc-title">${m.slot}</span>
+              <span class="tc-model">${m.model}</span>
+            </div>
+            <div class="tc-right">
+              <span style="${m.warn ? 'color:var(--amber);' : ''}">${m.right}</span>
+              <span class="tc-chevron">›</span>
+            </div>
+          </div>
+          <div class="tc-summary">${m.summary}</div>
+        </div>
+      `).join("") : `
+        <div class="t-card st-wait" onclick="openCard('group-claude')">
+          <div class="tc-top">
+            <div class="tc-head"><span class="step-dot wait">★</span><span class="tc-title">最终结论文档</span><span class="tc-model">作者 claude-1</span></div>
+            <span style="font-size:12px; color:var(--amber); font-weight:600;">待你定稿</span>
+          </div>
+          <div class="tc-summary">
+            <strong>方案：</strong>复用 <code>session-list.db</code> 存索引，文档原子落盘至项目 <code>.mindfs/runs/</code>，进程池按成员槽位隔离。<br>
+            <strong>未解决分歧：</strong><code>gemini-1</code> 曾提议拆独立库但未提供有效依据，原样保留记录。<br>
+            <strong>成员确认：</strong>codex-1 已确认准确表达 · gemini-1 未确认。
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;" onclick="event.stopPropagation()">
+            <button class="btn-secondary" onclick="openCard('group-claude', '最终结论这里补充一点：')">在对话里微调</button>
+            <button class="btn-primary" onclick="showToast('已确认定稿')">确认定稿</button>
+          </div>
+        </div>
+      `}
+    </div>`;
+}
+
+/* ===== Right Pane: Reused Single-Chat Conversation Stack ===== */
+function sendChat() {
+  const input = $("abInput");
+  const txt = (input?.value || "").trim();
+  if (!txt) return;
+  const s = STREAMS[state.sel];
+  s.events.push({ kind: "user", text: txt });
+  if (/删|清理/.test(txt)) {
+    state.docsCleaned = true;
+    s.events.push({ kind: "agent", text: "好的，已直接删除 `.mindfs/runs/run-042/` 下的临时过程文档，工作区已清理干净。" });
+  } else {
+    s.events.push({ kind: "agent", text: `明白，已按你的要求「${txt}」调整当前步骤并更新交付文档。` });
+  }
+  input.value = "";
+  render();
+}
+
+function renderDetail() {
+  const pane = $("detailPane");
+  if (!SCENES_WITH_DETAIL.has(state.scene)) { pane.innerHTML = ""; return; }
+  const s = STREAMS[state.sel];
+  pane.innerHTML = `
+    <div class="detail-full">
+      <div class="detail-head">
+        <button class="ghost-btn back-btn" onclick="backToCards()">‹ 返回卡片</button>
+        <div class="detail-title">
+          <div class="t">${escapeHtml(s.title)}</div>
+          <div class="m">${escapeHtml(s.agent)} / ${escapeHtml(s.model)} · ${escapeHtml(s.effort)}</div>
+        </div>
+        <button class="icon-btn collapse-detail" title="收起对话" onclick="toggleDetail()">⇥</button>
+      </div>
+
+      <!-- Reused SessionViewer -->
+      <div class="detail-body" id="detailBody">
+        ${s.events.map(ev => {
+          if (ev.kind === "user") return `<div class="chat-user">${escapeHtml(ev.text)}</div>`;
+          if (ev.kind === "think") return `<div class="chat-think">${escapeHtml(ev.text)}</div>`;
+          if (ev.kind === "tool") return `
+            <details class="chat-tool">
+              <summary><span>${escapeHtml(ev.name)}</span><span>展开</span></summary>
+              <pre>${escapeHtml(ev.out)}</pre>
+            </details>`;
+          return `<div class="chat-agent">${escapeHtml(ev.text).replace(/\n/g, "<br>")}</div>`;
+        }).join("")}
+      </div>
+
+      <!-- Reused SessionActivity -->
+      <div class="session-activity-bar">
+        <span>${escapeHtml(s.activity)}</span>
+        <span class="mono" style="color:var(--text-tertiary);">独立会话</span>
+      </div>
+
+      <!-- Reused ActionBar -->
+      <div class="actionbar">
+        <div class="ab-box">
+          <textarea id="abInput" class="ab-input" placeholder="直接在这里对话、纠偏、给特殊指示，或让模型清理文档…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+          <div class="ab-foot">
+            <div class="ab-pills">
+              <button class="pill-btn" onclick="openStreamPicker()">${escapeHtml(s.agent)} · ${escapeHtml(s.model)} · ${escapeHtml(s.effort)} ▾</button>
+              <span class="pill-btn" style="cursor:default;">${escapeHtml(s.mode)}</span>
+            </div>
+            <button class="btn-primary" style="padding:5px 12px;" onclick="sendChat()">发送</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="detail-rail">
+      <button class="icon-btn" title="展开对话" onclick="toggleDetail()">⇤</button>
+      <span class="rail-label">对话详情</span>
+    </div>`;
+  const b = $("detailBody");
+  if (b) b.scrollTop = b.scrollHeight;
+}
+
+/* ===== Untouched Single-Chat Entry Preview ===== */
+function renderSingleChat() {
+  const host = $("singleChatShell");
+  if (state.scene !== "single-chat") { host.innerHTML = ""; return; }
+  host.innerHTML = `
+    <aside class="sc-left" style="background:var(--sidebar-bg); border-right:1px solid var(--border); padding:12px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong style="font-size:13.5px;">idea-ai-agent</strong>
+        <button class="btn-secondary" style="padding:4px 9px;">＋ 单聊</button>
+      </div>
+      <button class="new-run-btn" style="justify-content:space-between; border-color:var(--accent); color:var(--accent);" onclick="switchScene('quick-review')">
+        <span>⚡ 多模型协作</span>
+        <span style="font-size:11.5px;">● 2 待拍板 ›</span>
+      </button>
+      <div class="run-item active" style="margin-top:4px;">
+        <div class="run-item-body">
+          <div class="run-item-title">原生模型排序与权限名核对</div>
+          <div class="run-item-sub">codex / gpt-5.4 · 刚刚</div>
+        </div>
+      </div>
+    </aside>
+    <main style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:12px; padding:24px; text-align:center;">
+      <div style="font-size:15px; font-weight:600;">普通单聊界面完全不动</div>
+      <div style="max-width:400px; color:var(--text-secondary); font-size:13px;">只在左上角留一个「⚡ 多模型协作」入口和待处理提醒，点进去就是干净独立的协作界面。</div>
+      <button class="btn-primary" onclick="switchScene('quick-review')">进入多模型协作界面</button>
+    </main>`;
+}
+
+/* ===== Modals ===== */
+function openDoc(key) {
+  const d = DOCS[key];
+  if (!d) return;
+  $("docModalTitle").textContent = key;
+  $("docModalPath").textContent = d.path;
+  $("docModalBody").textContent = d.body;
+  $("docModal").classList.add("open");
+}
+function closeDocModal() { $("docModal").classList.remove("open"); }
+
+function openSlotPicker(idx) {
+  const m = state.newRun.members[idx];
+  state.picker = { target: { kind: "slot", idx }, agent: m.agent, model: m.model, effort: m.effort };
+  $("slotModalTitle").textContent = m.role;
+  renderPicker();
+  $("slotModal").classList.add("open");
+}
+function openStreamPicker() {
+  const s = STREAMS[state.sel];
+  state.picker = { target: { kind: "stream" }, agent: s.agent, model: s.model, effort: s.effort };
+  $("slotModalTitle").textContent = "切换当前模型";
+  renderPicker();
+  $("slotModal").classList.add("open");
+}
+function renderPicker() {
+  const p = state.picker;
+  const cat = CATALOG[p.agent];
+  const natives = cat.models.filter(m => m.source === "native");
+  const relays = cat.models.filter(m => m.source === "relay");
+  $("agentMenuBody").innerHTML = `
+    <div class="agent-left">
+      ${Object.keys(CATALOG).map(a => `<button class="ag-item ${p.agent === a ? 'active' : ''}" onclick="pAgent('${a}')"><span>${a}</span><span>›</span></button>`).join("")}
+    </div>
+    <div class="agent-right">
+      <div class="sec-label">自带原生模型</div>
+      ${natives.map(m => `<button class="md-item mono ${p.model === m.id ? 'selected' : ''}" onclick="pModel('${m.id}')"><span>${m.id}</span>${p.model === m.id ? '<span>✓</span>' : ''}</button>`).join("")}
+      ${relays.length ? `<div class="sec-label">中转模型（已去重）</div>` : ""}
+      ${relays.map(m => `<button class="md-item mono ${p.model === m.id ? 'selected' : ''}" onclick="pModel('${m.id}')"><span>${m.id}</span>${p.model === m.id ? '<span>✓</span>' : ''}</button>`).join("")}
+      <div class="sec-label">思考强度</div>
+      <div style="padding:4px 14px; display:flex; gap:6px; flex-wrap:wrap;">
+        ${cat.efforts.map(ef => `<button class="pill-btn ${p.effort === ef ? 'active' : ''}" style="${p.effort === ef ? 'border-color:var(--accent);color:var(--accent);font-weight:600;' : ''}" onclick="pEffort('${ef}')">${ef}</button>`).join("")}
+      </div>
+    </div>`;
+}
+function pAgent(a) { state.picker.agent = a; state.picker.model = CATALOG[a].models[0].id; renderPicker(); applyPicker(); }
+function pModel(m) { state.picker.model = m; renderPicker(); applyPicker(); }
+function pEffort(ef) { state.picker.effort = ef; renderPicker(); applyPicker(); }
+function applyPicker() {
+  const p = state.picker;
+  if (p.target?.kind === "slot") {
+    const m = state.newRun.members[p.target.idx];
+    m.agent = p.agent; m.model = p.model; m.effort = p.effort;
+    state.newRun.modified = true;
+  } else if (p.target?.kind === "stream") {
+    const s = STREAMS[state.sel];
+    s.agent = p.agent; s.model = p.model; s.effort = p.effort;
+  }
+  render();
+}
+function closeSlotModal() { $("slotModal").classList.remove("open"); }
+
+/* ===== Main Render ===== */
+function updateSidebarStatus() {
+  const dot = $("quickRunDot"), sub = $("quickRunSub");
+  if (!dot || !sub) return;
+  if (state.run.status === "running") { dot.className = "run-dot running"; sub.textContent = `快速 · 第 ${state.run.step} 步执行中`; }
+  else if (state.run.status === "wait") { dot.className = "run-dot wait"; sub.textContent = "快速 · 2 项待你拍板"; }
+  else { dot.className = "run-dot"; sub.textContent = "快速 · 已完成"; }
+}
+
+function render() {
+  renderSingleChat();
+  if (state.scene === "single-chat") { applyLayout(); return; }
+  const cp = $("cardsPane");
+  if (state.scene === "quick-review") cp.innerHTML = renderQuickReview();
+  else if (state.scene === "quick-start") cp.innerHTML = renderQuickStart();
+  else cp.innerHTML = renderGroupChat();
+  applyLayout();
+  const sc = document.querySelector("#cardsPane .cards-scroll");
+  if (sc && !state.run.demo) sc.scrollTop = state.cardsScroll || 0;
+  renderDetail();
+  updateSidebarStatus();
+  renderFollowChip();
+}
+
+document.querySelectorAll("[data-scene]").forEach(b => b.addEventListener("click", () => switchScene(b.dataset.scene)));
+document.querySelectorAll("[data-vp]").forEach(b => b.addEventListener("click", () => setViewport(b.dataset.vp)));
+initControls();
+render();
+</script>
+</body>
+</html>

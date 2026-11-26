@@ -14,8 +14,10 @@
 .idea-workbench input:focus-visible, .idea-workbench textarea:focus-visible {
   outline: 2px solid var(--accent-color) !important; outline-offset: -2px;
 }
-.idea-toolbar { height: 43px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--border-color); background: var(--sidebar-bg); }
+.idea-toolbar { height: 43px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--border-color); background: var(--sidebar-bg); }
 .idea-toolbar strong { margin-right: auto; font-size: 13px; font-weight: 600; }
+.idea-toolbar-spacer { margin-left: auto; }
+.idea-collab-topbar { height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px; border-bottom: 1px solid var(--border-color); background: var(--sidebar-bg); }
 .idea-toolbar-action { position: relative; display: inline-flex; flex-shrink: 0; }
 .idea-toolbar-tooltip { position: absolute; top: 100%; right: 0; z-index: 1100; width: max-content; max-width: min(280px, calc(100vw - 32px)); padding: 6px 9px; border: 1px solid var(--menu-border); border-radius: 5px; background: var(--menu-bg); color: var(--text-primary); box-shadow: 0 3px 10px rgba(0,0,0,.16); font-size: 12px; line-height: 1.5; }
 .idea-icon-button { width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 6px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--text-secondary); }

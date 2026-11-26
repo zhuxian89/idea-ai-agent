@@ -51,7 +51,7 @@ func (m *Manager) createSessionUnsafe(session *Session) error {
 	}
 	if _, err := m.getSessionMetaUnsafe(session.Key); err == nil {
 		return fmt.Errorf("session already exists: %s", session.Key)
-	} else if !errors.Is(err, errSessionNotFound) {
+	} else if !errors.Is(err, ErrSessionNotFound) {
 		return err
 	}
 	if err := m.upsertSessionMetaUnsafe(session); err != nil {
@@ -99,7 +99,7 @@ func (m *Manager) getSessionMetaUnsafe(key string) (*Session, error) {
 WHERE key = ?`, key)
 	session, err := scanSessionMetaRow(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, errSessionNotFound
+		return nil, ErrSessionNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -203,6 +203,7 @@ SELECT key FROM sessions`
 	where, args := sessionListWhere(ListOptions{
 		ParentSessionKey: opts.ParentSessionKey,
 		TopLevelOnly:     opts.TopLevelOnly,
+		IncludeCollab:    opts.IncludeCollab,
 	})
 	where = append(where, "pinned_at IS NOT NULL AND pinned_at != ''")
 	if len(where) > 0 {
@@ -260,12 +261,17 @@ WHERE ` + strings.Join(where, " AND ")
 
 func sessionListWhere(opts ListOptions) ([]string, []any) {
 	args := make([]any, 0, 2)
-	where := make([]string, 0, 2)
+	where := make([]string, 0, 3)
 	if parentKey := strings.TrimSpace(opts.ParentSessionKey); parentKey != "" {
 		where = append(where, "parent_session_key = ?")
 		args = append(args, parentKey)
-	} else if opts.TopLevelOnly {
-		where = append(where, "parent_session_key = ''")
+	} else {
+		if opts.TopLevelOnly {
+			where = append(where, "parent_session_key = ''")
+		}
+		if !opts.IncludeCollab {
+			where = append(where, "source NOT IN ('collab_stage', 'collab_review')")
+		}
 	}
 	if !opts.BeforeTime.IsZero() {
 		where = append(where, "updated_at < ?")

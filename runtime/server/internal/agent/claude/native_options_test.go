@@ -40,12 +40,15 @@ func TestNativePermissionModeChoices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range modes.Modes {
-		if mode.ID == "bypassPermissions" {
-			return
+	want := []string{"bypassPermissions", "default", "acceptEdits"}
+	if len(modes.Modes) != len(want) {
+		t.Fatalf("Claude modes = %+v, want %v", modes.Modes, want)
+	}
+	for i, mode := range modes.Modes {
+		if mode.ID != want[i] || mode.Name != want[i] {
+			t.Fatalf("Claude mode[%d] = {ID:%q Name:%q}, want native %q", i, mode.ID, mode.Name, want[i])
 		}
 	}
-	t.Fatal("Claude bypassPermissions permission choice is missing")
 }
 
 func TestNativeClientRetainsConfigurationValidation(t *testing.T) {

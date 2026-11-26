@@ -107,10 +107,6 @@ type Options = {
     worktreePath: string,
     force?: boolean,
   ) => Promise<void>;
-  refreshSessionRelatedFiles: (
-    rootID: string,
-    sessionKey: string,
-  ) => Promise<void>;
   updateSessionRelatedWorktreeForKey: (
     rootID: string,
     sessionKey: string,
@@ -159,7 +155,6 @@ export function createSessionLifecycleHandler({
   setSelectedSession,
   boundSessionByRootRef,
   refreshRelatedWorktree,
-  refreshSessionRelatedFiles,
   updateSessionRelatedWorktreeForKey,
 }: Options) {
   return (event: SessionServiceEvent) => {
@@ -421,7 +416,8 @@ export function createSessionLifecycleHandler({
               currentRootIdRef.current ||
               "";
         if (rootID && sessionKey) {
-          if (payload?.replay !== true) {
+          const isCollabSession = sessionKey.startsWith("collab-");
+          if (payload?.replay !== true && !isCollabSession) {
             playCompletionSound();
           }
           setMultiProjectSessionPending(rootID, sessionKey, false);
@@ -437,13 +433,15 @@ export function createSessionLifecycleHandler({
               },
             );
           }
-          const newest = sessionsRef.current[0]?.updated_at || "";
-          void loadSessionsForRoot(
-            rootID,
-            newest ? { afterTime: newest } : { replace: true },
-          );
-          if (multiProjectSessionsEnabled) {
-            void loadMultiProjectSessionGroups();
+          if (!isCollabSession) {
+            const newest = sessionsRef.current[0]?.updated_at || "";
+            void loadSessionsForRoot(
+              rootID,
+              newest ? { afterTime: newest } : { replace: true },
+            );
+            if (multiProjectSessionsEnabled) {
+              void loadMultiProjectSessionGroups();
+            }
           }
         } else if (currentRootIdRef.current) {
           const newest = sessionsRef.current[0]?.updated_at || "";
@@ -590,13 +588,15 @@ export function createSessionLifecycleHandler({
             );
           }
           bumpCacheVersion();
-          const newest = sessionsRef.current[0]?.updated_at || "";
-          void loadSessionsForRoot(
-            rootID,
-            newest ? { afterTime: newest } : { replace: true },
-          );
-          if (multiProjectSessionsEnabled) {
-            void loadMultiProjectSessionGroups();
+          if (!sessionKey.startsWith("collab-")) {
+            const newest = sessionsRef.current[0]?.updated_at || "";
+            void loadSessionsForRoot(
+              rootID,
+              newest ? { afterTime: newest } : { replace: true },
+            );
+            if (multiProjectSessionsEnabled) {
+              void loadMultiProjectSessionGroups();
+            }
           }
         }
         break;
@@ -772,26 +772,17 @@ export function createSessionLifecycleHandler({
           typeof payload?.root_id === "string" ? payload.root_id : "";
         const sessionKey =
           typeof payload?.session_key === "string" ? payload.session_key : "";
-        if (rootID && sessionKey) {
-          void refreshSessionRelatedFiles(rootID, sessionKey);
-          const cachedSession =
-            sessionCacheRef.current[rootSessionKey(rootID, sessionKey)];
-          const parentSessionKey = String(
-            cachedSession?.parent_session_key || "",
-          ).trim();
-          if (parentSessionKey) {
-            void refreshSessionRelatedFiles(rootID, parentSessionKey);
-          }
-          if (
-            payload?.related_worktree &&
-            typeof payload.related_worktree === "object"
-          ) {
-            updateSessionRelatedWorktreeForKey(
-              rootID,
-              sessionKey,
-              payload.related_worktree as RelatedWorktree,
-            );
-          }
+        if (
+          rootID &&
+          sessionKey &&
+          payload?.related_worktree &&
+          typeof payload.related_worktree === "object"
+        ) {
+          updateSessionRelatedWorktreeForKey(
+            rootID,
+            sessionKey,
+            payload.related_worktree as RelatedWorktree,
+          );
         }
         break;
       }

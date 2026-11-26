@@ -13,6 +13,7 @@ func TestSwitchAgentConfigClearsExistingEnvWhenBackupHasNoEnv(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("IDE_AGENT_DATA_DIR", home)
 	configPath := filepath.Join(home, "agents.json")
 	t.Setenv("MINDFS_AGENTS_CONFIG", configPath)
 

@@ -3,6 +3,7 @@ package turndiff
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -260,4 +261,24 @@ func unquote(path string) string {
 		}
 	}
 	return path
+}
+
+// FilePaths returns the paths represented by the same merged patch shown in the turn summary.
+func FilePaths(diff string) []string {
+	var paths []string
+	for _, section := range sections(diff) {
+		paths = append(paths, sectionPaths(section)...)
+	}
+	return paths
+}
+
+// FilePatch selects the existing sections for one path, including either side of a rename.
+func FilePatch(diff, file string) string {
+	var matched []string
+	for _, section := range sections(diff) {
+		if slices.Contains(sectionPaths(section), file) {
+			matched = append(matched, section)
+		}
+	}
+	return strings.Join(matched, "\n")
 }

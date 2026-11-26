@@ -34,6 +34,7 @@ type sessionEntry struct {
 	sessionKey string
 	protocol   Protocol
 	session    agenttypes.Session
+	readOnly   bool
 	lastUsedAt time.Time
 	activeUses int
 	closing    bool
@@ -98,6 +99,10 @@ retryExisting:
 			p.mu.Lock()
 			goto retryExisting
 		}
+		if entry.readOnly != in.ReadOnly {
+			p.mu.Unlock()
+			return nil, errors.New("agent session read-only mode changed")
+		}
 		entry.lastUsedAt = time.Now()
 		p.mu.Unlock()
 		return entry.session, nil
@@ -128,10 +133,14 @@ retryExisting:
 	// Another goroutine may have created the same session while the lock was released.
 	if entry, ok := p.sessions[in.SessionKey]; ok {
 		existing := entry.session
+		readOnly := entry.readOnly
 		entry.lastUsedAt = time.Now()
 		p.mu.Unlock()
 		if protocol == ProtocolClaudeSDK {
 			_ = sess.Close()
+		}
+		if readOnly != in.ReadOnly {
+			return nil, errors.New("agent session read-only mode changed")
 		}
 		return existing, nil
 	}
@@ -140,6 +149,7 @@ retryExisting:
 		sessionKey: in.SessionKey,
 		protocol:   protocol,
 		session:    sess,
+		readOnly:   in.ReadOnly,
 		lastUsedAt: time.Now(),
 	}
 	p.mu.Unlock()
@@ -246,6 +256,7 @@ func (p *Pool) openSession(ctx context.Context, protocol Protocol, def Definitio
 			Mode:                  in.Mode,
 			Effort:                in.Effort,
 			PlanMode:              in.PlanMode,
+			ReadOnly:              in.ReadOnly,
 			RootPath:              in.RootPath,
 			Command:               def.Command,
 			Args:                  append([]string{}, def.Args...),
@@ -269,6 +280,7 @@ func (p *Pool) openSession(ctx context.Context, protocol Protocol, def Definitio
 			Effort:                in.Effort,
 			FastService:           in.FastService,
 			PlanMode:              in.PlanMode,
+			ReadOnly:              in.ReadOnly,
 			Probe:                 in.Probe,
 			RootPath:              in.RootPath,
 			Command:               def.Command,
@@ -288,6 +300,7 @@ func (p *Pool) openSession(ctx context.Context, protocol Protocol, def Definitio
 			Model:           in.Model,
 			Mode:            in.Mode,
 			Effort:          in.Effort,
+			ReadOnly:        in.ReadOnly,
 			RootPath:        in.RootPath,
 			Command:         def.Command,
 			Args:            def.BuildArgs(in.RootPath),
@@ -537,13 +550,18 @@ func (p *Pool) applyRuntimeEnvOverridesLocked(cfg Config) Config {
 
 // Get returns an existing session handle if present.
 func (p *Pool) Get(sessionKey string) (agenttypes.Session, bool) {
+	sess, _, ok := p.GetWithReadOnly(sessionKey)
+	return sess, ok
+}
+
+func (p *Pool) GetWithReadOnly(sessionKey string) (agenttypes.Session, bool, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	entry, ok := p.sessions[sessionKey]
 	if !ok || entry == nil || entry.session == nil {
-		return nil, false
+		return nil, false, false
 	}
-	return entry.session, true
+	return entry.session, entry.readOnly, true
 }
 
 // Context returns the pool lifecycle context (read-only).

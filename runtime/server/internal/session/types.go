@@ -11,7 +11,23 @@ const (
 	TypeChat    = "chat"
 	TypeView    = "view"
 	TypeCommand = "command"
+
+	SourceCollabStage  = "collab_stage"
+	SourceCollabReview = "collab_review"
 )
+
+func IsCollabSource(source string) bool {
+	switch strings.TrimSpace(source) {
+	case SourceCollabStage, SourceCollabReview:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsReadOnlySession(s *Session) bool {
+	return s != nil && strings.TrimSpace(s.Source) == SourceCollabReview
+}
 
 type Session struct {
 	Key               string                   `json:"key"`

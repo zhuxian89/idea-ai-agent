@@ -513,7 +513,7 @@ func probeInstalledAgentWithPool(ctx context.Context, name string, def Definitio
 	if err := storeProbeSessionBinding(probeSessions, name, sess.SessionID(), resumedBinding, resumed); err != nil {
 		log.Printf("[agent/probe] store_session.error agent=%s phase=%s err=%v", name, phase, err)
 	}
-	populateProbeModels(ctx, sess, &status)
+	populateProbeModels(ctx, def, sess, &status)
 	populateProbeCommands(ctx, sess, &status)
 	return status
 }

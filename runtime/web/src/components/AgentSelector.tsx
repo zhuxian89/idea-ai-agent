@@ -41,6 +41,7 @@ type AgentSelectorProps = {
   viewportMenu?: boolean;
   stableLayout?: boolean;
   allowDefaultModel?: boolean;
+  allowDefaultMode?: boolean;
   closeOnSelect?: boolean;
 };
 
@@ -100,6 +101,7 @@ export function AgentSelector({
   viewportMenu = false,
   stableLayout = false,
   allowDefaultModel = false,
+  allowDefaultMode = false,
   closeOnSelect = false,
 }: AgentSelectorProps) {
   const { t } = useI18n();
@@ -125,6 +127,16 @@ export function AgentSelector({
     ? effort || getAgentDefaults(selectedAgentStatus, model).effort
     : "";
   const selectedEffortLabel = selectedEffort;
+  const fallbackModelName =
+    selectedModelStatus?.name ||
+    selectedAgentStatus?.default_model_id ||
+    selectedAgentStatus?.current_model_id ||
+    "";
+  const selectedModelLabel = model
+    ? (selectedModelStatus?.name || model)
+    : (fallbackModelName
+        ? `${t("agent.defaultModel")} (${fallbackModelName})`
+        : t("agent.defaultModel"));
   const [isOpen, setIsOpen] = useState(false);
   const [submenuAgent, setSubmenuAgent] = useState<string | null>(null);
   const [setupAgent, setSetupAgent] = useState<string | null>(null);
@@ -177,16 +189,17 @@ export function AgentSelector({
     [submenuAgentStatus, submenuSelectedModel],
   );
   const submenuModes = useMemo(
-    () => submenuAgentStatus?.modes ?? [],
-    [submenuAgentStatus],
+    () => onModeChange ? submenuAgentStatus?.modes ?? [] : [],
+    [onModeChange, submenuAgentStatus],
   );
   const displayedMode = useMemo(() => {
     if (!submenuAgentStatus) return "";
+    if (allowDefaultMode) return submenuAgentStatus.name === agent ? mode || "" : "";
     const fallbackMode = getAgentDefaults(submenuAgentStatus).mode;
     return submenuAgentStatus.name === agent
       ? mode || fallbackMode
       : fallbackMode;
-  }, [submenuAgentStatus, agent, mode]);
+  }, [submenuAgentStatus, agent, mode, allowDefaultMode]);
   const submenuSupportsEffort = useMemo(
     () => submenuEfforts.length > 0 && !!submenuSelectedModel?.supportEffort,
     [submenuEfforts, submenuSelectedModel],
@@ -202,13 +215,12 @@ export function AgentSelector({
       return t("agent.currentUnavailable", { name: agent });
     }
     if (agent) {
-      const modelLabel = model || t("agent.defaultModel");
       return selectedEffortLabel
-        ? `${agent} · ${modelLabel} · ${t("agent.effort")}: ${selectedEffortLabel}`
-        : `${agent} · ${modelLabel}`;
+        ? `${agent} · ${selectedModelLabel} · ${t("agent.effort")}: ${selectedEffortLabel}`
+        : `${agent} · ${selectedModelLabel}`;
     }
     return undefined;
-  }, [agent, model, selectedEffortLabel, t, showUnavailableWarning]);
+  }, [agent, selectedModelLabel, selectedEffortLabel, t, showUnavailableWarning]);
 
   useEffect(() => {
     const handlePointerOutside = (e: PointerEvent) => {
@@ -531,7 +543,7 @@ export function AgentSelector({
         {showLabel ? (
           <span className="idea-agent-selector-label">
             <span className="idea-agent-selector-model">
-              {agentDisplayName(agent)} · {model || t("agent.defaultModel")}
+              {agentDisplayName(agent)} · {selectedModelLabel}
             </span>
             {selectedEffortLabel ? (
               <span className="idea-agent-selector-effort">
@@ -690,8 +702,14 @@ export function AgentSelector({
                   onToggle={() => setModelSectionExpanded((prev) => !prev)}
                   value={
                     allowDefaultModel && submenuAgentStatus.name === agent && !model
-                      ? t("agent.defaultModel")
-                      : (submenuAgentStatus.name === agent ? model : "") || submenuSelectedModel?.id || undefined
+                      ? (submenuSelectedModel?.name || submenuSelectedModel?.id
+                          ? `${t("agent.defaultModel")} (${submenuSelectedModel.name || submenuSelectedModel.id})`
+                          : t("agent.defaultModel"))
+                      : (submenuAgentStatus.name === agent && model
+                          ? (submenuSelectedModel?.id === model
+                              ? (submenuSelectedModel.name || model)
+                              : model)
+                          : submenuSelectedModel?.name || submenuSelectedModel?.id || undefined)
                   }
                 />
                 {modelSectionExpanded ? (
@@ -773,10 +791,19 @@ export function AgentSelector({
                         submenuModels.length > 0 ||
                         !!submenuSelectedModel?.id
                       }
-                      value={displayedMode || undefined}
+                      value={displayedMode || (allowDefaultMode ? t("agent.inheritPermission") : undefined)}
                     />
                     {modeSectionExpanded ? (
                       <>
+                        {allowDefaultMode ? (
+                          <button
+                            type="button"
+                            onClick={() => handleModeSelect("")}
+                            style={sectionItemStyle(submenuAgentStatus.name === agent && !displayedMode, false)}
+                          >
+                            {t("agent.inheritPermission")}
+                          </button>
+                        ) : null}
                         {submenuModes.map((item, index) => (
                           <button
                             key={item.id}
@@ -784,7 +811,7 @@ export function AgentSelector({
                             onClick={() => handleModeSelect(item.id)}
                             style={sectionItemStyle(
                               item.id === displayedMode,
-                              index > 0,
+                              allowDefaultMode || index > 0,
                             )}
                             title={item.description || item.id}
                           >

@@ -21,6 +21,7 @@ type OpenOptions struct {
 	Model           string
 	Mode            string
 	Effort          string
+	ReadOnly        bool
 	RootPath        string
 	Command         string
 	Args            []string
@@ -63,13 +64,14 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 			return nil, err
 		}
 	}
+	proc.SetReadOnly(opts.SessionKey, opts.ReadOnly)
 	if strings.TrimSpace(opts.Model) != "" {
 		if err := proc.SetModel(ctx, opts.SessionKey, opts.Model); err != nil {
 			proc.ForgetSession(opts.SessionKey)
 			return nil, err
 		}
 	}
-	if strings.TrimSpace(opts.Mode) != "" {
+	if !opts.ReadOnly && strings.TrimSpace(opts.Mode) != "" {
 		if err := proc.SetMode(ctx, opts.SessionKey, opts.Mode); err != nil {
 			proc.ForgetSession(opts.SessionKey)
 			return nil, err
@@ -84,6 +86,7 @@ func (r *Runtime) OpenSession(ctx context.Context, opts OpenOptions) (types.Sess
 	return &session{
 		proc:          proc,
 		sessionKey:    opts.SessionKey,
+		readOnly:      opts.ReadOnly,
 		agentDebugLog: logs.NewAgentLogger(opts.RootPath, opts.SessionKey, opts.AgentName),
 	}, nil
 }
@@ -276,6 +279,7 @@ func (r *Runtime) getOrCreateProcess(opts OpenOptions) (*Process, error) {
 type session struct {
 	proc          *Process
 	sessionKey    string
+	readOnly      bool
 	agentDebugLog *logs.AgentLogger
 }
 
@@ -317,6 +321,9 @@ func (s *session) ListModels(_ context.Context) (types.ModelList, error) {
 func (s *session) SetMode(ctx context.Context, mode string) error {
 	if s == nil || s.proc == nil {
 		return errors.New("acp session not initialized")
+	}
+	if s.readOnly {
+		return errors.New("read-only session cannot change permission mode")
 	}
 	return s.proc.SetMode(ctx, s.sessionKey, mode)
 }

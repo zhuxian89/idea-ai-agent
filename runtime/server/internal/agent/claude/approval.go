@@ -13,12 +13,23 @@ import (
 
 func (s *session) automaticToolPermission(req claudeagent.ToolPermissionRequest) (claudeagent.PermissionResult, bool) {
 	s.mu.RLock()
+	readOnly := s.readOnly
 	state := permissionState{
 		planMode:               s.planMode,
 		permissionMode:         s.permissionMode,
 		previousPermissionMode: s.previousPermissionMode,
 	}
 	s.mu.RUnlock()
+
+	if readOnly {
+		if isReadOnlyBackgroundSubagent(req.ToolName, req.Arguments) {
+			return claudeagent.PermissionDeny{Reason: "read-only session requires synchronous Explore subagents; set run_in_background to false"}, true
+		}
+		if isReadOnlySafeTool(req.ToolName, req.Arguments) {
+			return claudeagent.PermissionAllow{}, true
+		}
+		return claudeagent.PermissionDeny{Reason: "read-only session blocks tools that can modify files or execute commands"}, true
+	}
 
 	planning := state.planMode || state.permissionMode == planPermissionMode
 	if !planning || state.previousPermissionMode != claudeagent.PermissionModeBypassAll {
@@ -32,6 +43,23 @@ func (s *session) automaticToolPermission(req claudeagent.ToolPermissionRequest)
 		return claudeagent.PermissionAllow{}, true
 	}
 	return claudeagent.PermissionDeny{Reason: "plan mode blocks tools that can modify files or execute commands"}, true
+}
+
+func isReadOnlyBackgroundSubagent(toolName string, arguments json.RawMessage) bool {
+	if toolName != "Agent" && toolName != "Task" {
+		return false
+	}
+	var input struct {
+		RunInBackground bool `json:"run_in_background"`
+	}
+	return json.Unmarshal(arguments, &input) == nil && input.RunInBackground
+}
+
+func isReadOnlySafeTool(toolName string, arguments json.RawMessage) bool {
+	if toolName == "EnterPlanMode" || toolName == "ExitPlanMode" || isReadOnlyBackgroundSubagent(toolName, arguments) {
+		return false
+	}
+	return isPlanSafeTool(toolName, arguments)
 }
 
 func isPlanSafeTool(toolName string, arguments json.RawMessage) bool {

@@ -20,10 +20,23 @@ func (m *Manager) Search(_ context.Context, opts SearchOptions) ([]SearchHit, er
 	qLower := strings.ToLower(query)
 
 	m.mu.Lock()
-	sessions, err := m.listSessionMetasUnsafe()
+	allSessions, err := m.listSessionMetasUnsafe()
 	m.mu.Unlock()
 	if err != nil {
 		return nil, err
+	}
+	collabKeys := make(map[string]bool)
+	for _, item := range allSessions {
+		if IsCollabSource(item.Source) {
+			collabKeys[item.Key] = true
+		}
+	}
+	sessions := make([]*Session, 0, len(allSessions))
+	for _, item := range allSessions {
+		if collabKeys[item.Key] || collabKeys[item.ParentSessionKey] {
+			continue
+		}
+		sessions = append(sessions, item)
 	}
 
 	nameHits := make([]SearchHit, 0, limit)

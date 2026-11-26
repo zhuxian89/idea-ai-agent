@@ -135,7 +135,7 @@ const gitFixture = `
     const currentRootIdRef = useRef("a");
     const managedRootByIdRef = useRef({a:{is_git_repo:true},b:{is_git_repo:true}});
     const git = useWorkspaceGit({currentRootIdRef,managedRootByIdRef,fileOpenRequestRef:useRef(0),
-      setRelatedSelectedFileKey:noop,setMainViewPreferenceForRoot:noop,setSelectedSession:noop,
+      setMainViewPreferenceForRoot:noop,setSelectedSession:noop,
       setSelectedSessionLoading:noop,setFile:noop,replaceURLState:noop,setCurrentRootId:noop,
       isMobile:false,setIsLeftOpen:noop,refreshTreeDir:async (...args) => window.refreshed.push(args),
       selectedDirRef:useRef("."),t:key => key});

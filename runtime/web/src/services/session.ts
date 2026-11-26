@@ -7,7 +7,6 @@ import type { ActivityDetailResult, ActivityRef } from "./activityDetails";
 import { e2eeService } from "./e2ee";
 import {
   SessionType,
-  RelatedFile,
   ExchangeAux,
   Session,
   SessionSearchHit,
@@ -43,12 +42,10 @@ export {
   deleteCachedSession,
   clearCachedSessionsForRoot,
   getCachedSession,
-  setCachedSessionRelatedFiles,
 } from "./sessionCache";
 export type {
   SessionType,
   QueuedUserMessage,
-  RelatedFile,
   RelatedWorktree,
   ExchangeAux,
   TurnDiffUpdate,
@@ -1233,63 +1230,6 @@ class SessionService {
       const retryable = status === undefined || status === 408 || status === 429 || status >= 500;
       return { kind: "unavailable", retryable,
         message: retryable ? "toolActivity.detailsUnavailable" : "toolActivity.detailsRestricted" };
-    }
-  }
-
-  async getSessionRelatedFiles(
-    rootId: string,
-    sessionKey: string,
-  ): Promise<RelatedFile[]> {
-    try {
-      const params = new URLSearchParams({
-        root: rootId,
-      });
-      const data = await protectedJSON<any[]>(
-        appURL(
-          `/api/sessions/${encodeURIComponent(sessionKey)}/related-files`,
-          params,
-        ),
-      );
-      return Array.isArray(data) ? (data as RelatedFile[]) : [];
-    } catch (err) {
-      console.error("[Session] Failed to get session related files:", err);
-      return [];
-    }
-  }
-
-  async removeSessionRelatedFile(
-    rootId: string,
-    sessionKey: string,
-    path: string,
-    head = "",
-    repoPath = "",
-    repoKind = "",
-  ): Promise<boolean> {
-    try {
-      const params = new URLSearchParams({ root: rootId, path });
-      if (head) {
-        params.set("head", head);
-      }
-      if (repoPath) {
-        params.set("repo_path", repoPath);
-      }
-      if (repoKind) {
-        params.set("repo_kind", repoKind);
-      }
-      const res = await protectedFetch(
-        appURL(
-          `/api/sessions/${encodeURIComponent(sessionKey)}/related-files`,
-          params,
-        ),
-        { method: "DELETE" },
-      );
-      if (!res.ok) {
-        throw new Error("Failed to remove session related file");
-      }
-      return true;
-    } catch (err) {
-      console.error("[Session] Failed to remove session related file:", err);
-      return false;
     }
   }
 

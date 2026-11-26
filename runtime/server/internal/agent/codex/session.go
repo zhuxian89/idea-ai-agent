@@ -23,6 +23,7 @@ type OpenOptions struct {
 	Effort                string
 	FastService           string
 	PlanMode              bool
+	ReadOnly              bool
 	Probe                 bool
 	RootPath              string
 	Command               string
@@ -74,10 +75,12 @@ func (r *Runtime) OpenSession(_ context.Context, opts OpenOptions) (types.Sessio
 			return sess.handleAskUserRequest(req)
 		},
 	}
-	if opts.PlanMode {
+	if opts.PlanMode && !opts.ReadOnly {
 		threadOptions.CollaborationMode = codexCollaborationMode(true)
 	}
-	if err := applyPermissionMode(&threadOptions, opts.Mode); err != nil {
+	if opts.ReadOnly {
+		threadOptions.SandboxMode, threadOptions.ApprovalPolicy = "read-only", "never"
+	} else if err := applyPermissionMode(&threadOptions, opts.Mode); err != nil {
 		return nil, err
 	}
 
@@ -107,7 +110,8 @@ func (r *Runtime) OpenSession(_ context.Context, opts OpenOptions) (types.Sessio
 		threadOpts:    threadOptions,
 		threadID:      threadID,
 		sessionKey:    opts.SessionKey,
-		planMode:      opts.PlanMode,
+		planMode:      opts.PlanMode && !opts.ReadOnly,
+		readOnly:      opts.ReadOnly,
 		questionWaits: make(map[string]*types.PendingQuestion[map[string]string]),
 		agentDebugLog: logs.NewAgentLogger(opts.RootPath, opts.SessionKey, opts.AgentName),
 	}
@@ -212,6 +216,7 @@ type session struct {
 	threadID   string
 	sessionKey string
 	planMode   bool
+	readOnly   bool
 
 	mu            sync.RWMutex
 	onUpdate      func(types.Event)

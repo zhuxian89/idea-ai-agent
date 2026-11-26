@@ -16,6 +16,19 @@ import (
 	"mindfs/server/internal/turndiff"
 )
 
+type StreamTextFilter interface {
+	Push(chunk string) string
+	Flush() string
+}
+
+type StreamCompletionSuffixer interface {
+	CompletionSuffix() string
+}
+
+type StreamToolActivityObserver interface {
+	MarkToolActivity()
+}
+
 type SendMessageInput struct {
 	RootID                 string
 	RuntimeRootPath        string
@@ -26,6 +39,9 @@ type SendMessageInput struct {
 	Effort                 string
 	FastService            string
 	PlanMode               *bool
+	ReadOnly               bool
+	ReturnErrorOnCancel    bool
+	StreamFilter           StreamTextFilter
 	Shell                  string
 	TerminalCols           int
 	Content                string
@@ -249,12 +265,16 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 	if err != nil {
 		return err
 	}
-	if in.PlanMode != nil && current.PlanMode != *in.PlanMode {
+	readOnly := in.ReadOnly || session.IsReadOnlySession(current)
+	if !readOnly && in.PlanMode != nil && current.PlanMode != *in.PlanMode {
 		if err := manager.UpdatePlanMode(ctx, current, *in.PlanMode); err != nil {
 			return err
 		}
 	}
 	resolvedMode := resolveRuntimeMode(current, in.Mode)
+	if readOnly {
+		resolvedMode = ""
+	}
 	resolvedFastService := resolveRuntimeFastService(in.Agent, current, in.FastService)
 	if in.OnStart != nil {
 		in.OnStart(MessageStart{
@@ -288,16 +308,16 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 	if runtimeRootPath := strings.TrimSpace(in.RuntimeRootPath); runtimeRootPath != "" {
 		rootAbs = filepath.Clean(runtimeRootPath)
 	}
-	planMode := current != nil && current.PlanMode
+	planMode := current != nil && current.PlanMode && !readOnly
 
 	developerInstructions := ""
-	includeReplyTipsInUserMessage := isInitial
+	includeReplyTipsInUserMessage := isInitial && !session.IsCollabSource(current.Source)
 	if isInitial && agentPool.SupportsDeveloperInstructions(in.Agent) {
 		// Native configuration owns the developer/system prompt. Rendering hints
 		// must not replace the user's configured developer instructions.
 		includeReplyTipsInUserMessage = false
 	}
-	sess, agentCtxSeq, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, in.Agent, in.Model, in.Mode, in.Effort, in.FastService, rootAbs, developerInstructions, func() {
+	sess, agentCtxSeq, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, in.Agent, in.Model, resolvedMode, in.Effort, in.FastService, readOnly, rootAbs, developerInstructions, func() {
 		if in.OnUpdate != nil {
 			in.OnUpdate(agenttypes.Event{
 				Type: agenttypes.EventTypeRecovery,
@@ -462,7 +482,20 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 			if update.Type == agenttypes.EventTypeMessageChunk {
 				if chunk, ok := update.Data.(agenttypes.MessageChunk); ok {
 					sawAssistantChunk = true
-					responseText = appendResponseChunk(responseText, lastResponseUpdateType, chunk.Content)
+					textDelta := chunk.Content
+					if in.StreamFilter != nil && chunk.ParentToolUseID == "" && chunk.TaskID == "" {
+						textDelta = in.StreamFilter.Push(chunk.Content)
+						if textDelta == "" {
+							if watcher != nil {
+								watcher.MarkSessionActive(current.Key)
+							}
+							return
+						}
+						chunk.Content = textDelta
+						update.Data = chunk
+						clientUpdate = compactAgentUpdate(update)
+					}
+					responseText = appendResponseChunk(responseText, lastResponseUpdateType, textDelta)
 					lastResponseUpdateType = string(update.Type)
 				}
 			} else if update.Type == agenttypes.EventTypeMessageDone {
@@ -475,6 +508,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 				update.Type == agenttypes.EventTypeTodoUpdate ||
 				update.Type == agenttypes.EventTypePlanUpdate ||
 				update.Type == agenttypes.EventTypeCompact {
+				if update.Type == agenttypes.EventTypeToolCall || update.Type == agenttypes.EventTypeToolUpdate {
+					if obs, ok := in.StreamFilter.(StreamToolActivityObserver); ok {
+						obs.MarkToolActivity()
+					}
+				}
 				lastResponseUpdateType = string(update.Type)
 			}
 			if watcher != nil {
@@ -539,10 +577,41 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		}
 	}
 	flushThought()
+	if in.StreamFilter != nil {
+		if tail := in.StreamFilter.Flush(); tail != "" {
+			responseText = appendResponseChunk(responseText, lastResponseUpdateType, tail)
+			lastResponseUpdateType = string(agenttypes.EventTypeMessageChunk)
+			if in.OnUpdate != nil {
+				in.OnUpdate(agenttypes.Event{
+					Type:      agenttypes.EventTypeMessageChunk,
+					SessionID: sess.SessionID(),
+					Data:      agenttypes.MessageChunk{Content: tail},
+				})
+			}
+		}
+		if sendErr == nil && ctx.Err() == nil && turnCtx.Err() == nil {
+			if suffixer, ok := in.StreamFilter.(StreamCompletionSuffixer); ok {
+				if suffix := suffixer.CompletionSuffix(); suffix != "" {
+					responseText = appendResponseChunk(responseText, lastResponseUpdateType, suffix)
+					lastResponseUpdateType = string(agenttypes.EventTypeMessageChunk)
+					if in.OnUpdate != nil {
+						in.OnUpdate(agenttypes.Event{
+							Type:      agenttypes.EventTypeMessageChunk,
+							SessionID: sess.SessionID(),
+							Data:      agenttypes.MessageChunk{Content: suffix},
+						})
+					}
+				}
+			}
+		}
+	}
 	latestTurnDiff = finishWorkspaceTurnDiff(workspaceBefore, latestTurnDiff, root, current.Key, func(path string) string {
 		return normalizeToolPath(root, filepath.Join(rootAbs, filepath.FromSlash(path)))
 	})
-	if latestTurnDiff != nil && strings.TrimSpace(latestTurnDiff.Diff) != "" {
+	if session.IsCollabSource(current.Source) && latestTurnDiff == nil {
+		latestTurnDiff = &agenttypes.TurnDiffUpdate{Partial: true}
+	}
+	if latestTurnDiff != nil && (strings.TrimSpace(latestTurnDiff.Diff) != "" || (session.IsCollabSource(current.Source) && latestTurnDiff.Partial)) {
 		turnDiffCopy := *latestTurnDiff
 		auxBuffer = append(auxBuffer, session.ExchangeAux{
 			Seq:      plannedAssistantSeq,
@@ -557,7 +626,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 	resolvedModel := resolveRuntimeModel(current, sess, in.Model)
 	resolvedEffort := resolveRuntimeEffort(in.Agent, current, in.Effort)
 	resolvedFastService = resolveRuntimeFastService(in.Agent, current, in.FastService)
-	if prefs := s.Registry.GetPreferences(); prefs != nil {
+	if prefs := s.Registry.GetPreferences(); prefs != nil && !session.IsCollabSource(current.Source) {
 		if changed, err := prefs.UpdateAgentDefaultsIfChanged(in.Agent, resolvedModel, resolvedEffort, resolvedFastService); err != nil {
 			log.Printf("[preferences] agent_defaults.update.error agent=%s err=%v", strings.TrimSpace(in.Agent), err)
 		} else if changed {
@@ -599,7 +668,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 			prober.ReportRuntimeFailure(in.Agent, sendErr)
 		}
 		return sendErr
-	} else if prober != nil {
+	}
+	if in.ReturnErrorOnCancel && (isCanceledTurnError(sendErr) || ctx.Err() != nil || turnCtx.Err() != nil) {
+		return context.Canceled
+	}
+	if prober != nil {
 		prober.ReportSuccess(in.Agent)
 	}
 	return nil
@@ -632,6 +705,9 @@ func (s *Service) RunTransientSlashCommand(ctx context.Context, in RunTransientS
 	}
 	current, err := manager.Get(ctx, key, 0)
 	if err != nil {
+		if !errors.Is(err, session.ErrSessionNotFound) {
+			return err
+		}
 		current = &session.Session{
 			Key:         key,
 			Type:        session.TypeChat,
@@ -658,7 +734,8 @@ func (s *Service) RunTransientSlashCommand(ctx context.Context, in RunTransientS
 	}
 	root := manager.Root()
 	rootAbs, _ := root.RootDir()
-	sess, _, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, agentName, in.Model, in.Mode, in.Effort, in.FastService, rootAbs, "", nil)
+	readOnly := session.IsReadOnlySession(current)
+	sess, _, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, agentName, in.Model, in.Mode, in.Effort, in.FastService, readOnly, rootAbs, "", nil)
 	if err != nil {
 		return err
 	}

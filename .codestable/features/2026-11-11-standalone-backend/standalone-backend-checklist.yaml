@@ -1,8 +1,50 @@
 feature: 2026-11-11-standalone-backend
 status: in_progress
 entrypoint: README.md
-current_step: windows-first-install-acceptance
+current_step: standalone-quick-mode-final-review
 steps:
+- id: standalone-0167-and-plugin-0127-ci-release
+  description: 独立后台 0.1.67 经 GitHub Actions 构建六平台正式包并切换默认版本，之后由插件流水线同版本更新 0.1.27。
+  status: in_progress
+- id: standalone-collab-clean-handoff-docs
+  description: 逐条回应合并磁盘文档时过滤控制块，最终报告补上已记录且正文缺少的测试命令。竞态、旧库迁移、浏览器回归及隔离安装通过，本机已升级至 0.1.66-local.16。
+  status: done
+- id: standalone-runtime-test-isolation
+  description: API 测试隔离继承的后台和 Agent 配置路径，Web Push 测试密钥限定在临时目录。31 个 Go 包竞态测试通过，模拟安装和配置目录的文件清单及 SHA-256 前后一致。
+  status: done
+- id: standalone-0166-local15-collab-progress-permissions
+  description: 快速模式实时应用阶段状态，进度图标恢复未完成步骤，运行圆点按配置呼吸，主模型权限随模板保存并在手机回显。回归与隔离安装通过，本机已升级，9 个项目、模板接口、网页资源和 Relay 已核验。
+  status: done
+- id: standalone-0166-local14-shared-activity-glow
+  description: 网页快速模式共用单聊流光设置，覆盖运行卡片和列表状态点。类型检查、9 项浏览器测试、旧库迁移、静态门禁和隔离安装通过。本机已升级，9 个项目、网页资源与 Relay 已核验。
+  status: done
+- id: standalone-quick-mode-final-review
+  description: 第 02 轮恢复旧 Skill 单行简介的读取并校正版本顺序和 R3 出处。交付复跑通过 11 个 Go 包的竞态测试、Skill 简介和看板旧库迁移专项、TypeScript 检查及 4 项前端回归。真实双模型流程、安装包、Windows 与手机实机待验收。
+  status: in_progress
+- id: standalone-0166-local13-review-again-attachments
+  description: 再审支持作者补充意见及附件，上传完成后将路径和意见交给本轮审核员。浏览器回归、后端竞态、旧库迁移、静态门禁、隔离安装通过，本机已从 local.11 升至 local.13，网页资源、9 个项目与 Relay 已核验。
+  status: done
+- id: standalone-0166-local11-handoff-and-flow-control
+  description: 修复快速模式 4 处交接文档问题（去掉控制块外层四反引号、工具边界切分剥离交付文档开头过渡语、去除 02/03 尾部重复正文、修正首次回应误标继续补齐）并加固阶段流程控制（审核续跑保留正文、缺有效审核块不误报交付路径、阶段取消透传暂停防误推进、Claude 只读审核禁用后台异步子任务防提前结轮）。四包 -race、kanban 旧库迁移门禁、浏览器回归、静态门禁与隔离安装全部通过，已调度 launchd 热升级至 0.1.66-local.11。该测试版本已由 local.13 接替。
+  status: done
+- id: standalone-0166-local10-slim-review-basis
+  description: 快速模式 02-审核依据.md 去掉跨 Agent 全局规则自动内联，以项目 AGENTS.md 路径为唯一统一规范，模板勾选 Skill 改为仅写「名称 + 简介 + 路径索引」按需读取（文件压回约 40 行），并包含前端 CollabSkillPicker 分类与全选交互。Go 竞态、kanban 旧库迁移门禁、10 项浏览器回归、静态门禁及隔离安装全部通过，本机已从 local.9 热升级至 0.1.66-local.10（9 个项目、二进制、网页资源与 Relay 已核验）。该测试版本已由 local.13 接替。
+  status: done
+- id: standalone-0166-local9-delivery-path-footer
+  description: 在保留原生对话区实时正文输出与卡片原样的前提下，于成功完成的阶段对话末尾重新追加「阶段交付路径：<相对路径>」（不污染交付文档正文，取消或失败时不追加）。Go vet、三包 -race、kanban 全量与迁移 -race、macos-arm64 静态门禁与隔离安装全部通过，本机已从 local.8 热升级至 0.1.66-local.9（9 个项目、二进制、网页资源与 Relay 状态已核验）。该测试版本已由 local.13 接替。
+  status: done
+- id: standalone-0166-local8-native-chat-restore
+  description: 撤销 local.7 在步骤卡片内嵌正文的改动，恢复卡片原样并保留原生对话区实时正文输出与保存。0.1.66-local.8 通过 Go 竞态、最终包浏览器回归、静态门禁及隔离安装，已热升级至本机 http://127.0.0.1:7441（9 个项目、二进制、网页资源与 Relay 已核验）。该测试版本已由 local.13 接替。
+  status: done
+- id: standalone-0166-local7-stage-text
+  description: 恢复阶段正文推送、会话保存和卡片内历史正文，最终包通过浏览器和隔离安装验证，本机已升级，既有第二轮的四张卡片直接显示正文。
+  status: done
+- id: standalone-0166-local6-phone-and-review
+  description: 快速模式两轮交接、改动文件查看、手机单聊左侧会话列表通过回归。0.1.66-local.6 已装机，9 个项目、Relay 及本机手机布局已核验。
+  status: done
+- id: standalone-0166-local3-collab-quick-mode-macos
+  description: 多模型协作快速模式 macOS arm64 本地独立测试包 0.1.66-local.3 已构建（含顶部正中「多Agent模式」入口与手机灵动岛/底部安全区及 App 现有按钮复用），通过旧库迁移与竞态测试、18 项浏览器回归、305 网页文件静态门禁、临时 HOME 隔离安装验证及本机预检，调度热升级至本机 http://127.0.0.1:7441。该测试版本已由 local.13 接替。
+  status: done
 - id: standalone-0165-plugin-0127-release
   description: 独立后台 0.1.65 经 release-standalone.yml formal 全自动发布并切为默认版本（Run 45538561445，含真实 Windows ACP Job Object 进程树与文件锁单测、24 附件匿名回读、无参数默认安装核验及 0.1.64 归档下架）；IDEA 插件 v0.1.27 经 release-plugin.yml formal 同版替换 6 个附件并保持 Latest（Run 45540134877，双端内嵌后台 305 HTTP 资源、Windows PowerShell 5.1 三包对 0.1.65 验证及 6 附件公开回读通过）。
   status: done

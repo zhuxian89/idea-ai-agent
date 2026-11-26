@@ -81,14 +81,16 @@ func (h *HTTPHandler) handleAgentConnectionModels(w http.ResponseWriter, r *http
 		return
 	}
 	if h.AppContext != nil {
+		var def agent.Definition
+		var hasDef bool
+		if pool := h.AppContext.GetAgentPool(); pool != nil {
+			def, hasDef = pool.Config().GetAgent(agentName)
+		}
+		if hasDef {
+			models.Models = agent.SupplementActiveRelayModels(ctx, agentName, def, models.Models)
+		}
 		if prefs := h.AppContext.GetPreferences(); prefs != nil {
-			var protocol agent.Protocol
-			if pool := h.AppContext.GetAgentPool(); pool != nil {
-				if def, ok := pool.Config().GetAgent(agentName); ok {
-					protocol = def.Protocol
-				}
-			}
-			models.Models = prefs.SupplementAgentModels(agentName, protocol, models.Models)
+			models.Models = prefs.SupplementAgentModels(agentName, def.Protocol, models.Models)
 		}
 	}
 	respondJSON(w, http.StatusOK, models)

@@ -20,7 +20,6 @@ export type ErrorCode =
   | "root.delete_failed"
   | "root.rename_failed"
   | "git.checkout_failed"
-  | "git.related_file_diff_failed"
   | "git.worktree_switch_failed"
   | "git.worktree_remove_failed"
   // Agent errors
@@ -194,11 +193,6 @@ class ErrorService {
       "git.checkout_failed": {
         messageKey: "error.git.checkoutFailed",
         severity: "error",
-        recoverable: true,
-      },
-      "git.related_file_diff_failed": {
-        messageKey: "error.git.relatedFileDiffFailed",
-        severity: "warning",
         recoverable: true,
       },
       "git.worktree_switch_failed": {

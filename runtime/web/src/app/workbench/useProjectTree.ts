@@ -44,7 +44,6 @@ export function useProjectTree({ appFoundationApi, currentRootApi }: Deps) {
   const [gitHistoryExpandedByRoot, setGitHistoryExpandedByRoot] = useState<
     Record<string, Record<string, boolean>>
   >(() => loadStringBooleanRecord(GIT_HISTORY_EXPANDED_STORAGE_KEY));
-  const [relatedSelectedFileKey, setRelatedSelectedFileKey] = useState("");
   const [treeSortMode, setTreeSortMode] = useState<DirectorySortMode>(() => {
     if (typeof window === "undefined") {
       return DEFAULT_DIRECTORY_SORT_MODE;
@@ -76,10 +75,6 @@ export function useProjectTree({ appFoundationApi, currentRootApi }: Deps) {
     }
   });
   const [showHiddenFiles, setShowHiddenFiles] = useState(false);
-  const [projectTreeTabRequest, setProjectTreeTabRequest] = useState<{
-    tab: ProjectTreeTab;
-    nonce: number;
-  } | null>(null);
   const [projectTreeTab, setProjectTreeTab] = useState<ProjectTreeTab>("files");
   useEffect(() => {
     expandedRef.current = expanded;
@@ -201,5 +196,5 @@ export function useProjectTree({ appFoundationApi, currentRootApi }: Deps) {
     [mainEntries, showHiddenFiles],
   );
 
-  return { currentDirectorySortMode, currentDirectorySortOverride, entriesByPath, entriesByPathRef, expanded, formatDirectoryLoadError, getDirectorySortKey, gitHistoryExpandedByRoot, gitStatusExpandedByRoot, mainDirectoryError, normalizeTreeResponse, projectTreeTab, projectTreeTabRequest, refreshTreeDir, relatedSelectedFileKey, selectedDir, selectedDirKey, setDirectorySortOverrides, setEntriesByPath, setExpanded, setGitHistoryExpandedByRoot, setGitStatusExpandedByRoot, setMainDirectoryError, setMainEntries, setProjectTreeTab, setProjectTreeTabRequest, setRelatedSelectedFileKey, setSelectedDir, setSelectedDirKey, setShowHiddenFiles, setTreeSortMode, showHiddenFiles, treeCacheKey, treeSortMode, visibleMainEntries };
+  return { currentDirectorySortMode, currentDirectorySortOverride, entriesByPath, entriesByPathRef, expanded, formatDirectoryLoadError, getDirectorySortKey, gitHistoryExpandedByRoot, gitStatusExpandedByRoot, mainDirectoryError, normalizeTreeResponse, projectTreeTab, refreshTreeDir, selectedDir, selectedDirKey, setDirectorySortOverrides, setEntriesByPath, setExpanded, setGitHistoryExpandedByRoot, setGitStatusExpandedByRoot, setMainDirectoryError, setMainEntries, setProjectTreeTab, setSelectedDir, setSelectedDirKey, setShowHiddenFiles, setTreeSortMode, showHiddenFiles, treeCacheKey, treeSortMode, visibleMainEntries };
 }

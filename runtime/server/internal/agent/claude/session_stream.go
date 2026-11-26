@@ -101,9 +101,9 @@ func (s *session) consumeMessages() {
 				SessionID: s.SessionID(),
 				Data:      types.MessageDone{ContextWindow: contextWindow},
 			})
-			s.completeTurn(resultErr(m))
 			s.sawDelta = false
 			s.sawMessageText = false
+			s.completeTurn(resultErr(m))
 		default:
 			s.logRawMessage(raw)
 		}

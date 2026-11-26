@@ -390,3 +390,151 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 - 独立后台 `0.1.65` 从 `60f5290`（`standalone-0.1.65`）触发 `release-standalone.yml` `mode=formal` 全绿通过（[独立后台 CI Run 45538561445](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45538561445)）：旧库 `kanban` 迁移与 `-race` 迁移测试、Go 全量与 405 个前端测试、六平台 24 个附件静态门禁、Linux 隔离安装与 systemd 自更新、macOS arm64 隔离安装、真实 Windows `TestWindowsACPProcessTreeCleanup`（`close`/`cancel`/`wrapper-exit`）及 PowerShell 5.1 安装/升级/计划任务自更新、公开匿名回读 24 个附件逐字节比对、Windows PowerShell 5.1 公开下载验证、提交 `7d8ae9b` 更新 `scripts/standalone/version.txt` 为 `0.1.65` 后无参数默认在线安装核验通过；旧 `standalone-v0.1.64` 快照归档至工作流产物 `withdrawn-standalone-releases-0.1.65` 后已下架，Git 标签保留。[0.1.65 正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.65)
 - IDEA 插件 `0.1.27` 从 `7d8ae9b`（`main`）触发 `release-plugin.yml` `mode=formal` + `replace_existing=true` 全绿通过（[插件 CI Run 45540134877](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45540134877)）：旧库迁移与 `-race` 测试、Go 全量与前端测试、Gradle 测试、5 个插件 ZIP + `SHA256SUMS.txt` 静态门禁、`macos-latest` 与 `windows-latest` 双端隔离启动内嵌后台逐字节校验 305 个 HTTP 网页资源、真实 Windows PowerShell 5.1 对三个 Windows/通用插件包针对 `0.1.65` 的安装验证；替换前快照归档至工作流产物 `plugin-replaced-snapshot-0.1.27`，更新 `v0.1.27` 保持 `Latest` 并完成 6 个公开附件匿名回读逐字节核验。已安装 `0.1.27` 的用户需从磁盘重装 ZIP 并重启 IDEA。[插件 Release](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)
 - **仍待真机确认范围：** Linux/Windows ARM64 与 macOS Intel 物理机运行、macOS 真实服务升级与 Windows 真实登录自启。
+
+### 0.1.66-local.3 本机独立测试包（顶部正中「多Agent模式」与手机灵动岛适配，2026-11-25）
+
+- 在 `0.1.66-local.2` 基础上按实机反馈完成两项修正：移除会话侧栏角落入口，改为桌面/平板 `RemoteTopBar` 顶栏正中央、手机 `RemotePhoneShell` 聊天顶栏及 IDEA 顶栏展示「多Agent模式」胶囊按钮；`CollabShell` 接入 `--mindfs-safe-area-top`、`--mindfs-safe-area-bottom` 与 `--mindfs-viewport-height`，移动端顶栏、抽屉、底部滚动区与弹窗完整避让灵动岛和 Home Indicator，并复用现有 App 的 `PanelToggle` 与 `44x44` `.remote-phone-icon` 顶栏按钮规范。
+- `kanban` 旧库迁移与 `-race` 迁移测试、`TestFrontendAssetsStayWithBackend`、前端 `tsc`、生产构建（305 个网页文件、零 `/mindfs-assets/`）与 18 项浏览器回归通过；重新打包 `build/standalone/0.1.66-local.3/` 并通过 `verify-release-assets.mjs`、`verify-package-install.mjs` 隔离安装及 `upgrade.py --check` 预检，经独立 `launchd` 任务带失败自动回滚热升级至 `http://127.0.0.1:7441`（[本机部署](../../../build/reports/standalone-0.1.66-local.3-live-upgrade/result.txt) · [安装日志](../../../build/reports/standalone-0.1.66-local.3-live-upgrade/install.log)）。未修改 `scripts/standalone/version.txt`，未公开发布，未重打 IDEA 插件包。
+
+## 0.1.66-local.6 手机会话列表与快速模式手动复核
+
+- 快速模式从现有回合改动记录汇总路径。审核通过项目内文件交接；第 5 步可查看原回合的单文件差异，也可手动开始下一轮只读审核。中文交付按轮次保存，旧运行仍可打开原文档。
+- 手机单聊的三横线打开可搜索的左侧会话列表，选中会话即可返回聊天。「全部会话」继续进入完整管理页。文件预览保留返回项目入口。
+- 受影响的六个 Go 包通过竞态测试，覆盖真实会话存储、首轮至复核流转及旧库迁移。看板全量与旧库专项竞态测试通过。手机浏览器 5 项测试通过，最终包网页的快速模式与远程入口浏览器回归 5 项通过。
+- macOS arm64 产物通过 6 个附件及 305 个网页文件的静态校验、临时 HOME 安装。热升级 `local.5 → local.6` 后在 7441 端口核对版本、二进制、HTTP 资源、原 9 个项目及 Relay 连接。在运行中的网页用 390 × 844 视口打开 292 px 左侧会话列表并点空白处收起。包和验证记录仅用于本机测试。[安装回执](../../../build/reports/standalone-0.1.66-local.6-live-upgrade/result.txt) · [手机布局回执](../../../build/reports/standalone-0.1.66-local.6-live-upgrade/live-phone.txt)
+- 真模型附加试跑在临时项目启动 Codex 实现，原生 CLI 请求授权执行写文件的命令，随后终止并清理测试运行。两轮流程的通过记录来自协作服务和浏览器回归。
+
+## 0.1.66-local.7 快速模式阶段正文
+
+- 移除把回复正文压成一行路径的过滤器。自动阶段共用已有控制块过滤器，普通文字随模型输出推送并保存进会话，交接指令仍引用项目相对路径。步骤卡片取回实际保存的 Markdown，可以直接回看旧版的交付。
+- 三个相关 Go 包的竞态测试、看板全量与旧库专项竞态测试通过。最终包浏览器回归核对阶段卡上可读正文，6 个 macOS arm64 附件、305 个网页文件及临时 HOME 隔离安装通过。
+- 本机从 local.6 升级到 local.7 后，9 个项目可访问、Relay 连接已核对。用实际后台页面打开既有第二轮运行，逐一读取实现、审核、回应及最终结果四张卡片。[升级回执](../../../build/reports/standalone-0.1.66-local.7-live-upgrade/result.txt) · [正文回看验证](../../../build/reports/standalone-0.1.66-local.7-live-upgrade/live-cards.txt)
+
+## 0.1.66-local.8 步骤卡片还原与原生对话区显示
+
+- 撤销 `local.7` 将交付文档正文内嵌到步骤卡片的改动，`CollabShell` 步骤卡片恢复原样（仅保留标题、模型、摘要、分歧裁决/改动文件与底部文档弹窗入口）；服务端保持 `ControlStreamFilter`，新阶段输出实时流式推送并保存至原生对话区。
+- 验证证据：`collab`、`api/usecase`、`api` 三个 Go 包 `-race` 通过（[race.log](../../../build/reports/standalone-0.1.66-local.8-live-upgrade/race.log)）；最终包 7 项浏览器回归通过（[browser.log](../../../build/reports/standalone-0.1.66-local.8-live-upgrade/browser.log)）；`macos-arm64` 6 个附件及 305 网页文件静态门禁通过（[assets.log](../../../build/reports/standalone-0.1.66-local.8-live-upgrade/assets.log)）；临时 HOME 隔离安装通过（[isolated-install.log](../../../build/reports/standalone-0.1.66-local.8-live-upgrade/isolated-install.log)）。
+- 本机从 `local.7` 热升级至 `0.1.66-local.8`，核验 `http://127.0.0.1:7441`、9 个既有项目、二进制、`/api/collab/templates`、网页资源与 Relay 状态通过（[升级回执](../../../build/reports/standalone-0.1.66-local.8-live-upgrade/result.txt)）。**未做：** 真实页面的卡片与原生对话区交互验收交由作者自测；本轮未重跑 `kanban` 旧库迁移（未改动 `kanban` 或数据库结构，正式发包前仍须按 AGENTS.md 复跑）；未提交、未公开发布。
+
+## 0.1.66-local.9 阶段对话末尾恢复阶段交付路径提示
+
+- 改动：`ControlStreamFilter` 新增 `NewControlStreamFilterWithDeliveryPath(docPath)` 与 `CompletionSuffix()`（`runtime/server/internal/collab/control_filter.go`）；`handoffTurn` 传入 `step.DocPath`（`runtime/server/internal/collab/stage_handoff.go`）；`usecase.SendMessage` 新增可选接口 `StreamCompletionSuffixer`，仅在回合成功且上下文未取消（`sendErr == nil && ctx.Err() == nil && turnCtx.Err() == nil`）时将 `阶段交付路径：<step.DocPath>` 实时推送并持久化到阶段对话末尾，不写入 `VisibleText()` 与 `.mindfs/runs/` 交付文档正文。新增 `TestControlStreamFilterCompletionSuffixKeepsVisibleTextClean` 与 `TestSendMessageStreamFilterCompletionSuffix`（覆盖成功追加与取消不追加双分支）。
+- 验证证据：`go vet` 与 `collab` / `api/usecase` / `api` `-race` 全部通过（[race.log](../../../build/reports/standalone-0.1.66-local.9-live-upgrade/race.log)）；`kanban` 旧库全量与 `-race` 迁移门禁通过（[kanban.log](../../../build/reports/standalone-0.1.66-local.9-live-upgrade/kanban.log) · [kanban-race.log](../../../build/reports/standalone-0.1.66-local.9-live-upgrade/kanban-race.log)）；`0.1.66-local.9` `macos-arm64` 6 个附件及 305 网页文件静态门禁通过（[assets.log](../../../build/reports/standalone-0.1.66-local.9-live-upgrade/assets.log)）；临时 HOME 隔离安装通过（[isolated-install.log](../../../build/reports/standalone-0.1.66-local.9-live-upgrade/isolated-install.log)）；`upgrade.py --check` 预检通过（`0.1.66-local.8`、9 个项目、Relay 已连接，[preflight.log](../../../build/reports/standalone-0.1.66-local.9-live-upgrade/preflight.log)）。
+- 本机升级：独立 `launchd` 任务（`dev.ideaagent.standalone-upgrade-0166-local9`）已完成 `local.8 -> local.9` 热升级，核验 `http://127.0.0.1:7441`、9 个既有项目、二进制、`/api/collab/templates`、网页资源与 Relay 状态全部通过（[升级回执](../../../build/reports/standalone-0.1.66-local.9-live-upgrade/result.txt)）。**未做：** 未改 `scripts/standalone/version.txt`，未提交、未公开发布，未重打 IDEA 插件包；真实页面的阶段交付提示待作者自测确认。
+
+## 0.1.66-local.10 审核依据去内联精简与 Skill 分组选择（2026-11-26）
+
+- 改动：`LoadStandards` 与 `BuildReviewerStandardsSection`（`runtime/server/internal/collab/standards.go`）移除对 `~/.codex/AGENTS.md`、`~/.claude/CLAUDE.md`、`~/.gemini/GEMINI.md` 的自动扫描与正文内联，避免不同 Agent 全局配置冲突；仅按路径引用项目 `AGENTS.md` 作为唯一共享规范，并将模板勾选的 `SKILL.md` 从全文拼接改为单行索引（`名称：简介（路径）`，提示仅在改动涉及该领域时按需读取），使 `02-审核依据.md` 从 1,300+ 行收敛回约 40 行。同步更新 `CollabShell.tsx` Skill 选择器说明文案与 `prompts.go` 示例措辞，并包含前端 `CollabSkillPicker` 按来源/前缀分类及一键全选能力。
+- 验证证据：`go vet` 与 `collab` / `api` `-race` 通过（含行数上限断言 `<= 55`，[race.log](../../../build/reports/standalone-0.1.66-local.10-live-upgrade/race.log)）；`kanban` 旧库全量与 `-race` 迁移门禁通过（[kanban.log](../../../build/reports/standalone-0.1.66-local.10-live-upgrade/kanban.log) · [kanban-race.log](../../../build/reports/standalone-0.1.66-local.10-live-upgrade/kanban-race.log)）；最终前端产物 10 项单测与浏览器回归全部通过（[browser.log](../../../build/reports/standalone-0.1.66-local.10-live-upgrade/browser.log)）；`0.1.66-local.10` `macos-arm64` 6 附件及 305 网页文件静态门禁通过（[assets.log](../../../build/reports/standalone-0.1.66-local.10-live-upgrade/assets.log)）；临时 HOME 隔离安装通过（[isolated-install.log](../../../build/reports/standalone-0.1.66-local.10-live-upgrade/isolated-install.log)）；`upgrade.py --check` 预检通过（[preflight.log](../../../build/reports/standalone-0.1.66-local.10-live-upgrade/preflight.log)）。
+- 本机升级：独立 `launchd` 任务（`dev.ideaagent.standalone-upgrade-0166-local10`）已完成 `local.9 -> local.10` 热升级，核验 `http://127.0.0.1:7441`、9 个既有项目、二进制、`/api/collab/templates`、网页资源与 Relay 状态全部通过（[升级回执](../../../build/reports/standalone-0.1.66-local.10-live-upgrade/result.txt)）。**未做：** 未改 `scripts/standalone/version.txt`，未提交、未公开发布，未重打 IDEA 插件包；新运行生成的 `02-审核依据.md` 实机表现待作者确认。
+
+## 0.1.66-local.11 快速模式交接文档清理与阶段流程控制加固（2026-11-26）
+
+- 交接文档修复（4 处）：
+  1. `prompts.go` 三个 `*ControlFormatSpec()` 移除外层四反引号围栏，直接输出三反引号 `mindfs-control` 格式，消除模型照抄外层围栏导致控制块漏进聊天与解析失败的风险。
+  2. `ControlStreamFilter` 新增 `MarkToolActivity()` 与 `DeliverableText()`，`usecase.SendMessage` 在 `ToolCall`/`ToolUpdate` 事件标记工具边界：聊天流继续完整保留实时过程文字，落盘交付文档仅取最后一段完整交付正文（且尾部仅跟无正文工具与控制块时不误清），消除交付文档开头的等待过渡语。
+  3. `renderReviewDocWithCitations` 尾部核验记录精简为单行出处核实状态（仅当正文未提及该条目编号时才补充标题说明）；`buildResponseDocContent` 在单轮正常完成且无解析兜底、正文已覆盖全部条目时不再重复追加结构化回应汇总。
+  4. `service.go` 第 3 步仅在已有部分已回应条目（`respondedCount > 0`）时才标记增量续跑并输出“继续补齐尚未回应的条目”，消除首次执行误写“继续补齐：R1..Rn”。
+- 流程控制加固：
+  1. `usecase.SendMessageInput` 新增 `ReturnErrorOnCancel` 并在 `AppContext.RunStageTurn` 启用：在右侧 `ActionBar` 停止当前回合或 SDK 取消时返回 `context.Canceled`（且不广播红色错误横幅），由 `collab.Service.handleTurnError` 准确将当前步骤置为 `waiting_user` 暂停，杜绝把半截取消回合当成功推进至下一阶段。
+  2. `claude/approval.go` 在 `readOnly` 会话中拒绝 `run_in_background: true` 的 `Agent`/`Task` 调用，要求 `Explore` 子任务同步执行，防止 Claude 审核回合提前返回导致第 2 步误暂停。
+  3. `StepReview` 续跑仅补控制块时自动保留磁盘已有的审核正文（剥离旧核验尾注后合并），且未解析出有效 `review` 控制块的半截回合不输出 `阶段交付路径`。
+- 验证证据：`go vet` 与 `collab` / `api/usecase` / `api` / `agent/claude` `-race` 全部通过（[race.log](../../../build/reports/standalone-0.1.66-local.11-live-upgrade/race.log)）；`kanban` 旧库全量与 `-race` 迁移门禁通过（[kanban.log](../../../build/reports/standalone-0.1.66-local.11-live-upgrade/kanban.log) · [kanban-race.log](../../../build/reports/standalone-0.1.66-local.11-live-upgrade/kanban-race.log)）；8 项前端与浏览器回归通过（[browser.log](../../../build/reports/standalone-0.1.66-local.11-live-upgrade/browser.log)）；`0.1.66-local.11` `macos-arm64` 6 附件及 305 网页文件静态门禁通过（[assets.log](../../../build/reports/standalone-0.1.66-local.11-live-upgrade/assets.log)）；临时 HOME 隔离安装通过（[isolated-install.log](../../../build/reports/standalone-0.1.66-local.11-live-upgrade/isolated-install.log)）；`upgrade.py --check` 预检通过（[preflight.log](../../../build/reports/standalone-0.1.66-local.11-live-upgrade/preflight.log)）。
+- 本机升级：通过独立 `launchd` 任务（`dev.ideaagent.standalone-upgrade-0166-local11`）延迟 15 秒执行 `local.10 -> local.11` 热升级并在失败时自动回滚，回执写入 [result.txt](../../../build/reports/standalone-0.1.66-local.11-live-upgrade/result.txt)。**未做：** 未改 `scripts/standalone/version.txt`，未提交、未公开发布，未重打 IDEA 插件包；新运行实机表现待作者确认。
+
+## 0.1.66-local.13 再审补充意见与附件
+
+- 源码：第 5 步的「再审一轮」表单可填文字或选多个附件，提交前可移除选中的文件。沿用项目上传接口，把上传返回的 Agent 可读路径和文字一起写入新一轮 `00-作者补充意见.md`。`02-审核依据.md` 指示审核员打开附件核查。文字和附件均为可选。
+- 回归：类型检查通过。最终包浏览器测试覆盖选择两个附件、移除一个、提交再审、进入第二轮及打开补充意见。后端端到端回归确认附件路径落盘并由审核依据引用。四包竞态、网页资源路由、看板全量及旧库迁移竞态通过。[浏览器日志](../../../build/reports/standalone-0.1.66-local.13-live-upgrade/browser.log) · [后端竞态日志](../../../build/reports/standalone-0.1.66-local.13-live-upgrade/race.log)
+- 安装包：macOS arm64 六个附件和 305 个网页文件通过静态门禁，最终包通过临时 HOME 隔离安装。[静态门禁](../../../build/reports/standalone-0.1.66-local.13-live-upgrade/assets.log) · [隔离安装](../../../build/reports/standalone-0.1.66-local.13-live-upgrade/isolated-install.log)
+- 本机：从 `0.1.66-local.11` 升到 `0.1.66-local.13`，验证 9 个既有项目、二进制、模板接口、网页资源和 Relay。用户确认升级成功。[升级回执](../../../build/reports/standalone-0.1.66-local.13-live-upgrade/result.txt)
+
+## 0.1.66-local.14 快速模式共用流光设置
+
+- 源码：网页快速模式的运行卡片和列表圆点复用单聊的边框流光，沿用设置里的开关、效果、颜色和速度。关闭时保留运行状态标记，系统减少动态效果时显示静态流光。
+- 验证：类型检查和 9 项浏览器测试通过，覆盖桌面设置选环绕、青绿和较快，手机版式从设置关闭，以及减少动态效果。看板全量、旧库迁移竞态、六个 macOS arm64 附件和 305 个网页文件静态门禁、隔离安装均通过。[浏览器记录](../../../build/reports/standalone-0.1.66-local.14-live-upgrade/browser.log)
+- 本机：从 `0.1.66-local.13` 升到 `0.1.66-local.14`，验证 9 个既有项目、二进制、模板接口、网页资源与 Relay。[升级回执](../../../build/reports/standalone-0.1.66-local.14-live-upgrade/result.txt)
+
+## 快速模式交接文档修复（2026-11-26）
+
+逐条回应合并磁盘文件时复用现有控制块过滤器。最终报告落盘前从结构化结果获取测试命令，补上正文缺少的命令。修复前已复现两个问题，修复后协作、API 及 usecase 三包竞态通过。[测试日志](../../../build/reports/collab-handoff-docs/go-race.log) · [修复记录](../../issues/2026-11-26-collab-handoff-docs/collab-handoff-docs-fix-note.md)
+
+## 0.1.66-local.16 快速模式交接文档
+
+- 验证通过协作、API、usecase 和 Web Push 竞态测试，以及看板全量测试和旧库迁移竞态测试。最终包通过 5 项浏览器回归、6 个 macOS arm64 附件及 305 个网页文件的静态门禁、临时目录隔离安装。[后端测试](../../../build/reports/standalone-0.1.66-local.16-handoff/race.log) · [浏览器测试](../../../build/reports/standalone-0.1.66-local.16-handoff/browser.log)
+- 第 2 轮协作完成后，本机从 `0.1.66-local.15` 升级到 `0.1.66-local.16`，已核验二进制、9 个项目、模板接口、网页资源和 Relay 连接。[升级回执](../../../build/reports/standalone-0.1.66-local.16-handoff/result.txt)
+
+## 后端测试配置隔离（2026-11-26）
+
+- API 测试套件用临时目录隔离后台数据和 Agent 配置，Web Push 密钥生成测试显式写入自己的临时数据目录。
+- 在继承伪造安装路径的环境下，`go test -race ./server/... -count=1` 通过 31 个测试包。模拟安装目录和配置文件在运行前后的文件清单与 SHA-256 完全一致。[测试日志](../../../build/reports/runtime-test-isolation/go-race.log) · [修复记录](../../issues/2026-11-26-runtime-test-isolation/runtime-test-isolation-fix-note.md)
+
+## 0.1.66-local.15 协作进度与模板权限
+
+- 阶段卡片和自动跟随对话直接采用推送的阶段状态，详情随后加载，重连时对齐状态。「检查进度并继续」沿用服务端阶段状态与工作队列，恢复停下的阶段，同时保留作者裁决。运行圆点本身按流光开关、颜色与速度明暗呼吸。
+- 模板保存主模型原生权限档位，并在新运行的实现、回应和最终修改阶段传给 Agent。保存模板、设置任务和运行详情使用独立权限标签，手机窄屏可读。旧模板缺档位时沿用 Agent 配置。审核模型固定只读。
+- 验证：类型检查、9 项浏览器测试、3 个 Go 包竞态、Codex 原生权限映射、看板全量及旧库迁移竞态通过。手机 390px 布局核对权限标签和 44px 进度按钮。macOS arm64 六个附件、305 个网页资源和临时目录隔离安装通过。[浏览器日志](../../../build/reports/standalone-0.1.66-local.15-progress/browser.log) · [后端竞态日志](../../../build/reports/standalone-0.1.66-local.15-progress/race.log)
+- 本机：原协作回合结束后，从 `0.1.66-local.14` 升至 `0.1.66-local.15`。二进制、9 个既有项目、模板接口、网页资源和 Relay 已核验。[升级回执](../../../build/reports/standalone-0.1.66-local.15-progress/result.txt)
+
+## 快速模式最终代码审核（2026-11-26）
+
+- 初审记录包含 6 项发现，交叉审核补充了 Skill 简介和两项交接问题。以下记录修复后的复跑证据。
+- R1 `collab/prompts.go:19` 的审核输入允许混入回应和裁决状态。R2 `api/usecase/session.go:737`、`api/usecase/session_runtime.go:120` 的 Codex 临时命令和会话复用可能丢失审核只读属性。
+- R3 `collab/service.go:770–831` 的审核取消和补充续跑可能把未核验或已发现的改动显示为未改动。R4 `collab/service.go:387` 的 `SubmitDecisions` 缺少并发提交条件，导致数据库和裁决文档可能记录不同结果。
+- R5 `collab/rounds.go:158` 写再审补充意见失败时，新轮已提交且无法从原轮重试。R6 `collab/control_filter.go:255` 显示交付路径前只检查控制块格式，漏掉上轮意见时仍出现路径。
+- R7 `collab/standards.go` 逐行读取 YAML，丢失折叠与字面块简介。R8 checklist 当前步骤和旧测试版本进度过期。R9 本节缺少可复跑证据，版本小节顺序也需校正。
+
+### 第 01 轮逐条回应
+
+- 源码已更新。按审核回合保存核验状态，保留本轮已发现的改动和中断记录。裁决和再审在文档写入成功后提交数据库事务。复核完成提示与后端共用同一校验，Skill 简介使用现有 YAML 解析库。
+- Go 竞态测试覆盖 10 个有用例的包。`server/internal/` 下的 `collab`、`api`、`api/usecase`、`session`、`agent`、`agent/acp`、`agent/claude`、`agent/codex`、`agent/types`、`kanban` 全部通过，`agent/logs` 无测试。复跑使用临时 `IDE_AGENT_DATA_DIR`。现有 `TestSwitchAgentConfigClearsExistingEnvWhenBackupHasNoEnv` 也已改为使用自己的临时数据目录。[Go 竞态日志](../../../build/reports/standalone-quick-mode-review-response/race-verified.log) · [迁移专项日志](../../../build/reports/standalone-quick-mode-review-response/kanban-migration.log) · [配置测试隔离](../../../build/reports/standalone-quick-mode-review-response/config-isolation.log)
+- 专项用例各跑 5 次。`TestQuickModeEndToEndCompletenessDisputesAndNoAutoLoopOnTestFail` 覆盖裁决并发、文档写失败回滚及再审重试。`TestPauseThenImmediateContinueNeverDropsContinuation` 和 `TestContinueRunFlowControlReviewProsePreservationAndCleanFirstResponse` 覆盖暂停、续跑与核验状态。`TestReReviewDeliverySuffixRequiresEveryPreviousItem` 覆盖上轮意见遗漏时的交付提示。审核字段、Codex 临时命令与 YAML 简介也纳入专项。[专项竞态日志](../../../build/reports/standalone-quick-mode-review-response/focused-race.log)
+- 前端类型检查和 4 项回归通过，覆盖三种设备布局、快速模式裁决和 Skill 选择。沙盒内落盘复跑受到本地端口和 Chrome 启动限制，允许本机运行后复跑通过。[类型检查](../../../build/reports/standalone-quick-mode-review-response/typecheck.log) · [前端回归](../../../build/reports/standalone-quick-mode-review-response/web-verified.log)
+- 真实双模型复核及修复后的安装包验证待执行。
+
+Go 命令从仓库的 `runtime/` 执行，网页命令从 `runtime/web/` 执行。
+
+```sh
+IDE_AGENT_DATA_DIR="$(mktemp -d)" go test -race ./server/internal/collab ./server/internal/api ./server/internal/api/usecase ./server/internal/session ./server/internal/agent/... ./server/internal/kanban -count=1
+go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1 -v
+go test -race ./server/internal/api -run '^TestSwitchAgentConfigClearsExistingEnvWhenBackupHasNoEnv$' -count=1 -v
+go test -race ./server/internal/collab ./server/internal/api/usecase -run 'Test(QuickModeEndToEndCompletenessDisputesAndNoAutoLoopOnTestFail|PauseThenImmediateContinueNeverDropsContinuation|ContinueRunFlowControlReviewProsePreservationAndCleanFirstResponse|ParseReviewControlRequiresExplicitItemsArrayAndResponseDocMerges|ReReviewDeliverySuffixRequiresEveryPreviousItem|LoadStandardsAndSkillsInjection|ParseSkillFrontmatterLiteralDescription|TransientSlashCommandPreservesReviewReadOnlyMode)$' -count=5 -v
+./node_modules/.bin/tsc --noEmit
+node --test tests/collab-quick-mode.test.mjs tests/collab-skill-picker.test.mjs
+```
+
+### 第 01 轮最终修改与测试
+
+- R4 补齐裁决提交与「检查进度并继续」的并发处理。裁决提交保留进度检查已启动的最终回合。新增 `TestSubmitDecisionsKeepsFinalWorkerStartedByProgressCheck`，修复前复现同一裁决触发两次最终回合，修复后只执行一次。涉及 `runtime/server/internal/collab/service.go` 和 `service_test.go`。
+- 本轮复跑期间全局模板的角色标签改成「主模型」「审核模型」。同步更新 `runtime/web/tests/collab-quick-mode.test.mjs` 的文案断言，继续核对 Agent、模型和思考强度。选择权限后用 Esc 收起选择器，再测试附件操作。
+- 11 个有用例的 Go 包通过竞态测试。在逐条回应的包列表上增加了 `turndiff`。9 项专项各跑 5 次，共 45 次通过。看板旧库迁移专项通过，覆盖缺字段和已有字段的数据库。[Go 竞态](../../../build/reports/standalone-quick-mode-review-final/race.log) · [专项竞态](../../../build/reports/standalone-quick-mode-review-final/focused-race.log) · [旧库迁移](../../../build/reports/standalone-quick-mode-review-final/kanban-migration.log)
+- 第 01 轮的 TypeScript 类型检查和 4 项前端回归通过，涵盖三种设备布局、裁决和 Skill 选择。该批类型检查日志早于当前 `CollabShell.tsx` 的修改，当前源码验证见第 02 轮。[类型检查](../../../build/reports/standalone-quick-mode-review-final/typecheck.log) · [前端回归](../../../build/reports/standalone-quick-mode-review-final/web.log)
+- 真实双模型复核与安装包验收待执行。
+
+Go 命令从 `runtime/` 执行，网页命令从 `runtime/web/` 执行。Go 套件用独立临时数据目录。
+
+```sh
+IDE_AGENT_DATA_DIR="$(mktemp -d)" go test -race ./server/internal/collab ./server/internal/api ./server/internal/api/usecase ./server/internal/session ./server/internal/agent/... ./server/internal/kanban ./server/internal/turndiff -count=1
+IDE_AGENT_DATA_DIR="$(mktemp -d)" go test -race ./server/internal/collab ./server/internal/api/usecase -run 'Test(SubmitDecisionsKeepsFinalWorkerStartedByProgressCheck|QuickModeEndToEndCompletenessDisputesAndNoAutoLoopOnTestFail|PauseThenImmediateContinueNeverDropsContinuation|ContinueRunFlowControlReviewProsePreservationAndCleanFirstResponse|ParseReviewControlRequiresExplicitItemsArrayAndResponseDocMerges|ReReviewDeliverySuffixRequiresEveryPreviousItem|LoadStandardsAndSkillsInjection|ParseSkillFrontmatterLiteralDescription|TransientSlashCommandPreservesReviewReadOnlyMode)$' -count=5 -v
+IDE_AGENT_DATA_DIR="$(mktemp -d)" go test -race ./server/internal/kanban -run '^TestTaskStoreSnapshotMigration$' -count=1 -v
+./node_modules/.bin/tsc --noEmit -p tsconfig.json
+node --test tests/collab-quick-mode.test.mjs tests/collab-skill-picker.test.mjs
+```
+
+### 第 02 轮逐条回应与验证
+
+- R10 审核依据和 Skill 选择器共用 `runtime/server/internal/collab/standards.go` 的解析函数。YAML 解析失败时按单行提取旧格式的 `description: Use when X: Y`。合法的折叠块和字面块由 YAML 解析，3 项用例通过竞态测试。[修复前日志](../../../build/reports/standalone-quick-mode-review-round-02/skill-repro.log) · [交付复跑](../../../build/reports/standalone-quick-mode-review-round-02/delivery/skill-race.log)
+- R11 从包含当前 `CollabShell.tsx` 的源码重跑类型检查及 4 项前端回归，全部通过，覆盖桌面、平板和手机版式、裁决流程及 Skill 选择。[类型检查](../../../build/reports/standalone-quick-mode-review-round-02/delivery/typecheck.log) · [前端回归](../../../build/reports/standalone-quick-mode-review-round-02/delivery/web-verified.log)
+- R12 按 `local.13`、`local.14`、`local.15` 排列版本记录。已核对本记录和第 01 轮逐条回应的 R3 出处指向 `collab/service.go:770–831` 的审核快照和状态保留逻辑。
+- 交付复跑中 11 个有用例的 Go 包通过竞态测试。看板旧库迁移专项覆盖缺少快照列与已有快照列两种数据库。沙盒首次执行受 Go 缓存读取、回环端口和 Chrome 启动限制，相关命令在沙盒外复跑通过。[Go 竞态](../../../build/reports/standalone-quick-mode-review-round-02/delivery/go-race-verified.log) · [旧库迁移](../../../build/reports/standalone-quick-mode-review-round-02/delivery/kanban-migration.log)
+- 真实双模型流程需连通两个实际 Agent，安装包、Windows 和手机实机需在对应环境验收。本轮完成源码和浏览器回归。
+
+Go 命令从 `runtime/` 执行，每次使用独立的临时数据目录。前端命令从 `runtime/web/` 执行，浏览器测试从当前源码构建。
+
+```sh
+IDE_AGENT_DATA_DIR="$(mktemp -d)" go test -race ./server/internal/collab ./server/internal/api ./server/internal/api/usecase ./server/internal/session ./server/internal/agent/... ./server/internal/kanban ./server/internal/turndiff -count=1
+IDE_AGENT_DATA_DIR="$(mktemp -d)" go test -race ./server/internal/collab -run '^(TestLoadStandardsAndSkillsInjection|TestParseSkillFrontmatter(Legacy|Literal)Description)$' -count=1 -v
+IDE_AGENT_DATA_DIR="$(mktemp -d)" go test -race ./server/internal/kanban -run '^TestTaskStoreSnapshotMigration$' -count=1 -v
+./node_modules/.bin/tsc --noEmit -p tsconfig.json
+IDEA_COLLAB_DIST= node --test tests/collab-quick-mode.test.mjs tests/collab-skill-picker.test.mjs
+```

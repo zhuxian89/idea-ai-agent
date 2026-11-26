@@ -2,8 +2,9 @@ import React, { useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n";
 
-export function PhoneSheet({ title, open, onClose, children }: {
+export function PhoneSheet({ title, open, onClose, children, side }: {
   title: string;
+  side?: "left";
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
@@ -19,7 +20,11 @@ export function PhoneSheet({ title, open, onClose, children }: {
     }
   }, [open]);
   return createPortal(
-    <dialog className="remote-phone-sheet" ref={ref} aria-labelledby={titleId} onCancel={event => {
+    <dialog className="remote-phone-sheet" data-side={side} ref={ref} onClick={event => {
+      if (side !== "left" || event.target !== event.currentTarget) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      if (event.clientX >= bounds.right || event.clientX < bounds.left) onClose();
+    }} aria-labelledby={titleId} onCancel={event => {
       event.preventDefault();
       ref.current?.close();
       onClose();

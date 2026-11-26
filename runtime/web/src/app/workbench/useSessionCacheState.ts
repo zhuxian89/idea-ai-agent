@@ -26,7 +26,6 @@ export function useSessionCacheState({ appFoundationApi, currentRootApi, session
     clearSessionStale,
     isSessionStale,
     restoreActiveSession,
-    updateSessionRelatedFilesForKey,
     updateSessionRelatedWorktreeForKey,
     updateSessionAgentForKey,
     handleSetPlanMode,
@@ -65,5 +64,5 @@ export function useSessionCacheState({ appFoundationApi, currentRootApi, session
     setOpenSessionTabsByRoot,
   });
 
-  return { appendAgentChunkForSession, appendCompactNoticeForSession, appendPlanUpdateForSession, appendThoughtChunkForSession, appendTodoUpdateForSession, appendToolCallForSession, attachContextWindowToLatestAssistant, clearLocalPendingForSession, clearSessionStale, getSessionSnapshot, handleSetPlanMode, isSessionStale, markSessionStale, promotePendingSessionForRoot, resolvePendingForSession, restoreActiveSession, setSelectedPendingByKey, updateSessionAgentForKey, updateSessionRelatedFilesForKey, updateSessionRelatedWorktreeForKey };
+  return { appendAgentChunkForSession, appendCompactNoticeForSession, appendPlanUpdateForSession, appendThoughtChunkForSession, appendTodoUpdateForSession, appendToolCallForSession, attachContextWindowToLatestAssistant, clearLocalPendingForSession, clearSessionStale, getSessionSnapshot, handleSetPlanMode, isSessionStale, markSessionStale, promotePendingSessionForRoot, resolvePendingForSession, restoreActiveSession, setSelectedPendingByKey, updateSessionAgentForKey, updateSessionRelatedWorktreeForKey };
 }

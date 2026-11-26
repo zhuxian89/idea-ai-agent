@@ -1,6 +1,5 @@
 import { mergeHistoryAux, mergeHistoryExchanges } from "./sessionHistory";
 import {
-  RelatedFile,
   ExchangeAux,
   Session,
   SessionListPayload,
@@ -394,9 +393,6 @@ export async function clearCachedSessionsForRoot(rootId: string): Promise<void> 
 export function cloneSession(session: Session): Session {
   return {
     ...session,
-    related_files: Array.isArray(session.related_files)
-      ? [...session.related_files]
-      : [],
     exchanges: Array.isArray(session.exchanges) ? [...session.exchanges] : [],
     exchange_aux: cloneExchangeAux(session.exchange_aux),
   };
@@ -421,21 +417,4 @@ export async function getCachedSession(
 ): Promise<Session | null> {
   const cached = await loadCachedSession(rootId, sessionKey);
   return cached ? cloneSession(cached) : null;
-}
-
-export async function setCachedSessionRelatedFiles(
-  rootId: string,
-  sessionKey: string,
-  relatedFiles: RelatedFile[],
-): Promise<Session | null> {
-  const cached = await loadCachedSession(rootId, sessionKey);
-  if (!cached) {
-    return null;
-  }
-  const next: Session = {
-    ...cached,
-    related_files: Array.isArray(relatedFiles) ? [...relatedFiles] : [],
-  };
-  await saveCachedSession(rootId, next);
-  return cloneSession(next);
 }

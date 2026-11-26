@@ -7,7 +7,7 @@ import { PhoneAgentBackup } from "./remoteui/PhoneAgentBackup";
 import { PhoneSheet } from "./remoteui/PhoneSheet";
 import { GlowSettingsDialog } from "./remoteui/GlowSettingsDialog";
 import { IdeaAgentSettings } from "./IdeaAgentSettings";
-import { ProjectTreeTab, FileTreeProps } from "./fileTreeModel";
+import { FileTreeProps } from "./fileTreeModel";
 import { useFileTreeMenus } from "./fileTree/useFileTreeMenus";
 import { useEntryRenderer } from "./fileTree/useEntryRenderer";
 import { useFileTreeMenuBehavior } from "./fileTree/useFileTreeMenuBehavior";
@@ -51,8 +51,6 @@ export function FileTree({
   onToggleDir,
   renderRootExtraContent,
   renderRootWorktreeContent,
-  renderRootRelatedContent,
-  projectTreeTabRequest = null,
   agentConfigSwitchRequest = null,
   agentMenuRequest = null,
   onAgentMenuOpened,
@@ -84,8 +82,8 @@ export function FileTree({
   onGoHome,
 }: FileTreeProps) {
   const fileTreeMenusApi = useFileTreeMenus({ props: { updateActionLabel, updateActionSummary } });
-  const projectTreeTabApi = useProjectTreeTab({ props: { onProjectTreeTabChange, onRefresh, projectTreeTabRequest } });
-  const entryRendererApi = useEntryRenderer({ fileTreeMenusApi, projectTreeTabApi, props: { activeSessionKey, childrenByPath, expanded, fileMetas, onSelectFile, onSelectRoot, onToggleDir, renderRootExtraContent, renderRootRelatedContent, renderRootWorktreeContent, rootId, rootSessionIndicators, selectedDirKey, selectedPath, showHiddenFiles, sortMode } });
+  const projectTreeTabApi = useProjectTreeTab({ props: { onProjectTreeTabChange, onRefresh } });
+  const entryRendererApi = useEntryRenderer({ fileTreeMenusApi, projectTreeTabApi, props: { activeSessionKey, childrenByPath, expanded, fileMetas, onSelectFile, onSelectRoot, onToggleDir, renderRootExtraContent, renderRootWorktreeContent, rootId, rootSessionIndicators, selectedDirKey, selectedPath, showHiddenFiles, sortMode } });
   const fileTreePreferenceStateApi = useFileTreePreferenceState();
   const agentLifecycleStateApi = useAgentLifecycleState();
   const agentConfigFlowApi = useAgentConfigFlow({ fileTreeMenusApi, fileTreePreferenceStateApi, agentLifecycleStateApi, props: { agentConfigSwitchRequest, agentMenuRequest, onAgentConfigSwitched, onAgentMenuOpened } });
@@ -132,7 +130,7 @@ export function FileTree({
                     {t("fileTree.files")}
                   </button>
                   <b className="remote-tool-crumb-name">
-                    {projectTreeTab === "git" ? t("git.changes") : projectTreeTab === "worktrees" ? t("fileTree.worktrees") : t("fileTree.relatedFiles")}
+                    {projectTreeTab === "git" ? t("git.changes") : t("fileTree.worktrees")}
                   </b>
                 </>
               )}
@@ -148,10 +146,9 @@ export function FileTree({
               ["files", t("fileTree.files")],
               ["git", "git"],
               ["worktrees", t("fileTree.worktrees")],
-              ["related", t("fileTree.relatedFiles")],
             ] as const).map(([value, label]) => {
               const active = projectTreeTab === value;
-              const flexGrow = value === "related" ? 1.45 : value === "worktrees" ? 1.15 : 0.85;
+              const flexGrow = value === "worktrees" ? 1.15 : 0.85;
               return (
                 <React.Fragment key={value}>
                   <button

@@ -1,8 +1,5 @@
 import React from "react";
 import {
-  sessionService,
-  setCachedSessionRelatedFiles,
-  type RelatedFile,
   type Session,
   type SyncSessionResult,
 } from "../../services/session";
@@ -44,11 +41,6 @@ type Options = {
     rootID: string | null | undefined,
     sessionKey: string | null | undefined,
   ) => void;
-  updateSessionRelatedFilesForKey: (
-    rootID: string,
-    sessionKey: string,
-    relatedFiles: RelatedFile[],
-  ) => void;
 };
 
 export function createSessionReplay({
@@ -68,7 +60,6 @@ export function createSessionReplay({
   currentRootIdRef,
   managedRootIdsRef,
   markSessionStale,
-  updateSessionRelatedFilesForKey,
 }: Options) {
   const completedTurnVersions = new Map<string, number>();
 
@@ -185,23 +176,9 @@ export function createSessionReplay({
     }
   };
 
-  const refreshSessionRelatedFiles = async (
-    rootID: string,
-    sessionKey: string,
-  ) => {
-    if (!rootID || !sessionKey) return;
-    const relatedFiles = await sessionService.getSessionRelatedFiles(
-      rootID,
-      sessionKey,
-    );
-    if (isCancelled()) return;
-    await setCachedSessionRelatedFiles(rootID, sessionKey, relatedFiles);
-    updateSessionRelatedFilesForKey(rootID, sessionKey, relatedFiles);
-  };
   return {
     advanceTurnVersion,
     reloadSessionForReplay,
     replayTargetsForAllRoots,
-    refreshSessionRelatedFiles,
   };
 }

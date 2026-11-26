@@ -1,5 +1,5 @@
 import { type TimelineItem } from "../hooks/useSessionStream";
-import type { ExchangeAux, RelatedFile } from "../services/session";
+import type { ExchangeAux } from "../services/session";
 import type { AgentStatus } from "../services/agents";
 import { useI18n } from "../i18n";
 
@@ -33,7 +33,6 @@ export type SessionItem = {
   }>;
   closed_at?: string;
   source?: string;
-  related_files?: RelatedFile[];
   exchange_aux?: Record<string, ExchangeAux[]>;
 };
 
@@ -62,13 +61,8 @@ export type SessionViewerProps = {
   rootPath?: string | null;
   interactionMode?: "main" | "drawer";
   targetSeq?: number;
-  gitFileStatsByPath?: Record<
-    string,
-    { status: string; additions: number; deletions: number }
-  >;
-  onFileClick?: (file: RelatedFile & { name?: string }) => void;
+  onFileClick?: (file: { path: string; name?: string }) => void;
   onRootClick?: (rootId: string) => void;
-  onRemoveRelatedFile?: (path: string, head?: string, repoPath?: string, repoKind?: string) => void;
   onAskUserAnswer?: (input: {
     rootId: string;
     sessionKey: string;

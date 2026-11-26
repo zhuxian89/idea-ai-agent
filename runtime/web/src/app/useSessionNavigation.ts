@@ -186,7 +186,13 @@ export function useSessionNavigation({
       const targetRoot =
         (session?.root_id as string | undefined) || currentRootIdRef.current;
       if (!targetRoot || !key) return;
-      openSessionTab(targetRoot, session as SessionItem);
+      const isCollabSession =
+        key.startsWith("collab-") ||
+        session?.source === "collab_stage" ||
+        session?.source === "collab_review";
+      if (!isCollabSession) {
+        openSessionTab(targetRoot, session as SessionItem);
+      }
       if (currentRootIdRef.current !== targetRoot) {
         setCurrentRootId(targetRoot);
       }
@@ -194,7 +200,9 @@ export function useSessionNavigation({
       setSelectedDirKey(
         buildDirectorySelectionKey(targetRoot, targetRoot, true),
       );
-      setMainViewPreferenceForRoot(targetRoot, "session");
+      if (!isCollabSession) {
+        setMainViewPreferenceForRoot(targetRoot, "session");
+      }
       const currentDrawer = drawerSessionByRootRef.current[targetRoot];
       const preservePending =
         currentDrawer?.key === key
@@ -204,35 +212,44 @@ export function useSessionNavigation({
         typeof session?.search_seq === "number"
           ? `${key}:${session.search_seq}:${++sessionSearchTargetCounterRef.current}`
           : undefined;
-      replaceURLState({
-        root: targetRoot,
-        file: "",
-        session: key,
-        cursor: 0,
-        pluginQuery: {},
-      });
-      selectedSessionByRootRef.current[targetRoot] = key;
+      if (!isCollabSession) {
+        replaceURLState({
+          root: targetRoot,
+          file: "",
+          session: key,
+          cursor: 0,
+          pluginQuery: {},
+        });
+        selectedSessionByRootRef.current[targetRoot] = key;
+      }
       const cacheKey = rootSessionKey(targetRoot, key);
       const wasStale = isSessionStale(targetRoot, key);
       const hadInMemoryState =
         !!pendingBySessionRef.current[cacheKey] ||
         hasSessionExchanges(sessionCacheRef.current[cacheKey]);
       const shouldSyncHistory = wasStale || !hadInMemoryState;
+      const nextSelectedSession = toSessionItem(targetRoot, {
+        ...(session as any),
+        pending: preservePending,
+        search_target_id: searchTargetId || session?.search_target_id,
+      });
+      selectedSessionRef.current = nextSelectedSession;
       setSelectedSessionLoading(true);
-      setSelectedSession(
-        toSessionItem(targetRoot, {
-          ...(session as any),
-          pending: preservePending,
-          search_target_id: searchTargetId || session?.search_target_id,
-        }),
-      );
+      setSelectedSession(nextSelectedSession);
       setInteractionMode("main");
       setDrawerOpenForRoot(targetRoot, false);
       if (isMobile) setIsRightOpen(false);
       const finishLoading = () => {
+        const activeSelected = selectedSessionRef.current;
+        const activeKey = activeSelected?.key || activeSelected?.session_key;
+        const activeRoot =
+          (activeSelected?.root_id as string | undefined) ||
+          currentRootIdRef.current;
         if (
           currentRootIdRef.current === targetRoot &&
-          selectedSessionByRootRef.current[targetRoot] === key
+          (isCollabSession
+            ? activeKey === key && activeRoot === targetRoot
+            : selectedSessionByRootRef.current[targetRoot] === key)
         ) {
           setSelectedSessionLoading(false);
         }

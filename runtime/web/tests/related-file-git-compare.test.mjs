@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -9,12 +9,10 @@ import { chromium, expect } from '@playwright/test';
 
 const webDir = fileURLToPath(new URL('../', import.meta.url));
 const repo = path.resolve(webDir, '../..');
-const reports = path.join(repo, 'build/reports/related-file-compare');
 const require = createRequire(import.meta.url);
 const { build } = createRequire(require.resolve('vite'))('esbuild');
 
-test('related file row separates IDEA open and native Git compare actions', async t => {
-  mkdirSync(reports, { recursive: true });
+test('SessionViewer omits related files section and diff requests in both IDEA and remote views', async t => {
   execFileSync(process.execPath, ['scripts/test-runtime.mjs', './server/internal/gitview', '-run', '^TestReadHeadWorktreeFileCompareSupportsWorktreeStates$', '-count=1'], {
     cwd: repo, stdio: 'pipe',
   });
@@ -30,10 +28,9 @@ test('related file row separates IDEA open and native Git compare actions', asyn
         import './src/services/remoteUi';
         const session = {key:'related-files', name:'Related files', agent:'codex', pending:false,
           exchanges:[{seq:1, role:'user', content:'修改 note.txt。'}],
-          related_files:[{root_id:'project', repo_path:'/repo', repo_kind:'git', path:'note.txt', name:'note.txt'}]};
+          related_files:[{root_id:'project', repo_path:'/repo', repo_kind:'git', head:'abc1234', path:'note.txt', name:'note.txt'}]};
         createRoot(document.getElementById('root')).render(<I18nProvider><main className="idea-workbench"><div className="idea-conversation">
           <SessionViewer rootId="project" session={session} connected={false} loading={false}
-            gitFileStatsByPath={{ 'note.txt': { status:'M', additions:1, deletions:1 } }}
             onFileClick={() => { window.opened = true; }}/>
         </div></main></I18nProvider>);
       `,
@@ -61,6 +58,11 @@ test('related file row separates IDEA open and native Git compare actions', asyn
     await page.addInitScript(locale => {
       localStorage.setItem('mindfs-locale', locale);
     }, locale);
+    const diffRequests = [];
+    await page.route(/\/api\/git\/related-file\/diff/, route => {
+      diffRequests.push(route.request().url());
+      return route.abort();
+    });
     await page.route(/http:\/\/related-files\.test\/(?:\?remote=1)?$/, route => {
       const standalone = new URL(route.request().url()).searchParams.has('remote')
         ? '<meta name="local-ai-agent-mode" content="standalone">' : '';
@@ -69,39 +71,25 @@ test('related file row separates IDEA open and native Git compare actions', asyn
         body: `<!doctype html><html data-theme="dark"><head><meta charset="utf-8">${standalone}<style>${styles}</style></head><body><div id="root"></div></body></html>`,
       });
     });
-    await page.goto('http://related-files.test/');
-    await page.addScriptTag({ content: script });
-    
-    await page.evaluate(() => {
-      window.messages = [];
-      window.opened = false;
-      window.ideaAgent = { postMessage: payload => window.messages.push(payload) };
-    });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    const row = page.getByText('note.txt', { exact: true });
-    await expect(row).toBeVisible();
-    const button = page.getByRole('button', { name: '与 HEAD 对比' });
-    await expect(button).toHaveCount(1);
-    {
-      await button.click();
-      assert.deepEqual(await page.evaluate(() => window.messages.filter(item => item.action !== 'setLocale')), [{
-        action: 'compareGitFile',
-        rootId: 'project',
-        path: 'note.txt',
-        repoPath: '/repo',
-        repoKind: 'git',
-      }]);
-      await row.click();
-      assert.equal(await page.evaluate(() => window.opened), true);
-      assert.equal(await page.evaluate(() => window.messages.filter(item => item.action !== 'setLocale').length), 1);
-    }
-    await page.screenshot({ path: path.join(reports, `related-${locale}.png`), fullPage: true });
+
+    await page.goto('http://related-files.test/');
+    await page.addScriptTag({ content: script });
+    await expect(page.getByText('修改 note.txt。', { exact: true })).toBeVisible();
+    await expect(page.getByText('关联文件 1', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('note.txt', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '与 HEAD 对比' })).toHaveCount(0);
+
     await page.goto('http://related-files.test/?remote=1');
     await page.addScriptTag({ content: script });
     await expect(page.locator('html')).toHaveAttribute('data-remote-ui', '1');
     await expect(page.getByText('修改 note.txt。', { exact: true })).toBeVisible();
     await expect(page.getByText('关联文件 1', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('note.txt', { exact: true })).toHaveCount(0);
+
+    assert.deepEqual(diffRequests, []);
+    assert.deepEqual(errors, []);
     await context.close();
   }
 });

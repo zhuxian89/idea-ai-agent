@@ -25,6 +25,8 @@ type AppShellProps = {
   remoteTopBar?: {
     multiProjectSessionsEnabled?: boolean;
     onMultiProjectSessionsChange?: (enabled: boolean) => void;
+    onOpenCollab?: () => void;
+    collabWaitingCount?: number;
   };
 };
 
@@ -153,7 +155,7 @@ export function AppShell({
     position: "relative",
     width: isMobile ? "100%" : undefined,
     maxWidth: isMobile ? "100%" : undefined,
-    paddingTop: isMobile ? "var(--mindfs-safe-area-top, env(safe-area-inset-top, 0px))" : undefined,
+    paddingTop: isMobile ? "max(var(--mindfs-safe-area-top, 0px), env(safe-area-inset-top, 0px))" : undefined,
     overflow: "hidden",
     isolation: "isolate",
     boxSizing: "border-box",
@@ -164,7 +166,7 @@ export function AppShell({
 
   const mobileSidebarStyle = (side: 'left' | 'right'): React.CSSProperties => ({
     position: "fixed",
-    top: "var(--mindfs-safe-area-top, env(safe-area-inset-top, 0px))",
+    top: "max(var(--mindfs-safe-area-top, 0px), env(safe-area-inset-top, 0px))",
     bottom: 0,
     [side]: 0,
     width: "75vw",

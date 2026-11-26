@@ -32,7 +32,8 @@ export type RemotePhoneProps = {
   importOpen?: boolean;
   connection?: PhoneMoreConnection;
   multiProjectSessionsEnabled: boolean;
-
+  onOpenCollab?: () => void;
+  collabWaitingCount?: number;
 };
 
 export function RemotePhoneShell({ leftOpen, rightOpen, onProjects, onSessions, onChat, sidebar, sessions, main, footer, drawer, phone }: {
@@ -92,13 +93,35 @@ export function RemotePhoneShell({ leftOpen, rightOpen, onProjects, onSessions, 
     <div className="remote-phone" data-onboarding="shell" data-page={page}>
       <div className="remote-phone-chat" hidden={page !== "chat"}>
         <header className="remote-phone-chat-header">
-          <button type="button" className="remote-phone-icon remote-phone-leading" aria-label={phone.viewingFile ? labels.projects : labels.sessions} onClick={() => go(phone.viewingFile ? "projects" : "sessions")}>
+          <button type="button" className="remote-phone-icon remote-phone-leading" aria-label={phone.viewingFile ? labels.projects : labels.sessions} aria-haspopup={phone.viewingFile ? undefined : "dialog"} aria-expanded={phone.viewingFile ? undefined : quick}
+            onClick={() => {
+              if (phone.viewingFile) go("projects");
+              else { setQuery(""); setQuick(true); }
+            }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d={phone.viewingFile ? icons.back : icons.sessions} /></svg>
           </button>
-          <button type="button" className="remote-phone-title" aria-label={t("remote.phone.quickSwitch")} aria-haspopup="dialog" aria-expanded={quick} onClick={() => { setQuery(""); setQuick(true); }}>
+          <div className="remote-phone-title">
             <strong>{phone.title || phone.project || labels.chat}</strong>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-          </button>
+          </div>
+          {phone.onOpenCollab ? (
+            <button
+              type="button"
+              className="collab-entry-btn collab-entry-btn--phone"
+              onClick={phone.onOpenCollab}
+              title={t("collab.entryTitle")}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="9" cy="8" r="3" />
+                <path d="M3.5 18.5c.8-2.7 2.9-4.2 5.5-4.2s4.7 1.5 5.5 4.2" />
+                <circle cx="17" cy="9" r="2.5" />
+                <path d="M15.5 14.8c2.1.2 3.8 1.4 4.6 3.7" />
+              </svg>
+              <span>{t("collab.entryMode")}</span>
+              {(phone.collabWaitingCount || 0) > 0 ? (
+                <span className="collab-entry-badge">{phone.collabWaitingCount}</span>
+              ) : null}
+            </button>
+          ) : null}
           <button type="button" className="remote-phone-icon" aria-label={labels.projects} onClick={() => go("projects")}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d={icons.projects} /></svg>
           </button>
@@ -137,7 +160,7 @@ export function RemotePhoneShell({ leftOpen, rightOpen, onProjects, onSessions, 
         </button>)}
       </nav>}
     </div>
-    <PhoneSheet title={t("remote.phone.quickSwitch")} open={quick && page === "chat"} onClose={() => setQuick(false)}>
+    <PhoneSheet side="left" title={labels.sessions} open={quick && page === "chat"} onClose={() => setQuick(false)}>
       <div className="remote-phone-search-bar">
         <input className="remote-phone-search" type="search" aria-label={t("remote.phone.searchRecent")} placeholder={t("remote.phone.searchRecent")} value={query} onChange={event => setQuery(event.target.value)} />
       </div>

@@ -1547,7 +1547,7 @@ export function ActionBar({
               <div className="idea-input-secondary-controls" style={{ display: compactWorkbench ? undefined : "contents" }}>
                 {mode !== "command" && permissionChoices.length > 0 ? <PermissionSelector
                   value={effectiveAgentMode}
-                  choices={permissionChoices.map((choice) => ({ id: choice.id, label: t(choice.label) }))}
+                  choices={permissionChoices}
                   label={t("permission.label")}
                   description={t("permission.description")}
                   disabled={sending}

@@ -17,6 +17,7 @@ import (
 	"mindfs/server/internal/api"
 	"mindfs/server/internal/backend"
 	"mindfs/server/internal/barknotify"
+	"mindfs/server/internal/collab"
 	"mindfs/server/internal/e2ee"
 	"mindfs/server/internal/fs"
 	"mindfs/server/internal/githubimport"
@@ -220,6 +221,11 @@ func Start(ctx context.Context, addr string, opts StartOptions) error {
 	}
 	services.Kanban = kanban.NewService(taskTemplates, services)
 	services.Kanban.SetRunner(services)
+	collabTemplates, err := collab.NewTemplateStore()
+	if err != nil {
+		return err
+	}
+	services.Collab = collab.NewService(collabTemplates, services)
 	githubImportSvc, err := githubimport.NewService(services)
 	if err != nil {
 		return err

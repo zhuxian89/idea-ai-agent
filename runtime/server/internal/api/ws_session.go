@@ -161,7 +161,7 @@ func (h *WSHandler) handleSessionMessage(ctx context.Context, conn *websocket.Co
 		sessionName = current.Name
 		planMode = current.PlanMode
 		runtimeRootPath = sessionRuntimeRootPath(current)
-		if planRequested && !current.PlanMode {
+		if planRequested && !current.PlanMode && !session.IsReadOnlySession(current) {
 			if manager, managerErr := h.AppContext.GetSessionManager(rootID); managerErr == nil {
 				if updateErr := manager.UpdatePlanMode(ctx, current, true); updateErr != nil {
 					h.sendWSError(conn, clientID, req.ID, "session.plan_mode_failed", updateErr.Error())

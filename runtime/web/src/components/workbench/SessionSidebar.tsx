@@ -4,6 +4,7 @@ import { AgentMenuList } from "../AgentMenuList";
 import { SessionItem } from "../../app/sessionModel";
 import { ExternalSessionList } from "../ExternalSessionList";
 import { isIDEManagedProject, isIdeaRuntime } from "../../services/ideaBridge";
+import { isRemoteWebUi } from "../../services/remoteUi";
 import { MultiProjectSessionList, SessionList } from "../SessionList";
 import type { useAppFoundation } from "../../app/workbench/useAppFoundation";
 import type { useSessionDialogs } from "../../app/workbench/useSessionDialogs";
@@ -30,9 +31,11 @@ type Deps = {
   agentCatalogApi: ReturnType<typeof useAgentCatalog>;
   actionHandlersApi: ReturnType<typeof useActionHandlers>;
   sessionSidebarModelApi: ReturnType<typeof useSessionSidebarModel>;
+  onOpenCollab?: () => void;
+  collabWaitingCount?: number;
 };
 
-export function SessionSidebar({ appFoundationApi, sessionDialogsApi, workbenchLayoutApi, currentRootApi, sessionSelectionApi, sessionListApi, workbenchSessionNavigationApi, externalSessionImportApi, agentCatalogApi, actionHandlersApi, sessionSidebarModelApi }: Deps) {
+export function SessionSidebar({ appFoundationApi, sessionDialogsApi, workbenchLayoutApi, currentRootApi, sessionSelectionApi, sessionListApi, workbenchSessionNavigationApi, externalSessionImportApi, agentCatalogApi, actionHandlersApi, sessionSidebarModelApi, onOpenCollab, collabWaitingCount = 0 }: Deps) {
   const { t } = appFoundationApi;
   const { setHandoffSession, setScheduledAgentDialogOpen, setScheduledAgentSession } = sessionDialogsApi;
   const { isMobile, phoneFilter, remotePhone, setIsRightOpen } = workbenchLayoutApi;
@@ -140,6 +143,24 @@ export function SessionSidebar({ appFoundationApi, sessionDialogsApi, workbenchL
       ) : null}
     </div>
   );
+  const headerActions = (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {onOpenCollab && !isRemoteWebUi && !isIdeaRuntime ? (
+        <button
+          type="button"
+          className="collab-entry-btn collab-entry-btn--topcenter"
+          onClick={onOpenCollab}
+          title={t("collab.entryTitle")}
+        >
+          <span>{t("collab.entryMode")}</span>
+          {collabWaitingCount > 0 ? (
+            <span className="collab-entry-badge">{collabWaitingCount}</span>
+          ) : null}
+        </button>
+      ) : null}
+      {sessionImportMenu}
+    </div>
+  );
   const openSessionSchedule = (session: SessionItem) => {
     setScheduledAgentSession({ ...session, root_id: session.root_id || currentRootId || undefined });
     setScheduledAgentDialogOpen(true);
@@ -156,7 +177,7 @@ export function SessionSidebar({ appFoundationApi, sessionDialogsApi, workbenchL
         importingKeys={importingExternalSessionKeys}
         selectedImportKeys={selectedExternalImportKeys}
         filterBound={externalFilterBound}
-        headerAction={sessionImportMenu}
+        headerAction={headerActions}
         loading={loadingExternalSessions}
         error={externalSessionsError}
         loadingOlder={loadingOlderExternalSessions}
@@ -189,7 +210,7 @@ export function SessionSidebar({ appFoundationApi, sessionDialogsApi, workbenchL
           currentRootId ||
           ""
         }
-        headerAction={sessionImportMenu}
+        headerAction={headerActions}
         loading={multiProjectSessionsLoading}
         emptyText={t("externalImport.empty")}
         syncingSessionKeys={syncingSessionKeys}
@@ -231,7 +252,7 @@ export function SessionSidebar({ appFoundationApi, sessionDialogsApi, workbenchL
             : filterPhoneSessions(sessionWithRoot)
         }
         selectedKey={selectedSession?.key}
-        headerAction={sessionImportMenu}
+        headerAction={headerActions}
         persistentSearch={isIdeaRuntime}
         searchOpen={sessionSearchOpen}
         searchResultsMode={sessionSearchResultsMode}

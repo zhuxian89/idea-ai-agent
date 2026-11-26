@@ -5,10 +5,6 @@ import {
   parentDirsOfFile,
   buildDirectorySelectionKey,
   dirnameOfPath,
-  RelatedFileClickTarget,
-  relatedFileSelectionKey,
-  relativeDisplayPathFromRoot,
-  joinDisplayPath,
 } from "../fileNavigation";
 import { normalizeCursor, parsePluginQuery, extractHTTPStatusFromErrorMessage } from "../urlState";
 import { loadPersistedPluginQuery, persistPluginQuery } from "../storagePrefs";
@@ -17,7 +13,6 @@ import { appURL } from "../../services/base";
 import { fetchFile, getCachedFile, type FilePayload } from "../../services/file";
 import { buildMatchInputFromPath, inferReadModeFromPlugin } from "../pluginInput";
 import { reportError } from "../../services/error";
-import { fetchGitRelatedFileDiff } from "../../services/git";
 import type { useAppFoundation } from "./useAppFoundation";
 import type { useWorkbenchLayout } from "./useWorkbenchLayout";
 import type { useCurrentRoot } from "./useCurrentRoot";
@@ -51,22 +46,19 @@ export function useActionHandlers({ appFoundationApi, workbenchLayoutApi, curren
   const { isMobile, setIsLeftOpen } = workbenchLayoutApi;
   const { currentRootIdRef, replaceURLState, setCurrentRootId } = currentRootApi;
   const { setDrawerOpenForRoot, setMainViewPreferenceForRoot, setSelectedSession, setSelectedSessionLoading } = sessionSelectionApi;
-  const { entriesByPathRef, formatDirectoryLoadError, normalizeTreeResponse, refreshTreeDir, setEntriesByPath, setExpanded, setMainDirectoryError, setMainEntries, setRelatedSelectedFileKey, setSelectedDir, setSelectedDirKey, treeCacheKey } = projectTreeApi;
+  const { entriesByPathRef, formatDirectoryLoadError, normalizeTreeResponse, refreshTreeDir, setEntriesByPath, setExpanded, setMainDirectoryError, setMainEntries, setSelectedDir, setSelectedDirKey, treeCacheKey } = projectTreeApi;
   const { setPluginBypass, setPluginQuery } = pluginStateApi;
   const { file, rememberCurrentFileScroll, setFile } = fileViewerStateApi;
   const { handleRelayNavigationFailure } = relayConnectionApi;
   const { managedRootByIdRef } = managedRootsApi;
   const { loadSessionsForRoot, sessions } = sessionListApi;
-  const { gitStatus, openGitDiff, setGitDiff } = gitApi;
+  const { setGitDiff } = gitApi;
   const { handleSelectSession, tryShowBoundSessionForRoot } = workbenchSessionNavigationApi;
 
   const actionHandlers = useMemo(
     () => ({
       open: async (params: any) => {
         const requestId = ++fileOpenRequestRef.current;
-        if (!params?.preserveRelatedSelection) {
-          setRelatedSelectedFileKey("");
-        }
         const isStale = () => fileOpenRequestRef.current !== requestId;
         const parsedLocation = parseFileLocation(String(params.path || ""));
         const root = params.root || currentRootIdRef.current;
@@ -454,101 +446,6 @@ export function useActionHandlers({ appFoundationApi, workbenchLayoutApi, curren
   useEffect(() => {
     actionHandlersRef.current = actionHandlers;
   }, [actionHandlers]);
-  const openRelatedFileDiff = useCallback(
-    async (rootID: string, file: RelatedFileClickTarget) => {
-      const path = String(file?.path || "").trim();
-      const head = String(file?.head || "").trim();
-      const repoKind = String(file?.repo_kind || "").trim();
-      if (!rootID || !path) {
-        return;
-      }
-      setRelatedSelectedFileKey(relatedFileSelectionKey(file));
-      if (repoKind === "plain") {
-        actionHandlers.open({
-          path,
-          root: rootID,
-          preserveRelatedSelection: true,
-        });
-        return;
-      }
-      if (!head && !file?.repo_path) {
-        const gitItem = (gitStatus?.items || []).find(
-          (item) => item.path === path,
-        );
-        if (gitItem) {
-          void openGitDiff(rootID, gitItem, { preserveRelatedSelection: true });
-          return;
-        }
-        actionHandlers.open({
-          path,
-          root: rootID,
-          preserveRelatedSelection: true,
-        });
-        return;
-      }
-      fileOpenRequestRef.current += 1;
-      setMainViewPreferenceForRoot(rootID, "git-diff");
-      setSelectedSession(null);
-      setSelectedSessionLoading(false);
-      setFile(null);
-      setGitDiff(null);
-      replaceURLState({
-        root: rootID,
-        file: "",
-        session: "",
-        cursor: 0,
-        pluginQuery: {},
-      });
-      try {
-        const next = await fetchGitRelatedFileDiff(rootID, file);
-        const rootPath = managedRootByIdRef.current[rootID]?.root_path;
-        const repoPath = String(file?.repo_path || "").trim();
-        const displayPath = repoPath
-          ? relativeDisplayPathFromRoot(
-              rootPath,
-              joinDisplayPath(repoPath, path),
-            )
-          : path;
-        if (displayPath) {
-          next.display_path = displayPath;
-        }
-        setGitDiff(next);
-        if (currentRootIdRef.current !== rootID) {
-          setCurrentRootId(rootID);
-        }
-        if (isMobile) {
-          setIsLeftOpen(false);
-        }
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : t("git.relatedFileDiffFailed");
-        console.error("[git.related-file.diff] failed", {
-          rootID,
-          path,
-          head,
-          err,
-        });
-        reportError("git.related_file_diff_failed", message, {
-          severity: "warning",
-          recoverable: true,
-          details: {
-            root: rootID,
-            path,
-            head,
-            payload: err instanceof ProtectedAPIError ? err.payload : undefined,
-          },
-        });
-      }
-    },
-    [
-      actionHandlers,
-      gitStatus,
-      isMobile,
-      openGitDiff,
-      replaceURLState,
-      setMainViewPreferenceForRoot,
-    ],
-  );
   const handleSessionChipClick = useCallback(
     (sessionKey: string, rootOverride?: string | null) => {
       if (!sessionKey) return;
@@ -600,5 +497,5 @@ export function useActionHandlers({ appFoundationApi, workbenchLayoutApi, curren
     };
   }, [handleSessionChipClick]);
 
-  return { actionHandlers, actionHandlersRef, handleSessionChipClick, openProject, openRelatedFileDiff };
+  return { actionHandlers, actionHandlersRef, handleSessionChipClick, openProject };
 }

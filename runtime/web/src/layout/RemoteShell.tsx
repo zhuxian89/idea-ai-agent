@@ -16,7 +16,7 @@ type RemoteShellProps = {
   main: React.ReactNode;
   drawer?: React.ReactNode;
   footer: React.ReactNode;
-  topBar: Pick<RemoteTopBarProps, "multiProjectSessionsEnabled" | "onMultiProjectSessionsChange">;
+  topBar: Pick<RemoteTopBarProps, "multiProjectSessionsEnabled" | "onMultiProjectSessionsChange" | "onOpenCollab" | "collabWaitingCount">;
   fileMenuWidth: string;
 };
 

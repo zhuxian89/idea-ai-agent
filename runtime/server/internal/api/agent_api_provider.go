@@ -424,28 +424,12 @@ func normalizeAPIProviderBaseURL(input string) (string, error) {
 	return baseURL, nil
 }
 
-func openAIModelsURL(baseURL string) string {
-	base := strings.TrimRight(baseURL, "/")
-	if strings.HasSuffix(base, "/v1") {
-		return base + "/models"
-	}
-	return base + "/v1/models"
-}
-
 func openAIModelsBaseURL(baseURL string) string {
 	base := strings.TrimRight(baseURL, "/")
 	if strings.HasSuffix(base, "/v1") {
 		return base
 	}
 	return base + "/v1"
-}
-
-func geminiModelsURL(baseURL string) string {
-	base := strings.TrimRight(baseURL, "/")
-	if strings.HasSuffix(base, "/v1beta") {
-		return base + "/models"
-	}
-	return base + "/v1beta/models"
 }
 
 func apiProviderCompatibleWithAgent(provider agentAPIProvider, agentName string) bool {

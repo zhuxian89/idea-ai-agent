@@ -110,6 +110,7 @@ type OpenSessionInput struct {
 	Effort                string
 	FastService           string
 	PlanMode              bool
+	ReadOnly              bool
 	Probe                 bool
 	RootPath              string
 	DeveloperInstructions string

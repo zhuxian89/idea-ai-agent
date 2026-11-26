@@ -1,5 +1,4 @@
-import { useMemo, useEffect } from "react";
-import { GitFileStat } from "../fileNavigation";
+import { useEffect } from "react";
 import type { useCurrentRoot } from "./useCurrentRoot";
 import type { useSessionList } from "./useSessionList";
 import type { useGit } from "./useGit";
@@ -15,22 +14,9 @@ type Deps = {
 export function useGitFileStats({ currentRootApi, sessionListApi, gitApi, externalSessionImportApi }: Deps) {
   const { currentRootId } = currentRootApi;
   const { setSessionListMode } = sessionListApi;
-  const { gitStatus, refreshGitHistory, refreshGitStatus, setGitDiff, setGitHistory, setGitStatus } = gitApi;
+  const { refreshGitHistory, refreshGitStatus, setGitDiff, setGitHistory, setGitStatus } = gitApi;
   const { setExternalSelectedKey, setExternalSessions } = externalSessionImportApi;
 
-  const gitFileStatsByPath = useMemo<Record<string, GitFileStat>>(() => {
-    const items = gitStatus?.items || [];
-    return Object.fromEntries(
-      items.map((item) => [
-        item.path,
-        {
-          status: item.status,
-          additions: item.additions,
-          deletions: item.deletions,
-        },
-      ]),
-    );
-  }, [gitStatus]);
   useEffect(() => {
     if (!currentRootId) {
       setGitStatus(null);
@@ -45,6 +31,4 @@ export function useGitFileStats({ currentRootApi, sessionListApi, gitApi, extern
     void refreshGitHistory(currentRootId);
     setGitDiff(null);
   }, [currentRootId, refreshGitHistory, refreshGitStatus]);
-
-  return { gitFileStatsByPath };
 }

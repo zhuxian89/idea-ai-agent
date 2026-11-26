@@ -78,6 +78,7 @@ var stderrMessagePattern = regexp.MustCompile(`"message"\s*:\s*"([^"]+)"`)
 
 type sessionState struct {
 	ID            acp.SessionId
+	readOnly      bool
 	models        *acp.SessionModelState
 	modes         *acp.SessionModeState
 	configOptions []acp.SessionConfigOption
@@ -85,6 +86,18 @@ type sessionState struct {
 	contextWindow types.ContextWindow
 	onUpdate      func(SessionUpdate)
 	mu            sync.RWMutex
+}
+
+func (s *sessionState) setReadOnly(readOnly bool) {
+	s.mu.Lock()
+	s.readOnly = readOnly
+	s.mu.Unlock()
+}
+
+func (s *sessionState) isReadOnly() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.readOnly
 }
 
 type qwenSlashCommandNotification struct {
@@ -267,9 +280,11 @@ func (c *mindfsClient) SessionUpdate(ctx context.Context, params acp.SessionNoti
 }
 
 func (c *mindfsClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	session := c.proc.getSessionByID(string(params.SessionId))
+	readOnly := session != nil && session.isReadOnly()
 	// Emit a synthetic tool_call update for permission-gated operations so upper
 	// layers can track tool execution and associate file paths immediately.
-	if session := c.proc.getSessionByID(string(params.SessionId)); session != nil {
+	if session != nil {
 		if handler := session.getOnUpdate(); handler != nil {
 			toolCall := &acp.SessionUpdateToolCall{
 				Content:    params.ToolCall.Content,
@@ -300,34 +315,58 @@ func (c *mindfsClient) RequestPermission(ctx context.Context, params acp.Request
 			})
 		}
 	}
-	// TODO: Forward to frontend for user approval
-	// For now, auto-approve with first allow option
-	for _, opt := range params.Options {
-		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {
-			return acp.RequestPermissionResponse{
-				Outcome: acp.RequestPermissionOutcome{
-					Selected: &acp.RequestPermissionOutcomeSelected{
-						OptionId: opt.OptionId,
-					},
-				},
-			}, nil
+	return acp.RequestPermissionResponse{
+		Outcome: selectACPPermissionOutcome(readOnly, params.ToolCall.Kind, params.Options),
+	}, nil
+}
+
+func isACPReadOnlySafeKind(kind *acp.ToolKind) bool {
+	if kind == nil {
+		return false
+	}
+	switch *kind {
+	case acp.ToolKindRead, acp.ToolKindSearch, acp.ToolKindThink, acp.ToolKindFetch:
+		return true
+	default:
+		return false
+	}
+}
+
+func selectACPPermissionOutcome(readOnly bool, toolKind *acp.ToolKind, options []acp.PermissionOption) acp.RequestPermissionOutcome {
+	if readOnly && !isACPReadOnlySafeKind(toolKind) {
+		for _, opt := range options {
+			if opt.Kind == acp.PermissionOptionKindRejectOnce {
+				return acp.RequestPermissionOutcome{
+					Selected: &acp.RequestPermissionOutcomeSelected{OptionId: opt.OptionId},
+				}
+			}
+		}
+		for _, opt := range options {
+			if opt.Kind == acp.PermissionOptionKindRejectAlways {
+				return acp.RequestPermissionOutcome{
+					Selected: &acp.RequestPermissionOutcomeSelected{OptionId: opt.OptionId},
+				}
+			}
+		}
+		return acp.RequestPermissionOutcome{
+			Cancelled: &acp.RequestPermissionOutcomeCancelled{},
 		}
 	}
-	// Fallback to first option
-	if len(params.Options) > 0 {
-		return acp.RequestPermissionResponse{
-			Outcome: acp.RequestPermissionOutcome{
-				Selected: &acp.RequestPermissionOutcomeSelected{
-					OptionId: params.Options[0].OptionId,
-				},
-			},
-		}, nil
+	for _, opt := range options {
+		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {
+			return acp.RequestPermissionOutcome{
+				Selected: &acp.RequestPermissionOutcomeSelected{OptionId: opt.OptionId},
+			}
+		}
 	}
-	return acp.RequestPermissionResponse{
-		Outcome: acp.RequestPermissionOutcome{
-			Cancelled: &acp.RequestPermissionOutcomeCancelled{},
-		},
-	}, nil
+	if len(options) > 0 {
+		return acp.RequestPermissionOutcome{
+			Selected: &acp.RequestPermissionOutcomeSelected{OptionId: options[0].OptionId},
+		}
+	}
+	return acp.RequestPermissionOutcome{
+		Cancelled: &acp.RequestPermissionOutcomeCancelled{},
+	}
 }
 
 func (c *mindfsClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
@@ -336,10 +375,16 @@ func (c *mindfsClient) ReadTextFile(ctx context.Context, params acp.ReadTextFile
 }
 
 func (c *mindfsClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
+	if sess := c.proc.getSessionByID(string(params.SessionId)); sess != nil && sess.isReadOnly() {
+		return acp.WriteTextFileResponse{}, errors.New("read-only session cannot write files")
+	}
 	return acp.WriteTextFileResponse{}, nil
 }
 
 func (c *mindfsClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
+	if sess := c.proc.getSessionByID(string(params.SessionId)); sess != nil && sess.isReadOnly() {
+		return acp.CreateTerminalResponse{}, errors.New("read-only session cannot create terminal")
+	}
 	return acp.CreateTerminalResponse{}, nil
 }
 
@@ -594,6 +639,13 @@ func (p *Process) SetOnUpdate(sessionKey string, onUpdate func(SessionUpdate)) {
 	sess := p.getSessionByKey(sessionKey)
 	if sess != nil {
 		sess.setOnUpdate(onUpdate)
+	}
+}
+
+// SetReadOnly marks whether an ACP session must reject write and terminal operations.
+func (p *Process) SetReadOnly(sessionKey string, readOnly bool) {
+	if sess := p.getSessionByKey(sessionKey); sess != nil {
+		sess.setReadOnly(readOnly)
 	}
 }
 

@@ -27,9 +27,15 @@ test("phone keeps chat chrome compact and navigates cards, quick switching, proj
   const glowStyle = property => glowFrame.evaluate((frame, name) => getComputedStyle(frame, "::before")[name], property);
   await expect(activity).toHaveAttribute("data-activity-kind", "wait");
   assert.equal(await glowStyle("visibility"), "hidden");
-  await shell.getByRole("button", { name: "Switch session" }).click();
-  const quick = page.getByRole("dialog", { name: "Switch session" });
+  await shell.getByRole("button", { name: "Sessions", exact: true }).click();
+  const quick = page.getByRole("dialog", { name: "Sessions", exact: true });
   await expect(quick).toBeVisible();
+  const bounds = await quick.boundingBox();
+  assert.equal(bounds.x, 0);
+  assert.ok(bounds.width < 390 && bounds.height >= 690);
+  await page.mouse.click(375, 120);
+  await expect(quick).toBeHidden();
+  await shell.locator(".remote-phone-leading").click();
   const choices = quick.getByRole("list").getByRole("button");
   await expect(choices.locator("strong")).toHaveText([
     "Other conversation", "Main conversation", "Pinned finished", "Recently finished", "Older finished",
@@ -52,6 +58,7 @@ test("phone keeps chat chrome compact and navigates cards, quick switching, proj
   assert.equal(await glowStyle("animationName"), "none");
   assert.equal(await glowStyle("visibility"), "visible");
   await shell.getByRole("button", { name: "Sessions", exact: true }).click();
+  await page.getByRole("dialog", { name: "Sessions" }).getByRole("button", { name: "All sessions" }).click();
   await expect(shell).toHaveAttribute("data-page", "sessions");
   await expect(shell.locator(".workspace-session-row")).toHaveCount(1);
   await expect(shell.locator(".remote-phone-card-preview")).toHaveText("Recent preview");
@@ -80,7 +87,7 @@ test("phone header aligns the one-line title with the compact sessions and proje
     const colorOf = value => { const probe = document.createElement("i"); probe.style.color = value; document.body.append(probe); const out = getComputedStyle(probe).color; probe.remove(); return out; };
     return {
       sessions: middle(leading), folder: middle(icons[1].querySelector("svg")),
-      chevron: middle(element.querySelector(".remote-phone-title svg")), title: middle(title),
+      title: middle(title),
       leadingOffset: leading.getBoundingClientRect().left - element.getBoundingClientRect().left,
       leadingTarget: icons[0].getBoundingClientRect().toJSON(),
       titleWrapping: getComputedStyle(title).whiteSpace,
@@ -89,7 +96,8 @@ test("phone header aligns the one-line title with the compact sessions and proje
       accent: colorOf("var(--accent-color)"), secondary: colorOf("var(--text-secondary)"),
     };
   });
-  for (const name of ["folder", "chevron", "title"]) assert.ok(Math.abs(measured[name] - measured.sessions) <= 1, `${name} is ${measured[name] - measured.sessions}px off the sessions button's axis`);
+  await expect(header.locator("button.remote-phone-title, .remote-phone-title svg")).toHaveCount(0);
+  for (const name of ["folder", "title"]) assert.ok(Math.abs(measured[name] - measured.sessions) <= 1, `${name} is ${measured[name] - measured.sessions}px off the sessions button's axis`);
   assert.ok(measured.leadingOffset <= 12, "the sessions icon should sit close to the leading edge");
   assert.ok(measured.leadingTarget.width >= 44 && measured.leadingTarget.height >= 44);
   assert.equal(measured.titleWrapping, "nowrap");
@@ -142,7 +150,7 @@ test("More exposes grouped settings directly and opens the existing actions with
     return {};
   });
   const shell = page.locator(".remote-phone");
-  await shell.getByRole("button", { name: "Sessions", exact: true }).click();
+  await shell.getByRole("button", { name: "Projects", exact: true }).click();
   await shell.getByRole("button", { name: "More", exact: true }).click();
   const more = shell.getByRole("region", { name: "More" });
   await expect(more.getByText("Standalone test")).toBeVisible();
