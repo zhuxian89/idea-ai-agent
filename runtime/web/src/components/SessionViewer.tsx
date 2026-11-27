@@ -376,10 +376,10 @@ function SessionViewerInner({
     }
     return "";
   })();
-  const activePhoneAsk = phone && activityHost && activeAskUserCallId ? timeline.find(item =>
+  const activeHostedAsk = activityHost && activeAskUserCallId ? timeline.find(item =>
     item.type === "tool" && (item.toolCall.callId || item.toolCall.meta?.toolUseId) === activeAskUserCallId,
   ) : null;
-  const phoneAskKey = activePhoneAsk ? `${rootId}::${sessionKey}::${activeAskUserCallId}` : "";
+  const hostedAskKey = activeHostedAsk ? `${rootId}::${sessionKey}::${activeAskUserCallId}` : "";
 
   if (!session) {
     return (
@@ -451,7 +451,7 @@ function SessionViewerInner({
       const toolUseId =
         tc.callId ||
         (typeof tc.meta?.toolUseId === "string" ? tc.meta.toolUseId : "");
-      if (isAskUser && activePhoneAsk && toolUseId === activeAskUserCallId) return null;
+      if (isAskUser && activeHostedAsk && toolUseId === activeAskUserCallId) return null;
       return (
         <div key={timelineItemKey} style={{ marginTop: spacing }}>
           {isAskUser ? (
@@ -1208,8 +1208,8 @@ function SessionViewerInner({
   };
 
   const activity = <SessionActivity key={sessionKey} timeline={timeline} lastEventAt={lastEventAt} connected={connected} recoveryText={streamStatusText}
-    active={isAwaiting || isStreaming || !!activePhoneAsk} rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined}
-    onResolveQuestion={phoneAskKey ? () => setOpenPhoneAsk(phoneAskKey) : undefined} />;
+    active={isAwaiting || isStreaming || !!activeHostedAsk} rootId={rootId || undefined} sessionKey={sessionKey || undefined} rootPath={rootPath || undefined}
+    onResolveQuestion={hostedAskKey ? () => setOpenPhoneAsk(hostedAskKey) : undefined} />;
 
   return (
     <div
@@ -1222,10 +1222,10 @@ function SessionViewerInner({
         background: "transparent",
       }}
     >
-      {activePhoneAsk && activePhoneAsk.type === "tool" ? (
-        <PhoneSheet key={phoneAskKey} title={t("remote.phone.wait")} open={openPhoneAsk === phoneAskKey} onClose={() => setOpenPhoneAsk("")}>
-          <AskUserQuestionCard toolCall={activePhoneAsk.toolCall} rootId={rootId} sessionKey={sessionKey} agent={session?.agent}
-            active phoneSheet onAnswer={onAskUserAnswer} onResolved={() => setOpenPhoneAsk("")} />
+      {activeHostedAsk && activeHostedAsk.type === "tool" ? (
+        <PhoneSheet key={hostedAskKey} title={t("remote.phone.wait")} open={openPhoneAsk === hostedAskKey} onClose={() => setOpenPhoneAsk("")}>
+          <AskUserQuestionCard toolCall={activeHostedAsk.toolCall} rootId={rootId} sessionKey={sessionKey} agent={session?.agent}
+            active phoneSheet={phone} onAnswer={onAskUserAnswer} onResolved={() => setOpenPhoneAsk("")} />
         </PhoneSheet>
       ) : null}
       {interactionMode === "drawer" || phone ? null : (
@@ -1330,7 +1330,7 @@ function SessionViewerInner({
               rootPath={rootPath || undefined} tailClosed={Boolean(slashCommandResult) || (!loading && !isAwaiting && !isStreaming)}
               renderItem={renderTimelineItem} itemSpacing={timelineItemSpacing} />
             {renderSlashCommandResult()}
-            {phone && activityHost ? createPortal(activity, activityHost) : activity}
+            {activityHost ? createPortal(activity, activityHost) : activity}
             {session && rootId ? <SessionRecovery key={`${rootId}:${sessionKey}`} session={session} rootId={rootId}
               connected={connected} active={loading || isAwaiting || isStreaming} /> : null}
             <div ref={scrollEndRef} style={{ height: "1px" }} />

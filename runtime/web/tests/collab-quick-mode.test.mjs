@@ -303,7 +303,8 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
           },
           status: "waiting_user",
           current_step: "decisions",
-          readonly_check_state: "clean",
+          readonly_check_state: "modified",
+          readonly_check_note: "只读审核期间工作区有改动",
           steps: [
             {
               key: "impl",
@@ -1177,14 +1178,15 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   });
 
   // 1. Desktop Single-Chat: verify top-center 多Agent模式 entry + waiting badge (2) & zero sidebar clutter
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("mindfs-remote-glow")) {
+      localStorage.setItem("mindfs-remote-glow", JSON.stringify({ on: true, fx: "orbit", color: "teal", custom: "#6366f1", speed: "fast" }));
+    }
+  });
   await page.goto("https://entry.test/");
   await page.getByRole("button", { name: "打开文件树菜单" }).click();
-  await page.getByRole("button", { name: /对话区边框流光/ }).click();
-  const desktopGlowSettings = page.getByRole("dialog", { name: "对话区边框流光" });
-  await desktopGlowSettings.getByRole("button", { name: "环绕" }).click();
-  await desktopGlowSettings.getByRole("button", { name: "青绿" }).click();
-  await desktopGlowSettings.getByRole("button", { name: "较快" }).click();
-  await desktopGlowSettings.getByRole("button", { name: "完成", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Agent 状态框流光/ })).toBeVisible();
+  await page.getByRole("button", { name: "打开文件树菜单" }).click();
   const entryBtn = page.locator(".remote-topbar .collab-entry-btn:visible").first();
   await expect(entryBtn).toBeVisible();
   await expect(entryBtn).toContainText("多Agent模式");
@@ -1234,6 +1236,19 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
     page.locator(".collab-detail-pane").getByText(/我已实现.*ControlBlockFilter/),
   ).toBeVisible();
   await expect(page.locator(".collab-card").getByText(/我已实现.*ControlBlockFilter/)).toHaveCount(0);
+  const completedReview = page.locator(".collab-card.st-done").filter({ hasText: "独立只读审核" });
+  const stepDetails = page.locator(".collab-step-details");
+  await expect(completedReview.locator(".collab-tc-status")).toHaveText("已完成");
+  await expect(page.locator(".collab-card.st-pending .collab-tc-status")).toHaveText("待开始");
+  await expect(completedReview.getByRole("button")).toHaveCount(1);
+  await expect(completedReview).not.toContainText("Claude Code");
+  const reviewHeader = completedReview.getByRole("button");
+  await reviewHeader.press("Enter");
+  await expect(reviewHeader).toBeFocused();
+  await expect(reviewHeader).toHaveCSS("outline-width", "2px");
+  await stepDetails.locator(":scope > summary").click();
+  await expect(stepDetails).toContainText("提出 3 条审核意见");
+  await expect(stepDetails).toContainText("处已核实");
   sessionFetchLog.length = 0;
   holdDocPromise = new Promise((resolve) => {
     releaseDoc = resolve;
@@ -1294,24 +1309,22 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await page.getByRole("button", { name: "开始一写一审" }).click();
   const runningCard = page.locator(".collab-card.st-running");
   await expect(runningCard).toContainText("独立只读审核");
+  await expect(runningCard.locator(".collab-tc-status")).toHaveText("进行中");
   const readGlow = (locator) => locator.evaluate((el) => {
     const style = getComputedStyle(el, "::before");
-    return [style.visibility, style.animationName, style.getPropertyValue("--glow1").trim(), style.getPropertyValue("--glow-dur").trim()];
+    return [style.visibility, style.animationName, style.content];
   });
   const runningDot = page.locator(".collab-run-item.active .collab-run-dot");
-  await expect.poll(() => readGlow(runningCard)).toEqual(["visible", "glow-flow, glow-breathe", "#14b8a6", "8s"]);
+  await expect(runningCard).toHaveClass(/remote-glow-frame/);
+  await expect(runningCard).toHaveAttribute("data-glow-active", "");
+  await expect.poll(() => readGlow(runningCard)).toEqual(["visible", "glow-flow, glow-breathe", "\"\""]);
   await expect(runningDot).toHaveCSS("animation-name", "collabPulseDot");
-  await expect(runningDot).toHaveCSS("animation-duration", "3.2s");
-  await expect(runningDot).toHaveCSS("background-color", "rgb(20, 184, 166)");
   await expect(page.locator(".collab-run-dot.completed")).toHaveCSS("animation-name", "none");
-  await expect(page.locator(".collab-card:not(.st-running)[data-glow-active]")).toHaveCount(0);
+  await expect(page.locator(".collab-detail-body")).not.toHaveClass(/remote-glow-frame/);
+  await expect(page.locator(".collab-detail-footer .remote-status-activity.remote-glow-frame")).toHaveCount(1);
   if (screenshotDir) {
     await page.screenshot({ path: path.join(screenshotDir, "02a-desktop-running-glow.png") });
   }
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect.poll(async () => (await readGlow(runningCard)).slice(0, 2)).toEqual(["visible", "none"]);
-  await expect(runningDot).toHaveCSS("animation-name", "none");
-  await page.emulateMedia({ reducedMotion: "no-preference" });
   assert.equal(startedPayloads.length, 1);
   assert.equal(startedPayloads[0].root_id, "proj-2");
   await expect.poll(() => !!runSocket).toBe(true);
@@ -1336,6 +1349,21 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await runningCard.getByRole("button", { name: "检查进度并继续" }).click();
   await expect.poll(() => progressRequests).toEqual([["proj-2", "run-new-1"]]);
   await expect(runningCard.getByRole("button", { name: "检查进度并继续" })).toBeEnabled();
+
+  const failed = structuredClone(advanced);
+  failed.status = "failed";
+  failed.updated_at = "2026-11-25T08:20:00.000006Z";
+  failed.steps[2].status = "failed";
+  failed.steps[2].summary = "当前模型服务不可用";
+  current.run = failed;
+  runSocket.send(JSON.stringify({ type: "collab.run.updated", payload: { root_id: "proj-2", run: failed } }));
+  const failedCard = page.locator(".collab-card.st-failed");
+  await expect(failedCard.locator(".collab-tc-status")).toHaveText("失败");
+  await expect(failedCard.locator(".collab-tc-warning")).toHaveText("当前模型服务不可用");
+  await expect(failedCard.getByRole("button", { name: "检查进度并继续" })).toBeEnabled();
+  current.run = { ...advanced, updated_at: "2026-11-25T08:20:00.000007Z" };
+  runSocket.send(JSON.stringify({ type: "collab.run.updated", payload: { root_id: "proj-2", run: current.run } }));
+  await expect(runningCard.locator(".collab-tc-status")).toHaveText("进行中");
   startedPayloads.length = 0;
 
   // Switching project while viewing an active run must NOT trigger 404 or error toast
@@ -1722,12 +1750,20 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
     startedPayloads[0].task_prompt.includes("[file: .mindfs/attachments/notes.txt]"),
     `expected file token in task_prompt: ${startedPayloads[0].task_prompt}`,
   );
-  await expect(page.locator(".collab-run-models")).toContainText("Codex · gpt-5.3-codex · high");
-  await expect(page.locator(".collab-run-models").getByText("全权限", { exact: true })).toBeVisible();
-  await expect(page.locator(".collab-run-models .collab-run-model-chip").filter({ hasText: "Claude Code · claude-opus-4-6 · high" }).getByText("只读", { exact: true })).toBeVisible();
-  await expect(page.locator(".collab-card.st-running .collab-tc-model")).toContainText("Claude Code · claude-opus-4-6 · high · 只读");
-  await expect(page.locator(".collab-detail-title .m")).toContainText("Claude Code · claude-opus-4-6 · high");
-  await expect(page.locator(".collab-detail-title .collab-permission-tag")).toHaveText("严格只读");
+  const quickModels = page.getByRole("group", { name: "本次协作模型配置" });
+  await expect(quickModels.getByRole("group", { name: /主模型 · Codex · gpt-5.3-codex/ })).toContainText("5.3-codex · high");
+  await expect(quickModels.getByText("全权限", { exact: true })).toBeVisible();
+  const reviewerModel = quickModels.getByRole("group", { name: /审核 · Claude Code · claude-opus-4-6.*严格只读/ });
+  await expect(reviewerModel).toContainText("Opus 4.6 · high");
+  await expect(reviewerModel).not.toContainText("只读");
+  await expect(runningCard.locator(".collab-tc-status")).toHaveText("进行中");
+  await expect(runningCard).not.toContainText("Claude Code");
+  await expect(page.locator(".collab-detail-title .m")).toContainText("Opus 4.6 · high");
+  await expect(page.locator(".collab-detail-title").getByRole("img", { name: "Claude Code" })).toBeVisible();
+  await expect(page.locator(".collab-detail-head").getByRole("img", { name: "严格只读" })).toBeVisible();
+  await expect(page.locator(".collab-detail-head").getByRole("img", { name: "进行中" })).toBeVisible();
+  assert.equal((await page.locator(".collab-detail-title .t").boundingBox()).y,
+    (await page.locator(".collab-detail-title .m").boundingBox()).y);
 
   // R1 & R5: Historical run with empty model must NOT echo live agent default model,
   // and bracketed attachment path [file: ...截图[1].png] must render thumbnail without stray ".png]" text
@@ -1735,10 +1771,11 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await expect(defaultModelRunItem).toContainText("Codex · 默认模型 · high");
   await expect(defaultModelRunItem).not.toContainText("gpt-5.3-codex");
   await defaultModelRunItem.click();
-  await expect(page.locator(".collab-run-models")).toContainText("Codex · 默认模型 · high");
-  await expect(page.locator(".collab-run-models")).not.toContainText("gpt-5.3-codex");
-  await expect(page.locator(".collab-detail-title .m")).toContainText("Codex · 默认模型 · high");
-  await expect(page.locator(".collab-detail-title .m")).not.toContainText("gpt-5.3-codex");
+  await expect(page.locator(".collab-card.st-skipped .collab-tc-status")).toHaveText(["已跳过", "已跳过"]);
+  await expect(quickModels.getByRole("group", { name: /主模型 · Codex · 默认模型/ })).toContainText("默认模型 · high");
+  await expect(quickModels).not.toContainText("5.3-codex");
+  await expect(page.locator(".collab-detail-title .m")).toContainText("默认模型 · high");
+  await expect(page.locator(".collab-detail-title .m")).not.toContainText("5.3-codex");
   await expect(page.locator(".collab-detail-pane img[alt='截图[1].png']")).toBeVisible();
   await expect(page.locator(".collab-detail-pane")).not.toContainText(".png]");
 
@@ -1807,6 +1844,7 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   );
 
   // Open Markdown handoff doc preview modal (reusing MarkdownViewer)
+  await stepDetails.locator(":scope > summary").click();
   await page.getByRole("button", { name: "02-review.md" }).click();
   await expect(page.locator(".collab-modal")).toContainText("工作区只读检查通过（clean）");
 
@@ -1819,14 +1857,12 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await page.locator(".collab-modal-head .collab-icon-btn").click();
   await expect(page.locator(".collab-modal")).toHaveCount(0);
 
-  // 3. Select waiting dispute run -> side-by-side comparison + completeness gate + reused SessionViewer
+  // 3. Select waiting dispute run -> compact card summary + step-by-step decision modal + reused SessionViewer
   await page.locator(".collab-run-item", { hasText: "重构流式控制块过滤器并补齐边界单测" }).click();
   const disputeCard = page.locator(".collab-card.st-waiting_user");
   await expect(disputeCard).toBeVisible();
-  await expect(disputeCard).toContainText("已选 0 / 2 条");
-  await expect(disputeCard).toContainText("✓ 已核实");
-  await expect(disputeCard).toContainText("⚠ 文件不存在");
-  await expect(disputeCard).toContainText("解析兜底转交作者");
+  await expect(disputeCard).toContainText("2 条分歧待裁决");
+  await expect(disputeCard.locator(".collab-d-item")).toHaveCount(0);
 
   // Right pane must render reused SessionViewer with stage conversation!
   await expect(
@@ -1837,40 +1873,87 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
     await page.screenshot({ path: path.join(screenshotDir, "01-desktop-dispute-light.png") });
   }
 
-  const submitBtn = disputeCard.getByRole("button", { name: "提交裁决并继续" });
-  await expect(submitBtn).toBeDisabled();
+  // Open decision modal from compact card button
+  await disputeCard.getByRole("button", { name: "去裁决" }).click();
+  const decisionDialog = page.getByRole("dialog", { name: "逐条裁决" });
+  await expect(decisionDialog).toBeVisible();
+  await expect(decisionDialog).toContainText("第 1 / 2 条");
+  await expect(decisionDialog).toContainText("✓ 已核实");
+  await expect(decisionDialog.getByRole("button", { name: "下一条" })).toBeDisabled();
 
-  // Decide item 1 only -> still disabled (1 / 2)
-  const disputeItems = disputeCard.locator(".collab-d-item");
-  await disputeItems.nth(0).getByRole("button", { name: "按审核改" }).click();
-  await expect(disputeCard).toContainText("已选 1 / 2 条");
-  await expect(submitBtn).toBeDisabled();
+  // Quick batch fill works immediately and enables submit
+  await decisionDialog.getByRole("button", { name: "全部保留现状" }).click();
+  await expect(decisionDialog).toContainText("已处理 2");
+  await expect(decisionDialog.getByRole("button", { name: "提交裁决并继续" })).toBeEnabled();
 
-  // Decide item 2 as "其他指示" with empty note -> still disabled until note typed
-  await disputeItems.nth(1).getByRole("button", { name: "其他指示" }).click();
-  await expect(submitBtn).toBeDisabled();
-  await disputeItems.nth(1).locator("input").fill("暂不引入 sync.Pool，保持简单切片");
-  await expect(disputeCard).toContainText("已选 2 / 2 条");
-  await expect(submitBtn).toBeEnabled();
+  // Customize item 1 to "按审核改" and move to item 2
+  await decisionDialog.getByRole("radio", { name: /按审核改/ }).click();
+  await decisionDialog.getByRole("button", { name: /第 2 条/ }).click();
+  await expect(decisionDialog).toContainText("第 2 / 2 条");
+  await expect(decisionDialog).toContainText("⚠ 文件不存在");
+  await expect(decisionDialog).toContainText("解析兜底转交作者");
 
-  // Switch to Run B before submitting Run A -> Run B must have 0/2 selected and submit disabled!
+  // Decide item 2 as "其他指示" with empty note -> submit disabled until note typed
+  await decisionDialog.getByRole("radio", { name: /其他指示/ }).click();
+  await expect(decisionDialog.getByRole("button", { name: "提交裁决并继续" })).toBeDisabled();
+  await decisionDialog.getByLabel("R3 处理指示").fill("暂不引入 sync.Pool，保持简单切片");
+  await expect(decisionDialog).toContainText("已处理 2");
+  await expect(decisionDialog.getByRole("button", { name: "提交裁决并继续" })).toBeEnabled();
+  if (screenshotDir) {
+    await page.screenshot({ path: path.join(screenshotDir, "01b-desktop-dispute-modal.png") });
+  }
+
+  // Close modal -> draft persists on compact card
+  await decisionDialog.getByRole("button", { name: "关闭裁决" }).click();
+  await expect(decisionDialog).toHaveCount(0);
+  await expect(disputeCard).toContainText("已选 2 / 2");
+
+  // Switch to Run B before submitting Run A -> Run B must have 0 selected and submit/next disabled!
   await page.locator(".collab-run-item", { hasText: "第二条独立待裁决任务" }).click();
   const disputeCardB = page.locator(".collab-card.st-waiting_user");
-  await expect(disputeCardB).toContainText("已选 0 / 2 条");
-  await expect(disputeCardB.getByRole("button", { name: "提交裁决并继续" })).toBeDisabled();
+  await expect(disputeCardB.locator(".collab-tc-status")).toHaveText("等待你");
+  await expect(completedReview.locator(".collab-tc-warning")).toBeVisible();
+  await expect(completedReview.locator(".collab-tc-warning")).toHaveText("只读审核期间工作区有改动");
+  await expect(disputeCardB).toContainText("2 条分歧待裁决");
+  await expect(disputeCardB).not.toContainText("已选");
+  await disputeCardB.getByRole("button", { name: "去裁决" }).click();
+  await expect(decisionDialog).toContainText("已处理 0");
+  await expect(decisionDialog.getByRole("button", { name: "下一条" })).toBeDisabled();
+  await decisionDialog.getByRole("button", { name: "关闭裁决" }).click();
 
   // Switch back to Run A -> Run A still preserves its 2/2 draft and submits to Run A!
   await page.locator(".collab-run-item", { hasText: "重构流式控制块过滤器并补齐边界单测" }).click();
-  await expect(disputeCard).toContainText("已选 2 / 2 条");
-  await submitBtn.click();
+  await expect(disputeCard).toContainText("已选 2 / 2");
+  await disputeCard.getByRole("button", { name: "继续裁决" }).click();
+  await decisionDialog.getByRole("button", { name: "提交裁决并继续" }).click();
+  await expect(decisionDialog).toHaveCount(0);
   assert.equal(submittedPayloads.length, 1);
   assert.deepEqual(submittedPayloads[0].decisions, [
     { item_id: "R2", decision: "accept_review", note: "" },
     { item_id: "R3", decision: "custom", note: "暂不引入 sync.Pool，保持简单切片" },
   ]);
 
-  // Step 5 completed: verify test command & status + process doc cleanup keeping 05-report.md
-  await expect(page.getByText("✓ 通过")).toBeVisible();
+  // Done decisions card stays compact and opens read-only modal mirroring the decision UI
+  const doneDecisionCard = page.locator(".collab-card", { hasText: "分歧拍板" });
+  await expect(doneDecisionCard).toContainText("已裁决 2 条分歧");
+  await expect(doneDecisionCard.locator(".collab-d-item")).toHaveCount(0);
+  await doneDecisionCard.getByRole("button", { name: "查看裁决" }).click();
+  const readonlyDialog = page.getByRole("dialog", { name: "查看裁决" });
+  await expect(readonlyDialog).toBeVisible();
+  await expect(readonlyDialog).toContainText("已裁决 · 按审核改");
+  await expect(readonlyDialog.getByRole("button", { name: "全部按审核改" })).toHaveCount(0);
+  await readonlyDialog.getByRole("button", { name: "下一条" }).click();
+  await expect(readonlyDialog).toContainText("已裁决 · 其他指示");
+  await expect(readonlyDialog).toContainText("暂不引入 sync.Pool，保持简单切片");
+  if (screenshotDir) {
+    await page.screenshot({ path: path.join(screenshotDir, "01c-desktop-dispute-readonly-modal.png") });
+  }
+  await readonlyDialog.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(readonlyDialog).toHaveCount(0);
+
+  // Test result lives in stage details, with cleanup still available on the final card.
+  await stepDetails.locator(":scope > summary").click();
+  await expect(stepDetails.getByText(/✓ 通过/)).toBeVisible();
   const copy = structuredClone(runsById.get("run-wait"));
   Object.assign(copy.run, { id: "review-again-test", title: "独立复核按钮验证", round: 1 });
   copy.run.snapshot.members.find((member) => member.role === "primary").permission_mode = "full-access";
@@ -1880,11 +1963,13 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await page.getByRole("button", { name: /清理过程文档/ }).click();
   assert.equal(cleanedPayloads.length, 1);
   assert.deepEqual(cleanedPayloads[0].keep_docs, ["05-report.md"]);
-  await expect(page.getByText("已清理 .mindfs/runs/ 过程文档")).toBeVisible();
+  await expect(stepDetails.getByText("已清理 .mindfs/runs/ 过程文档")).toBeVisible();
+  await expect(page.locator(".collab-card").getByText("已清理 .mindfs/runs/ 过程文档")).toHaveCount(0);
 
   await page.reload();
   await page.locator(".collab-entry-btn:visible").first().click();
   await page.locator(".collab-run-item", { hasText: "独立复核按钮验证" }).click();
+  await stepDetails.locator(":scope > summary").click();
   await page.locator("summary", { hasText: "本次改动文件" }).click();
   await page.getByRole("button", { name: "src/main.go", exact: true }).click();
   await expect(page.locator("[data-turn-diff-detail]")).toContainText("newValue");
@@ -1900,6 +1985,7 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await page.getByRole("button", { name: "移除附件 remove-me.txt" }).click();
   await page.getByRole("button", { name: "开始再审" }).click();
   await expect(page.locator(".collab-card.st-running")).toContainText("独立只读审核");
+  await stepDetails.locator(":scope > summary").click();
   await page.getByRole("button", { name: "作者补充意见" }).click();
   await expect(page.locator(".collab-modal")).toContainText("第02轮/00-作者补充意见.md");
   await page.locator(".collab-modal-head .collab-icon-btn").click();
@@ -1988,6 +2074,7 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await page.locator(".collab-run-item", { hasText: "独立复核按钮验证" }).click();
   await expect(runningCard).toBeVisible();
   await expect(page.locator(".collab-run-models").getByText("全权限", { exact: true })).toBeVisible();
+  assert.ok((await quickModels.boundingBox()).height <= 50);
   const permissionBox = await page.locator(".collab-run-models").getByText("全权限", { exact: true }).boundingBox();
   assert.ok(permissionBox && permissionBox.x + permissionBox.width <= 390, "phone permission label must fit inside the screen");
   await expect.poll(async () => (await readGlow(runningCard))[0]).toBe("hidden");
@@ -2005,10 +2092,26 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
     await page.screenshot({ path: path.join(screenshotDir, "04-phone-cards-layer.png") });
   }
 
-  // Tap "查看对话细节 ›" on Step 1 card -> enters Layer 2 fullscreen conversation clearing Dynamic Island & Home Indicator!
-  await page.getByRole("button", { name: "查看对话细节 ›" }).first().click();
+  // Tap the first completed card to enter the full-screen conversation.
+  const phoneCards = page.locator(".collab-card");
+  const firstStep = phoneCards.first();
+  const reviewStep = phoneCards.filter({ hasText: "独立只读审核" });
+  const finalStep = phoneCards.filter({ hasText: "修改与测试报告" });
+  await expect(firstStep.locator(".collab-tc-status")).toHaveText("已完成");
+  await expect(reviewStep.locator(".collab-tc-status")).toHaveText("已完成");
+  await expect(finalStep.locator(".collab-tc-status")).toHaveText("已完成");
+  const cardHeight = (await firstStep.boundingBox()).height;
+  assert.equal((await reviewStep.boundingBox()).height, cardHeight);
+  assert.equal((await finalStep.boundingBox()).height, cardHeight);
+  await firstStep.getByRole("button").click();
   await expect(page.locator(".collab-workspace")).toHaveAttribute("data-level", "detail");
+  await stepDetails.locator(":scope > summary").click();
+  await expect(stepDetails.getByRole("button", { name: "01-impl.md" })).toBeVisible();
+  await expect(page.locator(".collab-detail-head").getByRole("img", { name: "已完成" })).toBeVisible();
   const detailHeadBox = await page.locator(".collab-detail-head").boundingBox();
+  assert.ok(detailHeadBox.height <= 50);
+  assert.equal((await page.locator(".collab-detail-title .t").boundingBox()).y,
+    (await page.locator(".collab-detail-title .m").boundingBox()).y);
   const backCardsBtn = page.getByRole("button", { name: "返回阶段卡片" });
   await expect(backCardsBtn).toBeVisible();
   const backCardsBox = await backCardsBtn.boundingBox();

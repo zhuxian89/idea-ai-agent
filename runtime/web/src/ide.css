@@ -211,3 +211,37 @@
 
 .idea-voice-active { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
 .idea-voice-active strong { color: var(--text-primary); font-weight: 600; }
+
+.file-viewer-modes {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--mindfs-code-bg, rgba(127, 127, 127, 0.1));
+}
+.file-viewer-modes button {
+  padding: 2px 8px;
+  min-height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.3;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.file-viewer-modes button:hover {
+  color: var(--text-primary);
+}
+.file-viewer-modes button[aria-pressed="true"] {
+  background: var(--selection-bg, rgba(0, 113, 227, 0.14));
+  color: var(--accent-color, #0071e3);
+  font-weight: 600;
+}
+.file-viewer-modes button:focus-visible {
+  outline: 2px solid var(--accent-color, #0071e3);
+  outline-offset: -1px;
+}

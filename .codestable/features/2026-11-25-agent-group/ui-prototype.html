@@ -909,6 +909,8 @@
     .t-card.st-running, .run-dot.running { animation: none; }
   }
 </style>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="ui-prototype-group.css">
 </head>
 <body data-theme="light">
 
@@ -919,10 +921,10 @@
     <button class="p-btn" data-scene="single-chat">普通单聊（入口）</button>
     <button class="p-btn active" data-scene="quick-review">快速模式（运行详情）</button>
     <button class="p-btn" data-scene="quick-start">新建快速任务</button>
-    <button class="p-btn" data-scene="group-chat">群组讨论</button>
+    <button class="p-btn" data-scene="group-chat">开大会</button>
   </div>
   <div class="proto-group">
-    <button class="p-btn demo" id="demoBtn" onclick="toggleDemo()">▶ 演示步骤自动推进</button>
+    <button class="p-btn demo" id="demoBtn" onclick="state.scene === 'group-chat' ? restartGroupDemo() : toggleDemo()">▶ 演示步骤自动推进</button>
     <span class="proto-label" style="margin-left:8px;">设备</span>
     <button class="p-btn active" data-vp="desktop">桌面</button>
     <button class="p-btn" data-vp="idea">IDEA（左缘可拖宽）</button>
@@ -969,10 +971,17 @@
               </div>
             </button>
             <button class="run-item" id="s-group-chat" onclick="switchScene('group-chat')">
-              <span class="run-dot wait"></span>
+              <span class="run-dot wait" id="groupRunDot"></span>
               <div class="run-item-body">
-                <div class="run-item-title">群组表结构与迁移方案</div>
-                <div class="run-item-sub">群组 · 待确认结论</div>
+                <div class="run-item-title" id="groupRunTitle"></div>
+                <div class="run-item-sub" id="groupRunStatus"></div>
+              </div>
+            </button>
+            <button class="run-item" id="s-quick-handoff" hidden onclick="switchScene('quick-handoff')">
+              <span class="run-dot"></span>
+              <div class="run-item-body">
+                <div class="run-item-title" id="handoffRunTitle"></div>
+                <div class="run-item-sub">快速 · 由会议交接</div>
               </div>
             </button>
           </div>
@@ -1014,10 +1023,13 @@
 
 <!-- Quiet Document / Diff Preview Modal (Reused FileViewer / GitDiffViewer) -->
 <div class="modal-backdrop" id="docModal" onclick="if(event.target===this)closeDocModal()">
-  <div class="modal" style="max-width:580px;">
+  <div class="modal prototype-doc" role="dialog" aria-modal="true" aria-labelledby="docModalTitle" style="max-width:580px;">
     <div class="modal-head">
       <span class="mono" id="docModalTitle">01-impl.md</span>
-      <button class="ghost-btn" onclick="closeDocModal()">关闭</button>
+      <div class="prototype-doc-actions">
+        <button class="ghost-btn" id="docDownload" hidden>下载 Markdown</button>
+        <button class="ghost-btn" id="docClose" onclick="closeDocModal()">关闭</button>
+      </div>
     </div>
     <div style="padding:14px 16px;">
       <div class="mono" style="font-size:11.5px; color:var(--text-tertiary); margin-bottom:8px;" id="docModalPath"></div>
@@ -1028,6 +1040,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="ui-prototype-group.js"></script>
 <script>
 const CATALOG = {
   codex: {
@@ -1128,34 +1141,10 @@ const STREAMS = {
       { kind: "agent", text: "已按你的决定完成处理并跑完回归测试。需要顺手删掉 `.mindfs/runs/run-042/` 下的过程文档吗？直接点卡片上的「清理过程文档」或跟我说一声就行。" }
     ]
   },
-  "group-codex": {
-    title: "codex-1 的对话",
-    agent: "codex", model: "gpt-5.4", effort: "high", mode: "read-only",
-    activity: "已提交盲评 v1 与第 2 轮互评",
-    events: [
-      { kind: "tool", name: "read_file · session_list_store.go:42", out: "确认现有 session-list.db 幂等迁移结构。" },
-      { kind: "agent", text: "主张复用 `session-list.db` 存索引、文档落盘项目运行目录；反对 `gemini-1` 新建第二个 SQLite 库（且其引用的 `store_v2.go:88` 不存在）。" }
-    ]
-  },
-  "group-claude": {
-    title: "claude-1 的对话（结论作者）",
-    agent: "claude", model: "claude-opus-4-6", effort: "high", mode: "default (只读)",
-    activity: "已吸收风险更新至 v2，并起草最终结论",
-    events: [
-      { kind: "tool", name: "read_file · session_store.go:118", out: "核对原子写盘流程。" },
-      { kind: "agent", text: "采纳 `codex-1` 提出的崩溃一致性风险，已在 v2 中加入 `.tmp + rename` 原子写盘，并汇总生成最终结论文档。" }
-    ]
-  },
-  "group-gemini": {
-    title: "gemini-1 的对话",
-    agent: "gemini", model: "gemini-2.5-pro", effort: "high", mode: "default",
-    activity: "第 2 轮表态未附核对内容，记为未确认",
-    events: [
-      { kind: "agent", text: "我同意 claude-1 的方案。（系统提示：未附检查内容与剩余风险，不计入有效同意）" }
-    ]
-  }
+
 };
 
+const DEFAULT_QUICK_TASK = "给独立后台的代理模型拉取增加超时控制，超时时保留原生模型列表。";
 const state = {
   scene: "quick-review",
   viewport: "desktop",
@@ -1174,17 +1163,16 @@ const state = {
       { role: "主模型", agent: "codex", model: "gpt-5.4", effort: "high" },
       { role: "审核模型（只读）", agent: "claude", model: "claude-opus-4-6", effort: "high" }
     ],
-    task: "给独立后台的代理模型拉取增加超时控制，超时时保留原生模型列表。"
+    task: DEFAULT_QUICK_TASK
   },
   decisions: { d1: "", d2: "" },
   docsCleaned: false,
-  groupRound: "round2",
   picker: { target: null, agent: "codex", model: "gpt-5.4", effort: "high", mode: "full-access" }
 };
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const SCENES_WITH_DETAIL = new Set(["quick-review", "group-chat"]);
+const SCENES_WITH_DETAIL = new Set(["quick-review", "group-chat", "quick-handoff"]);
 const STEP_STREAM = { 1: "quick-step1", 2: "quick-step2", 3: "quick-step3", 4: "quick-step3", 5: "quick-step5" };
 
 function showToast(msg) {
@@ -1275,10 +1263,12 @@ function initControls() {
 
 /* ===== Navigation ===== */
 function switchScene(sc) {
+  if (state.scene !== sc) state.cardsScroll = 0;
   state.scene = sc;
   state.level = "cards";
-  if (sc === "quick-review" && !state.sel.startsWith("quick-")) state.sel = "quick-step3";
-  if (sc === "group-chat" && !state.sel.startsWith("group-")) state.sel = "group-claude";
+  if (sc === "quick-review" && !Object.values(STEP_STREAM).includes(state.sel)) state.sel = "quick-step3";
+  if (sc === "group-chat") selectGroupStream();
+  if (sc === "quick-handoff") state.sel = "quick-handoff";
   if ($("appShell").dataset.narrow === "1") state.ui.sbOpen = false;
   document.querySelectorAll("[data-scene]").forEach(b => b.classList.toggle("active", b.dataset.scene === sc));
   document.querySelectorAll(".run-item").forEach(el => el.classList.remove("active"));
@@ -1305,7 +1295,7 @@ function setViewport(vp) {
 function openCard(streamId, focusComposerText) {
   if (!STREAMS[streamId]) return;
   state.sel = streamId;
-  if (state.run.demo && STEP_STREAM[state.run.step] !== streamId) state.follow = false;
+  if (state.scene === "quick-review" && state.run.demo && STEP_STREAM[state.run.step] !== streamId) state.follow = false;
   if (state.ui.stacked) state.level = "detail";
   else state.ui.detailCollapsed = false;
   render();
@@ -1359,9 +1349,11 @@ function toggleDemo() {
 function advanceStep(step, status) {
   state.run.step = step;
   state.run.status = status;
-  if (state.follow && STEP_STREAM[step]) state.sel = STEP_STREAM[step];
-  render();
-  if (state.follow) scrollToCurrentStep();
+  if (state.scene === "quick-review") {
+    if (state.follow && STEP_STREAM[step]) state.sel = STEP_STREAM[step];
+    render();
+    if (state.follow) scrollToCurrentStep();
+  } else updateSidebarStatus();
 }
 function scrollToCurrentStep() {
   const sc = document.querySelector("#cardsPane .cards-scroll");
@@ -1572,6 +1564,7 @@ function renderQuickReview() {
 /* ===== New Collaboration Task (Clean Minimalist Setup) ===== */
 function renderQuickStart() {
   const nr = state.newRun;
+  const groupSetup = nr.mode === "group";
   return `
     <header class="pane-head">
       <div class="pane-head-left">
@@ -1580,11 +1573,13 @@ function renderQuickStart() {
       </div>
       <div class="seg-group">
         <button class="seg-btn ${nr.mode === 'quick' ? 'active' : ''}" onclick="state.newRun.mode='quick'; render();">快速（一写一审）</button>
-        <button class="seg-btn ${nr.mode === 'group' ? 'active' : ''}" onclick="state.newRun.mode='group'; render();">群组讨论</button>
+        <button class="seg-btn ${groupSetup ? 'active' : ''}" onclick="state.newRun.mode='group'; render();">开大会</button>
       </div>
     </header>
     <div class="cards-scroll">
       <div class="setup-wrap">
+        ${groupSetup ? renderGroupSetup() : `
+        ${renderHandoffSource()}
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
           <span style="font-size:13px; color:var(--text-secondary);">全局模板：<strong>${escapeHtml(nr.templateName)}</strong>${nr.modified ? "（本次已调整）" : ""}</span>
           ${nr.modified ? `<button class="quiet-link" style="color:var(--accent); font-family:var(--font-sans);" onclick="nr.modified=false; render(); showToast('已更新到全局默认模板');">保存回模板</button>` : ""}
@@ -1601,69 +1596,13 @@ function renderQuickStart() {
         </div>
 
         <div class="ab-box" style="padding:12px 14px;">
-          <textarea class="ab-input" style="min-height:88px; font-size:13.5px;" placeholder="直接描述你要做的事…">${escapeHtml(nr.task)}</textarea>
+          <textarea class="ab-input" aria-label="快速模式任务说明" style="min-height:88px; font-size:13.5px;" placeholder="直接描述你要做的事…" oninput="state.newRun.task=this.value">${escapeHtml(nr.task)}</textarea>
           <div class="ab-foot">
             <span style="font-size:12px; color:var(--text-tertiary);">阶段间自动以项目内文档交接，全程可在右侧对话干预</span>
-            <button class="btn-primary" onclick="switchScene('quick-review'); toggleDemo();">开始运行</button>
+            <button class="btn-primary" onclick="startQuickPrototype()">开始运行</button>
           </div>
-        </div>
+        </div>`}
       </div>
-    </div>`;
-}
-
-/* ===== Group Discussion Cards View (Clean Minimalist) ===== */
-function renderGroupChat() {
-  const r = state.groupRound;
-  const members = [
-    { id: "group-codex", slot: "codex-1", model: "codex / gpt-5.4", right: "✓ 出处全部核对", summary: "主张复用现有 session-list.db 幂等加表；指出 gemini-1 引用的文件不存在。" },
-    { id: "group-claude", slot: "claude-1 · 结论作者", model: "claude / claude-opus-4-6", right: "v1 → v2", summary: "采纳 codex-1 的崩溃风险建议，补充 .tmp + rename 原子落盘并汇总最终方案。" },
-    { id: "group-gemini", slot: "gemini-1", model: "gemini / gemini-2.5-pro", right: "未有效确认", warn: true, summary: "仅回复「我同意」，未写明核对内容与剩余风险，按防盲从规则不计入有效同意。" }
-  ];
-  return `
-    <header class="pane-head">
-      <div class="pane-head-left">
-        <button class="icon-btn hamburger" onclick="toggleSidebar(true)">☰</button>
-        <span class="pane-title">群组表结构与迁移方案</span>
-      </div>
-      <div class="seg-group">
-        <button class="seg-btn ${r === 'round1' ? 'active' : ''}" onclick="state.groupRound='round1'; render();">盲评</button>
-        <button class="seg-btn ${r === 'round2' ? 'active' : ''}" onclick="state.groupRound='round2'; render();">互评</button>
-        <button class="seg-btn ${r === 'final' ? 'active' : ''}" onclick="state.groupRound='final'; render();">结论</button>
-      </div>
-    </header>
-    <div class="cards-scroll">
-      ${r !== "final" ? members.map(m => `
-        <div class="t-card ${state.sel === m.id ? "selected" : ""}" onclick="openCard('${m.id}')">
-          <div class="tc-top">
-            <div class="tc-head">
-              <span class="step-dot ${m.warn ? 'wait' : 'done'}">${m.warn ? '!' : '✓'}</span>
-              <span class="tc-title">${m.slot}</span>
-              <span class="tc-model">${m.model}</span>
-            </div>
-            <div class="tc-right">
-              <span style="${m.warn ? 'color:var(--amber);' : ''}">${m.right}</span>
-              <span class="tc-chevron">›</span>
-            </div>
-          </div>
-          <div class="tc-summary">${m.summary}</div>
-        </div>
-      `).join("") : `
-        <div class="t-card st-wait" onclick="openCard('group-claude')">
-          <div class="tc-top">
-            <div class="tc-head"><span class="step-dot wait">★</span><span class="tc-title">最终结论文档</span><span class="tc-model">作者 claude-1</span></div>
-            <span style="font-size:12px; color:var(--amber); font-weight:600;">待你定稿</span>
-          </div>
-          <div class="tc-summary">
-            <strong>方案：</strong>复用 <code>session-list.db</code> 存索引，文档原子落盘至项目 <code>.mindfs/runs/</code>，进程池按成员槽位隔离。<br>
-            <strong>未解决分歧：</strong><code>gemini-1</code> 曾提议拆独立库但未提供有效依据，原样保留记录。<br>
-            <strong>成员确认：</strong>codex-1 已确认准确表达 · gemini-1 未确认。
-          </div>
-          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;" onclick="event.stopPropagation()">
-            <button class="btn-secondary" onclick="openCard('group-claude', '最终结论这里补充一点：')">在对话里微调</button>
-            <button class="btn-primary" onclick="showToast('已确认定稿')">确认定稿</button>
-          </div>
-        </div>
-      `}
     </div>`;
 }
 
@@ -1671,6 +1610,10 @@ function renderGroupChat() {
 function sendChat() {
   const input = $("abInput");
   const txt = (input?.value || "").trim();
+  if (state.scene === "group-chat") {
+    if (txt || group.attachments.length) saveGroupSupplement(txt);
+    return;
+  }
   if (!txt) return;
   const s = STREAMS[state.sel];
   s.events.push({ kind: "user", text: txt });
@@ -1686,8 +1629,10 @@ function sendChat() {
 
 function renderDetail() {
   const pane = $("detailPane");
+  pane.dataset.prototypeScene = state.scene;
   if (!SCENES_WITH_DETAIL.has(state.scene)) { pane.innerHTML = ""; return; }
   const s = STREAMS[state.sel];
+  const isMeeting = state.scene === "group-chat";
   pane.innerHTML = `
     <div class="detail-full">
       <div class="detail-head">
@@ -1696,11 +1641,13 @@ function renderDetail() {
           <div class="t">${escapeHtml(s.title)}</div>
           <div class="m">${escapeHtml(s.agent)} / ${escapeHtml(s.model)} · ${escapeHtml(s.effort)}</div>
         </div>
+        ${isMeeting && s.docKey ? groupFileButton(s.docKey, "交付文件") : ""}
         <button class="icon-btn collapse-detail" title="收起对话" onclick="toggleDetail()">⇥</button>
       </div>
 
       <!-- Reused SessionViewer -->
       <div class="detail-body" id="detailBody">
+        ${s.events.length ? "" : '<p class="group-chat-empty">等待成员发言</p>'}
         ${s.events.map(ev => {
           if (ev.kind === "user") return `<div class="chat-user">${escapeHtml(ev.text)}</div>`;
           if (ev.kind === "think") return `<div class="chat-think">${escapeHtml(ev.text)}</div>`;
@@ -1709,7 +1656,7 @@ function renderDetail() {
               <summary><span>${escapeHtml(ev.name)}</span><span>展开</span></summary>
               <pre>${escapeHtml(ev.out)}</pre>
             </details>`;
-          return `<div class="chat-agent">${escapeHtml(ev.text).replace(/\n/g, "<br>")}</div>`;
+          return `<div class="chat-agent"${ev.groupReview ? ' data-group-review tabindex="-1"' : ""}>${escapeHtml(ev.text).replace(/\n/g, "<br>")}</div>`;
         }).join("")}
       </div>
 
@@ -1720,6 +1667,7 @@ function renderDetail() {
       </div>
 
       <!-- Reused ActionBar -->
+      ${isMeeting ? '<div class="g-detail-hint">' + (state.sel === "quick-handoff" ? "这里是快速模式主模型的原生对话，沿用快速模式的干预输入。" : "这里是该成员的原生对话和工具记录。要追问，请回到群里 @ TA。") + '</div>' : `
       <div class="actionbar">
         <div class="ab-box">
           <textarea id="abInput" class="ab-input" placeholder="直接在这里对话、纠偏、给特殊指示，或让模型清理文档…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
@@ -1731,7 +1679,7 @@ function renderDetail() {
             <button class="btn-primary" style="padding:5px 12px;" onclick="sendChat()">发送</button>
           </div>
         </div>
-      </div>
+      </div>`}
     </div>
     <div class="detail-rail">
       <button class="icon-btn" title="展开对话" onclick="toggleDetail()">⇤</button>
@@ -1773,16 +1721,34 @@ function renderSingleChat() {
 function openDoc(key) {
   const d = DOCS[key];
   if (!d) return;
-  $("docModalTitle").textContent = key;
+  openDoc.previousFocus = document.activeElement;
+  $("docModalTitle").textContent = d.name || key;
   $("docModalPath").textContent = d.path;
   $("docModalBody").textContent = d.body;
+  $("docModalBody").scrollTop = 0;
+  const download = $("docDownload");
+  download.hidden = !d.name;
+  download.onclick = () => downloadPrototypeDoc(d);
   $("docModal").classList.add("open");
+  $("docClose").focus();
 }
-function closeDocModal() { $("docModal").classList.remove("open"); }
+function closeDocModal() {
+  $("docModal").classList.remove("open");
+  openDoc.previousFocus?.focus();
+}
+$("docModal").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeDocModal();
+  if (event.key === "Tab") {
+    event.preventDefault();
+    const download = $("docDownload");
+    (download.hidden || document.activeElement === download ? $("docClose") : download).focus();
+  }
+});
 
 function openSlotPicker(idx) {
-  const m = state.newRun.members[idx];
-  state.picker = { target: { kind: "slot", idx }, agent: m.agent, model: m.model, effort: m.effort };
+  const isGroup = state.newRun.mode === "group";
+  const m = (isGroup ? groupSetup.members : state.newRun.members)[idx];
+  state.picker = { target: { kind: isGroup ? "group-slot" : "slot", idx }, agent: m.agent, model: m.model, effort: m.effort };
   $("slotModalTitle").textContent = m.role;
   renderPicker();
   $("slotModal").classList.add("open");
@@ -1819,10 +1785,11 @@ function pModel(m) { state.picker.model = m; renderPicker(); applyPicker(); }
 function pEffort(ef) { state.picker.effort = ef; renderPicker(); applyPicker(); }
 function applyPicker() {
   const p = state.picker;
-  if (p.target?.kind === "slot") {
-    const m = state.newRun.members[p.target.idx];
+  if (p.target?.kind === "slot" || p.target?.kind === "group-slot") {
+    const setup = p.target.kind === "group-slot" ? groupSetup : state.newRun;
+    const m = setup.members[p.target.idx];
     m.agent = p.agent; m.model = p.model; m.effort = p.effort;
-    state.newRun.modified = true;
+    setup.modified = true;
   } else if (p.target?.kind === "stream") {
     const s = STREAMS[state.sel];
     s.agent = p.agent; s.model = p.model; s.effort = p.effort;
@@ -1844,7 +1811,9 @@ function render() {
   renderSingleChat();
   if (state.scene === "single-chat") { applyLayout(); return; }
   const cp = $("cardsPane");
-  if (state.scene === "quick-review") cp.innerHTML = renderQuickReview();
+  $("demoBtn").textContent = state.scene === "group-chat" ? "▶ 重跑会议示例" : state.run.demo ? "■ 停止演示" : "▶ 演示步骤自动推进";
+  if (state.scene === "quick-handoff") cp.innerHTML = renderHandoffQuickRun();
+  else if (state.scene === "quick-review") cp.innerHTML = renderQuickReview();
   else if (state.scene === "quick-start") cp.innerHTML = renderQuickStart();
   else cp.innerHTML = renderGroupChat();
   applyLayout();
@@ -1852,13 +1821,16 @@ function render() {
   if (sc && !state.run.demo) sc.scrollTop = state.cardsScroll || 0;
   renderDetail();
   updateSidebarStatus();
+  updateGroupSidebar();
   renderFollowChip();
 }
 
 document.querySelectorAll("[data-scene]").forEach(b => b.addEventListener("click", () => switchScene(b.dataset.scene)));
 document.querySelectorAll("[data-vp]").forEach(b => b.addEventListener("click", () => setViewport(b.dataset.vp)));
+initGroupPrototype();
 initControls();
-render();
+if (location.hash === "#group") switchScene("group-chat");
+else render();
 </script>
 </body>
 </html>

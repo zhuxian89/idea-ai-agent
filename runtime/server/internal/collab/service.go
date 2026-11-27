@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"mindfs/server/internal/agent"
+	agenttypes "mindfs/server/internal/agent/types"
 	"mindfs/server/internal/turndiff"
 )
 
@@ -35,6 +36,11 @@ type StageTurnRequest struct {
 	ReadOnly       bool
 	Prompt         string
 	StreamFilter   *ControlStreamFilter
+	SkipSwitchHint bool
+	MemberSlotID   string
+	OnRegistered   func() error
+	OnToolCall     func(agenttypes.ToolCall)
+	OnText         func(string)
 }
 
 type StageTurnResult struct {
@@ -52,6 +58,7 @@ func (r StageTurnResult) deliverable() string {
 }
 
 type Runner interface {
+	StageTurnActive(rootID, sessionKey string) bool
 	CollabChangedFiles(ctx context.Context, rootID, runID string, since time.Time) (ChangeList, error)
 	GetCollabStore(rootID string) (*Store, error)
 	RootPath(rootID string) (string, error)
@@ -107,6 +114,10 @@ type Service struct {
 	mu      sync.Mutex
 	nextSeq uint64
 	workers map[string]*activeWorker
+
+	meetingMu   sync.Mutex
+	meetings    map[string]*meetingWorker
+	meetingLive sync.Map
 }
 
 func NewService(templates *TemplateStore, runner Runner) *Service {
@@ -114,6 +125,7 @@ func NewService(templates *TemplateStore, runner Runner) *Service {
 		templates: templates,
 		runner:    runner,
 		workers:   make(map[string]*activeWorker),
+		meetings:  make(map[string]*meetingWorker),
 	}
 }
 
@@ -225,7 +237,18 @@ func (s *Service) GetRunDetail(ctx context.Context, rootID, runID string) (RunDe
 		return RunDetail{}, err
 	}
 	docs, _ := ListRunDocs(rootPath, runID)
+	var meeting *MeetingDetail
+	if run.Mode == ModeGroup {
+		meeting, err = store.readMeeting(ctx, runID)
+		if err != nil {
+			return RunDetail{}, err
+		}
+		if len(meeting.Rounds) > 0 {
+			s.includeMeetingLive(run, &meeting.Rounds[len(meeting.Rounds)-1])
+		}
+	}
 	return RunDetail{
+		Meeting:     meeting,
 		Run:         run,
 		ReviewItems: items,
 		Docs:        docs,
@@ -241,6 +264,14 @@ func (s *Service) ReadDoc(rootID, runID, docName string) (string, error) {
 }
 
 func (s *Service) StartQuickRun(ctx context.Context, in StartQuickRunInput) (RunDetail, error) {
+	detail, err := s.createQuickRun(ctx, in, newCollabID("run"), nil)
+	if err == nil {
+		s.launchQuickWorker(detail.Run.RootID, detail.Run.ID, false, false)
+	}
+	return detail, err
+}
+
+func (s *Service) createQuickRun(ctx context.Context, in StartQuickRunInput, runID string, meeting *MeetingRound) (RunDetail, error) {
 	if s.runner == nil {
 		return RunDetail{}, errors.New("collab runner not configured")
 	}
@@ -296,7 +327,6 @@ func (s *Service) StartQuickRun(ctx context.Context, in StartQuickRunInput) (Run
 	}
 
 	primary, reviewer := extractQuickMembers(tempTpl.Members)
-	runID := newCollabID("run")
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
 		title = deriveRunTitle(taskPrompt)
@@ -364,7 +394,7 @@ func (s *Service) StartQuickRun(ctx context.Context, in StartQuickRunInput) (Run
 	if err != nil {
 		return RunDetail{}, err
 	}
-	created, err := store.CreateRun(ctx, Run{
+	run := Run{
 		ID: runID, Round: 1,
 		RootID:       rootID,
 		Mode:         ModeQuick,
@@ -376,12 +406,17 @@ func (s *Service) StartQuickRun(ctx context.Context, in StartQuickRunInput) (Run
 		Status:       RunStatusRunning,
 		CurrentStep:  StepImpl,
 		Steps:        steps,
-	})
+	}
+	var created Run
+	if meeting == nil {
+		created, err = store.CreateRun(ctx, run)
+	} else {
+		created, err = store.createMeetingQuickRun(ctx, run, *meeting)
+	}
 	if err != nil {
 		return RunDetail{}, err
 	}
 	s.notifyRunUpdated(ctx, store, rootID, created)
-	s.launchQuickWorker(rootID, created.ID, false, false)
 	return RunDetail{Run: created, ReviewItems: []ReviewItem{}, Docs: []string{}}, nil
 }
 
@@ -513,6 +548,9 @@ func (s *Service) PauseRun(ctx context.Context, rootID, runID string) (RunDetail
 	if err != nil {
 		return RunDetail{}, err
 	}
+	if run.Mode == ModeGroup {
+		return s.pauseMeeting(ctx, rootID, runID)
+	}
 	runKey := workerKey(rootID, runID)
 	s.mu.Lock()
 	w := s.workers[runKey]
@@ -532,6 +570,13 @@ func (s *Service) ContinueRun(ctx context.Context, rootID, runID string) (RunDet
 	store, err := s.runner.GetCollabStore(rootID)
 	if err != nil {
 		return RunDetail{}, err
+	}
+	run, err := store.GetRun(ctx, runID)
+	if err != nil {
+		return RunDetail{}, err
+	}
+	if run.Mode == ModeGroup {
+		return s.continueMeeting(ctx, rootID, runID)
 	}
 	action, err := s.checkQuickProgress(ctx, store, rootID, runID)
 	if err != nil {
@@ -589,6 +634,9 @@ func (s *Service) CleanupDocs(ctx context.Context, rootID, runID string, keepDoc
 	if err != nil {
 		return RunDetail{}, nil, err
 	}
+	if run.Mode == ModeGroup && run.Status != RunStatusCompleted {
+		return RunDetail{}, nil, errors.New("会议确认并开始实现后才能清理过程文件")
+	}
 	rootPath, err := s.runner.RootPath(rootID)
 	if err != nil {
 		return RunDetail{}, nil, err
@@ -616,6 +664,9 @@ func (s *Service) DeleteRun(ctx context.Context, rootID, runID string) error {
 	run, err := store.GetRun(ctx, runID)
 	if err != nil {
 		return err
+	}
+	if run.Mode == ModeGroup {
+		return s.deleteMeeting(ctx, rootID, runID)
 	}
 	runKey := workerKey(rootID, runID)
 	s.mu.Lock()
@@ -727,6 +778,7 @@ func (s *Service) executeQuickRun(ctx context.Context, rootID, runID string, wor
 		if err != nil {
 			return
 		}
+		run.workerSeq = workerSeq
 		if run.Status == RunStatusWaitingUser || run.Status == RunStatusCompleted || run.Status == RunStatusCanceled || run.Status == RunStatusFailed {
 			return
 		}
@@ -739,7 +791,9 @@ func (s *Service) executeQuickRun(ctx context.Context, rootID, runID string, wor
 			step := findStep(&run, StepImpl)
 			_, err = s.beginStep(ctx, store, rootID, &run, step, false, "正在实现并整理交付说明")
 			if err != nil {
-				s.failCurrentStep(context.Background(), store, rootID, &run, step, err)
+				if s.canMutateWorkerState(runKey, workerSeq) {
+					s.failCurrentStep(context.Background(), store, rootID, &run, step, err)
+				}
 				return
 			}
 			res, turnErr := s.handoffTurn(ctx, rootPath, run, step, taskFile, implementationInstructions(run))
@@ -776,7 +830,9 @@ func (s *Service) executeQuickRun(ctx context.Context, rootID, runID string, wor
 			}
 			_, err = s.beginStep(ctx, store, rootID, &run, step, true, "正在按任务和改动清单进行只读审核")
 			if err != nil {
-				s.failCurrentStep(context.Background(), store, rootID, &run, step, err)
+				if s.canMutateWorkerState(runKey, workerSeq) {
+					s.failCurrentStep(context.Background(), store, rootID, &run, step, err)
+				}
 				return
 			}
 			s.mu.Lock()
@@ -919,7 +975,9 @@ func (s *Service) executeQuickRun(ctx context.Context, rootID, runID string, wor
 			}
 			_, err = s.beginStep(ctx, store, rootID, &run, step, false, fmt.Sprintf("逐条回应 %d 条审核意见", len(items)))
 			if err != nil {
-				s.failCurrentStep(context.Background(), store, rootID, &run, step, err)
+				if s.canMutateWorkerState(runKey, workerSeq) {
+					s.failCurrentStep(context.Background(), store, rootID, &run, step, err)
+				}
 				return
 			}
 			prevRespDisk, _ := ReadRunDoc(rootPath, run.ID, run.doc(DocResponse))
@@ -999,7 +1057,9 @@ func (s *Service) executeQuickRun(ctx context.Context, rootID, runID string, wor
 			step := findStep(&run, StepFixTest)
 			_, err = s.beginStep(ctx, store, rootID, &run, step, false, "执行裁决修改并运行项目测试/构建")
 			if err != nil {
-				s.failCurrentStep(context.Background(), store, rootID, &run, step, err)
+				if s.canMutateWorkerState(runKey, workerSeq) {
+					s.failCurrentStep(context.Background(), store, rootID, &run, step, err)
+				}
 				return
 			}
 			res, turnErr := s.handoffTurn(ctx, rootPath, run, step, run.doc("05-交付要求.md"), reportInstructions(run))
@@ -1078,15 +1138,24 @@ func (s *Service) beginStep(ctx context.Context, store *Store, rootID string, ru
 	run.Status = RunStatusRunning
 	run.ErrorMessage = ""
 	run.UpdatedAt = time.Now().UTC()
-	if err := store.UpdateRun(context.Background(), *run); err != nil {
+	if err := s.persistQuickRun(context.Background(), store, run, step.Key); err != nil {
 		return "", err
 	}
 	s.notifyRunUpdated(context.Background(), store, rootID, *run)
 	return sessKey, nil
 }
 
+var errWorkerSuperseded = errors.New("collab worker superseded")
+
 func (s *Service) commitRunProgress(ctx context.Context, store *Store, rootID string, run *Run, step *StepCard) bool {
-	if err := store.UpdateRun(ctx, *run); err != nil {
+	stepKey := ""
+	if step != nil {
+		stepKey = step.Key
+	}
+	if err := s.persistQuickRun(ctx, store, run, stepKey); err != nil {
+		if errors.Is(err, errWorkerSuperseded) {
+			return false
+		}
 		log.Printf("[collab] update_run.error root=%s run=%s step=%s err=%v", rootID, run.ID, run.CurrentStep, err)
 		s.failCurrentStep(ctx, store, rootID, run, step, fmt.Errorf("保存阶段状态失败: %w", err))
 		return false
@@ -1110,8 +1179,10 @@ func (s *Service) handleTurnError(ctx context.Context, store *Store, rootID stri
 }
 
 func (s *Service) pauseCurrentStep(ctx context.Context, store *Store, rootID, runID, summary string) {
+	s.mu.Lock()
 	run, err := store.GetRun(ctx, runID)
-	if err != nil || run.Status == RunStatusCompleted || run.Status == RunStatusWaitingUser {
+	if err != nil || run.Status == RunStatusCompleted || run.Status == RunStatusCanceled || run.Status == RunStatusWaitingUser {
+		s.mu.Unlock()
 		return
 	}
 	if step := findStep(&run, run.CurrentStep); step != nil {
@@ -1121,6 +1192,7 @@ func (s *Service) pauseCurrentStep(ctx context.Context, store *Store, rootID, ru
 	run.Status = RunStatusWaitingUser
 	run.UpdatedAt = time.Now().UTC()
 	_ = store.UpdateRun(ctx, run)
+	s.mu.Unlock()
 	s.notifyRunUpdated(ctx, store, rootID, run)
 }
 
@@ -1129,15 +1201,34 @@ func (s *Service) failCurrentStep(ctx context.Context, store *Store, rootID stri
 	if err != nil {
 		msg = strings.TrimSpace(err.Error())
 	}
+	stepKey := ""
 	if step != nil {
+		stepKey = step.Key
 		step.Status = StepStatusFailed
 		step.Summary = msg
 	}
 	run.Status = RunStatusFailed
 	run.ErrorMessage = msg
 	run.UpdatedAt = time.Now().UTC()
-	_ = store.UpdateRun(ctx, *run)
+	if persistErr := s.persistQuickRun(ctx, store, run, stepKey); errors.Is(persistErr, errWorkerSuperseded) {
+		return
+	}
 	s.notifyRunUpdated(ctx, store, rootID, *run)
+}
+
+func (s *Service) persistQuickRun(ctx context.Context, store *Store, run *Run, activeStepKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if run.workerSeq != 0 {
+		w := s.workers[workerKey(run.RootID, run.ID)]
+		if w == nil || w.seq != run.workerSeq || w.paused {
+			return errWorkerSuperseded
+		}
+	}
+	if latest, err := store.GetRun(ctx, run.ID); err == nil {
+		mergeLatestQuickMembers(run, latest, activeStepKey)
+	}
+	return store.UpdateRun(ctx, *run)
 }
 
 func (s *Service) notifyRunUpdated(ctx context.Context, store *Store, rootID string, run Run) {
@@ -1164,6 +1255,12 @@ func recordStepResolvedModel(run *Run, step *StepCard, resolvedModel string) {
 		sameRole := strings.TrimSpace(step.Role) != "" && member.Role == step.Role
 		if (sameSlot || sameRole) && strings.TrimSpace(member.Model) == "" {
 			member.Model = resolved
+			run.resolvedMember = &resolvedMemberModel{
+				SlotID: member.SlotID,
+				Role:   member.Role,
+				Agent:  member.Agent,
+				Model:  resolved,
+			}
 		}
 	}
 }

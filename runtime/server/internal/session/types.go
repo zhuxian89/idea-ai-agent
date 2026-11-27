@@ -54,6 +54,7 @@ type Session struct {
 type Exchange struct {
 	Seq              int                       `json:"seq"`
 	Role             string                    `json:"role"`
+	MemberSlotID     string                    `json:"member_slot_id,omitempty"`
 	Agent            string                    `json:"agent,omitempty"`
 	Model            string                    `json:"model,omitempty"`
 	ModelDisplayName string                    `json:"model_display_name,omitempty"`

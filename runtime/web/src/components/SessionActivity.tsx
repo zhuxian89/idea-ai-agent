@@ -92,8 +92,9 @@ export function SessionActivity({ timeline, lastEventAt, connected, recoveryText
   return <div data-session-activity className="session-activity" {...(remoteUiActive() ? { "data-activity-kind": activityKind } : {})}>
     <div className="session-activity-label" role="status" aria-live="polite" aria-atomic="true">
       <ActivityEmoji emoji={reaction.emoji} />
-      {question && onResolveQuestion ? <button type="button" onClick={onResolveQuestion}>
-        {activityLabel}<span className="remote-phone-respond">{t("remote.phone.answerHint")}</span>
+      {question && onResolveQuestion ? <button type="button" className="session-activity-action" onClick={onResolveQuestion}>
+        <span className="session-activity-text" title={activityLabel}>{activityLabel}</span>
+        <span className="remote-phone-respond">{t("remote.phone.answerHint")}</span>
       </button> : <span className={`session-activity-text${showDetail ? " session-activity-tool-summary" : ""}`} title={activityLabel} tabIndex={0}>{activityLabel}</span>}
     </div>
     <div className="session-activity-time" title={timeLabel}>{timeLabel}</div>

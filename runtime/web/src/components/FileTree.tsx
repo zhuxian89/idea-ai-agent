@@ -102,7 +102,7 @@ export function FileTree({
   const { agentConfigBusy, agentConfigError, agentConfigRestartingAgent } = agentConfigFlowApi;
   const { probeAgentFromSettings, restartAgentFromConfigList, runAgentLifecycleCommand } = agentLifecycleApi;
   const { inPhoneMore } = fileTreeMenuBehaviorApi;
-  const { closePhonePanel, glowTitle, phonePanelTitle, settingsPanels } = phonePanelsApi;
+  const { closePhonePanel, glowTitle, phonePanelTitle, settingsPanels, showGlowSettings } = phonePanelsApi;
 
   if (agentSettingsOnly) {
     return <IdeaAgentSettings agents={agentLifecycleAgents} busy={agentLifecycleBusy || agentConfigBusy}
@@ -115,7 +115,7 @@ export function FileTree({
   return (
     <div className="workspace-projects" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <FileTreeAgentConfigDialog agentConfigFlowApi={agentConfigFlowApi} agentConfigurationViewApi={agentConfigurationViewApi} fileTreeMenusApi={fileTreeMenusApi} />
-      {isRemoteWebUi ? <GlowSettingsDialog title={glowTitle} open={glowDialogOpen} onClose={closeGlowDialog} /> : null}
+      {showGlowSettings ? <GlowSettingsDialog title={glowTitle} open={glowDialogOpen} onClose={closeGlowDialog} /> : null}
       {!isIDEManagedProject ? <div className="workspace-projects-title"><span>{t("fileTree.projects")}</span><StandaloneProjects compact onAdded={onProjectAdded} /></div> : null}
       <div className="workspace-files-toolbar" style={{ position: "relative", height: "36px", padding: "0 3px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--mindfs-topbar-bg, transparent)", boxSizing: "border-box", flexShrink: 0, gap: 0, overflow: "visible" }}>
         <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: "1 1 auto", maxWidth: "calc(100% - 56px)", marginRight: "6px" }}>

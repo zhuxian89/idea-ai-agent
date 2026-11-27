@@ -1,4 +1,8 @@
+import { CollabIcon, CollabIconButton } from "./CollabIcon";
 import { CollabFileChanges } from "./CollabFileChanges";
+import { MeetingPane } from "./MeetingPane";
+import { defaultCollabMembers, MeetingMemberSettings } from "./MeetingMemberSettings";
+import type { MeetingAction, MeetingDecision } from "../../services/collabMeeting";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SessionItem } from "../../app/sessionModel";
 import type { AgentStatus } from "../../services/agents";
@@ -6,6 +10,8 @@ import {
   collabService,
   type CollabItemDecision,
   type CollabMemberSlot,
+  type CollabMode,
+  type MeetingTopicMode,
   type CollabReviewItem,
   type CollabRun,
   type CollabRunDetail,
@@ -23,18 +29,27 @@ import { buildPendingAttachment } from "../actionBarUtils";
 import { AgentIcon } from "../AgentIcon";
 import { AgentSelector } from "../AgentSelector";
 import { CompactUploadProgress } from "../CompactUploadProgress";
-import { MarkdownViewer } from "../MarkdownViewer";
+import { FileViewer } from "../FileViewer";
 import { PanelToggle } from "../remoteui/RemoteTopBar";
+import { PhoneActivityHostContext } from "../remoteui/phoneSessionFacts";
 import { formatUploadAttachmentToken } from "../sessionViewerUtils";
 import { CollabSkillPicker } from "./CollabSkillPicker";
 import { CollabReviewAgainForm } from "./CollabReviewAgainForm";
 import { countSelectedSkills, filterVisibleSkillPaths } from "./collabSkillGrouping";
 import { CollabTemplateModal } from "./CollabTemplateModal";
+import { CollabRunModelsModal } from "./CollabRunModelsModal";
+import { CollabRunModelBar } from "./CollabRunModelBar";
+import { QuickDecisions, type QuickDecisionDraft } from "./QuickDecisions";
+import { meetingMemberAlias, meetingTurnStatus } from "./meetingDisplay";
 import {
+  checkLocalSlotAvailability,
   collabPermissionLabel,
+  compactCollabModelLabel,
   formatCollabMemberBadge,
+  meetingTurnModel,
   normalizeSlotAfterAgentChange,
   normalizeSlotForSubmission,
+  resolveCollabModelInfo,
 } from "./collabModelDisplay";
 
 function showToast(message: string, severity: "info" | "error") {
@@ -64,12 +79,14 @@ interface CollabShellProps {
   onWaitingCountChange: (count: number) => void;
   onBindStageSession: (session: SessionItem | null) => void;
   onExit: () => void;
+  conversationSessionKey?: string;
   conversationView: React.ReactNode;
   composerView: React.ReactNode;
 }
 
 const SB_WIDTH_KEY = "mindfs.collab.sidebarWidth";
 const CARDS_PCT_KEY = "mindfs.collab.cardsPercent";
+const FOLLOW_SCROLL_BUFFER_PX = 48;
 
 function readNumberStorage(key: string, fallback: number, min: number, max: number): number {
   try {
@@ -89,60 +106,29 @@ function writeNumberStorage(key: string, value: number) {
   }
 }
 
-function checkLocalSlotAvailability(
-  slot: CollabMemberSlot,
-  agents: AgentStatus[],
-): { available: boolean; reason?: string } {
-  if (!agents.length) return { available: true };
-  const st = agents.find((a) => a.name === slot.agent);
-  if (!st) {
-    return { available: false, reason: `未配置的 Agent：${slot.agent}` };
-  }
-  if (st.probe_pending) {
-    return { available: true };
-  }
-  if (!st.installed) {
-    return { available: false, reason: `Agent ${slot.agent} 未安装` };
-  }
-  if (!st.available) {
-    return {
-      available: false,
-      reason: `Agent ${slot.agent} 当前不可用${st.error ? `：${st.error}` : ""}`,
-    };
-  }
-  if (slot.model && (st.models?.length ?? 0) > 0) {
-    const found = st.models!.some((m) => m.id === slot.model);
-    if (!found) {
-      return {
-        available: false,
-        reason: `模型 ${slot.model} 不在 ${slot.agent} 当前可用列表中，请手动选择替代模型`,
-      };
-    }
-  }
-  if (slot.permission_mode && st.modes?.length && !st.modes.some((item) => item.id === slot.permission_mode)) {
-    return { available: false, reason: `权限档位 ${slot.permission_mode} 已不可用，请重新选择` };
-  }
-  return { available: true };
-}
-
 function stepStatusLabel(status: CollabStepCard["status"]): string {
   switch (status) {
     case "running":
       return "进行中";
     case "waiting_user":
-      return "待处理";
+      return "等待你";
     case "done":
       return "已完成";
     case "skipped":
       return "已跳过";
     case "failed":
-      return "出错";
+      return "失败";
     default:
-      return "等待上一步";
+      return "待开始";
   }
 }
 
 function runSubLabel(run: CollabRun): string {
+  if (run.mode === "group") {
+    if (run.quick_run_id) return "大会 → 快速";
+    if (run.current_step === "ready") return "正式计划待确认";
+    return run.status === "running" ? `开大会 · 第 ${run.round || 1} 轮` : "开大会 · 等待作者";
+  }
   if (run.status === "waiting_user") {
     return run.current_step === "decisions" ? "分歧待你拍板" : "等你继续";
   }
@@ -173,12 +159,14 @@ export function CollabShell({
   onWaitingCountChange,
   onBindStageSession,
   onExit,
+  conversationSessionKey,
   conversationView,
   composerView,
 }: CollabShellProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const cardsScrollRef = useRef<HTMLDivElement>(null);
+  const cardsScrollTopRef = useRef(0);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const currentRootIdRef = useRef<string | null>(rootId);
   currentRootIdRef.current = rootId;
@@ -217,9 +205,22 @@ export function CollabShell({
   const [stackedLevel, setStackedLevel] = useState<"cards" | "detail">("cards");
   const [filterState, setFilterState] = useState<"all" | "wait" | "running">("all");
 
+  const [draftMode, setDraftMode] = useState<CollabMode>("quick");
+  const [readyMode, setReadyMode] = useState<CollabMode | null>(null);
+  const draftModeRef = useRef(draftMode);
+  draftModeRef.current = draftMode;
+  const [quickTemplates, setQuickTemplates] = useState<CollabTemplateWithAvailability[]>([]);
+  const [meetingAuthor, setMeetingAuthor] = useState("");
+  const [meetingTopicMode, setMeetingTopicMode] = useState<MeetingTopicMode>("multi");
+  const [meetingRounds, setMeetingRounds] = useState(3);
+  const [meetingTurn, setMeetingTurn] = useState<{ runId: string; turnId: string } | null>(null);
+  const [meetingDecisions, setMeetingDecisions] = useState<Record<string, Record<string, MeetingDecision>>>({});
+  const [linkedDetail, setLinkedDetail] = useState<CollabRunDetail | null>(null);
+  const linkedRunIdRef = useRef<string | undefined>(undefined);
   const [templates, setTemplates] = useState<CollabTemplateWithAvailability[]>([]);
   const [skills, setSkills] = useState<CollabSkillSummary[]>([]);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [modelsModalMode, setModelsModalMode] = useState<"quick" | "group" | null>(null);
 
   const [runs, setRuns] = useState<CollabRun[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -288,8 +289,9 @@ export function CollabShell({
 
   // Dispute decisions state (strictly scoped per runId so switching runs never leaks choices)
   const [decisionsDraftByRun, setDecisionsDraftByRun] = useState<
-    Record<string, Record<string, { decision: "accept_review" | "keep_primary" | "custom"; note: string }>>
+    Record<string, Record<string, QuickDecisionDraft>>
   >({});
+  const [quickDecisionsModal, setQuickDecisionsModal] = useState<false | "edit" | "view">(false);
   const [submittingDecisions, setSubmittingDecisions] = useState(false);
 
   // Doc preview & cleanup state
@@ -305,6 +307,7 @@ export function CollabShell({
   }, []);
   const [keepReportOnClean, setKeepReportOnClean] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [meetingActionsHost, setMeetingActionsHost] = useState<HTMLElement | null>(null);
   const [checkingProgress, setCheckingProgress] = useState(false);
   const [reviewAgainOpenKey, setReviewAgainOpenKey] = useState<string | null>(null);
   const [reviewAgainDrafts, setReviewAgainDrafts] = useState<Record<string, { note?: string; files?: File[] }>>({});
@@ -330,61 +333,73 @@ export function CollabShell({
     ? shellWidth
     : shellWidth - (sidebarOpen ? sidebarWidth : 44);
   const isStacked = isMobile || remotePhone || availableWorkspaceWidth < 640;
+  const usePhoneConversationChrome = isMobile || remotePhone;
+  const [phoneActivityHost, setPhoneActivityHost] = useState<HTMLDivElement | null>(null);
+  const [desktopActivityHost, setDesktopActivityHost] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (isNarrow) setSidebarOpen(false);
+  }, [isNarrow]);
 
-  // Load templates + skills
   const refreshTemplates = useCallback(async () => {
+    const mode = draftMode;
     try {
-      const res = await collabService.listTemplates("quick");
-      setTemplates(res.items || []);
+      const res = await collabService.listTemplates(mode);
+      const list = (res.items || []).filter((item) => item.mode === mode);
+      if (draftModeRef.current !== mode) return [];
+      setTemplates(list);
+      if (mode === "quick") setQuickTemplates(list);
       setSkills(res.skills || []);
-      return res.items || [];
+      return list;
     } catch {
       return [];
     }
-  }, []);
+  }, [draftMode]);
 
   const applyTemplateToDraft = useCallback(
     (tpl: CollabTemplateWithAvailability | undefined, agentList: AgentStatus[]) => {
-      if (tpl) {
-        setAppliedTemplateId(tpl.id);
-        setDraftMembers(tpl.members.map((m) => ({ ...m })));
-        setDraftSkills([...(tpl.skill_paths || [])]);
-        return;
-      }
-      const primaryAgent =
-        agentList.find((a) => a.available)?.name || agentList[0]?.name || "codex";
-      const reviewerAgent =
-        agentList.find((a) => a.available && a.name !== primaryAgent)?.name || primaryAgent;
-      setAppliedTemplateId("");
-      setDraftMembers([
-        normalizeSlotForSubmission(
-          { slot_id: "primary", role: "primary", agent: primaryAgent, model: "", effort: "" },
-          agentList,
-        ),
-        normalizeSlotForSubmission(
-          { slot_id: "reviewer", role: "reviewer", agent: reviewerAgent, model: "", effort: "" },
-          agentList,
-        ),
-      ]);
-      setDraftSkills([]);
+      const members = tpl?.members.map((member) => ({ ...member })) || defaultCollabMembers(agentList, draftMode === "group");
+      setAppliedTemplateId(tpl?.id || "");
+      setDraftMembers(members);
+      setDraftSkills([...(tpl?.skill_paths || [])]);
+      setMeetingAuthor(tpl?.final_author_slot_id || members[0]?.slot_id || "");
+      setMeetingTopicMode(tpl?.topic_mode || "multi");
+      setMeetingRounds(tpl?.max_rounds || 3);
     },
-    [],
+    [draftMode],
   );
 
   useEffect(() => {
+    let canceled = false;
     void refreshTemplates().then((list) => {
-      const def = list.find((t) => t.is_default) || list[0];
-      applyTemplateToDraft(def, agents);
+      if (!canceled) {
+        applyTemplateToDraft(list.find((item) => item.is_default) || list[0], agents);
+        setReadyMode(draftMode);
+      }
     });
-  }, [refreshTemplates]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { canceled = true; };
+  }, [refreshTemplates, applyTemplateToDraft, draftMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fill sensible initial slots once agents arrive if draftMembers is still empty
   useEffect(() => {
     if (draftMembers.length === 0 && agents.length > 0) {
-      const def = templates.find((t) => t.is_default) || templates[0];
+      const def = templates.find((item) => item.is_default) || templates[0];
       applyTemplateToDraft(def, agents);
     }
   }, [agents, draftMembers.length, templates, applyTemplateToDraft]);
+
+  const switchDraftMode = (mode: CollabMode) => {
+    if (mode === draftMode) return;
+    setDraftMode(mode);
+    setReadyMode(null);
+    setTemplates([]);
+    setAppliedTemplateId("");
+    setSaveAsOpen(false);
+    const members = defaultCollabMembers(agents, mode === "group");
+    setDraftMembers(members);
+    setMeetingAuthor(members[0].slot_id);
+    setMeetingTopicMode("multi");
+    setMeetingRounds(3);
+    setDraftSkills([]);
+  };
 
   // Load runs for current project
   const refreshRuns = useCallback(async () => {
@@ -427,6 +442,8 @@ export function CollabShell({
         setStackedLevel("cards");
         setAutoFollow(true);
         setSelectedStepKey("impl");
+        setLinkedDetail(null);
+        setMeetingTurn(null);
         onWaitingCountChange(0);
         uploadAbortRef.current?.abort();
         setUploadProgress(null);
@@ -465,6 +482,10 @@ export function CollabShell({
   );
 
   useEffect(() => {
+    setModelsModalMode(null);
+  }, [rootId, activeRunId]);
+
+  useEffect(() => {
     if (!activeRunId || activeRunRootRef.current !== rootId) {
       setDetail(null);
       onBindStageSession(null);
@@ -480,50 +501,102 @@ export function CollabShell({
     if (runId && activeRunRootRef.current === rootId) void loadDetail(runId);
   }), [rootId, loadDetail, refreshRuns]);
 
-  // React to live WebSocket collab.run.updated events
+  // Apply list updates while keeping the linked implementation on the meeting's row.
   useEffect(() => {
     if (!latestRunEvent || latestRunEvent.rootId !== rootId) return;
     const incoming = latestRunEvent.run;
+    if (incoming.meeting_run_id) {
+      setRuns((previous) => previous.map((run) => run.id === incoming.meeting_run_id
+        ? { ...run, quick_run_id: incoming.id, quick_run_status: incoming.status } : run));
+      return;
+    }
     if (incoming.status === "deleted") {
-      setRuns((prev) => prev.filter((r) => r.id !== incoming.id));
-      if (activeRunId === incoming.id) {
+      setRuns((previous) => previous.filter((run) => run.id !== incoming.id));
+      if (activeRunIdRef.current === incoming.id) {
         activeRunRootRef.current = null;
         setActiveRunId(null);
       }
       return;
     }
-    setRuns((prev) => {
-      const idx = prev.findIndex((r) => r.id === incoming.id);
-      if (idx === -1) return [incoming, ...prev];
-      const next = [...prev];
-      next[idx] = incoming;
+    setRuns((previous) => {
+      const index = previous.findIndex((run) => run.id === incoming.id);
+      if (index === -1) return [incoming, ...previous];
+      const next = [...previous];
+      next[index] = incoming;
       return next;
     });
-    if (activeRunId === incoming.id) {
-      void loadDetail(incoming.id);
-    }
-  }, [latestRunEvent, rootId, activeRunId, loadDetail]);
+    if (activeRunIdRef.current === incoming.id) void loadDetail(incoming.id);
+  }, [latestRunEvent, rootId, loadDetail]);
 
-  const currentRun = useMemo(() => {
+  const selectedRun = useMemo(() => {
     if (!activeRunId || !rootId) return null;
     const eventRun = latestRunEvent?.rootId === rootId ? latestRunEvent.run : undefined;
     let latest: CollabRun | null = null;
-    // Timestamps are UTC RFC3339Nano, with variable fractional precision.
-    // Drop the trailing Z so a longer fractional prefix sorts after a shorter one.
     for (const run of [runs.find((item) => item.id === activeRunId), loadedDetail?.run, eventRun]) {
       if (run?.id !== activeRunId || (run.root_id && run.root_id !== rootId) || run.status === "deleted") continue;
       if (!latest || run.updated_at.replace(/Z$/, "") >= latest.updated_at.replace(/Z$/, "")) latest = run;
     }
     return latest;
   }, [activeRunId, loadedDetail, latestRunEvent, runs, rootId]);
-  const detail = loadedDetail?.run.id === currentRun?.id &&
-    loadedDetail?.run.root_id === currentRun?.root_id &&
-    loadedDetail?.run.round === currentRun?.round ? loadedDetail : null;
-  const activeStepKey = useMemo(() => {
-    if (!currentRun) return "impl";
-    if (currentRun.current_step === "done") return "fix_test";
-    return currentRun.current_step || "impl";
-  }, [currentRun]);
+
+  const selectedDetail = loadedDetail?.run.id === selectedRun?.id &&
+    loadedDetail?.run.root_id === selectedRun?.root_id ? loadedDetail : null;
+  const meetingDetail = selectedRun?.mode === "group" && selectedDetail?.meeting ? selectedDetail : null;
+  const linkedRunId = selectedRun?.quick_run_id || meetingDetail?.meeting?.quick_run_id;
+  linkedRunIdRef.current = linkedRunId;
+  const selectedMode = selectedRun?.mode;
+  useEffect(() => {
+    if (selectedMode === "group") setDetailCollapsed(!linkedRunId);
+  }, [selectedRun?.id, selectedMode, linkedRunId]);
+  const loadLinkedDetail = useCallback(async () => {
+    if (!rootId || !linkedRunId) return;
+    try {
+      const next = await collabService.getRunDetail(rootId, linkedRunId);
+      if (linkedRunIdRef.current === linkedRunId && currentRootIdRef.current === rootId) {
+        setLinkedDetail((previous) => previous?.run.id === next.run.id && previous.run.updated_at.replace(/Z$/, "") >
+          next.run.updated_at.replace(/Z$/, "") ? previous : next);
+      }
+    } catch (err) {
+      if (linkedRunIdRef.current === linkedRunId) showToast(err instanceof Error ? err.message : "读取实现进度失败", "error");
+    }
+  }, [linkedRunId, rootId]);
+  useEffect(() => { void loadLinkedDetail(); }, [loadLinkedDetail]);
+  useEffect(() => {
+    if (linkedRunId && latestRunEvent?.rootId === rootId && latestRunEvent.run.id === linkedRunId) void loadLinkedDetail();
+  }, [linkedRunId, latestRunEvent, loadLinkedDetail, rootId]);
+  useEffect(() => sessionService.subscribeEvents((event) => {
+    if (event.type === "ws.reconnected") void loadLinkedDetail();
+  }), [loadLinkedDetail]);
+
+  useEffect(() => {
+    if (selectedRun?.mode !== "group") return;
+    if (quickTemplates.length === 0 && draftMode === "group") {
+      void collabService.listTemplates("quick").then(({ items }) => setQuickTemplates(items || [])).catch(() => {});
+    }
+  }, [selectedRun?.id, selectedRun?.mode, draftMode, quickTemplates.length]);
+
+  const linked = linkedDetail?.run.id === linkedRunId && linkedDetail?.run.root_id === rootId ? linkedDetail : null;
+  const linkedEvent = linkedRunId && latestRunEvent?.rootId === rootId && latestRunEvent.run.id === linkedRunId ? latestRunEvent.run : null;
+  const currentRun = linked ? linkedEvent && linkedEvent.updated_at.replace(/Z$/, "") > linked.run.updated_at.replace(/Z$/, "")
+    ? linkedEvent : linked.run : selectedRun;
+  const baseDetail = linked || selectedDetail;
+  const detail = baseDetail?.run.round === currentRun?.round ? baseDetail : null;
+  const activeStepKey = currentRun?.current_step === "done" ? "fix_test" : currentRun?.current_step || "impl";
+  const focusedMeetingTurn = meetingTurn?.runId === selectedRun?.id
+    ? meetingDetail?.meeting?.rounds.flatMap((round) => round.turns).find((turn) => turn.id === meetingTurn?.turnId)
+    : undefined;
+  const focusedMemberIndex = selectedRun?.snapshot.members.findIndex((member) => member.slot_id === focusedMeetingTurn?.slot_id) ?? -1;
+  const focusedMember = selectedRun?.snapshot.members[focusedMemberIndex];
+  const meetingSessionStep = useMemo<CollabStepCard | null>(() => focusedMeetingTurn && focusedMember ? {
+    key: focusedMeetingTurn.id,
+    title: meetingMemberAlias(focusedMemberIndex),
+    role: "member",
+    ...meetingTurnModel(focusedMeetingTurn, focusedMember),
+    effort: focusedMeetingTurn.status === "running" || focusedMeetingTurn.status === "delivering" ? focusedMember.effort : undefined,
+    read_only: !focusedMember.permission_mode,
+    session_key: focusedMeetingTurn.session_key,
+    status: focusedMeetingTurn.status === "delivering" ? "running" : focusedMeetingTurn.status,
+  } : null, [focusedMeetingTurn, focusedMember, focusedMemberIndex]);
 
   // Resolve which step's session_key should drive the right-hand SessionViewer & ActionBar
   const resolveSessionStepForCard = useCallback(
@@ -558,16 +631,17 @@ export function CollabShell({
       return;
     }
     const targetStep = autoFollow ? activeStepKey : selectedStepKey;
-    if (autoFollow && selectedStepKey !== activeStepKey) {
+    if (currentRun.mode === "quick" && autoFollow && selectedStepKey !== activeStepKey) {
       setSelectedStepKey(activeStepKey);
     }
     if (autoFollow) {
       const el = cardRefs.current[activeStepKey];
       if (el) {
+        cardsScrollTopRef.current = cardsScrollRef.current?.scrollTop ?? 0;
         el.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
     }
-    const sessionStep = resolveSessionStepForCard(currentRun, targetStep);
+    const sessionStep = meetingSessionStep || resolveSessionStepForCard(currentRun, targetStep);
     if (sessionStep?.session_key && rootId) {
       const nextKey = `${rootId}::${sessionStep.session_key}`;
       if (boundSessionKeyRef.current !== nextKey) {
@@ -587,6 +661,7 @@ export function CollabShell({
     }
   }, [
     currentRun,
+    meetingSessionStep,
     activeStepKey,
     selectedStepKey,
     autoFollow,
@@ -624,8 +699,9 @@ export function CollabShell({
       })),
       s: normalizeSkills(draftSkills),
     });
-    return snapA !== snapB;
-  }, [appliedTemplate, draftMembers, draftSkills, skills]);
+    return snapA !== snapB || (draftMode === "group" &&
+      (meetingTopicMode !== (appliedTemplate.topic_mode || "multi") || meetingAuthor !== appliedTemplate.final_author_slot_id || meetingRounds !== (appliedTemplate.max_rounds || 3)));
+  }, [appliedTemplate, draftMembers, draftSkills, skills, draftMode, meetingAuthor, meetingRounds, meetingTopicMode]);
 
   const slotChecks = useMemo(
     () => draftMembers.map((m) => ({ slot: m, ...checkLocalSlotAvailability(m, agents) })),
@@ -664,7 +740,8 @@ export function CollabShell({
         const saved = await collabService.saveTemplate({
           id: appliedTemplate.id,
           name: appliedTemplate.name,
-          mode: "quick",
+          mode: draftMode,
+          ...(draftMode === "group" ? { final_author_slot_id: meetingAuthor, max_rounds: meetingRounds, topic_mode: meetingTopicMode } : {}),
           is_default: appliedTemplate.is_default,
           members: normalizedMembers,
           skill_paths: normalizedSkillPaths,
@@ -680,7 +757,8 @@ export function CollabShell({
       }
       const saved = await collabService.saveTemplate({
         name: saveAsName.trim(),
-        mode: "quick",
+        mode: draftMode,
+        ...(draftMode === "group" ? { final_author_slot_id: meetingAuthor, max_rounds: meetingRounds, topic_mode: meetingTopicMode } : {}),
         is_default: templates.length === 0,
         members: normalizedMembers,
         skill_paths: normalizedSkillPaths,
@@ -695,7 +773,8 @@ export function CollabShell({
     }
   };
 
-  const canStartRun =
+  const meetingSettingsValid = draftMode !== "group" || (meetingRounds >= 1 && meetingRounds <= 5);
+  const canStartRun = meetingSettingsValid &&
     Boolean(rootId) &&
     (Boolean(taskPrompt.trim()) || pendingAttachments.length > 0) &&
     !anySlotUnavailable &&
@@ -753,14 +832,14 @@ export function CollabShell({
     [appendPendingAttachments, rootId, startingRun],
   );
 
-  const handleStartQuickRun = async () => {
+  const handleStartRun = async () => {
     const targetRootId = rootId;
     if (!targetRootId) {
       showToast("请先选择项目目录", "error");
       return;
     }
     const trimmedPrompt = taskPrompt.trim();
-    if ((!trimmedPrompt && pendingAttachments.length === 0) || anySlotUnavailable || startingRun) {
+    if ((!trimmedPrompt && pendingAttachments.length === 0) || anySlotUnavailable || startingRun || (draftMode === "group" && (meetingRounds < 1 || meetingRounds > 5))) {
       return;
     }
     setStartingRun(true);
@@ -790,6 +869,7 @@ export function CollabShell({
         normalizeSlotForSubmission(slot, agents),
       );
       const created = await collabService.startQuickRun({
+        ...(draftMode === "group" ? { mode: draftMode, final_author_slot_id: meetingAuthor, max_rounds: meetingRounds, topic_mode: meetingTopicMode } : {}),
         root_id: targetRootId,
         task_prompt: finalTaskPrompt,
         template_id: appliedTemplate?.id || "",
@@ -804,6 +884,7 @@ export function CollabShell({
       docRequestSeqRef.current += 1;
       setDocPreview(null);
       setAutoFollow(true);
+      setMeetingTurn(null);
       setStackedLevel("cards");
       activeRunRootRef.current = targetRootId;
       setActiveRunId(created.run.id);
@@ -811,7 +892,7 @@ export function CollabShell({
       await refreshRuns();
     } catch (err) {
       if (!isUploadAbortError(err) && currentRootIdRef.current === targetRootId) {
-        showToast(err instanceof Error ? err.message : "启动快速协作失败", "error");
+        showToast(err instanceof Error ? err.message : "启动协作失败", "error");
       }
     } finally {
       uploadAbortRef.current = null;
@@ -831,6 +912,9 @@ export function CollabShell({
     () => decisionsDraftByRun[draftKey] || {},
     [draftKey, decisionsDraftByRun],
   );
+  useEffect(() => {
+    setQuickDecisionsModal(false);
+  }, [draftKey]);
 
   const disputedItems = useMemo(
     () =>
@@ -859,6 +943,89 @@ export function CollabShell({
     [disputedItems, currentRunDraft],
   );
 
+  const isViewedRun = (runId: string) => activeRunIdRef.current === runId || linkedRunIdRef.current === runId;
+  const applyActionDetail = (next: CollabRunDetail) => {
+    const apply = (previous: CollabRunDetail | null) => previous?.run.id === next.run.id &&
+      previous.run.updated_at.replace(/Z$/, "") > next.run.updated_at.replace(/Z$/, "") ? previous : next;
+    if (linkedRunIdRef.current === next.run.id) setLinkedDetail(apply);
+    else if (activeRunIdRef.current === next.run.id) setDetail(apply);
+  };
+
+  const handleUpdateRunMembers = async (
+    targetRun: CollabRun,
+    members: CollabMemberSlot[],
+    resume: boolean,
+  ) => {
+    const targetRootId = targetRun.root_id || rootId;
+    if (!targetRootId) return;
+    const updated = await collabService.updateRunMembers(
+      targetRootId,
+      targetRun.id,
+      members,
+      resume,
+    );
+    if (currentRootIdRef.current !== targetRootId) return;
+    if (isViewedRun(targetRun.id)) {
+      boundSessionKeyRef.current = "";
+      applyActionDetail(updated);
+    }
+    await refreshRuns();
+    if (currentRootIdRef.current === targetRootId) {
+      showToast(resume ? "已更新模型并继续执行" : "已更新运行模型", "info");
+    }
+  };
+
+  const handleMeetingAction = async (action: MeetingAction) => {
+    if (!selectedRun || selectedRun.mode !== "group" || actionBusy) return;
+    setActionBusy(true);
+    try {
+      const result = await collabService.meetingAction(selectedRun.root_id, selectedRun.id, action);
+      if (currentRootIdRef.current !== selectedRun.root_id || activeRunIdRef.current !== selectedRun.id) return;
+      applyActionDetail(result);
+      if (action.action === "retry_turn") {
+        const message = result.progress_action === "running" ? "该成员仍在执行" :
+          result.progress_action === "resumed" ? "已继续该成员的发言" :
+          result.progress_action === "unchanged" ? "该成员已交付" : "成员状态已更新";
+        showToast(message, "info");
+      }
+      if (action.action === "implement") {
+        setMeetingTurn(null);
+        setAutoFollow(true);
+        setStackedLevel("cards");
+        await refreshRuns();
+      }
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleMeetingControl = async (action: "pause" | "continue") => {
+    if (!selectedRun || actionBusy) return;
+    setActionBusy(true);
+    try {
+      const method = action === "pause" ? collabService.pauseRun : collabService.continueRun;
+      const next = await method(selectedRun.root_id, selectedRun.id);
+      if (currentRootIdRef.current === selectedRun.root_id) applyActionDetail(next);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "更新会议进度失败", "error");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleMeetingCleanup = async (planDoc: string) => {
+    if (!selectedRun || actionBusy) return;
+    setActionBusy(true);
+    try {
+      const next = await collabService.cleanupDocs(selectedRun.root_id, selectedRun.id, [planDoc]);
+      if (currentRootIdRef.current === selectedRun.root_id) applyActionDetail(next.detail);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "清理会议文档失败", "error");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const handleSubmitDecisions = async () => {
     const targetRootId = rootId;
     if (!targetRootId || !currentRun || !allDisputesDecided || submittingDecisions) return;
@@ -877,9 +1044,10 @@ export function CollabShell({
         delete next[draftKey];
         return next;
       });
+      setQuickDecisionsModal(false);
       if (currentRootIdRef.current !== targetRootId) return;
-      if (activeRunIdRef.current === targetRunId) {
-        setDetail(updated);
+      if (isViewedRun(targetRunId)) {
+        applyActionDetail(updated);
         setAutoFollow(true);
       }
       await refreshRuns();
@@ -895,11 +1063,11 @@ export function CollabShell({
     }
   };
 
-  const handleOpenDoc = async (e: React.MouseEvent, docRelPath?: string) => {
-    e.stopPropagation();
+  const handleOpenDoc = async (e: React.MouseEvent | null, docRelPath?: string, runId = currentRun?.id) => {
+    e?.stopPropagation();
     const targetRootId = rootId;
-    if (!targetRootId || !currentRun || !docRelPath) return;
-    const targetRunId = currentRun.id;
+    if (!targetRootId || !runId || !docRelPath) return;
+    const targetRunId = runId;
     const prefix = `.mindfs/runs/${targetRunId}/`;
     const docName = docRelPath.startsWith(prefix) ? docRelPath.slice(prefix.length) : docRelPath;
     const reqSeq = ++docRequestSeqRef.current;
@@ -908,7 +1076,7 @@ export function CollabShell({
       if (
         docRequestSeqRef.current !== reqSeq ||
         currentRootIdRef.current !== targetRootId ||
-        activeRunIdRef.current !== targetRunId
+        !isViewedRun(targetRunId)
       ) {
         return;
       }
@@ -921,7 +1089,7 @@ export function CollabShell({
       if (
         docRequestSeqRef.current !== reqSeq ||
         currentRootIdRef.current !== targetRootId ||
-        activeRunIdRef.current !== targetRunId
+        !isViewedRun(targetRunId)
       ) {
         return;
       }
@@ -938,8 +1106,8 @@ export function CollabShell({
     try {
       const res = await collabService.pauseRun(targetRootId, targetRunId);
       if (currentRootIdRef.current !== targetRootId) return;
-      if (activeRunIdRef.current === targetRunId) {
-        setDetail(res);
+      if (isViewedRun(targetRunId)) {
+        applyActionDetail(res);
       }
       await refreshRuns();
     } catch (err) {
@@ -961,8 +1129,8 @@ export function CollabShell({
     try {
       const res = await collabService.continueRun(targetRootId, targetRunId);
       if (currentRootIdRef.current !== targetRootId) return;
-      if (activeRunIdRef.current === targetRunId) {
-        setDetail(res);
+      if (isViewedRun(targetRunId)) {
+        applyActionDetail(res);
         setAutoFollow(true);
         const nextStep = res.run.steps.find((step) => step.key === res.run.current_step);
         const message = res.run.status === "completed" ? "本轮已完成"
@@ -1016,8 +1184,8 @@ export function CollabShell({
         return next;
       });
       if (currentRootIdRef.current !== targetRootId) return;
-      if (activeRunIdRef.current === targetRunId) {
-        setDetail(res);
+      if (isViewedRun(targetRunId)) {
+        applyActionDetail(res);
         setAutoFollow(true);
       }
       await refreshRuns();
@@ -1043,8 +1211,8 @@ export function CollabShell({
       const keep = keepReportOnClean && report ? [report.slice(`.mindfs/runs/${targetRunId}/`.length)] : [];
       const res = await collabService.cleanupDocs(targetRootId, targetRunId, keep);
       if (currentRootIdRef.current !== targetRootId) return;
-      if (activeRunIdRef.current === targetRunId) {
-        setDetail(res.detail);
+      if (isViewedRun(targetRunId)) {
+        applyActionDetail(res.detail);
       }
       showToast(
         keepReportOnClean
@@ -1136,21 +1304,51 @@ export function CollabShell({
 
   const filteredRuns = useMemo(() => {
     return runs.filter((r) => {
-      if (filterState === "wait") return r.status === "waiting_user";
-      if (filterState === "running") return r.status === "running";
+      const status = r.quick_run_status || r.status;
+      if (filterState === "wait") return status === "waiting_user";
+      if (filterState === "running") return status === "running";
       return true;
     });
   }, [runs, filterState]);
 
-  const selectedSessionStep = resolveSessionStepForCard(currentRun, autoFollow ? activeStepKey : selectedStepKey);
-  const selectedSessionMember = currentRun?.snapshot.members.find((member) => member.role === selectedSessionStep?.role);
+  const viewedStepKey = autoFollow ? activeStepKey : selectedStepKey;
+  const viewedQuickStep = meetingSessionStep ? undefined : currentRun?.steps.find((step) => step.key === viewedStepKey);
+  const selectedSessionStep = meetingSessionStep || resolveSessionStepForCard(currentRun, viewedStepKey);
+  const hasBoundConversation = !!selectedSessionStep?.session_key && conversationSessionKey === selectedSessionStep.session_key;
+  const selectedSessionMember = meetingSessionStep ? focusedMember : currentRun?.snapshot.members.find((member) => member.role === selectedSessionStep?.role);
   const selectedSessionPermission = selectedSessionStep?.read_only ? "严格只读"
-    : selectedSessionMember ? collabPermissionLabel(selectedSessionMember) : "";
+    : selectedSessionMember ? collabPermissionLabel(selectedSessionMember, !!meetingSessionStep, agents) : "";
+  const selectedSessionModel = selectedSessionStep?.agent
+    ? resolveCollabModelInfo(selectedSessionStep.agent, selectedSessionStep.model, agents, undefined, { resolveDefaultFromAgent: false })
+    : null;
+  const selectedSessionStatus = meetingSessionStep && focusedMeetingTurn ? meetingTurnStatus[focusedMeetingTurn.status]
+    : selectedSessionStep ? stepStatusLabel(selectedSessionStep.status) : "";
   const verifiedCitationsCount = (detail?.review_items || []).filter(
     (it) => it.citation_verified,
   ).length;
   const unverifiedCitationsCount =
     (detail?.review_items?.length || 0) - verifiedCitationsCount;
+
+  const meetingDraftKey = meetingDetail ? JSON.stringify([meetingDetail.run.root_id, meetingDetail.run.id, meetingDetail.run.round]) : "";
+  const groupView = meetingDetail?.meeting && selectedRun && (
+    <MeetingPane
+      key={selectedRun.id} run={meetingDetail.run} meeting={meetingDetail.meeting} docs={meetingDetail.docs || []}
+      agents={agents} quickTemplates={quickTemplates} busy={actionBusy} compact={!!linkedRunId}
+      selectedTurnId={focusedMeetingTurn?.id} actionsHost={meetingActionsHost}
+      choices={meetingDecisions[meetingDraftKey] || {}}
+      onChoice={(choice) => setMeetingDecisions((old) => ({
+        ...old, [meetingDraftKey]: { ...old[meetingDraftKey], [choice.item_id]: choice },
+      }))}
+      onAction={handleMeetingAction} onPause={() => handleMeetingControl("pause")} onContinue={() => handleMeetingControl("continue")}
+      onEditModels={() => setModelsModalMode("group")}
+      onDoc={(doc) => void handleOpenDoc(null, doc, selectedRun.id)} onCleanup={handleMeetingCleanup}
+      onProcess={(turn) => {
+        setMeetingTurn({ runId: selectedRun.id, turnId: turn.id });
+        setDetailCollapsed(false);
+        if (isStacked) setStackedLevel("detail");
+      }}
+    />
+  );
 
   return (
     <div
@@ -1260,6 +1458,7 @@ export function CollabShell({
                       boundSessionKeyRef.current = "";
                       activeRunRootRef.current = rootId;
                       closeDocPreview();
+                      setMeetingTurn(null);
                       setActiveRunId(r.id);
                       setAutoFollow(true);
                       setStackedLevel("cards");
@@ -1268,7 +1467,7 @@ export function CollabShell({
                     role="button"
                     tabIndex={0}
                   >
-                    <span className={`collab-run-dot ${r.status}`} />
+                    <span className={`collab-run-dot ${r.quick_run_status || r.status}`} />
                     <div className="collab-run-body">
                       <div className="collab-run-title">{r.title}</div>
                       <div className="collab-run-sub">{runSubLabel(r)}</div>
@@ -1421,7 +1620,7 @@ export function CollabShell({
                 </>
               ) : null}
               <span className="collab-pane-title">
-                {currentRun
+                {selectedRun?.mode === "group" && !linkedRunId ? selectedRun.title || "开大会" : currentRun
                   ? (currentRun.round && currentRun.round > 1 ? `${currentRun.title} · 第 ${currentRun.round} 轮` : currentRun.title)
                   : isNarrow
                     ? "多Agent模式"
@@ -1429,9 +1628,10 @@ export function CollabShell({
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {selectedRun?.mode === "group" && !linkedRunId ? <div className="collab-head-actions" ref={setMeetingActionsHost} /> : null}
               {currentRun ? (
                 <>
-                  {currentRun.status === "running" ? (
+                  {currentRun.mode === "quick" && currentRun.status === "running" ? (
                     <button
                       type="button"
                       className="collab-btn-secondary"
@@ -1515,6 +1715,13 @@ export function CollabShell({
             /* Clean New Quick Run View */
             <div className="collab-cards-scroll">
               <div className="collab-setup-wrap">
+                <div className="meeting-mode-switch" aria-label="协作模式">
+                  <button type="button" className="collab-btn-secondary" aria-pressed={draftMode === "quick"}
+                    onClick={() => switchDraftMode("quick")}>快速模式</button>
+                  <button type="button" className="collab-btn-secondary" aria-pressed={draftMode === "group"}
+                    onClick={() => switchDraftMode("group")}>开大会</button>
+                </div>
+                {readyMode !== draftMode ? <div role="status" className="meeting-muted">正在读取全局模板…</div> : <>
                 <div
                   style={{
                     display: "flex",
@@ -1543,9 +1750,7 @@ export function CollabShell({
                         fontSize: 12.5,
                       }}
                     >
-                      {templates.length === 0 ? (
-                        <option value="">当前临时组合（未保存模板）</option>
-                      ) : null}
+                      <option value="">当前临时组合（未保存模板）</option>
                       {templates.map((tpl) => (
                         <option key={tpl.id} value={tpl.id}>
                           {tpl.is_default ? `[默认] ${tpl.name}` : tpl.name}
@@ -1565,7 +1770,14 @@ export function CollabShell({
                 </div>
 
                 {/* Member Slots Reusing Native AgentSelector */}
-                <div className="collab-slot-row">
+                {draftMode === "group" ? (
+                  <MeetingMemberSettings
+                    agents={agents} members={draftMembers} author={meetingAuthor} rounds={meetingRounds}
+                    topicMode={meetingTopicMode} onTopicMode={setMeetingTopicMode}
+                    onMembers={setDraftMembers} onAuthor={setMeetingAuthor} onRounds={setMeetingRounds}
+                    unavailable={Object.fromEntries(slotChecks.map(({ slot, reason }) => [slot.slot_id, reason]))}
+                  />
+                ) : <div className="collab-slot-row">
                   {(["primary", "reviewer"] as const).map((role) => {
                     const check = slotChecks.find((c) => c.slot.role === role);
                     const slot = check?.slot;
@@ -1611,7 +1823,7 @@ export function CollabShell({
                       </div>
                     );
                   })}
-                </div>
+                </div>}
 
                 {/* Optional Skill Picker */}
                 {skillsExpanded && skills.length > 0 ? (
@@ -1628,7 +1840,7 @@ export function CollabShell({
                 ) : null}
 
                 {/* Dirty Template Notice / Save Controls */}
-                {isTemplateModified || templates.length === 0 ? (
+                {isTemplateModified || !appliedTemplate ? (
                   <div
                     style={{
                       padding: "8px 12px",
@@ -1645,7 +1857,7 @@ export function CollabShell({
                     <span>
                       {appliedTemplate
                         ? `已相对模板「${appliedTemplate.name}」临时修改（仅对本次生效）`
-                        : "可将当前主/审模型组合保存为全局默认模板"}
+                        : "可将当前成员配置保存为全局模板"}
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       {appliedTemplate ? (
@@ -1724,11 +1936,12 @@ export function CollabShell({
                       }
                     }}
                     onPaste={handleTaskPaste}
-                    placeholder="直接输入具体开发或重构任务，支持添加附件/图片或粘贴截图（Cmd/Ctrl + Enter 立即开始一写一审）..."
+                    placeholder={draftMode === "group" ? "输入会议议题，可附加文件或图片" :
+                      "直接输入具体开发或重构任务，支持添加附件/图片或粘贴截图（Cmd/Ctrl + Enter 立即开始一写一审）..."}
                     onKeyDown={(e) => {
                       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                         e.preventDefault();
-                        void handleStartQuickRun();
+                        void handleStartRun();
                       }
                     }}
                   />
@@ -1847,68 +2060,66 @@ export function CollabShell({
                       type="button"
                       className="collab-btn-primary"
                       disabled={!canStartRun}
-                      onClick={() => void handleStartQuickRun()}
+                      onClick={() => void handleStartRun()}
                     >
                       {startingRun
                         ? uploadProgress
                           ? "正在上传附件..."
                           : "正在启动..."
-                        : "开始一写一审"}
+                        : draftMode === "group" ? "开始会议" : "开始一写一审"}
                     </button>
                   </div>
                 </div>
+                </>}
               </div>
             </div>
-          ) : (
+          ) : selectedRun?.mode === "group" && !linked ? groupView : (
             /* Active Run Cards Stream */
             <div
               ref={cardsScrollRef}
               className="collab-cards-scroll"
-              onWheel={() => {
-                if (autoFollow && currentRun?.status === "running") {
-                  setAutoFollow(false);
-                }
-              }}
-              onTouchMove={() => {
-                if (autoFollow && currentRun?.status === "running") {
+              onScroll={(event) => {
+                const scroll = event.currentTarget;
+                const previousTop = cardsScrollTopRef.current;
+                const top = scroll.scrollTop;
+                cardsScrollTopRef.current = top;
+                if (!autoFollow || currentRun?.status !== "running" || top === previousTop) return;
+
+                const activeCard = cardRefs.current[activeStepKey];
+                if (!activeCard) return;
+                const viewport = scroll.getBoundingClientRect();
+                const card = activeCard.getBoundingClientRect();
+                if (
+                  (top > previousTop && card.bottom < viewport.top - FOLLOW_SCROLL_BUFFER_PX) ||
+                  (top < previousTop && card.top > viewport.bottom + FOLLOW_SCROLL_BUFFER_PX)
+                ) {
                   setAutoFollow(false);
                 }
               }}
             >
-              {(currentRun?.snapshot?.members?.length || 0) > 0 ? (
-                <div className="collab-run-models" aria-label="本次协作模型配置">
-                  {currentRun!.snapshot.members.map((member) => {
-                    const isReviewer = member.role === "reviewer";
-                    const label = formatCollabMemberBadge(member, agents, { resolveDefaultFromAgent: false });
-                    return (
-                      <div
-                        key={member.slot_id || member.role}
-                        className="collab-run-model-chip"
-                        title={label}
-                      >
-                        <AgentIcon
-                          agentName={member.agent}
-                          style={{ width: "14px", height: "14px", flexShrink: 0 }}
-                        />
-                        <span className="collab-run-model-role">
-                          {isReviewer ? "审核" : "主模型"}
-                        </span>
-                        <span className="collab-run-model-value">{label}</span>
-                        <span className="collab-permission-tag">{collabPermissionLabel(member)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+              {linked && groupView}
+              {currentRun?.snapshot?.members?.length ? (
+                <CollabRunModelBar agents={agents} busy={actionBusy}
+                  items={currentRun.snapshot.members.map((member) => ({
+                    member,
+                    label: member.role === "reviewer" ? "审核" : "主模型",
+                    badge: member.role === "reviewer" ? "审" : "主",
+                  }))}
+                  onEdit={currentRun.status !== "canceled" && !(currentRun.status === "completed" && currentRun.docs_cleaned)
+                    ? () => setModelsModalMode("quick") : undefined} />
               ) : null}
-              {(currentRun?.steps || []).map((step, idx) => {
+              {currentRun?.steps.map((step, idx) => {
                 const isSelected = selectedStepKey === step.key;
                 const isClickable = step.status !== "pending" && step.status !== "skipped";
                 const useSharedGlow = isRemoteWebUi && step.status === "running";
                 const canCheckProgress = step.key === currentRun?.current_step &&
                   ["running", "waiting_user", "failed"].includes(currentRun.status);
-                const modelBadge = formatCollabMemberBadge(step, agents, {
-                  resolveDefaultFromAgent: false,
-                });
+                const StepHeader = isClickable ? "button" : "div";
+                const failure = step.status === "failed"
+                  ? step.summary || currentRun?.error_message
+                  : step.key === "fix_test" && currentRun?.test_status === "failed"
+                    ? currentRun.test_summary || step.summary || "测试失败"
+                    : undefined;
 
                 return (
                   <div
@@ -1920,47 +2131,34 @@ export function CollabShell({
                     data-glow-active={useSharedGlow ? "" : undefined}
                     onClick={() => {
                       if (!isClickable) return;
+                      setMeetingTurn(null);
                       setSelectedStepKey(step.key);
-                      if (step.key !== activeStepKey) {
-                        setAutoFollow(false);
-                      }
-                      if (isStacked && step.key !== "decisions") {
-                        setStackedLevel("detail");
-                      }
+                      if (step.key !== activeStepKey) setAutoFollow(false);
+                      if (isStacked) setStackedLevel("detail");
+                      else setDetailCollapsed(false);
                     }}
                   >
                     <div className="collab-tc-top">
-                      <div className="collab-tc-head">
-                        <span className={`collab-step-dot ${step.status}`}>
+                      <StepHeader
+                        className="collab-tc-select"
+                        type={isClickable ? "button" : undefined}
+                      >
+                        <span className={`collab-step-dot ${step.status}`} aria-hidden="true">
                           {step.status === "done" ? "✓" : idx + 1}
                         </span>
                         <span className="collab-tc-title">{step.title}</span>
-                        {modelBadge ? <span className="collab-tc-model">{modelBadge}</span> : null}
-                      </div>
-                      <div className="collab-tc-right">
-                        <span>{canCheckProgress && checkingProgress ? "检查中…" : stepStatusLabel(step.status)}</span>
-                        {canCheckProgress ? (
-                          <button
-                            type="button"
-                            className="collab-icon-btn collab-progress-check"
-                            title="检查进度并继续"
-                            aria-label="检查进度并继续"
-                            disabled={actionBusy}
-                            onClick={(event) => void handleCheckProgress(event)}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <path d="M20 7v5h-5M4 17v-5h5" />
-                              <path d="M20 12a8 8 0 0 0-14-5M4 12a8 8 0 0 0 14 5" />
-                            </svg>
-                          </button>
-                        ) : null}
-                        {isClickable && step.session_key ? <span>›</span> : null}
-                      </div>
+                        <span className="collab-tc-status">{stepStatusLabel(step.status)}</span>
+                      </StepHeader>
+                      {canCheckProgress ? (
+                        <CollabIconButton icon="refresh" label="检查进度并继续"
+                          className="collab-icon-btn collab-progress-check"
+                          title={checkingProgress ? "检查中…" : "检查进度并继续"}
+                          aria-busy={checkingProgress} disabled={actionBusy}
+                          onClick={(event) => void handleCheckProgress(event)} />
+                      ) : null}
                     </div>
 
-                    {step.summary && step.status !== "pending" ? (
-                      <div className="collab-tc-summary">{step.summary}</div>
-                    ) : null}
+                    {failure ? <div className="collab-tc-warning">{failure}</div> : null}
 
                     {/* Read-only workspace check warning if modified or unobserved */}
                     {step.key === "review" &&
@@ -1968,7 +2166,7 @@ export function CollabShell({
                     currentRun.readonly_check_state !== "clean" &&
                     currentRun.readonly_check_note ? (
                       <div
-                        className="collab-tc-summary"
+                        className="collab-tc-warning"
                         style={{
                           color:
                             currentRun.readonly_check_state === "modified"
@@ -1981,165 +2179,47 @@ export function CollabShell({
                       </div>
                     ) : null}
 
-                    {/* Card 4: Minimalist Side-by-Side Author Dispute Resolution */}
+                    {/* Card 4: Compact summary bar; detailed resolution lives in modal */}
                     {step.key === "decisions" &&
                     disputedItems.length > 0 &&
                     step.status !== "pending" &&
                     step.status !== "skipped" ? (
                       <div
-                        className="collab-dispute-list"
+                        className="collab-dispute-bar"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {disputedItems.map((it: CollabReviewItem) => {
-                          const cur = currentRunDraft[it.item_id]?.decision;
-                          const saved = it.author_decision;
-                          const effectiveChoice = cur || saved || "";
-                          const locked = step.status === "done";
-                          const runIdForDraft = draftKey;
-                          return (
-                            <div key={it.item_id} className="collab-d-item">
-                              <div className="collab-d-head">
-                                <span>
-                                  {it.item_id} · {it.title}
-                                </span>
-                                <span className="collab-mono" style={{ color: "var(--cb-text-ter)" }}>
-                                  {it.file_path ? `${it.file_path}:${it.line_start}` : ""}{" "}
-                                  {it.citation_verified ? (
-                                    <span style={{ color: "var(--cb-green)" }}>✓ 已核实</span>
-                                  ) : (
-                                    <span style={{ color: "var(--cb-amber)" }}>
-                                      ⚠ {it.citation_note || "查无此处"}
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                              {it.rule_ref ? (
-                                <div style={{ fontSize: 11.5, color: "var(--cb-text-ter)" }}>
-                                  规范依据：{it.rule_ref}
-                                </div>
-                              ) : null}
-                              <div className="collab-d-compare">
-                                <div className="collab-d-side">
-                                  <b>审核意见（{it.dimension === "standard" ? "规范" : "功能"}）</b>
-                                  {it.description}
-                                </div>
-                                <div className="collab-d-side">
-                                  <b>
-                                    主模型说明
-                                    {it.parse_fallback ? "（解析兜底转交作者）" : ""}
-                                  </b>
-                                  {it.primary_note}
-                                </div>
-                              </div>
-                              {!locked ? (
-                                <>
-                                  <div className="collab-seg-group">
-                                    {(
-                                      [
-                                        { id: "accept_review", label: "按审核改" },
-                                        { id: "keep_primary", label: "保留现状" },
-                                        { id: "custom", label: "其他指示" },
-                                      ] as const
-                                    ).map((opt) => (
-                                      <button
-                                        key={opt.id}
-                                        type="button"
-                                        className={`collab-seg-btn ${cur === opt.id ? "active" : ""}`}
-                                        onClick={() => {
-                                          if (!runIdForDraft) return;
-                                          setDecisionsDraftByRun((prev) => {
-                                            const prevRun = prev[runIdForDraft] || {};
-                                            return {
-                                              ...prev,
-                                              [runIdForDraft]: {
-                                                ...prevRun,
-                                                [it.item_id]: {
-                                                  decision: opt.id,
-                                                  note: prevRun[it.item_id]?.note || "",
-                                                },
-                                              },
-                                            };
-                                          });
-                                        }}
-                                      >
-                                        {opt.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  {cur === "custom" ? (
-                                    <input
-                                      type="text"
-                                      value={currentRunDraft[it.item_id]?.note || ""}
-                                      onChange={(e) => {
-                                        if (!runIdForDraft) return;
-                                        const val = e.target.value;
-                                        setDecisionsDraftByRun((prev) => {
-                                          const prevRun = prev[runIdForDraft] || {};
-                                          return {
-                                            ...prev,
-                                            [runIdForDraft]: {
-                                              ...prevRun,
-                                              [it.item_id]: {
-                                                decision: "custom",
-                                                note: val,
-                                              },
-                                            },
-                                          };
-                                        });
-                                      }}
-                                      placeholder="输入对该条的具体处理指示..."
-                                      style={{
-                                        padding: "6px 10px",
-                                        borderRadius: 8,
-                                        border: "1px solid var(--cb-card-border)",
-                                        background: "var(--cb-surface)",
-                                        color: "var(--cb-text)",
-                                        fontSize: 12.5,
-                                      }}
-                                    />
-                                  ) : null}
-                                </>
-                              ) : (
-                                <div style={{ fontSize: 12, color: "var(--cb-text-sec)" }}>
-                                  已裁决：
-                                  {effectiveChoice === "accept_review"
-                                    ? "按审核改"
-                                    : effectiveChoice === "keep_primary"
-                                      ? "保留现状"
-                                      : `自定义（${it.author_note || ""}）`}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
+                        <span className="collab-dispute-bar-text">
+                          {step.status === "waiting_user"
+                            ? decidedCount > 0
+                              ? `${disputedItems.length} 条分歧待裁决 · 已选 ${decidedCount} / ${disputedItems.length}`
+                              : `${disputedItems.length} 条分歧待裁决`
+                            : `已裁决 ${disputedItems.length} 条分歧`}
+                        </span>
                         {step.status === "waiting_user" ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              paddingTop: 4,
-                            }}
+                          <button
+                            type="button"
+                            className="collab-btn-primary collab-dispute-action-btn"
+                            disabled={submittingDecisions}
+                            onClick={() => setQuickDecisionsModal("edit")}
                           >
-                            <span style={{ fontSize: 12, color: "var(--cb-text-sec)" }}>
-                              已选 {decidedCount} / {disputedItems.length} 条
-                            </span>
-                            <button
-                              type="button"
-                              className="collab-btn-primary"
-                              disabled={!allDisputesDecided || submittingDecisions}
-                              onClick={() => void handleSubmitDecisions()}
-                            >
-                              {submittingDecisions ? "正在提交..." : "提交裁决并继续"}
-                            </button>
-                          </div>
-                        ) : null}
+                            <CollabIcon name="check" />
+                            {decidedCount > 0 ? "继续裁决" : "去裁决"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="collab-btn-secondary collab-dispute-action-btn"
+                            onClick={() => setQuickDecisionsModal("view")}
+                          >
+                            <CollabIcon name="file" />
+                            查看裁决
+                          </button>
+                        )}
                       </div>
                     ) : null}
 
-                    {/* Card 5: Honest Test Result & Process Doc Cleanup */}
-                    {step.key === "fix_test" && currentRun?.test_status ? (
+                    {/* Final-stage author actions */}
+                    {step.key === "fix_test" && currentRun.status === "completed" && currentRun.test_status && !currentRun.docs_cleaned ? (
                       <div
                         style={{
                           paddingLeft: 29,
@@ -2149,42 +2229,7 @@ export function CollabShell({
                         }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 10,
-                            fontSize: 12.5,
-                          }}
-                        >
-                          <span className="collab-mono" style={{ color: "var(--cb-text-sec)" }}>
-                            {currentRun.test_command || "项目测试/构建检查"}
-                          </span>
-                          <span
-                            style={{
-                              fontWeight: 600,
-                              color:
-                                currentRun.test_status === "passed"
-                                  ? "var(--cb-green)"
-                                  : currentRun.test_status === "failed"
-                                    ? "var(--cb-red)"
-                                    : "var(--cb-amber)",
-                            }}
-                          >
-                            {currentRun.test_status === "passed"
-                              ? "✓ 通过"
-                              : currentRun.test_status === "failed"
-                                ? "✕ 失败（不自动返工）"
-                                : "— 已跳过"}
-                          </span>
-                        </div>
-
-                        {currentRun.status === "completed" && rootId ? (
-                          <CollabFileChanges key={`${rootId}/${currentRun.id}/${currentRun.round}`} rootId={rootId} runId={currentRun.id} />
-                        ) : null}
-                        {currentRun.status === "completed" && !currentRun.docs_cleaned &&
-                          detail?.docs?.includes(currentRun.steps.find((s) => s.key === "review")?.doc_path?.slice(`.mindfs/runs/${currentRun.id}/`.length) || "") ? (
+                        {detail?.docs?.includes(currentRun.steps.find((s) => s.key === "review")?.doc_path?.slice(`.mindfs/runs/${currentRun.id}/`.length) || "") ? (
                           reviewAgainOpenKey === reviewDraftKey ? (
                             <CollabReviewAgainForm
                               note={reviewDraft?.note || ""}
@@ -2212,9 +2257,7 @@ export function CollabShell({
                           )
                         ) : null}
 
-                        {currentRun.status === "completed" &&
-                        !currentRun.docs_cleaned &&
-                        (detail?.docs?.length || 0) > 0 ? (
+                        {(detail?.docs?.length || 0) > 0 ? (
                           <div
                             style={{
                               display: "flex",
@@ -2252,79 +2295,10 @@ export function CollabShell({
                               清理过程文档 ({detail?.docs?.length || 0})
                             </button>
                           </div>
-                        ) : currentRun.docs_cleaned ? (
-                          <div style={{ fontSize: 11.5, color: "var(--cb-text-ter)" }}>
-                            已清理 .mindfs/runs/ 过程文档
-                          </div>
                         ) : null}
                       </div>
                     ) : null}
 
-                    {/* Quiet Footer: Handoff Doc Chip + Citation Stats + Resume Button */}
-                    {step.status !== "pending" && step.status !== "skipped" ? (
-                      <div className="collab-tc-foot">
-                        {step.doc_path ? (
-                          <button
-                            type="button"
-                            className="collab-quiet-link"
-                            onClick={(e) => void handleOpenDoc(e, step.doc_path)}
-                          >
-                            {step.doc_path.split("/").pop()}
-                          </button>
-                        ) : null}
-                        {step.key === "review" && currentRun?.round && step.author_note ? (
-                          <button
-                            type="button"
-                            className="collab-quiet-link"
-                            onClick={(e) =>
-                              void handleOpenDoc(
-                                e,
-                                `第${String(currentRun.round).padStart(2, "0")}轮/00-作者补充意见.md`,
-                              )
-                            }
-                          >
-                            作者补充意见
-                          </button>
-                        ) : null}
-                        {step.key === "review" && currentRun?.round ? (
-                          <button type="button" className="collab-quiet-link" onClick={(e) => void handleOpenDoc(e, `第${String(currentRun.round).padStart(2, "0")}轮/本轮改动清单.md`)}>
-                            本轮改动清单
-                          </button>
-                        ) : null}
-                        {step.key === "review" && currentRun && (currentRun.round || 0) > 1 ? (
-                          <details onClick={(e) => e.stopPropagation()}>
-                            <summary>查看上轮交付</summary>
-                            {detail?.docs?.filter((doc) => /(?:作者补充意见|审核意见|逐条回应|作者裁决|改动结果|02-review|03-response|04-decisions|05-report)\.md$/.test(doc) &&
-                              !currentRun.steps.some((s) => s.doc_path?.endsWith("/" + doc))).map((doc) => (
-                              <button key={doc} type="button" className="collab-quiet-link" onClick={(e) => void handleOpenDoc(e, doc)}>{doc}</button>
-                            ))}
-                          </details>
-                        ) : null}
-                        {step.key === "review" && (detail?.review_items?.length || 0) > 0 ? (
-                          <span>
-                            ✓ {verifiedCitationsCount} 处已核实
-                            {unverifiedCitationsCount > 0
-                              ? ` · ⚠ ${unverifiedCitationsCount} 处查无此处`
-                              : ""}
-                          </span>
-                        ) : null}
-                        {isStacked && step.session_key ? (
-                          <button
-                            type="button"
-                            className="collab-quiet-link"
-                            style={{ color: "var(--cb-accent)" }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedStepKey(step.key);
-                              if (step.key !== activeStepKey) setAutoFollow(false);
-                              setStackedLevel("detail");
-                            }}
-                          >
-                            查看对话细节 ›
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
                   </div>
                 );
               })}
@@ -2333,6 +2307,7 @@ export function CollabShell({
 
           {/* Auto-follow recovery pill */}
           {activeRunId &&
+          currentRun?.mode === "quick" &&
           !autoFollow &&
           (currentRun?.status === "running" || currentRun?.status === "waiting_user") ? (
             <button
@@ -2373,7 +2348,7 @@ export function CollabShell({
                   label="展开对话细节"
                   onClick={() => setDetailCollapsed(false)}
                 />
-                <span className="collab-rail-label">对话细节</span>
+                <span className="collab-rail-label">{selectedMode === "group" && !linkedRunId ? "成员过程" : "对话细节"}</span>
               </div>
             ) : (
               <>
@@ -2383,27 +2358,33 @@ export function CollabShell({
                       type="button"
                       className="collab-mobile-back"
                       onClick={() => setStackedLevel("cards")}
-                      aria-label="返回阶段卡片"
+                      aria-label={selectedRun?.mode === "group" && !linked ? "返回群聊" : "返回阶段卡片"}
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="m13 5-7 7 7 7m-7-7h14" />
                       </svg>
-                      <span>卡片</span>
+                      <span>{selectedRun?.mode === "group" && !linked ? "群聊" : "卡片"}</span>
                     </button>
                   ) : null}
                   <div className="collab-detail-title">
-                    <div className="t">
-                      {selectedSessionStep ? selectedSessionStep.title : "阶段对话细节"}
-                    </div>
-                    <div className="m">
-                      {selectedSessionStep?.agent
-                        ? formatCollabMemberBadge({ ...selectedSessionStep, read_only: false }, agents, {
-                            resolveDefaultFromAgent: false,
-                          })
-                        : "点选左侧阶段卡片查看实时执行过程"}
-                    </div>
-                    {selectedSessionPermission ? <span className="collab-permission-tag">{selectedSessionPermission}</span> : null}
+                    {selectedSessionStep?.agent && selectedSessionModel && <span className="collab-detail-agent"
+                      role="img" aria-label={selectedSessionModel.agentLabel} title={selectedSessionModel.agentLabel}>
+                      <AgentIcon key={selectedSessionStep.agent} agentName={selectedSessionStep.agent} aria-hidden="true" />
+                    </span>}
+                    <span className="t" title={selectedSessionStep?.title}>{selectedSessionStep?.title || "阶段对话细节"}</span>
+                    {selectedSessionModel && <span className="m" title={selectedSessionModel.modelLabel}>
+                      <span aria-hidden="true">· </span>{compactCollabModelLabel(selectedSessionModel)}
+                      {selectedSessionStep?.effort && ` · ${selectedSessionStep.effort}`}
+                    </span>}
                   </div>
+                  {selectedSessionPermission && <span className="collab-detail-permission" role="img"
+                    aria-label={meetingSessionStep ? `当前权限 ${selectedSessionPermission}` : selectedSessionPermission}
+                    title={meetingSessionStep ? `当前权限 ${selectedSessionPermission}` : selectedSessionPermission}>
+                    <CollabIcon name={selectedSessionPermission.endsWith("只读") ? "lock" : "shield"} />
+                  </span>}
+                  {selectedSessionStatus && <span className="collab-model-dot" role="img"
+                    aria-label={selectedSessionStatus} title={selectedSessionStatus}
+                    data-state={selectedSessionStep?.status} />}
                   {!isStacked ? (
                     <PanelToggle
                       side="right"
@@ -2413,23 +2394,118 @@ export function CollabShell({
                     />
                   ) : null}
                 </header>
-                <div className="collab-detail-body">
+                {currentRun && viewedQuickStep && viewedQuickStep.status !== "pending" && viewedQuickStep.status !== "skipped" ? (
+                  <details className="collab-step-details" key={`${currentRun.id}/${currentRun.round}/${viewedQuickStep.key}`}>
+                    <summary className="collab-step-details-summary">
+                      <span className="collab-step-details-label">阶段详情</span>
+                      <span className="collab-step-details-chevron" aria-hidden="true">
+                        <CollabIcon name="chevron" />
+                      </span>
+                    </summary>
+                    <div className="collab-step-details-body">
+                    {viewedQuickStep.summary ? <p>{viewedQuickStep.summary}</p> : null}
+                    {viewedQuickStep.key === "fix_test" && currentRun.docs_cleaned ? (
+                      <p>已清理 .mindfs/runs/ 过程文档</p>
+                    ) : null}
+                    {viewedQuickStep.key === "fix_test" && currentRun.test_status ? (
+                      <p className="collab-step-test-row">
+                        <span className="collab-mono">{currentRun.test_command || "项目测试/构建检查"}</span>
+                        <span className="collab-step-test-badge" data-status={currentRun.test_status}>
+                          {currentRun.test_status === "passed"
+                            ? "✓ 通过"
+                            : currentRun.test_status === "failed"
+                              ? "✕ 失败（不自动返工）"
+                              : "— 已跳过"}
+                        </span>
+                      </p>
+                    ) : null}
+                    <div className="collab-step-details-links">
+                      {viewedQuickStep.doc_path ? (
+                        <button type="button" className="collab-quiet-link collab-doc-chip" onClick={(e) => void handleOpenDoc(e, viewedQuickStep.doc_path)}>
+                          <CollabIcon name="file" />
+                          <span>{viewedQuickStep.doc_path.split("/").pop()}</span>
+                        </button>
+                      ) : null}
+                      {viewedQuickStep.key === "review" && currentRun.round ? (
+                        <>
+                          {viewedQuickStep.author_note ? (
+                            <button type="button" className="collab-quiet-link collab-doc-chip" onClick={(e) => void handleOpenDoc(e, `第${String(currentRun.round).padStart(2, "0")}轮/00-作者补充意见.md`)}>
+                              <CollabIcon name="file" />
+                              <span>作者补充意见</span>
+                            </button>
+                          ) : null}
+                          <button type="button" className="collab-quiet-link collab-doc-chip" onClick={(e) => void handleOpenDoc(e, `第${String(currentRun.round).padStart(2, "0")}轮/本轮改动清单.md`)}>
+                            <CollabIcon name="file" />
+                            <span>本轮改动清单</span>
+                          </button>
+                          {currentRun.round > 1 ? (
+                            <details className="collab-prev-docs">
+                              <summary>查看上轮交付</summary>
+                              <div className="collab-prev-docs-list">
+                                {detail?.docs?.filter((doc) => /(?:作者补充意见|审核意见|逐条回应|作者裁决|改动结果|02-review|03-response|04-decisions|05-report)\.md$/.test(doc) &&
+                                  !currentRun.steps.some((step) => step.doc_path?.endsWith("/" + doc))).map((doc) => (
+                                  <button key={doc} type="button" className="collab-quiet-link collab-doc-chip" onClick={(e) => void handleOpenDoc(e, doc)}>
+                                    <CollabIcon name="file" />
+                                    <span>{doc}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </details>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {viewedQuickStep.key === "review" && (verifiedCitationsCount + unverifiedCitationsCount > 0) ? (
+                        <span className="collab-step-cite-summary" data-warn={unverifiedCitationsCount > 0}>
+                          ✓ {verifiedCitationsCount} 处已核实
+                          {unverifiedCitationsCount > 0 ? ` · ⚠ ${unverifiedCitationsCount} 处查无此处` : ""}
+                        </span>
+                      ) : null}
+                    </div>
+                    {viewedQuickStep.key === "fix_test" && currentRun.status === "completed" && rootId ? (
+                      <CollabFileChanges key={`${rootId}/${currentRun.id}/${currentRun.round}`} rootId={rootId} runId={currentRun.id} />
+                    ) : null}
+                    </div>
+                  </details>
+                ) : null}
+                <div
+                  className="collab-detail-body"
+                  data-phone-chrome={usePhoneConversationChrome ? "1" : "0"}
+                >
                   {selectedSessionStep?.session_key ? (
-                    <>
-                      <div
-                        style={{
-                          flex: 1,
-                          minHeight: 0,
-                          minWidth: 0,
-                          display: "flex",
-                          flexDirection: "column",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {conversationView}
-                      </div>
-                      <div style={{ flexShrink: 0 }}>{composerView}</div>
-                    </>
+                    usePhoneConversationChrome ? (
+                      <>
+                        <div className="remote-phone-thread">
+                          <PhoneActivityHostContext.Provider value={phoneActivityHost}>
+                            {hasBoundConversation ? conversationView : null}
+                          </PhoneActivityHostContext.Provider>
+                        </div>
+                        {hasBoundConversation ? (
+                          <footer className="remote-phone-composer">
+                            <div
+                              className={`remote-phone-activity${isRemoteWebUi ? " remote-glow-frame" : ""}`}
+                              ref={setPhoneActivityHost}
+                            />
+                            {composerView}
+                          </footer>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <div className="collab-detail-thread">
+                          {isRemoteWebUi ? (
+                            <PhoneActivityHostContext.Provider value={desktopActivityHost}>
+                              {hasBoundConversation ? conversationView : null}
+                            </PhoneActivityHostContext.Provider>
+                          ) : (hasBoundConversation ? conversationView : null)}
+                        </div>
+                        {hasBoundConversation ? (
+                          <div className="collab-detail-footer" data-has-status={isRemoteWebUi ? "1" : undefined}>
+                            {isRemoteWebUi ? <div className="remote-status-activity remote-glow-frame" ref={setDesktopActivityHost} /> : null}
+                            {composerView}
+                          </div>
+                        ) : null}
+                      </>
+                    )
                   ) : (
                     <div
                       style={{
@@ -2439,7 +2515,9 @@ export function CollabShell({
                         fontSize: 13,
                       }}
                     >
-                      该阶段尚未创建对话，请等待执行开始或点击已完成卡片查看。
+                      {selectedMode === "group" && !linkedRunId
+                        ? "点击成员头像或消息脚注中的「查看过程」。"
+                        : "该阶段尚未创建对话，请等待执行开始或点击已完成卡片查看。"}
                     </div>
                   )}
                 </div>
@@ -2449,10 +2527,10 @@ export function CollabShell({
         ) : null}
       </div>
 
-      {/* Handoff Document Markdown Preview Modal (Reusing MarkdownViewer) */}
+      {/* Handoff Document Markdown Preview Modal (Reusing FileViewer + MarkdownViewer) */}
       {docPreview && docPreview.rootId === rootId ? (
         <div className="collab-modal-backdrop" onClick={closeDocPreview}>
-          <div className="collab-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="collab-modal collab-modal--doc" onClick={(e) => e.stopPropagation()}>
             <div className="collab-modal-head">
               <span className="collab-mono">{docPreview.name}</span>
               <button
@@ -2463,20 +2541,83 @@ export function CollabShell({
                 ×
               </button>
             </div>
-            <div className="collab-modal-body">
-              <MarkdownViewer
-                content={docPreview.content}
-                currentPath={`.mindfs/runs/${docPreview.runId}/${docPreview.name}`}
-                root={docPreview.rootId}
-              />
+            <div className="collab-modal-body collab-modal-body--file">
+              <FileViewer file={{
+                name: docPreview.name.split("/").at(-1) || docPreview.name,
+                path: `.mindfs/runs/${docPreview.runId}/${docPreview.name}`,
+                content: docPreview.content, encoding: "utf-8", size: new Blob([docPreview.content]).size,
+                truncated: false, ext: ".md", root: docPreview.rootId,
+              }} />
             </div>
           </div>
         </div>
       ) : null}
 
+      {/* Runtime Model Editor Modal */}
+      {modelsModalMode === "quick" && currentRun ? (
+        <CollabRunModelsModal
+          open
+          run={currentRun}
+          agents={agents}
+          onClose={() => setModelsModalMode(null)}
+          onSave={(members, resume) => handleUpdateRunMembers(currentRun, members, resume)}
+        />
+      ) : modelsModalMode === "group" && meetingDetail ? (
+        <CollabRunModelsModal
+          open
+          run={meetingDetail.run}
+          meeting={meetingDetail.meeting}
+          agents={agents}
+          onClose={() => setModelsModalMode(null)}
+          onSave={(members, resume) => handleUpdateRunMembers(meetingDetail.run, members, resume)}
+        />
+      ) : null}
+
+      {/* Quick-Mode Step-by-Step Dispute Decisions Modal (Interactive & Read-Only) */}
+      {quickDecisionsModal && currentRun && disputedItems.length > 0 ? (
+        <QuickDecisions
+          key={`${draftKey}-${quickDecisionsModal}`}
+          items={disputedItems}
+          choices={currentRunDraft}
+          readOnly={
+            quickDecisionsModal === "view" ||
+            currentRun.steps.find((step) => step.key === "decisions")?.status === "done"
+          }
+          busy={submittingDecisions}
+          onChoice={(itemId, choice) => {
+            if (!draftKey) return;
+            setDecisionsDraftByRun((prev) => ({
+              ...prev,
+              [draftKey]: {
+                ...(prev[draftKey] || {}),
+                [itemId]: choice,
+              },
+            }));
+          }}
+          onBatchChoice={(decision) => {
+            if (!draftKey) return;
+            setDecisionsDraftByRun((prev) => {
+              const prevRun = prev[draftKey] || {};
+              const nextRun: Record<string, QuickDecisionDraft> = { ...prevRun };
+              for (const item of disputedItems) {
+                nextRun[item.item_id] = {
+                  decision,
+                  note: prevRun[item.item_id]?.note || "",
+                };
+              }
+              return { ...prev, [draftKey]: nextRun };
+            });
+          }}
+          onClose={() => setQuickDecisionsModal(false)}
+          onSubmit={() => void handleSubmitDecisions()}
+        />
+      ) : null}
+
       {/* Global Template Manager Modal */}
       <CollabTemplateModal
+        key={draftMode}
         open={templateModalOpen}
+        mode={draftMode}
         templates={templates}
         skills={skills}
         agents={agents}
@@ -2485,13 +2626,11 @@ export function CollabShell({
         onSave={async (input) => {
           const saved = await collabService.saveTemplate({
             ...input,
-            mode: "quick",
+            mode: draftMode,
           });
           await refreshTemplates();
           if (!appliedTemplateId || appliedTemplateId === saved.id) {
-            setAppliedTemplateId(saved.id);
-            setDraftMembers(saved.members.map((m) => ({ ...m })));
-            setDraftSkills([...(saved.skill_paths || [])]);
+            applyTemplateToDraft(saved, agents);
           }
         }}
         onDelete={async (id) => {

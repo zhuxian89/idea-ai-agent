@@ -119,12 +119,23 @@ func (s *Service) NextReview(ctx context.Context, rootID, runID string, expected
 	}
 	trimmedNote := strings.TrimSpace(authorNote)
 	r.Round = max(1, r.Round) + 1
+	primary, reviewer := extractQuickMembers(r.Snapshot.Members)
 	for i := range r.Steps {
 		step := &r.Steps[i]
 		if step.Key == StepImpl {
 			continue
 		}
 		step.Status, step.SessionKey, step.StartedAt, step.FinishedAt, step.Summary, step.AuthorNote = StepStatusPending, "", "", "", "", ""
+		switch step.Role {
+		case RolePrimary:
+			if primary.Agent != "" {
+				step.SlotID, step.Agent, step.Model, step.Effort = primary.SlotID, primary.Agent, primary.Model, primary.Effort
+			}
+		case RoleReviewer:
+			if reviewer.Agent != "" {
+				step.SlotID, step.Agent, step.Model, step.Effort = reviewer.SlotID, reviewer.Agent, reviewer.Model, reviewer.Effort
+			}
+		}
 		step.DocPath = DocRelPath(r.ID, r.doc(map[string]string{StepReview: DocReview, StepResponse: DocResponse, StepDecisions: DocDecisions, StepFixTest: DocReport}[step.Key]))
 	}
 	prev.ChangesSince, prev.PreviousItems, prev.HighestItemID, prev.AuthorNote = since, ids, high, trimmedNote

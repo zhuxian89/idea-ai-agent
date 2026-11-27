@@ -30,6 +30,8 @@ type fakeCollabRunner struct {
 	beforeRootPath func()
 }
 
+func (f *fakeCollabRunner) StageTurnActive(string, string) bool { return false }
+
 func (f *fakeCollabRunner) GetCollabStore(string) (*Store, error) { return f.store, nil }
 func (f *fakeCollabRunner) RootPath(string) (string, error) {
 	if f.beforeRootPath != nil {

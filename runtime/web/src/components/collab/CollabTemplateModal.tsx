@@ -2,10 +2,13 @@ import React, { useState } from "react";
 import type { AgentStatus } from "../../services/agents";
 import type {
   CollabMemberSlot,
+  CollabMode,
+  MeetingTopicMode,
   CollabSkillSummary,
   CollabTemplateWithAvailability,
 } from "../../services/collab";
 import { AgentSelector } from "../AgentSelector";
+import { defaultCollabMembers, MeetingMemberSettings } from "./MeetingMemberSettings";
 import { CollabSkillPicker } from "./CollabSkillPicker";
 import { filterVisibleSkillPaths } from "./collabSkillGrouping";
 import {
@@ -17,6 +20,7 @@ import {
 
 interface Props {
   open: boolean;
+  mode: CollabMode;
   templates: CollabTemplateWithAvailability[];
   skills: CollabSkillSummary[];
   agents: AgentStatus[];
@@ -28,12 +32,16 @@ interface Props {
     is_default?: boolean;
     members: CollabMemberSlot[];
     skill_paths?: string[];
+    final_author_slot_id?: string;
+    topic_mode?: MeetingTopicMode;
+    max_rounds?: number;
   }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
 export function CollabTemplateModal({
   open,
+  mode,
   templates,
   skills,
   agents,
@@ -46,6 +54,10 @@ export function CollabTemplateModal({
   const [name, setName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [members, setMembers] = useState<CollabMemberSlot[]>([]);
+  const [author, setAuthor] = useState("");
+  const [topicMode, setTopicMode] = useState<MeetingTopicMode>("multi");
+  const [rounds, setRounds] = useState(3);
+  const group = mode === "group";
   const [skillPaths, setSkillPaths] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -53,22 +65,14 @@ export function CollabTemplateModal({
   if (!open) return null;
 
   const startCreate = () => {
-    const firstAgent = agents.find((a) => a.available)?.name || agents[0]?.name || "codex";
-    const secondAgent =
-      agents.find((a) => a.available && a.name !== firstAgent)?.name || firstAgent;
+    const defaults = defaultCollabMembers(agents, group);
     setEditingId("__new__");
     setName("");
     setIsDefault(templates.length === 0);
-    setMembers([
-      normalizeSlotForSubmission(
-        { slot_id: "primary", role: "primary", agent: firstAgent, model: "", effort: "" },
-        agents,
-      ),
-      normalizeSlotForSubmission(
-        { slot_id: "reviewer", role: "reviewer", agent: secondAgent, model: "", effort: "" },
-        agents,
-      ),
-    ]);
+    setMembers(defaults);
+    setAuthor(defaults[0].slot_id);
+    setTopicMode("multi");
+    setRounds(3);
     setSkillPaths([]);
     setError("");
   };
@@ -78,6 +82,9 @@ export function CollabTemplateModal({
     setName(tpl.name);
     setIsDefault(Boolean(tpl.is_default));
     setMembers(tpl.members.map((m) => ({ ...m })));
+    setAuthor(tpl.final_author_slot_id || tpl.members[0]?.slot_id || "");
+    setTopicMode(tpl.topic_mode || "multi");
+    setRounds(tpl.max_rounds || 3);
     setSkillPaths([...(tpl.skill_paths || [])]);
     setError("");
   };
@@ -93,6 +100,7 @@ export function CollabTemplateModal({
       await onSave({
         id: editingId === "__new__" ? undefined : editingId || undefined,
         name: name.trim(),
+        ...(group ? { final_author_slot_id: author, max_rounds: rounds, topic_mode: topicMode } : {}),
         is_default: isDefault,
         members: members.map((slot) => normalizeSlotForSubmission(slot, agents)),
         skill_paths: skills.length > 0 ? filterVisibleSkillPaths(skillPaths, skills) : skillPaths,
@@ -128,13 +136,13 @@ export function CollabTemplateModal({
           {editingId ? (
             <div className="collab-d-item" style={{ gap: 10 }}>
               <div style={{ fontWeight: 600, fontSize: 13 }}>
-                {editingId === "__new__" ? "新建快速模式模板" : "编辑模板"}
+                {editingId === "__new__" ? group ? "新建会议模板" : "新建快速模式模板" : "编辑模板"}
               </div>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="模板名称，如：Codex 主写 + Claude 严审"
+                placeholder={group ? "会议模板名称" : "模板名称，如：Codex 主写 + Claude 严审"}
                 style={{
                   padding: "7px 10px",
                   borderRadius: 8,
@@ -143,7 +151,10 @@ export function CollabTemplateModal({
                   color: "var(--cb-text)",
                 }}
               />
-              <div className="collab-slot-row">
+              {group ? (
+                <MeetingMemberSettings members={members} agents={agents} author={author} rounds={rounds} topicMode={topicMode} onTopicMode={setTopicMode}
+                  onMembers={setMembers} onAuthor={setAuthor} onRounds={setRounds} />
+              ) : <div className="collab-slot-row">
                 {(["primary", "reviewer"] as const).map((role) => {
                   const slot = members.find((m) => m.role === role);
                   if (!slot) return null;
@@ -185,7 +196,7 @@ export function CollabTemplateModal({
                     </div>
                   );
                 })}
-              </div>
+              </div>}
 
               {skills.length > 0 ? (
                 <CollabSkillPicker
@@ -203,7 +214,7 @@ export function CollabTemplateModal({
                   checked={isDefault}
                   onChange={(e) => setIsDefault(e.target.checked)}
                 />
-                <span>设为快速模式默认模板</span>
+                <span>{group ? "设为会议默认模板" : "设为快速模式默认模板"}</span>
               </label>
 
               {error ? (
@@ -223,7 +234,7 @@ export function CollabTemplateModal({
                   type="button"
                   className="collab-btn-primary"
                   onClick={() => void handleSave()}
-                  disabled={busy}
+                  disabled={busy || group && (rounds < 1 || rounds > 5)}
                 >
                   保存模板
                 </button>
@@ -284,6 +295,9 @@ export function CollabTemplateModal({
                             is_default: true,
                             members: tpl.members,
                             skill_paths: tpl.skill_paths,
+                            final_author_slot_id: tpl.final_author_slot_id,
+                            max_rounds: tpl.max_rounds,
+                            topic_mode: tpl.topic_mode,
                           })
                         }
                       >
@@ -308,12 +322,13 @@ export function CollabTemplateModal({
                   </div>
                 </div>
                 <div className="collab-template-members">
-                  {tpl.members.map((member) => (
+                  {tpl.members.map((member, index) => (
                     <div key={member.slot_id} className="collab-slot-heading">
                       <span className="collab-mono">
-                        {member.role === "primary" ? "主模型" : "审核模型"} · {formatCollabMemberBadge(member, agents)}
+                        {group ? `成员${index + 1}${member.slot_id === tpl.final_author_slot_id ? "（主笔）" : ""}`
+                          : member.role === "primary" ? "主模型" : "审核模型"} · {formatCollabMemberBadge(member, agents)}
                       </span>
-                      <span className="collab-permission-tag">{collabPermissionLabel(member)}</span>
+                      <span className="collab-permission-tag">{collabPermissionLabel(member, group, agents)}</span>
                     </div>
                   ))}
                 </div>

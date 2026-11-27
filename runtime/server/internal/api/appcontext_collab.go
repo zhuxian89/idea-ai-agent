@@ -93,6 +93,9 @@ func (s *AppContext) EnsureStageSession(ctx context.Context, req collab.StageSes
 	key := strings.TrimSpace(req.SessionKey)
 	if key != "" {
 		if existing, getErr := mgr.Get(ctx, key, 0); getErr == nil && existing != nil {
+			if nextModel := strings.TrimSpace(req.Model); existing.Model != nextModel {
+				_ = mgr.UpdateModel(ctx, existing, nextModel)
+			}
 			return existing.Key, nil
 		}
 	}
@@ -115,6 +118,10 @@ func (s *AppContext) EnsureStageSession(ctx context.Context, req collab.StageSes
 	return created.Key, nil
 }
 
+func (s *AppContext) StageTurnActive(rootID, sessionKey string) bool {
+	return usecase.SessionTurnActive(rootID, sessionKey)
+}
+
 func (s *AppContext) RunStageTurn(ctx context.Context, req collab.StageTurnRequest) (collab.StageTurnResult, error) {
 	uc := &usecase.Service{Registry: s}
 	sessionKey := strings.TrimSpace(req.SessionKey)
@@ -126,18 +133,23 @@ func (s *AppContext) RunStageTurn(ctx context.Context, req collab.StageTurnReque
 	resolvedModel := strings.TrimSpace(req.Model)
 	s.SetSessionPendingReply(req.RootID, sessionKey, sessionName)
 	err := uc.SendMessage(ctx, usecase.SendMessageInput{
-		RootID:              req.RootID,
-		Key:                 sessionKey,
-		Agent:               req.Agent,
-		Model:               req.Model,
-		Mode:                req.PermissionMode,
-		Effort:              req.Effort,
-		PlanMode:            &planMode,
-		ReadOnly:            req.ReadOnly,
-		ReturnErrorOnCancel: true,
-		StreamFilter:        req.StreamFilter,
-		Content:             req.Prompt,
-		UserTimestamp:       userTimestamp,
+		RootID:                 req.RootID,
+		Key:                    sessionKey,
+		Agent:                  req.Agent,
+		Model:                  req.Model,
+		Mode:                   req.PermissionMode,
+		Effort:                 req.Effort,
+		PlanMode:               &planMode,
+		ReadOnly:               req.ReadOnly,
+		ExplicitRuntimeOptions: true,
+		ReturnErrorOnCancel:    true,
+		StreamFilter:           req.StreamFilter,
+		SkipSwitchHint:         req.SkipSwitchHint,
+		MemberSlotID:           req.MemberSlotID,
+		OnRegistered:           req.OnRegistered,
+		OnToolCall:             req.OnToolCall,
+		Content:                req.Prompt,
+		UserTimestamp:          userTimestamp,
 		OnStart: func(start usecase.MessageStart) {
 			if m := strings.TrimSpace(start.Model); m != "" {
 				resolvedModel = m
@@ -147,6 +159,10 @@ func (s *AppContext) RunStageTurn(ctx context.Context, req collab.StageTurnReque
 		OnUpdate: func(update agenttypes.Event) {
 			updateTracker.Begin()
 			defer updateTracker.End()
+			if chunk, ok := update.Data.(agenttypes.MessageChunk); req.OnText != nil && update.Type == agenttypes.EventTypeMessageChunk && ok &&
+				chunk.ParentToolUseID == "" && chunk.TaskID == "" {
+				req.OnText(chunk.Content)
+			}
 			s.BroadcastSessionUpdate(req.RootID, sessionKey, update)
 		},
 		OnSubSessionCreated: func(created *session.Session) {
@@ -172,10 +188,12 @@ func (s *AppContext) RunStageTurn(ctx context.Context, req collab.StageTurnReque
 	}
 	s.BroadcastSessionDone(req.RootID, sessionKey, "")
 
-	if mgr, mgrErr := s.GetSessionManager(req.RootID); mgrErr == nil && mgr != nil {
-		if latest, getErr := mgr.Get(context.Background(), sessionKey, 0); getErr == nil && latest != nil {
-			if m := strings.TrimSpace(latest.Model); m != "" {
-				resolvedModel = m
+	if err == nil {
+		if mgr, mgrErr := s.GetSessionManager(req.RootID); mgrErr == nil && mgr != nil {
+			if latest, getErr := mgr.Get(context.Background(), sessionKey, 0); getErr == nil && latest != nil {
+				if m := strings.TrimSpace(latest.Model); m != "" {
+					resolvedModel = m
+				}
 			}
 		}
 	}
@@ -208,5 +226,13 @@ func (s *AppContext) RunUpdated(rootID string, run collab.Run, waitingCount int)
 			"run":           run,
 			"waiting_count": waitingCount,
 		},
+	})
+}
+
+func (s *AppContext) MeetingChunk(rootID, runID, turnID, attempt string, seq int, delta string) {
+	s.GetSessionStreamHub().BroadcastAll(WSResponse{
+		Type: "collab.meeting.chunk",
+		Payload: map[string]any{"root_id": rootID, "run_id": runID,
+			"turn_id": turnID, "attempt": attempt, "seq": seq, "delta": delta},
 	})
 }

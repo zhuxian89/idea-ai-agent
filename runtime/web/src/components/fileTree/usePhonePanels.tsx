@@ -38,8 +38,9 @@ export function usePhonePanels({ fileTreeMenusApi, fileTreePreferenceStateApi, a
   const { agentConfiguration } = agentConfigurationViewApi;
   const { relayBaseURL, relayNoRelayer, relayNodeId } = props;
 
-  const glowTitle = t(inPhoneMore ? "glow.activityTitle" : "glow.title");
-  const glowSettingsButton = isRemoteWebUi ? (
+  const showGlowSettings = isRemoteWebUi;
+  const glowTitle = t("glow.activityTitle");
+  const glowSettingsButton = showGlowSettings ? (
     <button
       type="button"
       className={inPhoneMore ? undefined : "remote-shell-only"}
@@ -139,5 +140,5 @@ export function usePhonePanels({ fileTreeMenusApi, fileTreePreferenceStateApi, a
         ) : null}
   </>;
 
-  return { closePhonePanel, glowSettingsButton, glowTitle, phonePanelTitle, settingsPanels };
+  return { closePhonePanel, glowSettingsButton, glowTitle, phonePanelTitle, settingsPanels, showGlowSettings };
 }

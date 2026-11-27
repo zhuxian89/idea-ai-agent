@@ -40,8 +40,13 @@ type SendMessageInput struct {
 	FastService            string
 	PlanMode               *bool
 	ReadOnly               bool
+	ExplicitRuntimeOptions bool
 	ReturnErrorOnCancel    bool
 	StreamFilter           StreamTextFilter
+	SkipSwitchHint         bool
+	MemberSlotID           string
+	OnRegistered           func() error
+	OnToolCall             func(agenttypes.ToolCall)
 	Shell                  string
 	TerminalCols           int
 	Content                string
@@ -148,9 +153,10 @@ func setActiveTurnSession(rootID, sessionKey string, sess agenttypes.Session) {
 		return
 	}
 	activeTurnsMu.Lock()
-	state := activeTurns[activeTurnKey(rootID, sessionKey)]
+	key := activeTurnKey(rootID, sessionKey)
+	state := activeTurns[key]
 	if state != nil {
-		state.session = sess
+		activeTurns[key] = &activeTurnState{cancel: state.cancel, session: sess}
 	}
 	activeTurnsMu.Unlock()
 }
@@ -162,6 +168,10 @@ func unregisterActiveTurn(rootID, sessionKey string) {
 	activeTurnsMu.Lock()
 	delete(activeTurns, activeTurnKey(rootID, sessionKey))
 	activeTurnsMu.Unlock()
+}
+
+func SessionTurnActive(rootID, sessionKey string) bool {
+	return getActiveTurn(rootID, sessionKey) != nil
 }
 
 func getActiveTurn(rootID, sessionKey string) *activeTurnState {
@@ -256,6 +266,12 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 	turnCtx, turnCancel := context.WithCancel(ctx)
 	registerActiveTurn(in.RootID, in.Key, turnCancel)
 	defer unregisterActiveTurn(in.RootID, in.Key)
+	if in.OnRegistered != nil {
+		if err := in.OnRegistered(); err != nil {
+			turnCancel()
+			return err
+		}
+	}
 	s.applyMessageRuntimeDefaults(&in)
 	manager, err := s.Registry.GetSessionManager(in.RootID)
 	if err != nil {
@@ -272,6 +288,9 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		}
 	}
 	resolvedMode := resolveRuntimeMode(current, in.Mode)
+	if in.ExplicitRuntimeOptions {
+		resolvedMode = strings.TrimSpace(in.Mode)
+	}
 	if readOnly {
 		resolvedMode = ""
 	}
@@ -317,7 +336,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		// must not replace the user's configured developer instructions.
 		includeReplyTipsInUserMessage = false
 	}
-	sess, agentCtxSeq, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, in.Agent, in.Model, resolvedMode, in.Effort, in.FastService, readOnly, rootAbs, developerInstructions, func() {
+	sess, agentCtxSeq, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, in.Agent, in.Model, resolvedMode, in.Effort, in.FastService, readOnly, in.ExplicitRuntimeOptions, rootAbs, developerInstructions, func() {
 		if in.OnUpdate != nil {
 			in.OnUpdate(agenttypes.Event{
 				Type: agenttypes.EventTypeRecovery,
@@ -328,8 +347,6 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 	if err != nil {
 		return err
 	}
-	setActiveTurnSession(in.RootID, current.Key, sess)
-
 	prompt := s.BuildPrompt(BuildPromptInput{
 		Session:                       current,
 		Manager:                       manager,
@@ -340,6 +357,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		RuntimeRootAbs:                rootAbs,
 		IsInitial:                     isInitial,
 		IncludeReplyTipsInUserMessage: includeReplyTipsInUserMessage,
+		SkipSwitchHint:                in.SkipSwitchHint,
 	})
 	var responseText string
 	sawAssistantChunk := false
@@ -402,6 +420,9 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 			}
 			clientUpdate := compactAgentUpdate(update)
 			if update.Type == agenttypes.EventTypeToolCall || update.Type == agenttypes.EventTypeToolUpdate {
+				if toolCall, ok := update.Data.(agenttypes.ToolCall); ok && in.OnToolCall != nil {
+					in.OnToolCall(toolCall)
+				}
 				if toolCall, ok := update.Data.(agenttypes.ToolCall); ok && toolCall.IsWriteOperation() {
 					for _, path := range toolCall.GetAffectedPaths() {
 						if watcher == nil {
@@ -528,6 +549,10 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		defer unsubscribe()
 		finishUse := agentPool.BeginSessionUse(agentPoolSessionKey(current.Key, in.Agent))
 		defer finishUse()
+		setActiveTurnSession(in.RootID, current.Key, runtime)
+		if err := turnCtx.Err(); err != nil {
+			return err
+		}
 		return runtime.SendMessage(turnCtx, content)
 	}
 	// Observe every agent in the shared turn flow, outside its native runtime.
@@ -625,6 +650,13 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 	}
 	resolvedModel := resolveRuntimeModel(current, sess, in.Model)
 	resolvedEffort := resolveRuntimeEffort(in.Agent, current, in.Effort)
+	if in.ExplicitRuntimeOptions {
+		resolvedModel = strings.TrimSpace(in.Model)
+		if resolvedModel == "" && sess != nil {
+			resolvedModel = strings.TrimSpace(sess.CurrentModel())
+		}
+		resolvedEffort = strings.TrimSpace(in.Effort)
+	}
 	resolvedFastService = resolveRuntimeFastService(in.Agent, current, in.FastService)
 	if prefs := s.Registry.GetPreferences(); prefs != nil && !session.IsCollabSource(current.Source) {
 		if changed, err := prefs.UpdateAgentDefaultsIfChanged(in.Agent, resolvedModel, resolvedEffort, resolvedFastService); err != nil {
@@ -645,6 +677,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) error {
 		log.Printf("[session] persist.user.error root=%s session=%s agent=%s err=%v", in.RootID, current.Key, in.Agent, err)
 		return err
 	}
+	exchangeCtx = session.WithExchangeMemberSlot(exchangeCtx, in.MemberSlotID)
 	if err := manager.AddExchangeForAgent(session.WithExchangeContextWindow(exchangeCtx, &lastContextWindow), current, "agent", responseText, in.Agent, resolvedMode, resolvedEffort, resolvedFastService); err != nil {
 		log.Printf("[session] persist.agent.error root=%s session=%s agent=%s err=%v", in.RootID, current.Key, in.Agent, err)
 		return err
@@ -735,7 +768,7 @@ func (s *Service) RunTransientSlashCommand(ctx context.Context, in RunTransientS
 	root := manager.Root()
 	rootAbs, _ := root.RootDir()
 	readOnly := session.IsReadOnlySession(current)
-	sess, _, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, agentName, in.Model, in.Mode, in.Effort, in.FastService, readOnly, rootAbs, "", nil)
+	sess, _, err := s.ensureAgentSession(turnCtx, agentPool, manager, current, agentName, in.Model, in.Mode, in.Effort, in.FastService, readOnly, false, rootAbs, "", nil)
 	if err != nil {
 		return err
 	}
@@ -925,21 +958,23 @@ func (s *Service) CancelSessionTurn(ctx context.Context, in CancelSessionTurnInp
 	if err != nil {
 		return err
 	}
-	active := getActiveTurn(in.RootID, current.Key)
-	if active == nil {
-		return nil
-	}
-	if active.session != nil {
-		// Let the runtime emit its own turn boundary after interrupt. Canceling
-		// turnCtx first can dequeue the current waiter, so a late ResultMessage
-		// may be delivered to the next queued turn.
-		if err := active.session.CancelCurrentTurn(); err != nil {
-			log.Printf("[session] turn.cancel.error root=%s session=%s err=%v", in.RootID, current.Key, err)
+	activeTurnsMu.Lock()
+	active := activeTurns[activeTurnKey(in.RootID, current.Key)]
+	if active == nil || active.session == nil {
+		if active != nil {
 			active.cancel()
-			return err
 		}
+		activeTurnsMu.Unlock()
 		return nil
 	}
-	active.cancel()
+	activeTurnsMu.Unlock()
+	// Let the runtime emit its own turn boundary after interrupt. Canceling
+	// turnCtx first can dequeue the current waiter, so a late ResultMessage
+	// may be delivered to the next queued turn.
+	if err := active.session.CancelCurrentTurn(); err != nil {
+		log.Printf("[session] turn.cancel.error root=%s session=%s err=%v", in.RootID, current.Key, err)
+		active.cancel()
+		return err
+	}
 	return nil
 }

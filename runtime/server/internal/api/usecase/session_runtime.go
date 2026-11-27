@@ -81,19 +81,15 @@ func (s *Service) ensureAgentSession(
 	effort string,
 	fastService string,
 	readOnly bool,
+	explicitOptions bool,
 	rootAbs string,
 	developerInstructions string,
 	onResumeFallback func(),
 ) (agenttypes.Session, *int, error) {
 	poolSessionKey := agentPoolSessionKey(current.Key, agentName)
-	nextModel := resolveRuntimeModel(current, nil, model)
-	nextMode := resolveRuntimeMode(current, mode)
-	nextEffort := resolveRuntimeEffort(agentName, current, effort)
+	nextModel, nextMode, nextEffort := resolveEffectiveRuntimeOptions(agentName, current, model, mode, effort, readOnly, explicitOptions)
 	nextFastService := resolveRuntimeFastService(agentName, current, fastService)
 	nextPlanMode := current != nil && current.PlanMode && !readOnly
-	if readOnly {
-		nextMode = ""
-	}
 	var binding *session.AgentBinding
 	if manager != nil {
 		var err error
@@ -118,7 +114,8 @@ func (s *Service) ensureAgentSession(
 		currentPlanMode = current.PlanMode
 	}
 	if existing, existingReadOnly, ok := pool.GetWithReadOnly(poolSessionKey); ok {
-		if existingReadOnly == readOnly && !shouldReopenSessionForSetting(pool, agentName, currentEffort, nextEffort) &&
+		resetToDefault := explicitOptions && ((currentModel != "" && nextModel == "") || (!readOnly && currentMode != "" && nextMode == ""))
+		if existingReadOnly == readOnly && !resetToDefault && !shouldReopenSessionForSetting(pool, agentName, currentEffort, nextEffort) &&
 			currentFastService == nextFastService {
 			if current != nil && currentModel != nextModel {
 				log.Printf("[session/model] switch.detected session=%s agent=%s from=%q to=%q action=set_runtime_model", current.Key, agentName, currentModel, nextModel)
@@ -260,6 +257,22 @@ func shouldReopenSessionForSetting(pool *agent.Pool, agentName, currentValue, ne
 		protocol = agent.DefaultProtocol(agentName)
 	}
 	return protocol == agent.ProtocolCodexSDK || protocol == agent.ProtocolClaudeSDK
+}
+
+func resolveEffectiveRuntimeOptions(agentName string, current *session.Session, model, mode, effort string, readOnly, explicitOptions bool) (nextModel, nextMode, nextEffort string) {
+	if explicitOptions {
+		nextModel = strings.TrimSpace(model)
+		nextMode = strings.TrimSpace(mode)
+		nextEffort = strings.TrimSpace(effort)
+	} else {
+		nextModel = resolveRuntimeModel(current, nil, model)
+		nextMode = resolveRuntimeMode(current, mode)
+		nextEffort = resolveRuntimeEffort(agentName, current, effort)
+	}
+	if readOnly {
+		nextMode = ""
+	}
+	return nextModel, nextMode, nextEffort
 }
 
 func resolveRuntimeModel(current *session.Session, runtime agenttypes.Session, requested string) string {

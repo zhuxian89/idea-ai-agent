@@ -26,6 +26,9 @@ func (s *Service) handoffTurn(ctx context.Context, root string, run Run, step *S
 		}
 	}
 	prompt := fmt.Sprintf("请读取项目文件 `%s`，按其中的要求完成%s。", inputPath, step.Title)
+	if step.Key == StepImpl && run.MeetingRunID != "" {
+		prompt = fmt.Sprintf("请读取项目文件 `%s`，完成任务并自测。", inputPath)
+	}
 	result, err := s.runner.RunStageTurn(ctx, StageTurnRequest{RootID: run.RootID, SessionKey: step.SessionKey,
 		Agent: step.Agent, Model: step.Model, Effort: step.Effort, PermissionMode: permissionMode, ReadOnly: step.ReadOnly, Prompt: prompt, StreamFilter: output})
 	result.VisibleText = output.VisibleText()

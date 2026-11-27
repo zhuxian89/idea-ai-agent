@@ -2194,6 +2194,28 @@ func TestCancelSessionTurnCancelsTransientActiveTurn(t *testing.T) {
 	}
 }
 
+func TestSendMessageCanAbortAtTurnRegistration(t *testing.T) {
+	root := rootfs.NewRootInfo("mindfs", "mindfs", t.TempDir())
+	service := Service{Registry: &commandTestRegistry{root: root, manager: session.NewManager(root)}}
+	key := "meeting-turn"
+	err := service.SendMessage(context.Background(), SendMessageInput{
+		RootID: root.ID,
+		Key:    key,
+		OnRegistered: func() error {
+			if !SessionTurnActive(root.ID, key) {
+				t.Error("turn must be registered before the startup callback")
+			}
+			return context.Canceled
+		},
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendMessage error = %v, want context.Canceled", err)
+	}
+	if SessionTurnActive(root.ID, key) {
+		t.Fatal("aborted turn remained registered")
+	}
+}
+
 type commandTestRegistry struct {
 	root    rootfs.RootInfo
 	manager *session.Manager

@@ -550,6 +550,23 @@ test("remote panel and browser editing", async t => {
     await preview.click();
     await expect(page.frameLocator("iframe").getByRole("button", {name:"开始"})).toBeVisible();
   });
+  await t.test("markdown files default to rendered preview and switch to source in place", async () => {
+    const md = "# Release Notes\n\nRendered **markdown** body.";
+    const mdFile = { root: "project", path: "NOTES.MD", name: "NOTES.MD", content: md, size: Buffer.byteLength(md), encoding: "utf-8", ext: "md", truncated: false };
+    const page = await openHtml(mdFile);
+    const preview = page.getByRole("button", { name: "Preview", exact: true });
+    const source = page.getByRole("button", { name: "Source", exact: true });
+    await expect(preview).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("heading", { name: "Release Notes", exact: true })).toBeVisible();
+    await source.click();
+    await expect(source).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("code")).toContainText("# Release Notes");
+    await page.getByRole("button", { name: "Second file" }).click();
+    await expect(preview).toHaveCount(0);
+    await page.getByRole("button", { name: "First file" }).click();
+    await expect(preview).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("heading", { name: "Release Notes", exact: true })).toBeVisible();
+  });
   await t.test("editing retains drafts across navigation and conflict; save uses original revision", async () => {
     const page = await pageFor(900,true);
     await page.addScriptTag({content:bundle.outputFiles[0].text});

@@ -186,15 +186,32 @@ func exchangeModelDisplayNameFromContext(ctx context.Context) string {
 	return strings.TrimSpace(value)
 }
 
+type exchangeMemberSlotContextKey struct{}
+
+func WithExchangeMemberSlot(ctx context.Context, slotID string) context.Context {
+	if slotID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, exchangeMemberSlotContextKey{}, slotID)
+}
+
+func exchangeMemberSlot(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	value, _ := ctx.Value(exchangeMemberSlotContextKey{}).(string)
+	return value
+}
+
 func (m *Manager) AddExchangeForAgent(ctx context.Context, session *Session, role, content, agent, mode, effort, fastService string) error {
-	return m.addExchangeForAgentAt(session, role, content, agent, exchangeModelDisplayNameFromContext(ctx), mode, effort, fastService, time.Time{}, exchangeContextWindow(ctx))
+	return m.addExchangeForAgentAt(ctx, session, role, content, agent, mode, effort, fastService, time.Time{})
 }
 
 func (m *Manager) AddExchangeForAgentAt(ctx context.Context, session *Session, role, content, agent, mode, effort, fastService string, timestamp time.Time) error {
-	return m.addExchangeForAgentAt(session, role, content, agent, exchangeModelDisplayNameFromContext(ctx), mode, effort, fastService, timestamp, exchangeContextWindow(ctx))
+	return m.addExchangeForAgentAt(ctx, session, role, content, agent, mode, effort, fastService, timestamp)
 }
 
-func (m *Manager) addExchangeForAgentAt(session *Session, role, content, agent, modelDisplayName, mode, effort, fastService string, timestamp time.Time, contextWindow *agenttypes.ContextWindow) error {
+func (m *Manager) addExchangeForAgentAt(ctx context.Context, session *Session, role, content, agent, mode, effort, fastService string, timestamp time.Time) error {
 	if session == nil || strings.TrimSpace(session.Key) == "" {
 		return errors.New("session required")
 	}
@@ -221,12 +238,13 @@ func (m *Manager) addExchangeForAgentAt(session *Session, role, content, agent, 
 	record := Exchange{
 		Seq:              nextSeq,
 		Role:             role,
+		MemberSlotID:     exchangeMemberSlot(ctx),
 		Agent:            resolvedAgent,
 		Model:            session.Model,
-		ModelDisplayName: strings.TrimSpace(modelDisplayName),
+		ModelDisplayName: exchangeModelDisplayNameFromContext(ctx),
 		Mode:             strings.TrimSpace(mode),
 		Effort:           strings.TrimSpace(effort),
-		ContextWindow:    cloneContextWindow(contextWindow),
+		ContextWindow:    cloneContextWindow(exchangeContextWindow(ctx)),
 		FastService:      fastService,
 		Content:          content,
 		Timestamp:        ts,

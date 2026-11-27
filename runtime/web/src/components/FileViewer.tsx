@@ -193,9 +193,16 @@ export function FileViewer({ file, previewContent, onSessionClick, onPathClick, 
     return () => node.removeEventListener("scroll", handleScroll);
   }, [fileScrollKey, onScrollTopChange]);
 
-  const ext = file?.ext || (file?.path.includes(".") ? `.${file.path.split(".").pop()}` : "");
+  const rawExt = file?.ext || (file?.path.includes(".") ? `.${file.path.split(".").pop()}` : "");
+  const ext = rawExt ? (rawExt.startsWith(".") ? rawExt.toLowerCase() : `.${rawExt.toLowerCase()}`) : "";
   const documentPreviewKind = getDocumentPreviewKind(ext, file?.mime);
-  const usesMarkdownViewer = ext === ".md" || ext === ".markdown";
+  const isMarkdownFile = (ext === ".md" || ext === ".markdown") && file?.encoding !== "binary";
+  const [markdownModeByKey, setMarkdownModeByKey] = useState<{ key: string; mode: "preview" | "source" }>({
+    key: "",
+    mode: "preview",
+  });
+  const markdownMode = markdownModeByKey.key === fileScrollKey ? markdownModeByKey.mode : "preview";
+  const usesMarkdownViewer = isMarkdownFile && markdownMode === "preview";
   const lineSelectionEnabled = !!file
     && !usesMarkdownViewer
     && file.encoding !== "binary"
@@ -437,6 +444,24 @@ export function FileViewer({ file, previewContent, onSessionClick, onPathClick, 
             </div>
           )}
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flexShrink: 0 }}>
+            {isMarkdownFile && !previewActive && (
+              <div className="file-viewer-modes" role="group" aria-label={t("fileViewer.viewMode")}>
+                <button
+                  type="button"
+                  aria-pressed={markdownMode === "preview"}
+                  onClick={() => setMarkdownModeByKey({ key: fileScrollKey, mode: "preview" })}
+                >
+                  {t("fileViewer.preview")}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={markdownMode === "source"}
+                  onClick={() => setMarkdownModeByKey({ key: fileScrollKey, mode: "source" })}
+                >
+                  {t("fileViewer.source")}
+                </button>
+              </div>
+            )}
             <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginLeft: "6px", flexShrink: 0, opacity: 0.7 }}>{(file.size / 1024).toFixed(1)} KB</div>
             <button
               type="button"

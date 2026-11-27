@@ -33,6 +33,7 @@ type BuildPromptInput struct {
 	RuntimeRootAbs                string
 	IsInitial                     bool
 	IncludeReplyTipsInUserMessage bool
+	SkipSwitchHint                bool
 }
 
 func (s *Service) BuildPrompt(in BuildPromptInput) string {
@@ -46,6 +47,9 @@ func (s *Service) BuildPrompt(in BuildPromptInput) string {
 		prompt = buildPluginPrompt(clientCtx.PluginCatalog, in.Message, in.IsInitial, pluginDir)
 	} else if in.IsInitial && in.IncludeReplyTipsInUserMessage {
 		prompt = appendReplyTips(prompt)
+	}
+	if in.SkipSwitchHint {
+		return prompt
 	}
 	return prependSwitchHint(in, prompt)
 }

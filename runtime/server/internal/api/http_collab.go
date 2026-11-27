@@ -109,7 +109,10 @@ func (h *HTTPHandler) handleCollabRunCreate(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	var req collab.StartQuickRunInput
+	var req struct {
+		collab.StartMeetingInput
+		Mode string `json:"mode"`
+	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 2<<20)).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid json body"))
 		return
@@ -117,7 +120,16 @@ func (h *HTTPHandler) handleCollabRunCreate(w http.ResponseWriter, r *http.Reque
 	if strings.TrimSpace(req.RootID) == "" {
 		req.RootID = strings.TrimSpace(r.URL.Query().Get("root"))
 	}
-	detail, err := svc.StartQuickRun(r.Context(), req)
+	var detail collab.RunDetail
+	var err error
+	switch req.Mode {
+	case collab.ModeGroup:
+		detail, err = svc.StartMeeting(r.Context(), req.StartMeetingInput)
+	case "", collab.ModeQuick:
+		detail, err = svc.StartQuickRun(r.Context(), req.StartQuickRunInput)
+	default:
+		err = errInvalidRequest("invalid collaboration mode")
+	}
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -147,6 +159,36 @@ func (h *HTTPHandler) handleCollabRunGet(w http.ResponseWriter, r *http.Request)
 	respondJSON(w, http.StatusOK, detail)
 }
 
+func (h *HTTPHandler) handleCollabRunMembersUpdate(w http.ResponseWriter, r *http.Request) {
+	svc, ok := h.collabService(w)
+	if !ok {
+		return
+	}
+	var req collab.UpdateRunMembersInput
+	if err := json.NewDecoder(io.LimitReader(r.Body, 2<<20)).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid json body"))
+		return
+	}
+	req.RunID = chi.URLParam(r, "id")
+	if strings.TrimSpace(req.RootID) == "" {
+		req.RootID = strings.TrimSpace(r.URL.Query().Get("root"))
+	}
+	if strings.TrimSpace(req.RootID) == "" {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("root required"))
+		return
+	}
+	detail, err := svc.UpdateRunMembers(r.Context(), req)
+	if err != nil {
+		if errors.Is(err, collab.ErrRunNotFound) {
+			respondError(w, http.StatusNotFound, err)
+			return
+		}
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, detail)
+}
+
 func (h *HTTPHandler) handleCollabRunDocGet(w http.ResponseWriter, r *http.Request) {
 	svc, ok := h.collabService(w)
 	if !ok {
@@ -157,10 +199,7 @@ func (h *HTTPHandler) handleCollabRunDocGet(w http.ResponseWriter, r *http.Reque
 		respondError(w, http.StatusBadRequest, errInvalidRequest("root required"))
 		return
 	}
-	docName := chi.URLParam(r, "doc")
-	if round := chi.URLParam(r, "round"); round != "" {
-		docName = round + "/" + docName
-	}
+	docName := chi.URLParam(r, "*")
 	content, err := svc.ReadDoc(rootID, chi.URLParam(r, "id"), docName)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -174,6 +213,29 @@ func (h *HTTPHandler) handleCollabRunDocGet(w http.ResponseWriter, r *http.Reque
 		"name":    docName,
 		"content": content,
 	})
+}
+
+func (h *HTTPHandler) handleCollabMeetingAction(w http.ResponseWriter, r *http.Request) {
+	svc, ok := h.collabService(w)
+	if !ok {
+		return
+	}
+	rootID := strings.TrimSpace(r.URL.Query().Get("root"))
+	if rootID == "" {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("root required"))
+		return
+	}
+	var input collab.MeetingActionInput
+	if err := json.NewDecoder(io.LimitReader(r.Body, 2<<20)).Decode(&input); err != nil {
+		respondError(w, http.StatusBadRequest, errInvalidRequest("invalid json body"))
+		return
+	}
+	detail, err := svc.MeetingAction(r.Context(), rootID, chi.URLParam(r, "id"), input)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, detail)
 }
 
 func (h *HTTPHandler) handleCollabRunDecisions(w http.ResponseWriter, r *http.Request) {

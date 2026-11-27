@@ -1,11 +1,50 @@
 feature: 2026-11-11-standalone-backend
 status: in_progress
 entrypoint: README.md
-current_step: standalone-quick-mode-final-review
+current_step: desktop-static-status-bar
 steps:
-- id: standalone-0167-and-plugin-0127-ci-release
-  description: 独立后台 0.1.67 经 GitHub Actions 构建六平台正式包并切换默认版本，之后由插件流水线同版本更新 0.1.27。
+- id: desktop-static-status-bar
+  description: 桌面与平板远程网页状态栏统一对齐手机端：移除外层 .remote-center / .collab-detail-body 大框流光，改为输入框上方独立 .remote-status-activity.remote-glow-frame 承载单份 SessionActivity（默认开启呼吸灯，桌面设置菜单保留「Agent 状态框流光」配置与开关），协作运行卡/发言卡/状态点与手机共用同一套流光设置。TypeScript、Vite 生产构建（305 文件/零 /mindfs-assets/）、8 个前端测试套件（44/44）、TestFrontendAssetsStayWithBackend（24/24）及 kanban 全量与 -race 旧库迁移门禁全部通过；尚未打包安装，Chrome 经 Relay 15 分钟长驻打字卡顿现场对照录制待实机确认。
   status: in_progress
+- id: meeting-review-focus
+  description: 后续互评只处理未对齐条目，全体对齐后可生成正式计划。第 01 轮 R1 至 R4 交付复测通过，覆盖单议题和多议题提示、旧票沿用与未知编号的页面提醒。三包 Go 竞态、TypeScript、Vite 生产构建和两项 Chrome 回归通过。真实 Agent 验收和打包安装待完成。
+  status: in_progress
+- id: meeting-topic-mode
+  description: 开大会支持单议题和多议题。后台计票、修订、跨轮讨论和保存方案已通过竞态测试，浏览器通过模板保存、手机选择方案并结束、多议题逐项裁决并实现的回归。尚未打包安装。
+  status: done
+- id: meeting-replace-item-revisions
+  description: 会议条目直接替换旧版本。旧库迁移和历史裁决原文通过 Go 竞态回归，TypeScript、生产构建和会议浏览器回归通过。
+  status: done
+- id: standalone-edit-active-models-round-04
+  description: R9 至 R13 交付复测通过，补齐快速模式详情头的状态圆点。9 个 Go 包竞态、看板全量与旧库迁移、TypeScript、生产构建和 6 项前端回归通过。安装包、真实 Agent 换模型和实机验收待完成。
+  status: in_progress
+- id: standalone-edit-active-models-round-03
+  description: R5 至 R8 交付复测通过，补齐历史发言的默认模型显示。9 个 Go 包竞态、看板全量与旧库迁移、TypeScript、生产构建和 6 项前端回归通过。安装包、真实 Agent 换模型和实机验收待完成。
+  status: in_progress
+- id: standalone-edit-active-models-round-02
+  description: 运行中修改模型第 02 轮源码交付复测通过，含单行卡片与对话详情、Go 竞态、旧库迁移和 6 项前端回归。包含 R4 的安装包、真实 Agent 换模型和实机验收待完成。
+  status: in_progress
+- id: standalone-0166-local20-edit-active-models
+  description: 开大会与快速模式支持运行中修改模型，0.1.66-local.20 已安装到本机，9 个既有项目、协作模板接口、网页资源和 Relay 已核验。
+  status: done
+- id: standalone-0166-local19-meeting-wrap-up
+  description: 大会收口改进随 0.1.66-local.19 安装到本机，旧库迁移、最终包浏览器回归、隔离安装和本机服务回读通过。
+  status: done
+- id: standalone-agent-meeting-improvements
+  description: 收口改进第 01 轮最终交付复跑通过，覆盖发言登记时暂停、原生回合返回及续跑。Go 竞态、旧库迁移、TypeScript、生产构建和 5 项前端回归通过。真实 ACP 与 Claude 中断、工具读取及权限待验收。C5 归档入口和 D4 缺出处计票待作者确认。
+  status: in_progress
+- id: standalone-0166-local18-meeting-permissions
+  description: 大会成员权限选择和单成员重试已通过 Go 竞态、旧库迁移和浏览器回归；macOS arm64 包已在本机升级，9 个既有项目、网页资源及 Relay 连接已核验。
+  status: done
+- id: standalone-0166-local17-agent-meeting-macos
+  description: 0.1.66-local.17（macos-arm64）本机包已通过构建、回归、隔离安装和热升级，回执确认 9 个项目、二进制、模板接口、网页资源及 Relay 状态。本机随后升级到 local.18。
+  status: done
+- id: standalone-agent-meeting
+  description: 收口改进前的开大会第 02 轮交付复跑通过。R7 在隔离副本复现旧判定的 Glob 误报，修复后通过。真实双 Agent 验收纳入 standalone-agent-meeting-improvements。
+  status: done
+- id: standalone-0167-and-plugin-0127-ci-release
+  description: 独立后台 0.1.67 和插件 0.1.27 两条正式 CI 均成功。独立后台 24 个附件核验通过，默认在线安装已切换。插件五个 ZIP 和校验文件已同版本替换并通过公开回读，继续保持 GitHub Latest。
+  status: done
 - id: standalone-collab-clean-handoff-docs
   description: 逐条回应合并磁盘文档时过滤控制块，最终报告补上已记录且正文缺少的测试命令。竞态、旧库迁移、浏览器回归及隔离安装通过，本机已升级至 0.1.66-local.16。
   status: done

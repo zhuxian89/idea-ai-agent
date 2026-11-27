@@ -194,6 +194,105 @@ html[data-remote-ui][data-theme="moss"] {
   z-index: 6;
   background: transparent;
 }
+.remote-footer[data-has-status="1"] {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.remote-status-activity {
+  margin: 4px 16px 6px;
+  border-radius: 10px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.remote-status-activity:empty {
+  display: none;
+}
+.remote-status-activity .session-activity {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: inherit;
+  background: var(--rd-surface, var(--panel-bg));
+  border: 1px solid var(--rd-edge, var(--border-color));
+  box-sizing: border-box;
+}
+.remote-status-activity .session-activity[data-activity-kind="work"] {
+  border-color: color-mix(in srgb, var(--accent-color) 42%, var(--rd-edge, var(--border-color)));
+}
+.remote-status-activity .session-activity[data-activity-kind="wait"] {
+  background: var(--selection-bg);
+  border-color: var(--accent-color);
+}
+.remote-status-activity .session-activity[data-activity-kind="offline"] {
+  border-color: color-mix(in srgb, #d97706 48%, var(--rd-edge, var(--border-color)));
+}
+.remote-status-activity .session-activity[data-activity-kind="error"] {
+  background: color-mix(in srgb, #dc2626 6%, var(--rd-surface, var(--panel-bg)));
+  border-color: color-mix(in srgb, #dc2626 52%, var(--rd-edge, var(--border-color)));
+}
+.remote-status-activity .session-activity[data-activity-kind="done"] {
+  border-color: color-mix(in srgb, #16a34a 42%, var(--rd-edge, var(--border-color)));
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"]) {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  box-sizing: border-box;
+  width: min(560px, calc(100vw - 32px));
+  max-width: min(560px, calc(100vw - 32px));
+  max-height: min(80dvh, calc(var(--mindfs-viewport-height, 100dvh) - 48px));
+  padding: 0 16px 16px;
+  border-radius: 16px;
+  background: var(--rd-surface, var(--menu-bg));
+  color: var(--text-primary);
+  border: 1px solid var(--rd-edge, var(--border-color));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"])[open] {
+  display: flex;
+  flex-direction: column;
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"])::backdrop {
+  background: rgba(2, 6, 23, 0.45);
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"]) > header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 8px;
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"]) h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"]) > header button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"]) > header button:hover {
+  background: var(--menu-active-bg);
+  color: var(--text-primary);
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"]) > header button:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+html:not([data-device="phone"]) .remote-phone-sheet:not([data-side="left"]) .remote-phone-sheet-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 
 /* ---------- 左栏：只剩文件树，项目工具收进 ⋮ 菜单 ---------- */
 .remote-tool-crumb { display: none; }

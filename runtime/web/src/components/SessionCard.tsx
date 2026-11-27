@@ -463,6 +463,7 @@ export function SessionCard({
             <>
             {remoteUiActive() && !phoneFacts ? <span className="session-replying-label">{t("sessionList.replying")}</span> : null}
             <span
+              className="session-replying-dot"
               aria-label={t("sessionList.replying")}
               title={t("sessionList.replying")}
               style={{

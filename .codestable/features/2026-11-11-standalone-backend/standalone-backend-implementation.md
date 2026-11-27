@@ -464,6 +464,16 @@ Windows x64 插件测试包基于已核对 GitHub 摘要的正式 0.1.27 ZIP 替
 - 验证通过协作、API、usecase 和 Web Push 竞态测试，以及看板全量测试和旧库迁移竞态测试。最终包通过 5 项浏览器回归、6 个 macOS arm64 附件及 305 个网页文件的静态门禁、临时目录隔离安装。[后端测试](../../../build/reports/standalone-0.1.66-local.16-handoff/race.log) · [浏览器测试](../../../build/reports/standalone-0.1.66-local.16-handoff/browser.log)
 - 第 2 轮协作完成后，本机从 `0.1.66-local.15` 升级到 `0.1.66-local.16`，已核验二进制、9 个项目、模板接口、网页资源和 Relay 连接。[升级回执](../../../build/reports/standalone-0.1.66-local.16-handoff/result.txt)
 
+## 独立后台 0.1.67 与插件 0.1.27 正式发布
+
+- 从独立工作树提交 `cdec579` 至 `standalone-0.1.67`。独立后台 CI 按正式模式构建六个平台，启用全量 Go 与网页测试。插件 CI 等待默认独立后台切换至 `0.1.67`。[独立后台 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45740948059)
+- 首次 CI 的旧库迁移与全量 Go 测试通过，网页菜单测试仍要求按钮显示模型 ID。修正夹具以分别验证可见模型名称、实际选中的模型 ID 和菜单保持展开。[首次 CI 失败日志](../../../build/reports/ci-release-0.1.67-plugin-0.1.27/standalone-first-failure.log)
+- 18 项菜单测试通过。修正提交 `305eae1` 已触发第二次六平台正式发布，仍启用全量 Go 与网页测试。[菜单测试](../../../build/reports/ci-release-0.1.67-plugin-0.1.27/menu-controls.log) · [复验 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45741877391)
+- 第二次 CI 的全量 Go、409 项网页测试和旧库迁移门禁通过。[测试汇总](../../../build/reports/ci-release-0.1.67-plugin-0.1.27/standalone-test-summary.txt)
+- 六平台打包、静态门禁、Linux 隔离安装及 systemd 自更新、macOS 隔离安装、Windows ACP 进程树清理及 Windows PowerShell 5.1 安装和自更新通过，草稿附件已逐字节核验。
+- 独立后台 CI 已将候选提交快进合入 `main` 并发布 `standalone-v0.1.67`。24 个公开附件匿名回读逐字节一致，Windows PowerShell 5.1 公开下载与默认在线安装通过，旧 Release 快照归档后已下架。默认版本切换后，从 `main` 触发插件 `0.1.27` 的正式同版本更新。[独立后台 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45741877391) · [插件 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45743210857)
+- 插件 CI 的旧库迁移、全量 Go、网页和 Gradle 测试通过。macOS 与 Windows 沙箱均逐字节核验了内嵌后台的 305 个 HTTP 网页资源，两个 Windows ZIP 和通用 ZIP 均通过 PowerShell 5.1 安装器验证。替换前快照已归档，5 个 ZIP 和 `SHA256SUMS.txt` 匿名回读与构建一致，全部摘要已更新，`v0.1.27` 保持 GitHub Latest。[插件 CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45743210857) · [公开摘要更新记录](../../../build/reports/ci-release-0.1.67-plugin-0.1.27/plugin-asset-update.txt)
+
 ## 后端测试配置隔离（2026-11-26）
 
 - API 测试套件用临时目录隔离后台数据和 Agent 配置，Web Push 密钥生成测试显式写入自己的临时数据目录。
@@ -538,3 +548,214 @@ IDE_AGENT_DATA_DIR="$(mktemp -d)" go test -race ./server/internal/kanban -run '^
 ./node_modules/.bin/tsc --noEmit -p tsconfig.json
 IDEA_COLLAB_DIST= node --test tests/collab-quick-mode.test.mjs tests/collab-skill-picker.test.mjs
 ```
+
+## 开大会实现与验证
+
+- 后端接入会议运行、轮次状态及成员交付，复用快速模式的只读会话、恢复入口、文件核验与差异快照。会议确认时在同一个事务创建并关联快速运行。
+- 初次执行 `typecheck` 时误在仓库根目录运行，该目录没有此脚本；进入 `runtime/web` 后 TypeScript 报出关联运行 ref 和头像属性类型错误，已修正。
+- 在临时后台配置目录运行 `go test -race ./server/internal/collab ./server/internal/api/usecase ./server/internal/api -count=1`，三包通过。这次运行先于会议专项测试及后续修订。
+- 会议专项竞态测试覆盖并行提案、出处、控制块、点名、顺序互评、僵持、裁决门禁、同页实现关联和两种恢复落点。看板全量与旧库迁移竞态、会话与三协议回归通过。
+- 前端生产构建通过。首次群聊浏览器回归发现切换模式后，晚返回的默认模板会覆盖刚改的主笔与轮次上限。改为模板加载完成后呈现表单，继续回归。
+- 使用隔离 HOME、项目和后台配置启动真实 Codex、Claude。两者都创建了首轮会话。Codex 回合因 OAuth 过期中止，Claude 返回需要登录。真实读取标记待两端可用凭据后验收。
+- 核对两个真实 Agent 会话的首轮原始提示，仅含本人草案路径，均无单聊会话记录提示。认证失败在模型读取前发生。第二次浏览器回归已通过桌面主流程，手机视口切换后立即取尺寸读到了旧桌面布局，改为等待布局更新后再断言，继续验收。
+- 手机复跑发现从桌面切换窄视口时，已打开的运行列表抽屉会遮挡会议操作。进入窄视口时收起抽屉，保留按钮手动打开。
+- 盲评 ToolCall 可在文件交付之前报告相对路径或绝对路径，macOS 中绝对路径可能含 `/var` 或 `/private/var`。物理读取夹具暴露了启动事件收到未落盘路径时的解析差异，先按注册根路径匹配，再核对可解析的真实路径。
+- 截图的浅色回归需要显式设置项目的浅色偏好，浏览器系统配色无法覆盖入口默认的深色。
+
+- 最终验证通过。使用独立临时 Agent 和后台配置运行 `go vet`、协作与 API / 用例 / 会话及三协议的 9 包竞态测试。会议专项竞态连续跑 5 次。看板全量与 `TestTaskStoreSnapshotMigration` 竞态专项通过。
+- 最终 TypeScript 与生产构建通过，305 个网页文件无 `/mindfs-assets/` 引用。会议和快速模式 Playwright 回归、3 项 Skill 选择回归共 5 项通过。浅色、深色、390 px 手机和手机裁决截图已核对，320 px 和 390 px 视口均通过横向溢出检查。 [截图目录](../../../build/reports/agent-meeting-implementation)
+- 两个真实 Agent 均收到首轮提示，且提示中各自只有本人的草案路径。真实模型在读取前因登录失败中止，越界读取由实际读文件的自动化夹具和工具事件验证。安装包与本机服务升级未执行。 [初次实现说明](../../../.mindfs/runs/run-1795673407-b0811e52a911/01-初次实现说明.md)
+
+## 开大会第 01 轮审核修复与验证
+
+- 源码已修复混合有效与无效提案时的条目遗漏、历轮作者补充交接、盲评通配符及搜索结果路径识别。盲评搜索以返回的具体草案路径作为证据。已同步群组清单和设计状态。
+- 在临时 HOME 和临时后台配置下，`go test -race -count=1 ./server/internal/collab ./server/internal/api/usecase ./server/internal/api ./server/internal/session ./server/internal/agent/...` 的 9 个测试包通过。会议回归覆盖跨三轮补充交接、盲评工具事件、三种裁决及写盘、旧库迁移和重启恢复。
+- `go test ./server/internal/kanban -count=1` 和 `go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1` 通过。
+- `corepack pnpm run typecheck` 以及 `node --test tests/collab-meeting.test.mjs tests/collab-quick-mode.test.mjs` 通过，两个浏览器用例各自构建临时网页资源。Rollup 报告了 Zod 注释位置警告，构建及用例均完成。
+- 真实双 Agent 的读取标记待登录恢复后验收。安装包与本机升级留在各自的发布流程。 [第 01 轮回应](../../../.mindfs/runs/run-1795673407-b0811e52a911/第01轮/03-逐条回应.md)
+
+### 第 01 轮交付复跑
+
+- R1 的回归读取落盘互评条目和共识文件，确认引文不符和缺标题的提案都有编号及原文路径。R2 逐条检查第 3 轮两位成员和主笔的提示，验证每份历轮补充和答复路径各出现一次。
+- R3 新增两项回归，修复前均失败。Shell 直接读取同名前缀的备份时曾误报。ACP 的搜索完成事件仅带调用编号、状态和结果时曾漏报。修复后按文件名边界判断直接读取，并保留同一调用开始事件的搜索类型。
+- 后端命令在临时 HOME 及隔离的 Agent 和后台配置路径中执行。9 个 Go 包的竞态测试、会议专项竞态连续 5 次、看板全量与旧库迁移专项均通过。前端类型检查、临时目录生产构建和 5 项前端回归通过，含两项 Playwright 浏览器回归。
+- 真实双 Agent 读取沿用初次实现的待验状态。Codex OAuth 过期，Claude 需要登录。
+
+```sh
+# runtime
+go test -race -count=1 ./server/internal/collab ./server/internal/api/usecase ./server/internal/api ./server/internal/session ./server/internal/agent/...
+go test -race ./server/internal/collab -run '^TestMeeting' -count=5
+go test ./server/internal/kanban -count=1
+go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1
+
+# runtime/web
+review_dist="$(mktemp -d)"
+corepack pnpm run typecheck
+corepack pnpm run build --outDir "$review_dist"
+IDEA_COLLAB_DIST="$review_dist" node --test tests/collab-meeting.test.mjs tests/collab-quick-mode.test.mjs tests/collab-skill-picker.test.mjs
+```
+
+## 开大会第 02 轮审核修复与验证
+
+- 确认 R1 至 R6 已解决。R7 已修复，盲评检查要求搜索结果行在草案路径后带有内容。Claude `Glob` 仅列出文件名时跳过已读标记，含匹配正文的结果仍可标记。 [第 02 轮回应](../../../.mindfs/runs/run-1795673407-b0811e52a911/第02轮/03-逐条回应.md)
+- `TestMeetingBlindReadAuditSearchUpdate` 新增的纯文件名用例在修复前复现误报，修复后通过。测试同时覆盖带行号和省略行号的匹配正文，以及完成事件省略工具类型。
+- 使用临时 HOME、Agent 数据目录和后台目录，清空 `MINDFS_AGENTS_CONFIG` 后复跑下方 Go 测试。9 个包的竞态测试、会议专项 5 次、看板全量及旧库迁移竞态专项均通过。
+- TypeScript 检查、临时目录生产构建和 5 项前端回归通过。真实 Codex 与 Claude 的首轮读取待登录后验收。本轮未生成安装包或升级本机服务。
+
+```sh
+# runtime
+go test -race -count=1 ./server/internal/collab ./server/internal/api/usecase ./server/internal/api ./server/internal/session ./server/internal/agent/...
+go test -race ./server/internal/collab -run '^TestMeeting' -count=5
+go test ./server/internal/kanban -count=1
+go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1
+
+# runtime/web
+review_dist="$(mktemp -d)"
+corepack pnpm run typecheck
+corepack pnpm run build --outDir "$review_dist"
+IDEA_COLLAB_DIST="$review_dist" node --test tests/collab-meeting.test.mjs tests/collab-quick-mode.test.mjs tests/collab-skill-picker.test.mjs
+```
+
+### 第 02 轮交付复跑
+
+- R1 至 R6 按审核意见复核通过。R7 的源码及用例已在逐条回应阶段完成。用 Go overlay 在临时目录还原只匹配草案文件名的旧判定，`Claude_Glob_lists_draft_path` 按预期失败。当前源码的专项竞态测试中，纯文件名、带正文和带行号正文 3 个子用例均通过。 [旧判定复现](../../../build/reports/agent-meeting-implementation/round-02-final/r7-repro.log) · [当前判定](../../../build/reports/agent-meeting-implementation/round-02-final/r7-current.log)
+- 在临时 HOME、Agent 数据目录及后台目录复跑上方 4 条 Go 命令。9 个 Go 包的竞态测试、会议专项竞态连续 5 次、看板全量及旧库迁移竞态专项通过。给首条命令加 `-json` 复核，612 项通过（含子用例），5 项本机集成用例因未开启而跳过，1 项因当前进程没有以 root 运行而跳过。 [Go 日志](../../../build/reports/agent-meeting-implementation/round-02-final/go.log) · [用例结果](../../../build/reports/agent-meeting-implementation/round-02-final/go.jsonl)
+- TypeScript 检查和临时目录生产构建通过。同一份产物用于前端回归，2 项浏览器回归和 3 项 Skill 选择测试通过。 [类型检查](../../../build/reports/agent-meeting-implementation/round-02-final/typecheck.log) · [生产构建](../../../build/reports/agent-meeting-implementation/round-02-final/build.log) · [前端回归](../../../build/reports/agent-meeting-implementation/round-02-final/web.log)
+- 两个 CLI 的最小模型请求在认证时中止，Codex 返回 401，Claude 提示未登录。真实双 Agent 首轮和真实读取标记因此仍待验收。 [连通性检查](../../../build/reports/agent-meeting-implementation/round-02-final/agent-auth.log)
+
+## 0.1.66-local.17 开大会与最新多模型协作本机包
+
+- **范围**：基于当前未提交工作区打包 macOS ARM64 本机测试独立后台 `0.1.66-local.17`（包含“开大会”完整实现及第 01/02 轮审核修复），并通过独立 `launchd` 任务将本机服务从 `0.1.66-local.16` 热升级到 `0.1.66-local.17`（15 秒延迟启动，失败自动回滚 `0.1.66-local.16`）。
+- **验证证据（均在隔离临时目录执行）**：
+  - `go vet` 与 9 个 Go 包竞态测试全部通过：[竞态日志](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/race.log)
+  - 旧库迁移门禁（`go test ./server/internal/kanban -count=1` 与 `go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1`）全部通过：[kanban.log](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/kanban.log) · [kanban-race.log](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/kanban-race.log)
+  - `macos-arm64` 打包（`tsc --noEmit` + `vite build`，5545 modules）通过：[打包日志](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/package.log)
+  - 最终前端产物回归（`collab-meeting`、`collab-quick-mode`、`collab-skill-picker`、`remote-entry-build` 共 9/9 通过）：[浏览器日志](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/browser.log)
+  - 静态产物门禁通过（6/6 预期文件、305 个网页文件、无 `/mindfs-assets/` 引用）：[静态门禁日志](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/assets.log)
+  - 隔离 `HOME` 端到端安装验收通过（半成品清理、`.sh` 新装、二进制一致性、IDEA 发现记录、拒绝对已有安装覆盖）：[隔离安装日志](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/isolated-install.log)
+  - 热升级预检通过（`0.1.66-local.16` 在 `http://127.0.0.1:7441`，9 个已注册项目，Relay `bound=True connected=True`）：[预检日志](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/preflight.log) · [热升级回执](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/result.txt)
+- **明确未做与待验收**：未提交、未推送、未修改 `scripts/standalone/version.txt`、未发 GitHub Release、未重建 IDEA 插件；本机重启后的新版本页面实机体验、真实双 Agent 认证后的首轮会议读取标记仍待用户验收。
+
+## 0.1.66-local.18 大会成员权限与重试
+
+- 发起大会或编辑模板时，每个成员都可选择严格只读、沿用 Agent 配置或该 Agent 提供的权限档位。会议沿用发起时保存的配置，既有会议的历史配置保留。
+- 点击成员的「重试此成员」或「检查并重试」时，后台核对会议调度和原生会话状态。仍在执行时返回当前状态，停止且尚未交付时沿用同一会话继续。回归覆盖并行提案期间重试失败成员和保护仍在执行的其他成员。
+- 协作、API、会话用例竞态测试，以及看板全量和旧库迁移竞态测试通过。最终包的大会与快速模式浏览器回归 2 项通过，macOS arm64 的 6 个附件、305 个网页资源及临时 HOME 安装通过。已从 local.17 升级到 local.18，9 个既有项目可访问，二进制与网页资源匹配构建，Relay 已重连。Gemini 真实发言未复跑。[本机升级回执](../../../build/reports/standalone-0.1.66-local.18-live-upgrade/result.txt)
+
+
+## 开大会收口改进
+
+- 提案编号以实际交付为准。部分推进先恢复交付，在首轮继续互评。首轮互评逐个交接已交付文件，提案和互评分别给出对应控制块示例。
+- 条目保留原案、修订和各版票数。群聊、交接稿及裁决面板逐条显示依据和未确认原因。僵持以同一版本两轮状态判定，裁决锁定版本与发言。
+- 正式计划逐版保存并核对。作者可退回带异议的计划，或说明理由后按该版衔接快速模式。会议暂停先发起原生中断，再等待工作者结束。
+- 模板设默认保留主笔与上限。成员使用会议快照的规范索引，右栏按发言更新，转实现前显示权限。
+- 首次 Go 竞态回归发现二次计划路径超出已有交付路径格式，已用轮内合法路径保存各版。修复后 `collab`、`api/usecase`、`api` 竞态通过，会议专项竞态连续三次通过。旧会议 `state_json` 按原结构回读，可继续产生新版本并精确采纳旧原话。看板全量和旧库迁移竞态通过。
+- TypeScript、生产构建与 5 项前端回归通过。覆盖群聊、计划异议退回、模板默认回读、裁决重开、出处展示、右栏从发言中更新至已交付。桌面浅色和深色、320 px 和 390 px 手机检查通过。
+- 隔离后台启动了两个原生 Agent，会话暂停后退出运行态。Codex 请求返回 HTTP 401，Claude 在临时 HOME 中提示需要登录。真实工具事件和盲评标记的逐条对照、真实权限、默认轮次效果、未确认和互斥条目分布及计划核对耗时仍待验收。
+- 纯讨论归档入口和缺出处计票规则等待作者确认。当前验收使用临时项目、临时用户目录和独立后台数据目录。
+
+[实现说明](../../../.mindfs/runs/run-1795688295-a4b3ecea6b67/01-初次实现说明.md) · [Go 竞态](../../../build/reports/agent-meeting-improvements/go-race.log) · [会议专项](../../../build/reports/agent-meeting-improvements/meeting-race.log) · [看板旧库](../../../build/reports/agent-meeting-improvements/kanban.log) · [前端回归](../../../build/reports/agent-meeting-improvements/web.log) · [真实 CLI 验收](../../../build/reports/agent-meeting-improvements/live-recheck.log)
+
+## 开大会收口改进第 01 轮审核回应
+
+- R1 已修复。暂停先停止调度并发送原生中断，活跃执行调用全部返回后才取消会议上下文。暂停与交付的顺序以会议锁内的状态为准。已完成落盘的发言可继续使用，暂停期间返回的半截正文保留在会话与未交付发言中，继续时只补跑未交付成员。
+- R2 已修复。共用会议提示要求核查后直接写观点或结果，并省略工具调用前后的过程播报。交付继续使用完整正文和逐字引文。
+- R3 已修复。立场按不区分大小写的方式查找提案版本，绑定后使用后台生成的版本标识计票。
+- R4 已修复。群组交接清单引用本轮证据，独立后台 checklist 指向收口改进，早期会议复跑和本机包回执作为历史记录。
+
+在隔离副本还原 R1 和 R3 的旧判定后，回归分别复现半截正文被记为已交付和大小写不同的版本票被记为未确认。修复后，会议暂停、版本票、计划修订和旧会议数据库四项专项各通过 5 次。Go 竞态在临时 HOME、Agent 数据目录、后台数据目录及配置路径中执行。`collab`、`api/usecase` 和 `api` 三包通过，看板全量及 `TestTaskStoreSnapshotMigration` 竞态通过。 [旧判定复现](../../../build/reports/agent-meeting-improvements/round-01-response/repro.log) · [Go 竞态](../../../build/reports/agent-meeting-improvements/round-01-response/go-race.log) · [会议专项](../../../build/reports/agent-meeting-improvements/round-01-response/focused-race.log) · [看板全量](../../../build/reports/agent-meeting-improvements/round-01-response/kanban.log) · [看板迁移](../../../build/reports/agent-meeting-improvements/round-01-response/kanban-race.log)
+
+前端类型检查及 `collab-meeting`、`collab-quick-mode`、`collab-skill-picker` 共 5 项回归通过。浏览器用例使用临时目录构建生产资源，会议用例覆盖浅色、深色、320 px 和 390 px 视口。 [前端验证](../../../build/reports/agent-meeting-improvements/round-01-response/web.log)
+
+本轮安装包尚未生成。真实 ACP 与 Claude 中断及续跑、工具事件、权限和轮次效果待验收。最近一次隔离实跑时 Codex 返回 HTTP 401，Claude 提示需要登录。C5 纯讨论归档入口和 D4 缺出处是否计票待作者确认。 [最近一次真实 CLI 记录](../../../build/reports/agent-meeting-improvements/live-recheck.log)
+
+## 开大会收口改进第 01 轮最终交付
+
+最终复核补齐了发言进入会话运行层时的暂停时序。发言登记后才进入原生中断名单。暂停先发生时，尚未登记的发言会在启动前停止，续跑时仍可交付。暂停中已进入原生执行的发言等待回合返回，半截正文保留为未交付。Go overlay 还原旧登记顺序后，回归复现了向未登记会话发送中断。 [旧顺序复现](../../../build/reports/agent-meeting-improvements/round-01-delivery/r1-repro.log)
+
+隔离环境中 5 项专项竞态各通过 5 次，9 个含测试的 Go 包竞态通过。看板全量与旧库迁移竞态通过。TypeScript、Vite 生产构建和群聊、快速模式、Skill 选择共 5 项前端回归通过。 [交付结果及命令](../../../.mindfs/runs/run-1795688295-a4b3ecea6b67/第01轮/05-改动结果.md) · [本次日志](../../../build/reports/agent-meeting-improvements/round-01-delivery)
+
+真实 ACP 与 Claude 中断、工具读取、权限和轮次效果仍待登录恢复后验收。C5 纯讨论归档入口与 D4 缺出处计票待作者确认。
+
+## 0.1.66-local.19 大会收口改进
+
+- macOS arm64 最终包通过看板全量与旧库迁移竞态、2 项最终包浏览器回归、静态校验和隔离安装。本机从 `local.18` 升至 `local.19`，核验 9 个既有项目、两种协作模板接口、网页资源和 Relay。 [升级回执](../../../build/reports/standalone-0.1.66-local.19-live-upgrade/result.txt)
+
+## 运行中修改模型第 02 轮最终交付
+
+- R1 至 R3 的竞态回归通过。后台只回填实际解析到模型的槽位。替换活跃成员时先保存，再取消旧回合。请求取消后可用新配置继续。
+- R4 的步骤卡片使用单行状态，进入对话后可展开阶段资料和文档清理完成回执。卡片保留失败原因、只读警告、检查进度、裁决、再审和清理操作。键盘焦点和清理后卡片等高均已回归。
+- 9 个 Go 包竞态通过，含 630 条通过记录和 6 条条件跳过。看板全量、旧库迁移两个子用例、TypeScript、生产构建及前端 6 项通过。桌面、IDEA 窄窗和 390 px 手机布局使用临时 Web 产物验证。 [交付报告与命令](../../../.mindfs/runs/run-1795692939-c3b1160e81cf/第02轮/05-改动结果.md) · [验证日志](../../../build/reports/collab-edit-models/round-02-delivery)
+- `0.1.66-local.20` 的安装回执早于本轮卡片改动。真实 Agent 换模型、IDEA 与手机实机验收，以及包含 R4 的安装包待完成。 [升级回执](../../../build/reports/standalone-0.1.66-local.20-live-upgrade/result.txt)
+
+## 运行中修改模型第 03 轮逐条回应
+
+- R5 至 R8 已接受。开大会发言卡沿用快速模式的状态样式与光效，默认展示正文预览，文件和立场出处可从详情打开。会议顶部直接显示模型、强度和权限，修改入口沿用铅笔图标。权限选择保留原有选项和提交值。 [逐条回应](../../../.mindfs/runs/run-1795692939-c3b1160e81cf/第03轮/03-逐条回应.md)
+- 在 `runtime/web` 执行 `npm run typecheck` 和 `vite build --outDir <临时目录>` 均通过。以临时构建为 `IDEA_COLLAB_DIST` 执行 `node --test tests/collab-meeting.test.mjs tests/collab-edit-models.test.mjs tests/collab-quick-mode.test.mjs`，3 项通过。覆盖 IDEA 模式和远程呼吸灯及减少动态效果、正文和详情、权限键盘操作及提交回读、390 px 手机布局和 320 px 裁决布局，并复核 R4 的快速模式卡片。
+- 本轮安装包尚未生成。真实 Agent 换模型、IDEA 和手机实机体验待验收。
+
+## 运行中修改模型第 03 轮最终交付
+
+- R5 至 R8 和 R4 已复测。换模型后，已记录执行 Agent 的历史发言使用该回合的模型记录。模型为空时，发言详情和原生过程对话显示「默认模型」。使用新回归对修复前的构建复现了旧发言误用当前模型，修复后通过。
+- 9 个 Go 包在临时 HOME、Agent 数据目录、后台数据目录和 Agent 配置路径下通过竞态检测，含 630 条通过记录及 6 条条件跳过。看板全量和旧库迁移的 2 个子用例通过。TypeScript、Vite 生产构建和 6 项前端回归通过。Chrome 覆盖本地 IDEA 模式、远程呼吸灯和减少动态效果、会议权限操作及回显、390 px 手机布局和 320 px 裁决布局。 [交付报告与命令](../../../.mindfs/runs/run-1795692939-c3b1160e81cf/第03轮/05-改动结果.md) · [验证日志](../../../build/reports/collab-edit-models/round-03-delivery)
+- 本轮安装包尚未生成。真实 Agent 换模型、IDEA 和手机实机验收待完成。
+
+## 运行中修改模型第 04 轮逐条回应
+
+- R9 至 R13 已接受。开大会和快速模式共用单行模型栏，保留失效告警、修改模型和成员过程入口。会话标题与模型同行，切换成员时按会话键显示正文。会议的点名、主笔选择、裁决、状态栏和发言卡片统一成员简称。历史发言记录缺少强度字段，进行中的发言使用当前配置的强度。 [逐条回应](../../../.mindfs/runs/run-1795692939-c3b1160e81cf/第04轮/03-逐条回应.md)
+- 首轮回归发现头部内边距使标题栏超过 50 px，旧会议测试也仍匹配已移除的重复名称。调整内边距和断言后，最终产物通过桌面与 390 px 的单行高度断言，并验证横滑后进入第 5 位成员的正确对话、切换图标、默认权限和失效提示的可访问名称。会议既有流程同时覆盖 320 px 裁决布局。
+- 在 `runtime/web` 执行 `tsc --noEmit -p tsconfig.json`、`vite build --outDir <临时目录> --emptyOutDir`，并以临时构建为 `IDEA_COLLAB_DIST` 运行 `node --test tests/collab-edit-models.test.mjs tests/collab-meeting.test.mjs tests/collab-quick-mode.test.mjs tests/collab-skill-picker.test.mjs`，类型检查、构建及 6 项测试均通过。 [日志与截图](../../../build/reports/collab-edit-models/round-04-response)
+- 本轮安装包尚未生成。真实 Agent 换模型、IDEA 和手机实机验收待完成。
+
+## 运行中修改模型第 04 轮最终交付
+
+- R9 至 R13 已复验。快速模式对话头补齐了状态圆点，沿用阶段卡片文案。桌面检查「进行中」，390 px 检查「已完成」和标题与模型同行。旧构建因缺少可访问的「进行中」标记触发预期失败，修复后的构建通过。 [复现日志](../../../build/reports/collab-edit-models/round-04-delivery/web-before-status-dot.log) · [390 px 截图](../../../build/reports/collab-edit-models/round-04-delivery/screenshots/05-phone-detail-layer.png)
+- 9 个 Go 包通过竞态测试，630 条通过记录含子用例。5 项本机集成因未启用跳过，1 项需 root 跳过。看板全量和旧库迁移的两个子用例通过。TypeScript、Vite 生产构建、3 项 Chrome 回归和 3 项 Skill 逻辑测试通过。Chrome 覆盖五人会议 1440 px 和 390 px 单行布局、横滑与会话切换、失效状态识别，以及快速模式和会议的历史模型展示。 [交付报告与命令](../../../.mindfs/runs/run-1795692939-c3b1160e81cf/第04轮/05-改动结果.md) · [验证日志](../../../build/reports/collab-edit-models/round-04-delivery)
+- 本轮安装包待生成，真实 Agent 换模型、IDEA 和手机实机体验待验收。
+
+## 会议条目修订替换旧版本
+
+- 每轮条目只存当前提案、修订号和该版本的表态。一个条目连续修订仍沿用条目编号，新裁决只接受当前版本。旧会议库迁移时清理各轮条目的历史版本数组，已生效的裁决保留作者当时选中的引文。原始发言与交付文档保留。
+- 临时库回归核对 SQLite 中的旧版本已删除，重复迁移保留当前方案、修订号与已采纳的原话。`go test -race ./server/internal/collab ./server/internal/api/... -count=1` 和前端类型检查通过。浏览器首跑遇到旧断言按组查找已改为按钮的成员入口，更新相关断言后，使用当前源码的 Vite 生产构建运行 `node --test tests/collab-meeting.test.mjs` 通过，覆盖新版采纳、生成正式计划与转入实现。
+
+## 会议讨论方式
+
+- 发起会议时可选「单议题」和「多议题」。讨论方式写入会议快照，模板支持保存和复用。未设置讨论方式的会议和模板沿用多议题流程。
+- 单议题按会议主题汇总所有候选方案。成员分别支持不同方案时保留分歧，所有成员支持同一有效版本时达成共识。修订只替换指定的候选方案，原票失效。发起人可以选择方案、填写自己的方案或暂不决定。
+- 在隔离目录运行 `go test -race ./server/internal/collab ./server/internal/api/... -count=1`，三个包全部通过。专项用例验证单个成员提交多个提案仍只有一个议题、修订不影响其他候选、旧版本不能采纳、缺席或失败不计入共识。模拟成员连续两轮各自支持不同方案，发起人采纳第二个后，核对了正式计划文件中的引文，并验证只交付方案即可结束会议。
+- 首次类型检查发现会议页漏引入方案名称格式化函数，补齐后 `npm run typecheck` 和 Vite 生产构建通过。用该构建运行 `collab-meeting`、`collab-quick-mode`、`collab-skill-picker` 三个测试文件，5 项全部通过。Chrome 覆盖编辑并应用单议题模板、390 px 下从两份方案中采纳第二份并结束会议，以及多议题逐项裁决后进入实现。
+- 本次未生成或安装发行包。会议流程使用模拟 Agent 验证。
+
+## 会议互评收口
+
+- 第 2 轮起，互评材料只列未对齐条目，保留对应的方案、上一轮有效立场及原文入口。已达成的共识沿用到每轮汇总和正式计划，后续模型回合提交同编号的异议或修订也不会改动共识。
+- 成员提交有效控制块时，省略条目表示维持对同一版本的上一轮有效立场。各成员使用同一份轮初清单，修订生效后旧版立场失效，其他成员在下一轮对新版表态。提示词要求只把影响正确性、可行性或作者要求的问题列为异议。
+- 所有条目对齐后，会议页显示「生成正式计划」，后台拒绝继续互评的请求。还有分歧时可只讨论剩余条目，也可由发起人裁决。
+- 在隔离 HOME、Agent 数据目录和后台数据目录运行 `go test -race ./server/internal/collab ./server/internal/api/... -count=1`，三个包全部通过。回归核对已达成的共识未被重开、有效省略保留原出处、无效控制块维持未确认，以及过期修订和本轮尚未生效版本的表态。
+- `corepack pnpm run typecheck`、Vite 生产构建及使用该构建运行的 `collab-meeting.test.mjs`、`collab-quick-mode.test.mjs` 共两项 Chrome 回归通过。真实 Agent 验收和打包安装待完成。[实现说明](../../../.mindfs/runs/run-1795740324-2f69e4de8879/01-初次实现说明.md)
+
+## 会议互评收口第 01 轮审核
+
+- R1。成员明确重述同一版本的同一立场时，如果引文或异议理由未通过校验，保留原票和原出处，并在本轮结果中显示具体问题。版本缺失、版本错误或立场变化的无效提交保持未确认。
+- R2。解析互评时识别不存在的编号，通过成员卡和轮次汇总显示具体编号。出现未知编号时，未明确提交的条目记为未确认，明确提交的有效立场照常计票。
+- R3。后续互评提示先说明只回应有更新的条目，要求逐字复制清单中的编号和版本号。示例用字段占位符标明填写项。
+- R4。初次实现说明已补齐目标、实际文件、实现和自测，含复跑命令和实际验证记录入口。[逐条回应](../../../.mindfs/runs/run-1795740324-2f69e4de8879/第01轮/03-逐条回应.md)
+- `runtime/` 下用临时 HOME、Agent 数据目录和后台目录运行 `go test -race ./server/internal/collab ./server/internal/api/... -count=1`，三个包均通过。新增回归覆盖同版本同立场的错误重述、版本或立场不一致、未知编号与有效票同时出现，并通过模拟会议确认原票经过保存后仍能沿用。
+- `runtime/web/` 下运行 `corepack pnpm run typecheck` 和 `corepack pnpm exec vite build --outDir "$meeting_web_dist" --emptyOutDir --logLevel warn`，再用 `IDEA_COLLAB_DIST="$meeting_web_dist" node --test tests/collab-meeting.test.mjs tests/collab-quick-mode.test.mjs` 运行 Chrome，2 项通过。真实 Agent 验收和打包安装待完成。
+
+## 会议互评收口第 01 轮最终交付
+
+- 单议题和多议题的互评提示只在首轮说明自己方案的默认支持方式。后续轮次要求提交首次表态、立场变化或影响结论的新证据，维持有效立场时才省略。Go 提示回归覆盖两种模式，浏览器回归新增旧票沿用提醒和未知编号的显示检查。
+- `runtime/` 下隔离 HOME、Agent 配置和后台数据后运行 `go test -race ./server/internal/collab ./server/internal/api/... -count=1 -json`。`collab` 87 项、`api` 136 项、`api/usecase` 120 项通过，含子用例。已安装 Codex 连接、CC Switch 探测、真实 Agent 会话命名共 3 项需显式开启，本轮按测试条件跳过。
+- `runtime/web/` 下运行 `corepack pnpm run typecheck` 和 `corepack pnpm exec vite build --outDir "$meeting_web_dist" --emptyOutDir --logLevel warn`，再通过 `IDEA_COLLAB_DIST="$meeting_web_dist" node --test tests/collab-meeting.test.mjs tests/collab-quick-mode.test.mjs` 使用同一构建复跑，2 项 Chrome 回归通过。会议页核对了两类提醒、共识后生成正式计划和有分歧时的裁决入口。真实 Agent 验收和打包安装待完成。
+
+## 桌面和平板网页状态栏对齐手机
+
+- 按用户明确要求将桌面与平板远程网页调整为与手机完全一致：不再在整块对话面板 `.remote-center` 或协作详情 `.collab-detail-body` 外层挂载 `.remote-glow-frame`，改为在单聊 `.remote-footer` 和协作详情 `.collab-detail-footer` 的输入框上方挂载 `.remote-status-activity.remote-glow-frame` 宿主，并通过 `PhoneActivityHostContext` 由当前会话 `SessionViewer` 传送渲染同一份 `SessionActivity`（抽屉 `drawer` 位于 Provider 外，不产生双状态栏）。
+- 保留 `GLOW_DEFAULT.on = true`（默认开启 `breathe` 呼吸灯），恢复桌面设置菜单里的「Agent 状态框流光」（`glow.activityTitle`）配置入口与 `GlowSettingsDialog` 弹窗（`usePhonePanels.tsx` / `FileTree.tsx`），用户可随时开关或调整效果、配色和速度；移除 `RemoteStaticUiContext` 与 `data-remote-static` 禁用层，协作运行卡、会议发言卡、状态点、`ActivityEmoji` 与 `ToolCallCard` 均与手机保持一致并共用流光开关。
+- 保留 `SessionActivity` 单行截断、`tabular-nums` 防跳动高度、`:focus-visible` 焦点环、既有 `tabIndex={0}` 跨端契约以及桌面居中 `PhoneSheet` 等待回答弹窗。
+- 验证证据（2026-11-27 对齐手机版改动后复测，仅源码与生产构建，未重新打包安装）：
+  - 前端类型检查与构建：`cd runtime/web && npx tsc --noEmit && corepack pnpm run build` 通过；`runtime/web/dist` 共 305 个文件，零 `/mindfs-assets/` 引用。
+  - 前端测试与浏览器回归（8 个文件 44/44 通过）：`remote-design.test.mjs`（9/9，含 `.remote-center` 无流光、`.remote-status-activity.remote-glow-frame` 默认开启呼吸灯、桌面设置菜单打开「Agent 状态框流光」切换环绕/开关/恢复默认、明暗主题与窄窗口零跳动、键盘打开并提交回答弹窗、iOS App 平板一致布局）、`remote-phone.test.mjs`（5/5）、`session-activity-lifecycle.test.mjs`（7/7）、`activity-reactions.test.mjs`（12/12）、`approval-activity.test.mjs`（3/3）、`remote-entry-build.test.mjs`（3/3）、`collab-meeting.test.mjs`（1/1）、`collab-quick-mode.test.mjs`（1/1）。
+  - 后端隔离测试（临时 `HOME` / `IDE_AGENT_DATA_DIR` / `IDE_AGENT_REMOTE_HOST_DIR` / `MINDFS_AGENTS_CONFIG`）：`go test -v ./server/internal/api -run TestFrontendAssetsStayWithBackend -count=1`（24/24）、`go test ./server/internal/kanban -count=1` 与 `go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1` 全部通过。
+- 待实机确认：尚未生成/安装独立后台或插件发行包；Chrome 经真实 Relay 节点连续使用 15 分钟的打字卡顿对照录制留待现场实机验证。

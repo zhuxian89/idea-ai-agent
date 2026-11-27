@@ -23,10 +23,15 @@ const (
 	ModeQuick = "quick"
 	ModeGroup = "group"
 
+	TopicSingle = "single"
+	TopicMulti  = "multi"
+
 	RolePrimary  = "primary"
 	RoleReviewer = "reviewer"
 	RoleMember   = "member"
 )
+
+const meetingAgentDefaultMode = "agent-default"
 
 type MemberSlot struct {
 	SlotID         string `json:"slot_id"`
@@ -45,6 +50,7 @@ type Template struct {
 	Members           []MemberSlot `json:"members"`
 	SkillPaths        []string     `json:"skill_paths,omitempty"`
 	FinalAuthorSlotID string       `json:"final_author_slot_id,omitempty"`
+	TopicMode         string       `json:"topic_mode,omitempty"`
 	MaxRounds         int          `json:"max_rounds,omitempty"`
 	CreatedAt         string       `json:"created_at"`
 	UpdatedAt         string       `json:"updated_at"`
@@ -57,6 +63,7 @@ type TemplateSnapshot struct {
 	Members           []MemberSlot `json:"members"`
 	SkillPaths        []string     `json:"skill_paths,omitempty"`
 	FinalAuthorSlotID string       `json:"final_author_slot_id,omitempty"`
+	TopicMode         string       `json:"topic_mode,omitempty"`
 	MaxRounds         int          `json:"max_rounds,omitempty"`
 }
 
@@ -397,6 +404,13 @@ func normalizeAndValidateTemplate(input Template, now time.Time) (Template, erro
 			return Template{}, errors.New("快速模式模板必须分别指定 primary 和 reviewer 角色")
 		}
 	case ModeGroup:
+		switch out.TopicMode {
+		case "":
+			out.TopicMode = TopicMulti
+		case TopicSingle, TopicMulti:
+		default:
+			return Template{}, fmt.Errorf("不支持的讨论方式：%s", out.TopicMode)
+		}
 		if len(out.Members) < 2 {
 			return Template{}, errors.New("群组讨论模板至少需要 2 个成员槽位")
 		}
@@ -409,9 +423,15 @@ func normalizeAndValidateTemplate(input Template, now time.Time) (Template, erro
 				out.Members[i].Role = RoleMember
 			}
 			if seenSlot[out.Members[i].SlotID] {
-				out.Members[i].SlotID = fmt.Sprintf("slot-%d", i+1)
+				return Template{}, errors.New("群组成员槽位不能重复")
 			}
 			seenSlot[out.Members[i].SlotID] = true
+		}
+		if out.FinalAuthorSlotID == "" {
+			out.FinalAuthorSlotID = out.Members[0].SlotID
+		}
+		if !seenSlot[out.FinalAuthorSlotID] {
+			return Template{}, errors.New("正式计划主笔必须是会议成员")
 		}
 		if out.MaxRounds <= 0 {
 			out.MaxRounds = 3
@@ -437,6 +457,7 @@ func SnapshotTemplate(tpl Template) TemplateSnapshot {
 		Members:           cloned.Members,
 		SkillPaths:        cloned.SkillPaths,
 		FinalAuthorSlotID: cloned.FinalAuthorSlotID,
+		TopicMode:         cloned.TopicMode,
 		MaxRounds:         cloned.MaxRounds,
 	}
 }
@@ -496,7 +517,7 @@ func ValidateMembers(members []MemberSlot, statuses []agent.Status) []MemberAvai
 				continue
 			}
 		}
-		if member.PermissionMode != "" && len(st.Modes) > 0 {
+		if member.PermissionMode != "" && member.PermissionMode != meetingAgentDefaultMode && len(st.Modes) > 0 {
 			matched := false
 			for _, mode := range st.Modes {
 				if mode.ID == member.PermissionMode {

@@ -231,6 +231,7 @@ export function App(props: AppProps) {
           onWaitingCountChange={setCollabWaitingCount}
           onBindStageSession={bindStageSession}
           onExit={closeCollab}
+          conversationSessionKey={selectedSession?.key || selectedSession?.session_key}
           conversationView={
             <SelectedSessionView
               workbenchLayoutApi={workbenchLayoutApi}

@@ -87,20 +87,36 @@ type Run struct {
 	CreatedAt          time.Time        `json:"created_at"`
 	UpdatedAt          time.Time        `json:"updated_at"`
 	CompletedAt        string           `json:"completed_at,omitempty"`
+	MeetingRunID       string           `json:"meeting_run_id,omitempty"`
+	QuickRunID         string           `json:"quick_run_id,omitempty"`
+	QuickRunStatus     string           `json:"quick_run_status,omitempty"`
+	resolvedMember     *resolvedMemberModel
+	workerSeq          uint64
+}
+
+type resolvedMemberModel struct {
+	SlotID string
+	Role   string
+	Agent  string
+	Model  string
 }
 
 type RunDetail struct {
-	Run            Run          `json:"run"`
-	ReviewItems    []ReviewItem `json:"review_items"`
-	Docs           []string     `json:"docs,omitempty"`
-	ProgressAction string       `json:"progress_action,omitempty"`
+	Run            Run            `json:"run"`
+	ReviewItems    []ReviewItem   `json:"review_items"`
+	Docs           []string       `json:"docs,omitempty"`
+	ProgressAction string         `json:"progress_action,omitempty"`
+	Meeting        *MeetingDetail `json:"meeting,omitempty"`
 }
 
 const collabSelectRunColumns = `
 	id, root_id, mode, title, task_prompt, template_id, template_name,
 	template_snapshot_json, status, current_step, step_status_json,
 	readonly_check_state, readonly_check_note, test_status, test_command, test_summary,
-	docs_cleaned, error_message, created_at, updated_at, completed_at, review_round`
+	docs_cleaned, error_message, created_at, updated_at, completed_at, review_round,
+	COALESCE((SELECT meeting.run_id FROM collab_meeting_rounds meeting WHERE meeting.quick_run_id=collab_runs.id), ''),
+	COALESCE((SELECT meeting.quick_run_id FROM collab_meeting_rounds meeting WHERE meeting.run_id=collab_runs.id AND meeting.quick_run_id<>''), ''),
+	COALESCE((SELECT quick.status FROM collab_meeting_rounds meeting JOIN collab_runs quick ON quick.id=meeting.quick_run_id WHERE meeting.run_id=collab_runs.id), '')`
 
 type Store struct {
 	db  *sql.DB
@@ -146,6 +162,14 @@ CREATE TABLE IF NOT EXISTS collab_runs (
 	updated_at TEXT NOT NULL,
 	completed_at TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS collab_meeting_rounds (
+	run_id TEXT NOT NULL,
+	number INTEGER NOT NULL,
+	state_json TEXT NOT NULL,
+	quick_run_id TEXT NOT NULL DEFAULT '',
+	PRIMARY KEY (run_id, number)
+);
+CREATE INDEX IF NOT EXISTS idx_collab_meeting_quick ON collab_meeting_rounds(quick_run_id) WHERE quick_run_id <> '';
 CREATE TABLE IF NOT EXISTS collab_review_items (
 	run_id TEXT NOT NULL,
 	item_id TEXT NOT NULL,
@@ -201,10 +225,18 @@ CREATE INDEX IF NOT EXISTS idx_collab_review_items_run ON collab_review_items(ru
 			return err
 		}
 	}
-	return nil
+	return s.migrateMeetingItemVersions()
+}
+
+type runExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
 func (s *Store) CreateRun(ctx context.Context, run Run) (Run, error) {
+	return s.createRun(ctx, s.db, run)
+}
+
+func (s *Store) createRun(ctx context.Context, db runExecutor, run Run) (Run, error) {
 	now := s.now().UTC()
 	if strings.TrimSpace(run.ID) == "" {
 		run.ID = newCollabID("run")
@@ -235,7 +267,7 @@ func (s *Store) CreateRun(ctx context.Context, run Run) (Run, error) {
 	if err != nil {
 		return Run{}, err
 	}
-	_, err = s.db.ExecContext(ctx, `
+	_, err = db.ExecContext(ctx, `
 INSERT INTO collab_runs (
 	id, root_id, mode, title, task_prompt, template_id, template_name,
 	template_snapshot_json, status, current_step, step_status_json,
@@ -357,6 +389,8 @@ func (s *Store) ListRuns(ctx context.Context, mode string, limit int) ([]Run, er
 	if trimmed := strings.TrimSpace(mode); trimmed != "" {
 		query += ` WHERE mode = ?`
 		args = append(args, trimmed)
+	} else {
+		query += ` WHERE NOT EXISTS (SELECT 1 FROM collab_meeting_rounds WHERE quick_run_id = collab_runs.id)`
 	}
 	query += ` ORDER BY updated_at DESC`
 	if limit > 0 {
@@ -409,6 +443,27 @@ func (s *Store) RecoverInterruptedRuns(ctx context.Context) error {
 	}
 	now := s.now().UTC()
 	for _, run := range interrupted {
+		if run.Mode == ModeGroup {
+			detail, err := s.readMeeting(ctx, run.ID)
+			if err != nil {
+				return err
+			}
+			if run.Round < 1 || run.Round != len(detail.Rounds) {
+				return fmt.Errorf("会议 %s 的轮次记录不完整", run.ID)
+			}
+			round := detail.Rounds[run.Round-1]
+			for i := range round.Turns {
+				if round.Turns[i].Status == StepStatusRunning {
+					round.Turns[i].Status = StepStatusWaitingUser
+				}
+			}
+			run.Status, run.UpdatedAt = RunStatusWaitingUser, now
+			run.ErrorMessage = "后台重启中断，点击继续恢复会议"
+			if err := s.saveMeeting(ctx, run, round); err != nil {
+				return err
+			}
+			continue
+		}
 		for i := range run.Steps {
 			if run.Steps[i].Status == StepStatusRunning || run.Steps[i].Key == run.CurrentStep {
 				if run.Steps[i].Status == StepStatusRunning || run.Steps[i].Status == StepStatusPending {
@@ -437,6 +492,9 @@ func (s *Store) DeleteRun(ctx context.Context, id string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `DELETE FROM collab_review_items WHERE run_id = ?`, trimmed); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM collab_meeting_rounds WHERE run_id = ?`, trimmed); err != nil {
 		return err
 	}
 	res, err := tx.ExecContext(ctx, `DELETE FROM collab_runs WHERE id = ?`, trimmed)
@@ -594,7 +652,7 @@ func scanRunRow(row scanner) (Run, error) {
 		&run.ErrorMessage,
 		&createdRaw,
 		&updatedRaw,
-		&run.CompletedAt, &run.Round,
+		&run.CompletedAt, &run.Round, &run.MeetingRunID, &run.QuickRunID, &run.QuickRunStatus,
 	); err != nil {
 		return Run{}, err
 	}

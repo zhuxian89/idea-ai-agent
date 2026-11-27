@@ -1,3 +1,4 @@
+import type { MeetingAction, MeetingDetail } from "./collabMeeting";
 import type { TurnDiffUpdate } from "./session";
 import { protectedFetch, protectedJSON } from "./api";
 import { appURL } from "./base";
@@ -16,6 +17,7 @@ function changesURL(rootId: string, runId: string, path?: string) {
 }
 
 export type CollabMode = "quick" | "group";
+export type MeetingTopicMode = "single" | "multi";
 export type CollabRole = "primary" | "reviewer" | "member" | "author";
 
 export interface CollabMemberSlot {
@@ -44,6 +46,7 @@ export interface CollabTemplate {
   members: CollabMemberSlot[];
   skill_paths?: string[];
   final_author_slot_id?: string;
+  topic_mode?: MeetingTopicMode;
   max_rounds?: number;
   created_at: string;
   updated_at: string;
@@ -115,6 +118,9 @@ export interface CollabRun {
     mode: CollabMode;
     members: CollabMemberSlot[];
     skill_paths?: string[];
+    final_author_slot_id?: string;
+    topic_mode?: MeetingTopicMode;
+    max_rounds?: number;
   };
   status: "running" | "waiting_user" | "completed" | "failed" | "canceled" | string;
   current_step: string;
@@ -129,11 +135,15 @@ export interface CollabRun {
   created_at: string;
   updated_at: string;
   completed_at?: string;
+  meeting_run_id?: string;
+  quick_run_id?: string;
+  quick_run_status?: string;
 }
 
 export interface CollabRunDetail {
   run: CollabRun;
   review_items: CollabReviewItem[];
+  meeting?: MeetingDetail;
   docs?: string[];
   progress_action?: "running" | "resumed" | "waiting_for_decisions" | "changed" | "unchanged";
 }
@@ -191,6 +201,10 @@ export const collabService = {
   },
 
   async startQuickRun(input: {
+    mode?: CollabMode;
+    final_author_slot_id?: string;
+    topic_mode?: MeetingTopicMode;
+    max_rounds?: number;
     root_id: string;
     title?: string;
     task_prompt: string;
@@ -206,11 +220,40 @@ export const collabService = {
     });
   },
 
+  meetingAction(rootId: string, runId: string, action: MeetingAction): Promise<CollabRunDetail> {
+    return protectedJSON<CollabRunDetail>(
+      appURL(`/api/collab/runs/${encodeURIComponent(runId)}/meeting?root=${encodeURIComponent(rootId)}`),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(action),
+      },
+    );
+  },
+
   async getRunDetail(rootId: string, runId: string): Promise<CollabRunDetail> {
     return protectedJSON<CollabRunDetail>(
       appURL(
         `/api/collab/runs/${encodeURIComponent(runId)}?root=${encodeURIComponent(rootId)}`,
       ),
+    );
+  },
+
+  async updateRunMembers(
+    rootId: string,
+    runId: string,
+    members: CollabMemberSlot[],
+    resume = false,
+  ): Promise<CollabRunDetail> {
+    return protectedJSON<CollabRunDetail>(
+      appURL(
+        `/api/collab/runs/${encodeURIComponent(runId)}/members?root=${encodeURIComponent(rootId)}`,
+      ),
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ root_id: rootId, members, resume }),
+      },
     );
   },
 

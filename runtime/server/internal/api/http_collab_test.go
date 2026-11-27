@@ -126,11 +126,112 @@ func TestHTTPCollabTemplatesAndRunsLifecycle(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "复核结果") {
 		t.Fatalf("round doc: %d %s", rec.Code, rec.Body.String())
 	}
+	groupDoc := []string{"第01轮", "01-独立提案", "成员1.md"}
+	if _, err := collab.WriteRunDoc(rootDir, run.ID, strings.Join(groupDoc, "/"), "提案原文"); err != nil {
+		t.Fatal(err)
+	}
+	for i := range groupDoc {
+		groupDoc[i] = url.PathEscape(groupDoc[i])
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/collab/runs/"+run.ID+"/docs/"+strings.Join(groupDoc, "/")+"?root="+root.ID, nil)
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "提案原文") {
+		t.Fatalf("nested meeting doc: %d %s", rec.Code, rec.Body.String())
+	}
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodDelete, "/api/collab/runs/"+run.ID+"?root="+root.ID, nil)
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("DELETE run = %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHTTPCollabRunMembersUpdate(t *testing.T) {
+	t.Setenv("IDE_AGENT_DATA_DIR", t.TempDir())
+	rootDir := t.TempDir()
+	registry := fs.NewRegistry(filepath.Join(t.TempDir(), "dirs.json"))
+	root, err := registry.UpsertWithMetaLocation(rootDir, fs.MetaLocationProject)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	appCtx := &AppContext{Dirs: registry}
+	tplStore, err := collab.NewTemplateStoreAt(filepath.Join(t.TempDir(), "collab-templates.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := collab.NewService(tplStore, appCtx)
+	svc.SetHomeDir(t.TempDir())
+	appCtx.Collab = svc
+	router := (&HTTPHandler{AppContext: appCtx}).Routes()
+
+	store, err := appCtx.GetCollabStore(root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := store.CreateRun(context.Background(), collab.Run{
+		ID:          "run-edit-models",
+		RootID:      root.ID,
+		Mode:        collab.ModeQuick,
+		Title:       "运行中修改模型测试",
+		TaskPrompt:  "测试任务",
+		Status:      collab.RunStatusWaitingUser,
+		CurrentStep: collab.StepReview,
+		Snapshot: collab.TemplateSnapshot{
+			Mode: collab.ModeQuick,
+			Members: []collab.MemberSlot{
+				{SlotID: "primary", Role: collab.RolePrimary, Agent: "codex", Model: "gpt-5.3-codex", Effort: "high"},
+				{SlotID: "reviewer", Role: collab.RoleReviewer, Agent: "claude", Model: "claude-broken", Effort: "high"},
+			},
+		},
+		Steps: []collab.StepCard{
+			{Key: collab.StepImpl, Title: "主模型实现", Role: collab.RolePrimary, SlotID: "primary", Agent: "codex", Model: "gpt-5.3-codex", Status: collab.StepStatusDone},
+			{Key: collab.StepReview, Title: "只读审核", Role: collab.RoleReviewer, SlotID: "reviewer", Agent: "claude", Model: "claude-broken", ReadOnly: true, Status: collab.StepStatusWaitingUser},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := json.Marshal(collab.UpdateRunMembersInput{
+		RootID: root.ID,
+		Members: []collab.MemberSlot{
+			{SlotID: "reviewer", Role: collab.RoleReviewer, Agent: "codex", Model: "gpt-5.4", Effort: "xhigh"},
+		},
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/collab/runs/"+run.ID+"/members?root="+root.ID, bytes.NewReader(body))
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT members = %d: %s", rec.Code, rec.Body.String())
+	}
+	var detail collab.RunDetail
+	if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.Run.Snapshot.Members[1].Agent != "codex" || detail.Run.Snapshot.Members[1].Model != "gpt-5.4" {
+		t.Fatalf("updated snapshot = %+v", detail.Run.Snapshot.Members)
+	}
+	if detail.Run.Steps[1].Agent != "codex" || detail.Run.Steps[1].Model != "gpt-5.4" || detail.Run.Steps[1].Effort != "xhigh" {
+		t.Fatalf("updated pending step = %+v", detail.Run.Steps[1])
+	}
+	if detail.Run.Steps[0].Model != "gpt-5.3-codex" {
+		t.Fatalf("completed step should stay untouched: %+v", detail.Run.Steps[0])
+	}
+
+	// Reject unknown slot id.
+	badBody, _ := json.Marshal(collab.UpdateRunMembersInput{
+		RootID: root.ID,
+		Members: []collab.MemberSlot{
+			{SlotID: "unknown-slot", Agent: "codex", Model: "gpt-5.4"},
+		},
+	})
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPut, "/api/collab/runs/"+run.ID+"/members?root="+root.ID, bytes.NewReader(badBody))
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown slot, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

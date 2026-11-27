@@ -1,8 +1,57 @@
 # 独立后端计划与进度
 
-## 当前状态（2026-11-26）
 
-- 正式发布通过 GitHub Actions 执行。独立后台 `0.1.67` 先完成六平台验证并成为默认安装版本，IDEA 插件再以 `0.1.27` 同版本更新正式附件。
+## 当前状态（2026-11-27）
+
+- **快速模式「分歧拍板」步骤卡精简并改用开大会同款逐条裁决弹窗（含快捷批量填充与只读回看）。** 步骤 4 卡片不再内联平铺所有分歧详情与双栏对比，仅保留单行摘要与按钮（待裁决显示 `N 条分歧待裁决` +「去裁决 / 继续裁决」，已完成显示 `已裁决 N 条分歧` +「查看裁决」），点击卡片本身仍保持原有选中并查看右侧对话细节的行为。新增 `QuickDecisions.tsx` 复用 `MeetingDecisions` 的进度条与单选卡片弹窗，提供「全部按审核改 / 全部保留现状」快捷填充；裁决完成后点「查看裁决」打开同款只读弹窗回看每条拍板结论与补充说明。已通过 `tsc --noEmit`、Vite 生产构建及 `collab-quick-mode.test.mjs`、`collab-meeting.test.mjs` 回归与桌面截图核对；尚未重新打包安装。
+
+- **桌面与平板网页状态栏统一做成与手机一致（源码完成，前端构建、回归测试及后端资源/旧库迁移门禁通过；尚未重新打包安装，Chrome 经 Relay 15 分钟长驻打字卡顿现场复测待实机确认）。** 桌面与平板远程网页（`RemoteShell` 及 `CollabShell` 桌面分支）不再在整块对话区 `.remote-center` 或 `.collab-detail-body` 外层套大框流光，改为与手机完全一致：在输入框上方挂载独立的状态栏宿主 `.remote-status-activity.remote-glow-frame` 承载单份 `SessionActivity`（覆盖运行、等待回答、断线、恢复、完成、失败，单行防跳动并支持键盘打开/提交回答弹窗）；流光/呼吸灯默认开启（`breathe`），桌面设置菜单保留「Agent 状态框流光」配置入口与弹窗，可随时开关或调整效果、配色和速度；协作运行卡、会议发言卡与状态点与手机共用同一套流光配置。`tsc --noEmit`、Vite 生产构建（305 个网页文件、零 `/mindfs-assets/`）、`remote-design`（9/9）、`remote-phone`（5/5）、`session-activity-lifecycle`（7/7）、`activity-reactions`（12/12）、`approval-activity`（3/3）、`remote-entry-build`（3/3）、`collab-meeting`、`collab-quick-mode`、`TestFrontendAssetsStayWithBackend`（24/24）及 `kanban` 全量与 `-race` 旧库迁移门禁全部通过。[验证记录](standalone-backend-implementation.md#桌面和平板网页状态栏对齐手机)
+
+- **开大会三项体验与流程改进（共识与分歧可折叠、仅主模型生成正式计划、一键否决全部议题按作者方向生成）。** ① 共识与分歧卡片（`.meeting-summary`）顶部改为折叠切换按钮，超过 3 条时默认折叠为单行摘要条，3 条及以内默认展开，随时可一键展开/收起；② `advanceMeeting` 在 `meetingPlan` 完成后直接写入 `05-正式计划.md` 并进入 `meetingReady`，不再调度其他成员执行 `meetingConfirm`（保留旧历史运行中的 `meetingConfirm` 兼容路径）；③ `MeetingActionInput` 新增 `override_all` 与 `MeetingRound.AuthorOverride`，前端对齐操作栏与裁决弹窗顶部均提供「否决全部，按我方向 / 一键否决所有议题」入口，作者填写方向后直接写入 `第XX轮/作者裁决.md` 并由主笔直接按该方向生成正式计划（含 `## 作者方向（已否决全部议题）`）。已通过隔离环境 `go test -race -count=1 ./server/internal/collab ./server/internal/api`、`tsc --noEmit`、Vite 生产构建及 `collab-meeting.test.mjs` 浏览器回归与亮/暗色桌面/手机截图核对；尚未重新打包安装或进行真实 Agent 实机验收。
+
+- **开大会后续互评只处理剩余分歧。** 成员可省略同版本的有效立场。同版本同立场的重述有引文或理由瑕疵时，继续用原票并显示提醒。编号无法识别时提示成员核对，明确提交的有效立场继续计票。全员对齐后可直接生成正式计划。第 01 轮交付复测通过三包 Go 竞态、TypeScript、Vite 生产构建和两项 Chrome 回归。真实 Agent 验收和打包安装待完成。[验证记录](standalone-backend-implementation.md#会议互评收口第-01-轮最终交付)
+
+- **多 Agent 对话详情页统一接入单聊同款外壳（状态栏、对齐与流光呼吸灯），成员对话展示标准 `ActionBar`，且开大会出计划与结束后底部追问框常驻。** `CollabShell` 对话详情区在手机端接入 `PhoneActivityHostContext` + `.remote-phone-thread` + `.remote-phone-composer` + `.remote-phone-activity.remote-glow-frame`，桌面端也已按上方 2026-11-27 调整改为与手机一致的 `.remote-status-activity.remote-glow-frame`（不再在整块 `.collab-detail-body` 外层套大框流光）；移除 `meetingSessionStep` 隐藏 `composerView` 的限制，底部 `MeetingComposer` 在计划与结束后保持常驻并打通后端追问（未 `@` 默认主笔结合正式计划作答）。`go test -race ./server/internal/collab`、`tsc --noEmit`、Vite 生产构建及 `collab-meeting`、`collab-quick-mode` 回归通过；尚未重新打包安装。
+
+- **Markdown 统一支持默认预览与「预览 / 源码」原地切换（覆盖项目文件与开大会/快速模式文档弹窗）。** 修复 `FileViewer` 扩展名归一化（原开大会弹窗传入无前导点的 `ext: "md"` 及大写 `.MD` 会回退为纯源码），在 `FileViewer` 顶栏为 `.md` / `.markdown` 增加「预览 / 源码」切换（默认预览），并让开大会与快速模式交接文档弹窗共用 `FileViewer`。`tsc --noEmit`、Vite 生产构建及 `collab-meeting`、`collab-quick-mode`、`remote-access`（16/16）全部通过；尚未重新打包安装。
+
+- 「开大会」可在「讨论方式」选择「单议题」或「多议题」，会议模板可以保存此设置。单议题把不同解法放在一个问题下，全员支持同一方案时达成共识，有分歧时由发起人选定方案。旧会议及未设置讨论方式的模板按多议题处理。源码、后端竞态测试和浏览器回归已完成，尚未打包安装。[验证记录](standalone-backend-implementation.md#会议讨论方式)
+
+- **开大会互评借鉴 tarobird 群聊讨论的三点（`go test ./server/internal/collab ./server/internal/api/... -race` 与 `tsc --noEmit` 通过；未构建安装包、未用真实 Agent 实机）。** ① 立场变短：互评提示词要求同意 1–2 句、反对不超过 300 字，后台在引文对照原文之后截断保存（提案引文 800、立场引文 160、检查/风险/理由 300、标题 80 字，超出以「…」标明，完整内容见原文文件）。② 第 1 轮互评封住：成员只拿到公开提案和条目清单，不再拿到前序成员的互评与按成员生成的版本索引，仍为串行；对第 1 轮互评新增「读过他人互评」检测（沿用提案阶段的 `blind_reads`），第 2 轮起仍共享互评以便针对分歧反驳；这是提示与检测，不是沙箱。③ 修订版取代旧版本：页面、`03-共识与分歧.md` 和裁决弹窗只显示/可采纳最新版本，不再显示 v1/v2 标签与「N 份修订」；每轮条目在数据库中只存当前提案和当前表态。旧会议加载协作库时迁移，已经裁决采纳的原话随裁决保留。已知后果：第 1 轮互评封住后，若有人提修订版，其余成员没看到新版本，该条会显示「本轮未对该版本表态」，需再讨论一轮或由作者裁决。待验证：实机看修订版是否明显变少、同意发言是否变短。 [旧版本清理记录](standalone-backend-implementation.md#会议条目修订替换旧版本)
+
+- **开大会新增「只要方案，结束会议」（`go test ./server/internal/collab -race` 通过，`tsc --noEmit` 通过；未构建安装包、未实机）。** 正式计划核对完（`ready` 阶段）后，除「确认并开始实现」外新增 `finish` 会议动作：会议标记为已完成、不创建快速模式运行，方案保留在 `05-正式计划.md`；已结束的会议不能再 `implement`。前端在该阶段多一个次要按钮，结束后显示「会议已结束，没有进入实现」并保留查看正式计划入口。新增测试 `TestMeetingFinishKeepsPlanWithoutImplementation`。待验证：实机点一次，确认运行列表里该会议显示为已完成、方案文档能打开。
+
+- **开大会互评规则调整（源码完成，`go test ./server/internal/collab -race`、`./server/internal/api/...` 通过；未构建安装包、未实机）。** 互评保持串行；提案人对自己提出的版本自动记为同意（`alignMeetingItems`，提案本身有问题时不自动同意），互评提示词不再要求回应自己的提案；「同意」不再强制填写检查内容与剩余风险（只需一句依据，`parseMeetingPositions` 去掉该校验）；提示词要求提出修订版要极其慎重（默认不提，仅有可用出处证明的具体缺陷且能解决时才提，其余用 disagree 交作者裁决），目前只在提示词层约束，没有后端硬限制。同步更新 `meeting_test.go`、`meeting_improvements_test.go` 的旧断言并新增 `meeting_author_vote_test.go`。待验证：真实 Agent 实机跑一场会议确认修订版确实变少、同意卡片不再被标成缺依据。
+
+- **裁决弹窗重做为一次一条（仅过 `tsc --noEmit`，未跑测试/构建/实机）。** 手机上全屏，顶部显示「第 n / N 条」与逐条进度条（可点选跳转，已处理变绿），每条只显示标题和 3 类选择（采纳某成员方案 / 自己写 / 暂不决定）的单选卡片，原话默认折 4 行，理由与出处点「展开」才显示；底部固定「上一条 / 下一条」，处理完最后一条后变为「生成正式计划」，有遗漏时显示「去处理第 N 条」。取代上一版每条平铺的长列表。待验证：390 px 与桌面截图、`collab-meeting` 中旧裁决下拉框/按钮断言需同步、实机走通到生成正式计划。
+
+- **裁决弹窗与 3 人模型栏再改（仅过 `tsc --noEmit`，未跑测试/构建/实机）。** 裁决弹窗改为在每张立场卡底部直接「采纳这个方案」，每条下方只留「自己写说明 / 暂不决定」并显示当前裁决摘要，选中卡片高亮；裁决入口仍只在互评完成、已有共识与分歧后出现。模型栏 3 位及以下成员均分宽度、不再横滑，390 px 下芯片内改为上下两行（图标与序号在上，模型名在下）。待验证：390 px 与桌面截图确认 3 人模型名不被截断过多，`collab-meeting`/`collab-edit-models` 中关于横滑与裁决下拉框的断言需同步。
+
+- **开大会支持提前裁决（仅改前端，仅过 `tsc --noEmit`，未跑测试/构建/实机）。** 后端 `plan` 动作本就接受任意轮次的逐条裁决，原先只是前端在「最后一轮或出现僵持」前不显示按钮；现在一轮讨论完成后只要还有分歧就显示「提前裁决」。裁决弹窗把下拉框改为单选按钮（采纳某成员 / 自己写说明 / 暂不决定），标题显示分歧条数，底部显示「已处理 x/N」。待验证：`collab-meeting` 回归中关于裁决入口与下拉框的断言、390 px 弹窗截图、实机走一遍提前裁决到生成正式计划。未做：一轮讨论中途（成员还没发言完）直接裁决，需要后端放开 `plan` 的阶段限制。
+
+- **开大会页面瘦身已改源码（仅过 `tsc --noEmit`，按用户要求未跑回归测试、未构建、未实机）。** 议题改显示在顶栏标题（点顶栏文档图标看 `00-会议议题.md`），暂停/检查进度并继续挪到顶栏右侧；去掉状态行、议题横条、顶部「作者」卡与轮次下拉（轮次以进度条旁「第 N/M 轮」小字显示）；「本轮交接」收成默认折叠的「交接材料 N」；模型栏去掉 💬 图标，成员芯片整体可点；发言卡去掉「发言详情」图标，仅保留重试，发言中的卡在状态胶囊后显示已用时。待验证：`collab-meeting`、`collab-edit-models` 等回归断言需同步（仍引用旧入口），390 px 与桌面截图，实机确认首屏能看到发言中的卡。
+
+- **开大会与快速模式界面视觉精修已完成（待随下次打包实机验收）。** 开大会成员发言卡已对齐快速模式步骤卡（只显示成员与状态、无正文预览、无展开/收起全文，点整卡直接进入对话框并高亮选中态）；转入快速模式后的「会议」折叠卡移除右侧多余图标并按步骤卡尺寸全宽对齐；同步重做「共识与分歧」卡片、立场详情、逐条裁决弹窗、一体化底部输入卡、轮次折叠条与交接文件 chip、流程进度线、模型栏角标/自适应铺开、快速模式右侧「阶段详情」折叠栏与分歧拍板核实徽章，并修复 `.collab-re-review-textarea` 未定义 CSS 变量 `--cb-bg`。已通过 `tsc --noEmit`、生产构建与 `collab-meeting`、`collab-edit-models`、`collab-quick-mode`、`collab-skill-picker` 回归及亮/暗色桌面与 390 px 截图核对；安装包尚未重新构建。
+
+- **运行中修改模型第 04 轮交付复测通过。** 两种模式共用单行模型栏，详情标题与模型同行。交付阶段补齐快速模式详情头的状态圆点。五人会议在桌面和 390 px 下通过单行高度、横滑及会话切换验证。9 个 Go 包竞态、看板全量与旧库迁移、TypeScript、生产构建和 6 项前端回归通过。安装包、真实 Agent 换模型与实机验收待完成。 [验证记录](standalone-backend-implementation.md#运行中修改模型第-04-轮最终交付)
+
+- **运行中修改模型第 03 轮交付复测通过。** 开大会复用快速模式卡片与呼吸灯，模型栏直接显示成员配置。换模型后，已记录 Agent 的历史发言保留原执行模型或「默认模型」。Go 竞态、看板旧库迁移、TypeScript、生产构建和 6 项前端回归通过。本轮安装包、真实 Agent 换模型和实机验收待完成。 [验证记录](standalone-backend-implementation.md#运行中修改模型第-03-轮最终交付)
+
+- **运行中修改模型第 02 轮交付复测通过。** 快速模式步骤卡片显示单行状态，阶段内容和清理回执可在对话页查看。Go 竞态、看板旧库迁移、TypeScript、生产构建和 6 项前端回归通过。包含本轮卡片变更的安装包和实机验收待完成。 [验证记录](standalone-backend-implementation.md#运行中修改模型第-02-轮最终交付)
+
+- **快速模式与开大会运行中修改模型已随 `0.1.66-local.20` 安装到本机。** 升级回执记录了 9 个既有项目、协作模板接口、网页资源和 Relay 的验证结果。 [升级回执](../../../build/reports/standalone-0.1.66-local.20-live-upgrade/result.txt)
+
+- **开大会收口改进第 01 轮最终交付复跑通过。** 暂停中止尚未登记的发言，等待活跃发言返回，并保留未交付正文供查阅。撰写提示约束过渡语，大小写不同的版本号归入同一版。Go 竞态、旧库迁移、TypeScript、生产构建和 5 项前端回归通过。真实 ACP 与 Claude 中断、盲评读取和权限待验收，纯讨论归档入口与缺出处是否计票待作者确认。 [最终验证](standalone-backend-implementation.md#开大会收口改进第-01-轮最终交付)
+
+- **`0.1.66-local.18`** 新增大会成员权限选择和单成员重试。源码及 Go 竞态、看板旧库迁移和浏览器回归已通过。macOS arm64 包已构建并升级到本机，9 个既有项目、网页资源及 Relay 连接已核验。[验证记录](standalone-backend-implementation.md#0166-local18-大会成员权限与重试)
+- **`0.1.66-local.17`（`macos-arm64`）已由 local.18 接替。** local.17 本机包通过构建、Go 竞态、旧库迁移、9 项前端回归、静态门禁与隔离安装。热升级回执确认 9 个项目、二进制、模板接口、网页资源及 Relay 状态。 [本机包记录](standalone-backend-implementation.md#0166-local17-开大会与最新多模型协作本机包) · [热升级回执](../../../build/reports/standalone-0.1.66-local.17-live-upgrade/result.txt)
+- **开大会第 02 轮最终复跑通过。** R1 至 R6 复核通过，R7 的回归在隔离副本中复现了旧判定的误报，当前版本通过。会议专项竞态连续 5 次、9 个 Go 包竞态、旧库迁移、TypeScript、生产构建及 5 项前端回归通过。Codex 返回 401，Claude 提示未登录，真实双 Agent 首轮读取待验收。 [验证记录](standalone-backend-implementation.md#第-02-轮交付复跑)
+
+- **开大会第 01 轮审核交付完成（2026-11-26）。** 复跑确认未确认提案和历轮作者补充进入交接材料，修复盲评读取的备份文件误报和搜索完成事件漏报。Go 竞态、旧库迁移、TypeScript、生产构建及 5 项前端回归通过。两个真实 Agent 的首轮提示已核对，实际读取待登录恢复后验收。 [验证记录](standalone-backend-implementation.md#开大会第-01-轮审核修复与验证)
+
+- **独立后台 `0.1.67` 已正式发布并成为默认安装版本。** 六平台 24 个公开附件已逐字节核验，Windows PowerShell 5.1 公开下载和默认在线安装通过。旧独立后台 Release 已归档快照后下架，Git 标签保留。[下载](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.67) · [CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45741877391)
+
+- **IDEA 插件 `0.1.27` 已同版本更新，继续保持 GitHub Latest。** 5 个 ZIP 和校验文件通过公开回读比对，macOS 与 Windows 内嵌后台资源及 Windows PowerShell 5.1 安装器检查通过。已装 `0.1.27` 的用户需从磁盘重装 ZIP 并重启 IDEA。[下载](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27) · [CI](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45743210857)
 
 - **本机已升级至 `0.1.66-local.16`。** 快速模式合并逐条回应时过滤控制块，最终报告补齐已记录的测试命令。已核验 9 个既有项目、模板接口、网页资源和 Relay。[验证记录](standalone-backend-implementation.md#0166-local16-快速模式交接文档)
 

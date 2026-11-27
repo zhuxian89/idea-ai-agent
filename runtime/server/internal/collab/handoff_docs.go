@@ -24,7 +24,7 @@ const (
 )
 
 var validRunIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
-var validDocNamePattern = regexp.MustCompile(`^(第[0-9]{2,}轮/)?[\p{L}0-9][\p{L}0-9._-]{0,127}\.md$`)
+var validDocNamePattern = regexp.MustCompile(`^(第[0-9]{2,}轮/((01-独立提案|02-互评|04-补充答复|05-计划核对)/)?)?[\p{L}0-9][\p{L}0-9._-]{0,127}\.md$`)
 var roundDirPattern = regexp.MustCompile(`^第[0-9]{2,}轮$`)
 
 func ValidateRunID(runID string) error {
@@ -141,22 +141,21 @@ func docDirectory(rootPath, runID, name string, create bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sub, _, nested := strings.Cut(name, "/")
-	if !nested {
-		return dir, nil
-	}
-	dir = filepath.Join(dir, sub)
-	if create {
-		if err := os.Mkdir(dir, 0755); err != nil && !os.IsExist(err) {
+	parts := strings.Split(name, "/")
+	for _, sub := range parts[:len(parts)-1] {
+		dir = filepath.Join(dir, sub)
+		if create {
+			if err := os.Mkdir(dir, 0755); err != nil && !os.IsExist(err) {
+				return "", err
+			}
+		}
+		info, err := os.Lstat(dir)
+		if err != nil {
 			return "", err
 		}
-	}
-	info, err := os.Lstat(dir)
-	if err != nil {
-		return "", err
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("invalid round directory: %s", sub)
+		if !info.IsDir() {
+			return "", fmt.Errorf("invalid handoff directory: %s", sub)
+		}
 	}
 	return dir, nil
 }
@@ -242,7 +241,7 @@ func walkRunFiles(root, rel string, visit func(string, os.DirEntry) error) error
 	for _, e := range entries {
 		name := filepath.ToSlash(filepath.Join(rel, e.Name()))
 		if e.IsDir() {
-			if rel != "" || !roundDirPattern.MatchString(e.Name()) {
+			if !isHandoffDirectory(rel, e.Name()) {
 				continue
 			}
 			if err := walkRunFiles(root, name, visit); err != nil {
@@ -254,6 +253,19 @@ func walkRunFiles(root, rel string, visit func(string, os.DirEntry) error) error
 		}
 	}
 	return nil
+}
+
+func isHandoffDirectory(parent, name string) bool {
+	if parent == "" {
+		return roundDirPattern.MatchString(name)
+	}
+	if roundDirPattern.MatchString(parent) {
+		switch name {
+		case "01-独立提案", "02-互评", "04-补充答复", "05-计划核对":
+			return true
+		}
+	}
+	return false
 }
 
 type ImplDiffMeta struct {
