@@ -29,6 +29,7 @@ import { buildPendingAttachment } from "../actionBarUtils";
 import { AgentIcon } from "../AgentIcon";
 import { AgentSelector } from "../AgentSelector";
 import { CompactUploadProgress } from "../CompactUploadProgress";
+import { ConfirmDialog } from "../ConfirmDialog";
 import { FileViewer } from "../FileViewer";
 import { PanelToggle } from "../remoteui/RemoteTopBar";
 import { PhoneActivityHostContext } from "../remoteui/phoneSessionFacts";
@@ -37,15 +38,15 @@ import { CollabSkillPicker } from "./CollabSkillPicker";
 import { CollabReviewAgainForm } from "./CollabReviewAgainForm";
 import { countSelectedSkills, filterVisibleSkillPaths } from "./collabSkillGrouping";
 import { CollabTemplateModal } from "./CollabTemplateModal";
+import { CollabRunList, type OtherProjectRuns } from "./CollabRunList";
 import { CollabRunModelsModal } from "./CollabRunModelsModal";
 import { CollabRunModelBar } from "./CollabRunModelBar";
 import { QuickDecisions, type QuickDecisionDraft } from "./QuickDecisions";
-import { meetingMemberAlias, meetingTurnStatus } from "./meetingDisplay";
+import { meetingMemberAlias } from "./meetingDisplay";
 import {
   checkLocalSlotAvailability,
   collabPermissionLabel,
   compactCollabModelLabel,
-  formatCollabMemberBadge,
   meetingTurnModel,
   normalizeSlotAfterAgentChange,
   normalizeSlotForSubmission,
@@ -82,6 +83,8 @@ interface CollabShellProps {
   conversationSessionKey?: string;
   conversationView: React.ReactNode;
   composerView: React.ReactNode;
+  /** 侧栏底部的电脑状态、公网访问入口和版本号，由上层与单聊共用同一组件传入 */
+  sidebarFooter?: React.ReactNode;
 }
 
 const SB_WIDTH_KEY = "mindfs.collab.sidebarWidth";
@@ -123,30 +126,6 @@ function stepStatusLabel(status: CollabStepCard["status"]): string {
   }
 }
 
-function runSubLabel(run: CollabRun): string {
-  if (run.mode === "group") {
-    if (run.quick_run_id) return "大会 → 快速";
-    if (run.current_step === "ready") return "正式计划待确认";
-    return run.status === "running" ? `开大会 · 第 ${run.round || 1} 轮` : "开大会 · 等待作者";
-  }
-  if (run.status === "waiting_user") {
-    return run.current_step === "decisions" ? "分歧待你拍板" : "等你继续";
-  }
-  if (run.status === "running") {
-    const current = run.steps?.find((s) => s.key === run.current_step);
-    return current ? `正在：${current.title}` : "执行中";
-  }
-  if (run.status === "completed") {
-    if (run.test_status === "passed") return "已完成 · 测试通过";
-    if (run.test_status === "failed") return "已完成 · 测试失败";
-    return "已完成 · 一写一审";
-  }
-  if (run.status === "failed") {
-    return "执行出错";
-  }
-  return "快速模式";
-}
-
 export function CollabShell({
   rootId,
   projectName,
@@ -162,6 +141,7 @@ export function CollabShell({
   conversationSessionKey,
   conversationView,
   composerView,
+  sidebarFooter,
 }: CollabShellProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -223,6 +203,9 @@ export function CollabShell({
   const [modelsModalMode, setModelsModalMode] = useState<"quick" | "group" | null>(null);
 
   const [runs, setRuns] = useState<CollabRun[]>([]);
+  // 其他项目的记录：只用于侧栏列表展示，点开时先切到该项目再打开
+  const [otherRuns, setOtherRuns] = useState<Record<string, OtherProjectRuns>>({});
+  const pendingOpenRef = useRef<{ rootId: string; runId: string } | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const activeRunIdRef = useRef<string | null>(activeRunId);
   activeRunIdRef.current = activeRunId;
@@ -355,6 +338,13 @@ export function CollabShell({
     }
   }, [draftMode]);
 
+  const loadModeTemplates = useCallback(async (mode: CollabMode) => {
+    const res = await collabService.listTemplates(mode);
+    return (res.items || []).filter((item) => item.mode === mode);
+  }, []);
+  // 在模板弹窗里选了另一个模式的模板：模式切换后的首次载入里套用它，而不是默认模板。
+  const pendingTemplateRef = useRef<{ mode: CollabMode; tpl: CollabTemplateWithAvailability } | null>(null);
+
   const applyTemplateToDraft = useCallback(
     (tpl: CollabTemplateWithAvailability | undefined, agentList: AgentStatus[]) => {
       const members = tpl?.members.map((member) => ({ ...member })) || defaultCollabMembers(agentList, draftMode === "group");
@@ -372,7 +362,13 @@ export function CollabShell({
     let canceled = false;
     void refreshTemplates().then((list) => {
       if (!canceled) {
-        applyTemplateToDraft(list.find((item) => item.is_default) || list[0], agents);
+        const pending = pendingTemplateRef.current;
+        if (pending && pending.mode === draftMode) {
+          pendingTemplateRef.current = null;
+          applyTemplateToDraft(list.find((item) => item.id === pending.tpl.id) || pending.tpl, agents);
+        } else {
+          applyTemplateToDraft(list.find((item) => item.is_default) || list[0], agents);
+        }
         setReadyMode(draftMode);
       }
     });
@@ -450,8 +446,70 @@ export function CollabShell({
       }
       prevRootIdRef.current = rootId;
     }
+    // 从其他项目的记录点进来：项目已经切换完成，打开当时点的那一条
+    const pending = pendingOpenRef.current;
+    if (pending && pending.rootId === rootId) {
+      pendingOpenRef.current = null;
+      activeRunRootRef.current = rootId;
+      boundSessionKeyRef.current = "";
+      setActiveRunId(pending.runId);
+      setAutoFollow(true);
+      setStackedLevel("cards");
+    }
     void refreshRuns();
   }, [rootId, refreshRuns, onWaitingCountChange]);
+
+  const projectIdsKey = projects.map((item) => item.id).join("\n");
+  const loadOtherRuns = useCallback(async () => {
+    const targets = projectIdsKey.split("\n").filter((id) => id && id !== rootId);
+    setOtherRuns((previous) => {
+      const next: Record<string, OtherProjectRuns> = {};
+      for (const id of targets) next[id] = previous[id] ?? { state: "loading" };
+      return next;
+    });
+    await Promise.all(targets.map(async (id) => {
+      let entry: OtherProjectRuns;
+      try {
+        const res = await collabService.listRuns(id);
+        entry = { state: "ready", items: res.items || [] };
+      } catch (err) {
+        entry = { state: "error", message: err instanceof Error ? err.message : "读取失败" };
+      }
+      if (currentRootIdRef.current === id) return;
+      setOtherRuns((previous) => (id in previous ? { ...previous, [id]: entry } : previous));
+    }));
+  }, [projectIdsKey, rootId]);
+
+  // 侧栏展开、当前项目或项目列表变化、页面重新回到前台时刷新其他项目
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    void loadOtherRuns();
+    const onVisible = () => { if (document.visibilityState === "visible") void loadOtherRuns(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [sidebarOpen, loadOtherRuns]);
+
+  // 其他项目有运行变化时，只更新那一项目的列表
+  useEffect(() => {
+    if (!latestRunEvent || latestRunEvent.rootId === rootId) return;
+    const { rootId: eventRoot, run: incoming } = latestRunEvent;
+    setOtherRuns((previous) => {
+      const entry = previous[eventRoot];
+      if (!entry || entry.state !== "ready") return previous;
+      let items = entry.items;
+      if (incoming.meeting_run_id) {
+        items = items.map((run) => run.id === incoming.meeting_run_id
+          ? { ...run, quick_run_id: incoming.id, quick_run_status: incoming.status } : run);
+      } else if (incoming.status === "deleted") {
+        items = items.filter((run) => run.id !== incoming.id);
+      } else if (items.some((run) => run.id === incoming.id)) {
+        items = items.map((run) => (run.id === incoming.id ? incoming : run));
+      } else {
+        items = [incoming, ...items];
+      }
+      return { ...previous, [eventRoot]: { state: "ready", items } };
+    });
+  }, [latestRunEvent, rootId]);
 
   // Load selected run detail
   const loadDetail = useCallback(
@@ -1229,8 +1287,7 @@ export function CollabShell({
     }
   };
 
-  const handleDeleteRun = async (e: React.MouseEvent, runId: string) => {
-    e.stopPropagation();
+  const handleDeleteRun = async (runId: string) => {
     const targetRootId = rootId;
     if (!targetRootId) return;
     try {
@@ -1263,6 +1320,7 @@ export function CollabShell({
       if (currentRootIdRef.current === targetRootId) {
         showToast(err instanceof Error ? err.message : "删除失败", "error");
       }
+      throw err;
     }
   };
 
@@ -1302,34 +1360,91 @@ export function CollabShell({
     window.addEventListener("pointerup", onUp);
   };
 
-  const filteredRuns = useMemo(() => {
-    return runs.filter((r) => {
-      const status = r.quick_run_status || r.status;
-      if (filterState === "wait") return status === "waiting_user";
-      if (filterState === "running") return status === "running";
-      return true;
+  const openRunFromList = (targetRoot: string, runId: string) => {
+    if (targetRoot !== rootId) {
+      // 其他项目：先切项目，切换完成后在根变化的副作用里打开这一条
+      pendingOpenRef.current = { rootId: targetRoot, runId };
+      onSelectProject?.(targetRoot);
+      if (isNarrow) setSidebarOpen(false);
+      return;
+    }
+    boundSessionKeyRef.current = "";
+    activeRunRootRef.current = rootId;
+    closeDocPreview();
+    setMeetingTurn(null);
+    setActiveRunId(runId);
+    setAutoFollow(true);
+    setStackedLevel("cards");
+    if (isNarrow) setSidebarOpen(false);
+  };
+
+  const [pendingDeleteRun, setPendingDeleteRun] = useState<{
+    rootId: string;
+    runId: string;
+    title: string;
+  } | null>(null);
+  const [deletingRun, setDeletingRun] = useState(false);
+  const sidebarSwipeRef = useRef<{ x: number; y: number } | null>(null);
+
+  const requestDeleteRunFromList = (event: React.MouseEvent, targetRoot: string, runId: string) => {
+    event.stopPropagation();
+    const list =
+      targetRoot === rootId
+        ? runs
+        : otherRuns[targetRoot]?.state === "ready"
+          ? otherRuns[targetRoot].items
+          : [];
+    const target = list.find((run) => run.id === runId);
+    setPendingDeleteRun({
+      rootId: targetRoot,
+      runId,
+      title: target?.title || runId,
     });
-  }, [runs, filterState]);
+  };
+
+  const confirmDeleteRun = async () => {
+    if (!pendingDeleteRun || deletingRun) return;
+    const { rootId: targetRoot, runId } = pendingDeleteRun;
+    setDeletingRun(true);
+    try {
+      if (targetRoot === rootId) {
+        await handleDeleteRun(runId);
+      } else {
+        await collabService.deleteRun(targetRoot, runId);
+        setOtherRuns((previous) => {
+          const entry = previous[targetRoot];
+          if (!entry || entry.state !== "ready") return previous;
+          return {
+            ...previous,
+            [targetRoot]: { state: "ready", items: entry.items.filter((run) => run.id !== runId) },
+          };
+        });
+      }
+      setPendingDeleteRun(null);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "删除记录失败", "error");
+    } finally {
+      setDeletingRun(false);
+    }
+  };
 
   const viewedStepKey = autoFollow ? activeStepKey : selectedStepKey;
   const viewedQuickStep = meetingSessionStep ? undefined : currentRun?.steps.find((step) => step.key === viewedStepKey);
   const selectedSessionStep = meetingSessionStep || resolveSessionStepForCard(currentRun, viewedStepKey);
   const hasBoundConversation = !!selectedSessionStep?.session_key && conversationSessionKey === selectedSessionStep.session_key;
-  const selectedSessionMember = meetingSessionStep ? focusedMember : currentRun?.snapshot.members.find((member) => member.role === selectedSessionStep?.role);
-  const selectedSessionPermission = selectedSessionStep?.read_only ? "严格只读"
-    : selectedSessionMember ? collabPermissionLabel(selectedSessionMember, !!meetingSessionStep, agents) : "";
   const selectedSessionModel = selectedSessionStep?.agent
     ? resolveCollabModelInfo(selectedSessionStep.agent, selectedSessionStep.model, agents, undefined, { resolveDefaultFromAgent: false })
     : null;
-  const selectedSessionStatus = meetingSessionStep && focusedMeetingTurn ? meetingTurnStatus[focusedMeetingTurn.status]
-    : selectedSessionStep ? stepStatusLabel(selectedSessionStep.status) : "";
   const verifiedCitationsCount = (detail?.review_items || []).filter(
     (it) => it.citation_verified,
   ).length;
   const unverifiedCitationsCount =
     (detail?.review_items?.length || 0) - verifiedCitationsCount;
 
-  const meetingDraftKey = meetingDetail ? JSON.stringify([meetingDetail.run.root_id, meetingDetail.run.id, meetingDetail.run.round]) : "";
+  // 草稿按「弹窗实际展示并会提交的那一轮」归属，不用 run.round：详情接口分两次读取，并发时二者可能差一轮，
+  // 用 run.round 会把上一轮的草稿套到新一轮的条目上。
+  const meetingDraftRound = meetingDetail?.meeting?.rounds.at(-1)?.number ?? meetingDetail?.run.round;
+  const meetingDraftKey = meetingDetail ? JSON.stringify([meetingDetail.run.root_id, meetingDetail.run.id, meetingDraftRound]) : "";
   const groupView = meetingDetail?.meeting && selectedRun && (
     <MeetingPane
       key={selectedRun.id} run={meetingDetail.run} meeting={meetingDetail.meeting} docs={meetingDetail.docs || []}
@@ -1367,7 +1482,27 @@ export function CollabShell({
       ) : null}
 
       {/* Left Pane: Run List */}
-      <aside className={`collab-sidebar ${sidebarOpen ? "" : "collapsed"}`}>
+      <aside
+        className={`collab-sidebar ${sidebarOpen ? "" : "collapsed"}`}
+        onTouchStart={(event) => {
+          if (!isNarrow || !sidebarOpen || event.touches.length !== 1) return;
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("input, textarea, select")) {
+            sidebarSwipeRef.current = null;
+            return;
+          }
+          sidebarSwipeRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+        }}
+        onTouchEnd={(event) => {
+          if (!isNarrow || !sidebarOpen || !sidebarSwipeRef.current || event.changedTouches.length !== 1) return;
+          const dx = event.changedTouches[0].clientX - sidebarSwipeRef.current.x;
+          const dy = event.changedTouches[0].clientY - sidebarSwipeRef.current.y;
+          sidebarSwipeRef.current = null;
+          if (dx < -56 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+            setSidebarOpen(false);
+          }
+        }}
+      >
         {sidebarOpen ? (
           <>
             <div className="collab-sb-top">
@@ -1437,77 +1572,18 @@ export function CollabShell({
                 </button>
               ))}
             </div>
-            <div className="collab-run-list">
-              {filteredRuns.length === 0 ? (
-                <div
-                  style={{
-                    padding: "24px 12px",
-                    textAlign: "center",
-                    fontSize: 12,
-                    color: "var(--cb-text-ter)",
-                  }}
-                >
-                  暂无协作记录
-                </div>
-              ) : (
-                filteredRuns.map((r) => (
-                  <div
-                    key={r.id}
-                    className={`collab-run-item ${activeRunId === r.id ? "active" : ""}`}
-                    onClick={() => {
-                      boundSessionKeyRef.current = "";
-                      activeRunRootRef.current = rootId;
-                      closeDocPreview();
-                      setMeetingTurn(null);
-                      setActiveRunId(r.id);
-                      setAutoFollow(true);
-                      setStackedLevel("cards");
-                      if (isNarrow) setSidebarOpen(false);
-                    }}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <span className={`collab-run-dot ${r.quick_run_status || r.status}`} />
-                    <div className="collab-run-body">
-                      <div className="collab-run-title">{r.title}</div>
-                      <div className="collab-run-sub">{runSubLabel(r)}</div>
-                      {(r.snapshot?.members?.length || 0) > 0 ? (
-                        <div
-                          className="collab-run-sub collab-mono"
-                          style={{ fontSize: 10.5 }}
-                          title={r.snapshot.members
-                            .map((m) =>
-                              formatCollabMemberBadge(m, agents, {
-                                resolveDefaultFromAgent: false,
-                              }),
-                            )
-                            .join(" → ")}
-                        >
-                          {r.snapshot.members
-                            .map((m) =>
-                              formatCollabMemberBadge(m, agents, {
-                                resolveDefaultFromAgent: false,
-                              }),
-                            )
-                            .join(" → ")}
-                        </div>
-                      ) : null}
-                    </div>
-                    {r.status !== "running" ? (
-                      <button
-                        type="button"
-                        className="collab-icon-btn"
-                        style={{ width: 22, height: 22, fontSize: 12 }}
-                        title="删除记录"
-                        onClick={(e) => void handleDeleteRun(e, r.id)}
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
+            <CollabRunList
+              projects={projects}
+              currentRootId={rootId}
+              currentRuns={runs}
+              others={otherRuns}
+              filter={filterState}
+              activeRunId={activeRunId}
+              agents={agents}
+              onOpen={openRunFromList}
+              onDelete={requestDeleteRunFromList}
+              onRetry={() => void loadOtherRuns()}
+            />
             <div className="collab-sb-foot">
               <span
                 style={{
@@ -1528,6 +1604,7 @@ export function CollabShell({
                 全局模板
               </button>
             </div>
+            {sidebarFooter}
           </>
         ) : (
           <div className="collab-sb-rail">
@@ -1609,7 +1686,10 @@ export function CollabShell({
                   <button
                     type="button"
                     className="remote-phone-icon"
-                    onClick={() => setSidebarOpen(true)}
+                    onClick={() => {
+                      (document.activeElement as HTMLElement | null)?.blur?.();
+                      setSidebarOpen(true);
+                    }}
                     aria-label="运行列表"
                     title="运行列表"
                   >
@@ -2377,14 +2457,22 @@ export function CollabShell({
                       {selectedSessionStep?.effort && ` · ${selectedSessionStep.effort}`}
                     </span>}
                   </div>
-                  {selectedSessionPermission && <span className="collab-detail-permission" role="img"
-                    aria-label={meetingSessionStep ? `当前权限 ${selectedSessionPermission}` : selectedSessionPermission}
-                    title={meetingSessionStep ? `当前权限 ${selectedSessionPermission}` : selectedSessionPermission}>
-                    <CollabIcon name={selectedSessionPermission.endsWith("只读") ? "lock" : "shield"} />
-                  </span>}
-                  {selectedSessionStatus && <span className="collab-model-dot" role="img"
-                    aria-label={selectedSessionStatus} title={selectedSessionStatus}
-                    data-state={selectedSessionStep?.status} />}
+                  {isNarrow ? (
+                    <button
+                      type="button"
+                      className="remote-phone-icon"
+                      onClick={() => {
+                        (document.activeElement as HTMLElement | null)?.blur?.();
+                        setSidebarOpen(true);
+                      }}
+                      aria-label="运行列表"
+                      title="运行列表"
+                    >
+                      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                        <path d="M4 6h16M4 12h16M4 18h16" />
+                      </svg>
+                    </button>
+                  ) : null}
                   {!isStacked ? (
                     <PanelToggle
                       side="right"
@@ -2613,33 +2701,57 @@ export function CollabShell({
         />
       ) : null}
 
-      {/* Global Template Manager Modal */}
-      <CollabTemplateModal
-        key={draftMode}
-        open={templateModalOpen}
-        mode={draftMode}
-        templates={templates}
-        skills={skills}
-        agents={agents}
-        onClose={() => setTemplateModalOpen(false)}
-        onApply={(tpl) => applyTemplateToDraft(tpl, agents)}
-        onSave={async (input) => {
-          const saved = await collabService.saveTemplate({
-            ...input,
-            mode: draftMode,
-          });
-          await refreshTemplates();
-          if (!appliedTemplateId || appliedTemplateId === saved.id) {
-            applyTemplateToDraft(saved, agents);
-          }
-        }}
-        onDelete={async (id) => {
-          await collabService.deleteTemplate(id);
-          const list = await refreshTemplates();
-          if (appliedTemplateId === id) {
-            applyTemplateToDraft(list.find((t) => t.is_default) || list[0], agents);
-          }
-        }}
+      {/* Global Template Manager Modal：快速模式 / 开大会两个标签放在同一个弹窗里 */}
+      {templateModalOpen ? (
+        <CollabTemplateModal
+          initialMode={draftMode}
+          skills={skills}
+          agents={agents}
+          loadTemplates={loadModeTemplates}
+          onClose={() => setTemplateModalOpen(false)}
+          onApply={(mode, tpl) => {
+            if (mode === draftMode) {
+              applyTemplateToDraft(tpl, agents);
+              return;
+            }
+            // 发起页按模式分开：先切到该模式，等该模式的模板载入后再套用选中的这一份。
+            pendingTemplateRef.current = { mode, tpl };
+            switchDraftMode(mode);
+          }}
+          onSave={async (mode, input) => {
+            const saved = await collabService.saveTemplate({ ...input, mode });
+            if (mode === draftMode) {
+              await refreshTemplates();
+              if (!appliedTemplateId || appliedTemplateId === saved.id) {
+                applyTemplateToDraft(saved, agents);
+              }
+            } else if (mode === "quick") {
+              setQuickTemplates(await loadModeTemplates("quick"));
+            }
+          }}
+          onDelete={async (mode, id) => {
+            await collabService.deleteTemplate(id);
+            if (mode === draftMode) {
+              const list = await refreshTemplates();
+              if (appliedTemplateId === id) {
+                applyTemplateToDraft(list.find((t) => t.is_default) || list[0], agents);
+              }
+            } else if (mode === "quick") {
+              setQuickTemplates(await loadModeTemplates("quick"));
+            }
+          }}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={!!pendingDeleteRun}
+        title="删除协作记录"
+        description={`确定删除「${pendingDeleteRun?.title || ""}」吗？将同时删除关联的阶段会话、交接文档（.mindfs/runs/...）与变更快照，删除后无法恢复。`}
+        confirmLabel={deletingRun ? "删除中…" : "确认删除"}
+        cancelLabel="取消"
+        danger
+        busy={deletingRun}
+        onCancel={() => setPendingDeleteRun(null)}
+        onConfirm={confirmDeleteRun}
       />
     </div>
   );

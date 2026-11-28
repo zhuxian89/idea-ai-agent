@@ -18,6 +18,106 @@ Chromium 回归在节点路由验证了版本文本、二维码内容和关闭�
 
 [macOS 0.1.41 测试版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.41)从 `e9890f8` 的干净克隆构建，两架构均为 `vcs.modified=false`。核对了两个压缩包与自解压安装器的摘要、架构、安装脚本、网页资源和内嵌归档。ARM64 最终包在临时 HOME 新装并绑定隔离 Relay，验证了节点页版本、二维码内容、网页 JS/CSS 的实际 HTTP 200、同包升级及升级失败后恢复原端口。首轮隔离浏览器启动未找到临时 HOME 下的 Chromium，指定现有 Chromium 缓存路径后通过。8 个公开附件均匿名下载并逐字节核对，公开固定入口显式安装 0.1.41，检查了本机 HTML 版本和 JS/CSS 并注销临时服务。默认安装仍为 0.1.39，0.1.41 预发布只含 macOS 附件。证据在 `build/reports/release41-macos/`。
 
+## 0.1.69-local.7 本机测试包与本地升级（2026-11-28）
+
+- 改动：`CollabShell.tsx` 移除 `.collab-detail-head` 右侧的权限盾牌/锁（`.collab-detail-permission`）与无文字状态圆点（`.collab-model-dot`），并在窄屏/手机端（`isNarrow`）替换为「≡」运行列表抽屉按钮（点击收起软键盘并直接打开 `.collab-sidebar` 抽屉，可一步切换其他协作对话、新建协作或返回单聊，无需先退回卡片页）；`CollabShell.css` 对齐手机端 `.collab-detail-head` 左右 `8px` 内边距；同步更新 `collab-quick-mode.test.mjs`、`collab-meeting.test.mjs`、`collab-edit-models.test.mjs` 断言并补充手机详情页直点 `≡` 打开/收起侧栏回归。
+- 验证：`tsc --noEmit`、`vite build`、`collab-quick-mode.test.mjs`、`collab-meeting.test.mjs`、`collab-edit-models.test.mjs`（3/3，基于最终 `runtime/web/dist`）；隔离环境 `go vet ./server/...`、`go test ./server/internal/kanban -count=1`、`-race TestTaskStoreSnapshotMigration` 全部通过（`go-tests.log`）。
+- 构建与静态门禁：`LOCAL_AI_AGENT_VERSION=0.1.69-local.7 node scripts/package-standalone.mjs macos-arm64 --skip-web`；`verify-release-assets.mjs` 全部 6 附件与三份 SHA-256 通过（305 网页文件、零 `/mindfs-assets/`）；`verify-package-install.mjs` 临时 HOME 4/4 通过。
+- 回滚源与排程：回滚源为已装并验证通过的 `0.1.69-local.6`（`build/standalone/0.1.69-local.6/`）；`upgrade.py --check` 只读预检通过（`0.1.69-local.6` @ `http://127.0.0.1:7441`，10 个项目，Relay `bound=True connected=True`）；经独立 launchd 任务 `dev.ideaagent.standalone-upgrade-0169-local7` 排程（15 秒后开始，失败自动回滚到 `0.1.69-local.6`）。**结果以 `build/reports/standalone-0.1.69-local.7-live-upgrade/result.txt` 为准，写入前不记为已安装。**
+
+## 0.1.69-local.6 本机测试包与本地升级（2026-11-28）
+
+- 修复：手机真机反馈回复元信息栏（`.mindfs-assistant-meta`）从一行变成两行。根因是 `remotePhone.css` 将 `.mindfs-msg-meta-btn` 设为 `36×36px` 实占宽并将元信息字号提到 `11px`，挤占约 60px 横向空间导致模型名、时间与 `Context` 同步换行。改为 `SessionViewer.tsx:1008` 补充 `.mindfs-assistant-meta-model`，`remotePhone.css:921-958` 将按钮视觉占位收敛回 `20×20px` 并通过 `::after { inset: -8px -2px }` 扩展纵向触控热区，元信息栏恢复 `10px`、`gap: 5px`、`white-space: nowrap`（超窄时仅模型名省略，时间与 `Context` 永不折行）。
+- 验证：`tsc --noEmit`、`vite build`、`remote-phone.test.mjs` & `remote-design.test.mjs`（15/15）、生产 CSS 实包 Playwright 验证（320/375/390/412/430px 均 `rowH=20px`、`maxSpanH=13px`、`docOverflow=0`，412/430px 零截断；R1–R7 与桌面隔离全部通过）；隔离环境 `go vet ./server/...`、`go test ./server/internal/kanban -count=1`、`-race TestTaskStoreSnapshotMigration` 全部通过（`go-tests.log`）。
+- 构建与静态门禁：`LOCAL_AI_AGENT_VERSION=0.1.69-local.6 node scripts/package-standalone.mjs macos-arm64 --skip-web`；`verify-release-assets.mjs` 全部 6 附件与三份 SHA-256 通过（305 网页文件、零 `/mindfs-assets/`、包内含 `mindfs-assistant-meta-model` 样式）；`verify-package-install.mjs` 临时 HOME 4/4 通过。
+- 回滚源与排程：回滚源为已装并验证通过的 `0.1.69-local.5`（`build/standalone/0.1.69-local.5/`）；`upgrade.py --check` 只读预检通过（`0.1.69-local.5` @ `http://127.0.0.1:7441`，10 个项目，Relay `bound=True connected=True`）；经独立 launchd 任务 `dev.ideaagent.standalone-upgrade-0169-local6` 排程（15 秒后开始，失败自动回滚到 `0.1.69-local.5`）。**结果以 `build/reports/standalone-0.1.69-local.6-live-upgrade/result.txt` 为准，写入前不记为已安装。**
+
+## 0.1.69-local.5 本机测试包与本地升级（2026-11-28）
+
+- 构建：`LOCAL_AI_AGENT_VERSION=0.1.69-local.5 node scripts/package-standalone.mjs macos-arm64 --skip-web`（复用同一源码状态刚通过 `tsc --noEmit` 与 `vite build` 产出的 `runtime/web/dist`，日志 `build/reports/standalone-0.1.69-local.5-live-upgrade/package.log`）。产物 SHA-256：
+  - `local-ai-agent-0.1.69-local.5-macos-arm64.tar.gz`：`a44b02ae94c5d3dbf1cb087a95b38c5048d8c1aa070dc276cb6393ad08ea519f`
+  - `local-ai-agent-0.1.69-local.5-macos-arm64.sh`：`5d50b03cfa681933f1723e3d2febedea328832e13c0be5e99b4110fd070256d9`
+  - `install.sh`：`bc0da6f7b90b33602d0e4c003b367add818ca0f23eb538afd78216839184a154`
+- 静态门禁与隔离校验：`verify-release-assets.mjs build/standalone/0.1.69-local.5 0.1.69-local.5 --targets macos-arm64 --skip-build-info` 全部 6 附件通过；三份 SHA-256 `OK`，程序为 `Mach-O 64-bit executable arm64`（`Local AI Agent 0.1.69-local.5`），网页 305 文件、零 `/mindfs-assets/`，包内 CSS 含 `--rp-wait-badge-bg`、`.collab-modal.meeting-decision-modal` 与 `.collab-modal-body.collab-modal-body--file`，在线 `install.sh` 与源码一致（`static-check.log`）。`verify-package-install.mjs build/standalone/0.1.69-local.5/local-ai-agent-0.1.69-local.5-macos-arm64.tar.gz` 在临时 HOME 4/4 通过（`isolated-install.log`）。
+- Go 迁移与质量门禁：隔离 `HOME`/`IDE_AGENT_DATA_DIR`/`IDE_AGENT_REMOTE_HOST_DIR`/`MINDFS_AGENTS_CONFIG` 后 `go vet ./server/...`、`go test ./server/internal/kanban -count=1`、`go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1` 与 `go test ./server/internal/api -run TestFrontendAssetsStayWithBackend -count=1` 全部通过（`go-tests.log`）。
+- 回滚源与预检：回滚源为本机已装并经 `result.txt` 核验的 `0.1.69-local.4` 构建（`build/standalone/0.1.69-local.4/`）；`upgrade.py --check` 只读预检通过（`Preflight OK: 0.1.69-local.4 at http://127.0.0.1:7441, 10 registered projects; Relay bound=True connected=True`）。
+- 升级排程：经独立 launchd 任务 `dev.ideaagent.standalone-upgrade-0169-local5` 排程（15 秒后开始，失败自动回滚到 `0.1.69-local.4`）。**结果以 `build/reports/standalone-0.1.69-local.5-live-upgrade/result.txt` 为准，写入前不记为已安装。**
+
+## 手机端远程网页纯样式优化及第 01 轮审核修复（2026-11-28）
+
+- **源码完成**：
+  - 初次 5 阶段实现覆盖 4 个样式文件（`remotePhone.css`、`index.css`、`CollabShell.css`、`MeetingPane.css`）与 8 个 TSX 的最小语义类/状态属性挂载（`TokenEditor.tsx`、`ActionBar.tsx`、`ShellSelector.tsx`、`AgentSelector.tsx`、`SessionViewer.tsx`、`AskUserQuestionCard.tsx`、`NativeInteractionFields.tsx`、`SessionCard.tsx`），严格限定在 `html[data-remote-ui="1"][data-device="phone"]` 与 `.remote-phone` 下，不改 DOM 结构、`:root`、桌面/平板 `.remote-phone-sheet`、`AgentSelector` 动态列宽或 `ActionBar.tsx:1055` `gridTemplateColumns` 判断。
+  - 第 01 轮审核逐条修复（R1–R7 全部采纳落地）：
+    - **R1**：在 `CollabShell.css:2749-2755` 为 `html[data-remote-ui="1"][data-device="phone"] .collab-shell` 下全部可编辑 `textarea`、`select` 及文本/数值类 `input` 统一施加 `font-size: var(--rp-fs-16, 16px) !important`（覆盖不带 `[data-narrow="1"]` 的强制手机场景、内联 `12.5px`/`12px` 的模板选择器与另存名称输入框、以及 `MeetingMemberSettings` 的 `input[type="number"]`），并在 `MeetingPane.css:1220-1231` 为 `.meeting-permission select`、`.meeting-settings select`、`.meeting-settings input`、`.meeting-pane select` 补齐 16px 字号、36px 最小高度与 8px 圆角。
+    - **R2**：核实 `ActionBar.tsx:262` 中 `permissionChoices` 仅在 `compactWorkbench={isIdeaRuntime}` 时非空（手机远程网页 `data-remote-ui="1"` 下不渲染该控件），但 `CollabRunModelsModal.tsx:240` 在手机端实际渲染 `PermissionSelector`；已在 `remotePhone.css:809-857` 补齐工具栏 `.idea-permission-select` 的 40px 高度、`flex: 0 1 auto` 弹性收缩（`min-width: 36px`、`margin-left: 0`、8px 圆角）与 `.idea-permission-menu` 弹层手机规范，并在 `MeetingPane.css:1229-1233` 为 `.meeting-permission .idea-permission-select` 补齐 40px 触控高度与 8px 圆角。
+    - **R3**：将 `MeetingPane.css:1253-1260` 的窄屏全屏规则迁入 `@media (max-width: 640px)`，并在交付复核发现生产打包顺序中 `MeetingPane.css` 先于 `CollabShell.css` 导致同权重被 `.collab-modal` 覆写后，提升选择器至 `html[data-remote-ui="1"][data-device="phone"] .collab-modal.meeting-decision-modal`（显式重置 `max-width: none`、`max-height: none`、`border: 0`、`border-radius: 0`）；同时在 `CollabShell.css:3060-3062` 补充 `html[data-remote-ui="1"][data-device="phone"] .collab-modal-body.collab-modal-body--file { padding: 0; }`，防止手机端通用弹窗内边距覆盖文档预览弹窗的零内边距。
+    - **R4**：补齐本节与 `README.md`、`standalone-backend-checklist.yaml` 交接记录，分别标明源码完成、自动化通过、尚未打包与真机待验范围。
+    - **R5**：`AskUserQuestionCard.tsx:346` 为自定义输入框挂载 `data-active={customAnswerActive ? "true" : undefined}`；`remotePhone.css:957-1002` 将提问卡边框、头部底色、图标与自定义输入框激活/聚焦态统一收敛为静谧表面 + 主题强调色（`--accent-color` / `--rp-surface-subtle`），消除残留红调与选中态割裂。
+    - **R6**：`remotePhone.css:775-789` 将输入区与占位符顶距由 `10px` 归入 `var(--rp-s2, 8px)` 并配套 `line-height: 24px`（保持单行 `40px <= 50px` 不触发多行翻转）；`remotePhone.css:520,531` 与 `CollabShell.css:263,2855` 徽标内边距归入 `var(--rp-s1, 4px)` / `var(--rp-s2, 8px)`；`CollabShell.css:2945-2946` 改用 `calc(var(--rp-r-row, 12px) - 1px)` 显式表达 12px 外圆角减 1px 描边的同心内圆角。
+    - **R7**：`remotePhone.css:38-39,53-54,67-68,81-82,94-95` 新增 `--rp-wait-badge-bg` / `--rp-wait-badge-fg`（浅色 `#b45309/#ffffff`、深色与系统暗色 `#f59e0b/#111827`、草地 `#9a5b00/#ffffff`、苔藓 `#8f5800/#ffffff`），`CollabShell.css:267-268` 引用该变量。
+- **验证通过（最终改动后）**：
+  - `cd runtime/web && npx tsc --noEmit`：通过（0 报错）。
+  - `cd runtime/web && npx vite build`：通过（`runtime/web/dist` 共 305 文件，`/mindfs-assets/` 检索 0 处）。
+  - `cd runtime/web && node --test tests/action-queue.test.mjs tests/remote-phone.test.mjs tests/remote-design.test.mjs tests/session-project-hierarchy.test.mjs tests/workspace-sidebars-browser.test.mjs tests/native-interactions.test.mjs`：32/32 通过。
+  - `cd runtime/web && node --test tests/remote-entry-build.test.mjs`：4/4 通过。
+  - `cd runtime/web && IDEA_COLLAB_DIST=/Users/hongweizhang/java_project/idea-ai-agent/runtime/web/dist node --test tests/collab-quick-mode.test.mjs tests/collab-meeting.test.mjs`：2/2 通过（基于最终构建产物）。
+  - 隔离环境变量下 `cd runtime && go test ./server/internal/api -run TestFrontendAssetsStayWithBackend -count=1`、`go test ./server/internal/kanban -count=1`、`go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1`：全部通过。
+  - 基于最终生产 CSS 包（`runtime/web/dist/assets/index-*.css`）的 Playwright 专项实测：12 类协作/会议输入在 `data-narrow=1` 与 `data-narrow=0` 下均为 `16px`；320px 下 6 控件工具栏（含长标签 `.idea-permission-select` 宽 74px×高 40px、`.meeting-permission .idea-permission-select` 高 40px、`.idea-permission-menu` 12px 圆角/40px 选项/暗色去阴影）`controlsOverflow=0` 且左边界未裁切；裁决弹窗真实打包层叠下 `390px -> borderRadius: 0px, maxHeight: none, borderWidth: 0px, height: 780px`、`800px -> borderRadius: 16px`，文档预览 `.collab-modal-body--file` 保持 `padding: 0px`、普通弹窗 `12px 16px`、裁决体 `16px`；提问卡零渐变红调且图标/选中项/自定义输入 `data-active="true"` 与 `:focus`/提交按钮均统一为 `var(--accent-color)`；单行输入 `editorH=40`、`paddingTop=8px`、`lineHeight=24px`、占位符 `top=8px`，角标内边距 `4px`，`.collab-run-models-edit` 圆角 `11px`；多 Agent 入口角标对比度 `light 5.02:1`、`dark 8.26:1`、`meadow 5.43:1`、`moss 5.89:1`、`system-dark 8.26:1`；桌面 `390px` 隔离校验 `permH=26`、`ctrlPos=absolute` 零污染。
+- **安装包状态**：尚未重新构建或升级独立后台/插件安装包。
+- **待真机确认**：iPhone Safari / PWA、iOS App（`WKWebView`）与 Android Chrome 实机软键盘与 16px 输入防缩放、`--mindfs-safe-area-bottom` 键盘弹起清零与收起恢复、320px 实机观感、以及经 Relay 入口访问实测。
+
+## 开大会裁决弹窗显示未确认成员（2026-11-28）
+
+- 根因：`MeetingDecisions.tsx` 头部统计未计入 `unconfirmed`，且可采纳选项列表只保留 `position?.quote` 非空的立场（后端 `validateMeetingDecisions` 仅允许采纳带原话的立场），导致 3 成员会议里「未确认」且无有效原话的成员（如 `引文与正文不匹配`、`本轮未对该版本表态`、`成员漏答此条`）在裁决弹窗里被过滤掉，仅看到 2 家。
+- 改动：
+  - `runtime/web/src/components/collab/MeetingDecisions.tsx`：头部副标题补齐 `N 未确认`；将未被可采纳选项覆盖的成员（含无有效原话的未确认成员，以及单议题下的未确认成员）展示为只读状态卡（`.decision-option--readonly`），显示成员名、「未确认」标签、「无有效原话 · 不可采纳」说明及具体 `issue`，并提供「展开理由和出处」查看检查内容与出处；可采纳卡片有 `issue` 时同样展示。
+  - `runtime/web/src/components/collab/MeetingPane.css`：新增 `.decision-option--readonly`、`.decision-readonly-mark`、`.decision-option-issue` 样式，并将 `.decision-more` 触控高度提升至 `36px`。
+- 验证：`npx tsc --noEmit`、`npx vite build`、`node --test tests/collab-meeting.test.mjs`（新增 3 成员 2 同意 + 1 未确认 390px 手机断言）与 390px 截图核对通过；尚未重新打包安装。
+
+## 0.1.69-local.3 本机测试包与本地升级（2026-11-28）
+
+- 构建：`LOCAL_AI_AGENT_VERSION=0.1.69-local.3 node scripts/package-standalone.mjs macos-arm64`（含 `tsc --noEmit` 与 `vite build`）。`verify-release-assets.mjs build/standalone/0.1.69-local.3 0.1.69-local.3 --targets macos-arm64 --skip-build-info` 全部 6 附件通过（305 网页文件、零 `/mindfs-assets/`，包内含 `mindfs-confirm-dialog` 与 `remote-phone-group-head` 样式）。
+- 迁移与 Go：隔离 `HOME`/`IDE_AGENT_DATA_DIR`/`IDE_AGENT_REMOTE_HOST_DIR`/`MINDFS_AGENTS_CONFIG` 后 `go test ./server/internal/kanban -count=1`、`go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1`、`go test ./server/internal/agent/acp/... ./server/internal/turndiff/... ./server/internal/collab/... ./server/internal/api/usecase/...`、`TestFrontendAssetsStayWithBackend` 与 `go vet` 全部通过。
+- 隔离安装：`node scripts/standalone/verify-package-install.mjs build/standalone/0.1.69-local.3/local-ai-agent-0.1.69-local.3-macos-arm64.tar.gz` 在临时 HOME 4/4 通过。
+- 回滚源：已装的 `0.1.69-local.2` 构建（`build/standalone/0.1.69-local.2/`），程序与网页逐字节一致；`upgrade.py --check` 预检通过（`0.1.69-local.2` @ `http://127.0.0.1:7441`，10 个项目，Relay bound=True connected=True）。
+- 升级：经独立 launchd 任务 `dev.ideaagent.standalone-upgrade-0169-local3` 排程（15 秒后开始，失败自动回滚到 `0.1.69-local.2`）。**结果以 `build/reports/standalone-0.1.69-local.3-live-upgrade/result.txt` 为准。**
+
+## 删除二次确认与关联文件清理（2026-11-28）
+
+- 改动：
+  - 前端新增 `runtime/web/src/components/ConfirmDialog.tsx`（及 `index.css` 样式），使用原生 `<dialog>.showModal()` 置顶渲染，适配全主题。单聊手机抽屉（`PhoneSessionDrawerList.tsx`）与多 Agent 侧栏（`CollabShell.tsx`、`CollabRunList.tsx`）点击 `×` 时均先弹窗二次确认，提示将同步清理关联文件，取消保留、确认执行删除；开大会转入快速实现运行中同样隐藏删除按钮。
+  - 后端 `runtime/server/internal/turndiff/artifact.go` 新增 `DeleteSessionArtifacts`，并在 `usecase.Service.DeleteSession` 中删除已删会话及子会话对应的 `.mindfs/turn-diffs/<snapshotID>/` 快照目录（校验 ID 且不追踪符号链接）。
+  - 后端 `runtime/server/internal/collab/handoff_docs.go` 新增 `RemoveRunDir`（校验安全目录并无符号链接追踪整树移除 `.mindfs/runs/<runID>/`，覆盖非白名单子目录与点文件）；`collab.Service.DeleteRun` 清理全部 `1..run.Round` 轮次阶段会话并传递 `RemoveRunDir` 错误；`deleteMeeting` 移除 `!turn.At.IsZero()` 跳过条件，清理所有发言会话并整树移除 `.mindfs/runs/<runID>/`。
+  - 手机端操作体验专项优化（`PhoneSheet.tsx`、`RemotePhoneShell.tsx`、`remotePhone.css`、`CollabShell.tsx`、`CollabShell.css`、`index.css`）：双端抽屉支持左滑关闭手势、打开抽屉自动收起输入法键盘、单聊搜索框提供 36×36 一键清空按钮、抽屉列表底部避让 Home Indicator 安全区；统一放大手机端触控热区（新建按钮 ≥44px、筛选胶囊/删除/加载更多/全局模板按钮 ≥36px、项目头 ≥40px、确认弹窗按钮手机下等宽 44px）。
+- 验证：
+  - 隔离环境 `go test -race -count=1 ./server/internal/turndiff ./server/internal/collab ./server/internal/api/usecase ./server/internal/kanban`、`go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1`、`go vet` 全部通过（含新增 `TestDeleteSessionArtifactsDeletesMatchingOnly`、`TestRemoveRunDirDeletesAllSubdirsAndRejectsSymlinks`、`TestDeleteRunCleansRunDirectoryAndAllRoundStageSessions` 及 `TestDeleteSessionDeletesSubSessionTree` 快照清理断言）。
+  - `npx tsc --noEmit`、`npx vite build`、`remote-phone.test.mjs`（6/6）、`collab-quick-mode.test.mjs`、`collab-meeting.test.mjs` 全部通过（覆盖取消不删与确认删除的二次确认流程）。
+  - 390×700 视口 Playwright 截图核对确认弹窗深色与浅色外观。
+- 待验证：尚未重新打包安装，装包后真实删除单聊会话与多 Agent 协作记录的磁盘文件清理及真机交互待确认。
+
+## 手机端单聊会话抽屉对齐多 Agent（2026-11-28）
+
+- 改动：
+  - 新增 `runtime/web/src/components/remoteui/PhoneSessionDrawerList.tsx`：按项目分组渲染单聊会话（当前项目置顶并带「当前」标签、待处理数角标、总数、折叠箭头、左侧缩进竖线、超 6 条折叠「还有 N 条」并支持触发服务端分页、空非当前项目不占位、当前项目无记录/无筛选命中明确提示、非运行中会话提供删除按钮）。
+  - 更新 `runtime/web/src/layout/RemotePhoneShell.tsx` 与 `runtime/web/src/layout/remotePhone.css`：左侧 `PhoneSheet` 抽屉顶部改为固定控件区（「＋ 新建会话」、`全部 / 待处理 / 进行中` 筛选胶囊、搜索框），下方独立滚动分组列表，移除底部「全部会话」按钮；样式使用主题变量和 `color-mix`，适配浅色、深色、草地、苔藓与跟随系统外观。
+  - 更新 `runtime/web/src/App.tsx`、`runtime/web/src/app/workbench/useSessionSidebarModel.tsx`、`runtime/web/src/app/workbench/useAppBootstrap.ts`：透传 `onNewSession`、`onDeleteSession`、`onLoadMoreProject`，修正当前项目 `totalCount` 统计，并让手机端在 `bootstrapState.phase === "ready"` 时与多项目开关同样触发 `loadMultiProjectSessionGroups`。
+  - 新增中英文 i18n 文案（`remote.phone.filterAll/filterWait/filterWork/currentProject/moreItems/waitingCount/projectNoSessions/projectNoFilteredSessions`）。
+- 验证：
+  - `npx tsc --noEmit` 通过；`npx vite build` 生产构建通过。
+  - `node --test tests/remote-phone.test.mjs` 6/6 通过（更新旧扁平列表与「全部会话」断言，新增按项目分组、无「全部会话」、筛选、折叠、跨项目搜索切换、新建会话、非运行项删除与 6 条折叠回归）。
+  - `node --test tests/remote-design.test.mjs tests/remote-entry-build.test.mjs tests/session-project-hierarchy.test.mjs tests/action-queue.test.mjs` 19/19 通过。
+  - 390×700 视口 Playwright 截图核对浅色、深色、草地、苔藓四个主题，确认无遮挡、无文字低对比度或底色异常。
+- 待验证：尚未重新打独立后台包安装到本机；装包后真实手机多项目数据、跨项目加载更多与真机交互待确认。
+
+## 0.1.69-local.1 本机测试包与本地升级（2026-11-27）
+
+- 构建：`LOCAL_AI_AGENT_VERSION=0.1.69-local.1 node scripts/package-standalone.mjs macos-arm64`（含类型检查与网页构建）。包内程序 arm64、网页 305 文件、零 `/mindfs-assets/`，tar.gz、.sh、install.sh 校验和均 OK。
+- 迁移与 Go：隔离 `IDE_AGENT_DATA_DIR`、`IDE_AGENT_REMOTE_HOST_DIR`、`MINDFS_AGENTS_CONFIG` 后 `go test ./server/internal/kanban -count=1`、`go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1`、`go test ./server/internal/agent/acp/... -count=1`、`go vet ./server/cmd/... ./server/internal/agent/acp/...` 通过。日志 `build/reports/standalone-0.1.69-local.1-live-upgrade/go-tests.log`。
+- 隔离安装：`node scripts/standalone/verify-package-install.mjs <tar.gz>` 在临时 HOME 通过，未碰已装服务。
+- 回滚源：`gh release download standalone-v0.1.68` 取公开 macOS arm64 包，解压到 `build/standalone/0.1.68/`；程序 SHA-256 以 `905f03f0` 开头，与 `~/Applications/LocalAIAgent/local-ai-agent` 一致，网页目录 `diff -r` 无差异。
+- 升级：`upgrade.py`（改自 0.1.66-local.20 版）经独立 launchd 任务排程，先预检、再安装、校验程序/协作模板接口/网页资源/Relay 状态，失败回滚到 0.1.68。预检（`--check`）已通过。**结果以同目录 `result.txt` 为准。**
+- 网页测试：417 项中 413 通过；`document-preview`、`plugin-trust` 为 Node 22.9 无法加载 `.ts`（与改动无关），`idea-chrome` 全量时失败一次、单独 23 项全过，原因未查。
+
 ## 独立后台 0.1.41 正式发布（2026-11-18）
 
 用户确认 macOS 测试版可用后，将同一标签转为[正式版](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.41)。沿用 macOS 两架构的原附件，从相同干净提交 `e9890f8` 补齐 Linux、Windows 和在线入口。24 个附件逐字节比对与 SHA-256 通过；包内脚本、文件架构、305 个网页资源及自解压归档均通过。Kanban 旧库全量和迁移竞态复跑通过。
@@ -759,3 +859,40 @@ IDEA_COLLAB_DIST="$review_dist" node --test tests/collab-meeting.test.mjs tests/
   - 前端测试与浏览器回归（8 个文件 44/44 通过）：`remote-design.test.mjs`（9/9，含 `.remote-center` 无流光、`.remote-status-activity.remote-glow-frame` 默认开启呼吸灯、桌面设置菜单打开「Agent 状态框流光」切换环绕/开关/恢复默认、明暗主题与窄窗口零跳动、键盘打开并提交回答弹窗、iOS App 平板一致布局）、`remote-phone.test.mjs`（5/5）、`session-activity-lifecycle.test.mjs`（7/7）、`activity-reactions.test.mjs`（12/12）、`approval-activity.test.mjs`（3/3）、`remote-entry-build.test.mjs`（3/3）、`collab-meeting.test.mjs`（1/1）、`collab-quick-mode.test.mjs`（1/1）。
   - 后端隔离测试（临时 `HOME` / `IDE_AGENT_DATA_DIR` / `IDE_AGENT_REMOTE_HOST_DIR` / `MINDFS_AGENTS_CONFIG`）：`go test -v ./server/internal/api -run TestFrontendAssetsStayWithBackend -count=1`（24/24）、`go test ./server/internal/kanban -count=1` 与 `go test -race ./server/internal/kanban -run TestTaskStoreSnapshotMigration -count=1` 全部通过。
 - 待实机确认：尚未生成/安装独立后台或插件发行包；Chrome 经真实 Relay 节点连续使用 15 分钟的打字卡顿对照录制留待现场实机验证。
+
+## 0.1.68 正式发布与插件 0.1.27 同版更新（2026-11-27）
+
+- **版本说明**：因 `standalone-v0.1.67` 已于 2026-11-26 公开发布且不可复用，经用户确认独立后台升级发布 **`0.1.68`**，IDEA 插件同版更新 **`0.1.27`**（`replace_existing=true`）。发布前在本地修复了 `runtime/web/tests/collab-edit-models.test.mjs` 3 处沿用旧 `role="group"` / `发言详情` 按钮的过期断言，本地全量 Go、`kanban` 旧库迁移与 `-race` 迁移、18 项发布脚本单测、`tsc` 及 413/413 项前端测试全部通过后提交 `8af5254` 至临时分支 `standalone-0.1.68`。
+- **独立后台 `0.1.68`（`release-standalone.yml`，`mode=formal`，`targets=all`）**：
+  - CI 运行：[Run 45948732023](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45948732023)（全绿通过）。
+  - 验证范围：`plan`、旧库迁移（`kanban` 全量 + `-race` `TestTaskStoreSnapshotMigration`）、18 项发布脚本单测、全量 Go 测试、全量前端类型检查与 413 项测试、六平台 24 个附件打包与静态门禁（305 个网页文件、零 `/mindfs-assets/`、`vcs.modified=false`）、Linux x64 隔离安装与 systemd 自更新、macOS Apple Silicon 隔离安装、Windows ACP 进程树测试与 Windows PowerShell 5.1 安装/升级/自更新、草稿回读比对、快进合并 `main`、24 个公开附件匿名逐字节比对、Windows PowerShell 5.1 公开下载验证、更新 `scripts/standalone/version.txt` 为 `0.1.68`（提交 `1a0a3a0`）、`raw.githubusercontent.com` 缓存收敛后无参数默认在线安装验证，以及旧 `standalone-v0.1.67` 归档快照至工作流产物后下架（保留 Git 标签，清理临时分支 `standalone-0.1.68`）。
+  - 发布地址：[standalone-v0.1.68](https://github.com/zhuxian89/idea-ai-agent/releases/tag/standalone-v0.1.68)。
+- **IDEA 插件 `0.1.27` 同版更新（`release-plugin.yml`，`mode=formal`，`replace_existing=true`）**：
+  - CI 运行：[Run 45950291098](https://github.com/zhuxian89/idea-ai-agent/actions/runs/45950291098)（基于 `1a0a3a0`，全绿通过）。
+  - 验证范围：旧库迁移与 `-race` 迁移测试、发布脚本单测、全量 Go 与前端测试、Gradle 测试与 5 个平台/通用插件 ZIP + `SHA256SUMS.txt` 构建、6 附件静态门禁、`macos-latest` 与 `windows-latest` 双端内嵌后台隔离启动与 305 个 HTTP 网页资源逐字节核验、Windows PowerShell 5.1 对三个 Windows/通用 ZIP 针对 `standalone-v0.1.68` 的公开下载安装器验证、替换前快照归档至工作流产物、以及上线后 6 个公开附件匿名逐字节回读；继续保持 GitHub `Latest`。
+  - 发布地址：[v0.1.27](https://github.com/zhuxian89/idea-ai-agent/releases/tag/v0.1.27)。
+- **仍需人工实机确认的范围**：Linux/Windows ARM64 与 macOS Intel 物理真机运行、macOS 真实服务升级与 Windows 真实登录自启、已装 `0.1.27` 插件从磁盘重装并重启 IDEA、以及真实双 Agent 登录态下的会议首轮读取与 Relay 长驻打字体验。
+
+## ACP 上下文窗口占用修复（第 01 轮审核回应，2026-11-27）
+
+- **源码完成**：
+  - `runtime/server/internal/agent/acp/process.go`：`SessionUpdate` 在分发回调前先更新命令/模式/配置与上下文窗口，避免未注册回调时丢状态及产生 `unhandled raw` 噪声；新增 `parseACPUsageUpdate`（要求 `Used >= 0 && Size > 0`），移除 `TotalTokens == 0` 守卫与 `PromptResponse.Usage.TotalTokens` 覆盖逻辑。按第 01 轮审核 R1 将 `sessionState` 拆分为会话最新有效快照 `contextWindow` 与单轮快照 `turnContextWindow`：`recordContextWindow` 同时刷新两者，`SendMessage` 仅在轮初调用 `resetTurnContextWindow()`，因此 Prompt 报错、取消或某轮未发 `usage_update` 时 `Session.ContextWindow()` 保留会话最新有效占用（轮中先更新再失败也保留更新后的值）；正常完成时 `UpdateTypeMessageDone` 携带 `getTurnContextWindow()`，保持单条回复元数据跨轮隔离（与 Codex 行为一致）。
+  - `runtime/server/internal/agent/acp/session.go`：`UpdateTypeMessageDone` 直接透传 `update.ContextWindow`。
+  - `runtime/server/internal/agent/acp/context_window_test.go`：4 组单测覆盖最新 `usage_update` 刷新（含增长与压缩回落）且不被超 1M 的 `PromptResponse.usage.totalTokens` 覆盖、跨轮隔离与会话级占用保持、Prompt RPC 失败 / 上下文取消 / 轮中更新后失败均保留有效快照，以及非法值过滤与无回调记录。
+- **验证通过（真实 `agy` 载荷抓取 + 隔离 Go 竞态与迁移回归）**：
+  - **真实 `agy 1.5.18 acp` 载荷证据（回应 R2）**：在独立临时目录启动 `/Users/hongweizhang/.local/bin/agy acp`，执行第 1 轮（连续读取 3 个文件，触发 4 次模型调用）与第 2 轮（单次追问）：
+    - `session/new` 后：`{"sessionUpdate":"usage_update","used":0,"size":1048576}`
+    - 第 1 轮 4 次 `usage_update`：`used=10373` → `10553` → `10859` → `11008`（`size=1048576`）；`PromptResponse.result.usage` 为 `{"inputTokens":17115,"outputTokens":511,"cachedReadTokens":25167,"cachedWriteTokens":0,"thoughtTokens":294,"totalTokens":42793}`，其中 `10373 + 10553 + 10859 + 11008 = 42793`（逐 Token 精确相等）。
+    - 第 2 轮 `usage_update`：`used=11121, size=1048576`；`PromptResponse.result.usage` 为 `{"inputTokens":2182,"outputTokens":28,"cachedReadTokens":8911,"cachedWriteTokens":0,"thoughtTokens":24,"totalTokens":11121}`。
+    - 结论：证实 `agy` 的 `usage_update.used` 为当前上下文窗口占用，`PromptResponse.usage.totalTokens` 为轮内累计消耗，无需在 `parseACPUsageUpdate` 人为截断 `used <= size`。
+  - **隔离 Go 测试与构建复测（第 01 轮最终交付）**（临时 `HOME`、`IDE_AGENT_DATA_DIR`、`IDE_AGENT_REMOTE_HOST_DIR`、`MINDFS_AGENTS_CONFIG`，保留 `GOPATH`/`GOMODCACHE`/`GOCACHE`）：
+    - `go test -race -count=10 -timeout 60s ./server/internal/agent/acp/...`：PASS（`2.230s`，16 项单测连续 10 轮竞态零异常）
+    - `go test -race -count=1 -v ./server/internal/agent/acp/...`：PASS（`1.475s`，4 组上下文窗口测试及全部 16 项 ACP 用例全过）
+    - `go test -race -count=1 -timeout 60s ./server/internal/agent/codex/... ./server/internal/agent/claude/...`：PASS（`codex 1.660s`、`claude 1.632s`）
+    - `go test -race -count=1 -timeout 120s ./server/internal/session/... ./server/internal/api/usecase/... ./server/internal/kanban/...`：PASS（`session 1.754s`、`api/usecase 6.819s`、`kanban 2.861s`）
+    - `go test -count=1 ./server/internal/kanban`（`0.746s`）与 `go test -race -count=1 ./server/internal/kanban -run TestTaskStoreSnapshotMigration`（`1.600s`）：PASS
+    - `go test -count=1 ./server/internal/agent -run 'TestShippedRegistry|TestAntigravity'`（`0.554s`）：PASS
+    - `go vet ./server/internal/agent/acp/...` 与 `go build ./server/...`：PASS
+- **未验证与安装包状态**：
+  - `runtime/server/internal/agent` 同包内的 `relay_models_test.go` 与 `update_check_test.go` 依赖本地 `127.0.0.1` 建连，在无网络沙箱下未执行（与本次 ACP 上下文改动无关，需在有网络环境或发包 CI 中补跑全包）。
+  - 本次仅完成源码修复与测试验证，**尚未重新构建或安装**独立后台（`> 0.1.68`）或 IDEA 插件发行包；经 MindFS 页面接入真实 `agy` 的长会话实机验收待后续打包安装后完成。[逐条回应](../../../.mindfs/runs/run-1795777697-3805aa5cb644/第01轮/03-逐条回应.md)

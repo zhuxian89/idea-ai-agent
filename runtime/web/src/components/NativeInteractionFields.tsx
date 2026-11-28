@@ -81,7 +81,7 @@ export function NativeInteractionFields({ interaction: n, answers, onChange, dis
   };
   let safeURL = "";
   try { const url = new URL(n.url || ""); if (["http:", "https:"].includes(url.protocol)) safeURL = url.href; } catch { /* Invalid links remain plain text. */ }
-  return <fieldset disabled={disabled} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gap: "12px" }}>
+  return <fieldset className="mindfs-native-fields" disabled={disabled} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gap: "12px" }}>
     {n.message && <p style={{ margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{n.message}</p>}
     {n.kind === "url" && <div style={{ overflowWrap: "anywhere" }}>
       <p style={{ margin: "0 0 6px" }}>{t("native.urlHint")}</p>
@@ -91,7 +91,7 @@ export function NativeInteractionFields({ interaction: n, answers, onChange, dis
       ? <p style={{ margin: 0, overflowWrap: "anywhere" }}>{String(details.originalModel || "")} → {String(details.fallbackModel || "")}</p>
       : compactDetails ? <CompactRequestDetails details={details} /> : <details open><summary>{t("native.details")}</summary><pre style={{ margin: "8px 0 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: "12px" }}>{JSON.stringify(details, null, 2)}</pre></details>)}
     <div role="radiogroup" aria-label={t("native.action")} style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-      {n.actions.map(action => <label key={action} style={{ display: "flex", gap: "6px", alignItems: "center", padding: "7px 10px", border: "1px solid var(--border-color)", borderRadius: "6px", cursor: disabled ? "default" : "pointer" }}>
+      {n.actions.map(action => <label key={action} className="mindfs-native-action" data-checked={answers.q_0 === action ? "true" : undefined} style={{ display: "flex", gap: "6px", alignItems: "center", padding: "7px 10px", border: "1px solid var(--border-color)", borderRadius: "6px", cursor: disabled ? "default" : "pointer" }}>
         <input type="radio" name={groupID} checked={answers.q_0 === action} onChange={() => onChange({ ...answers, q_0: action, ...(form && action === "accept" && !answers.q_1 ? { q_1: "{}" } : {}) })} />
         {labels[action] || action}
       </label>)}
@@ -103,15 +103,15 @@ export function NativeInteractionFields({ interaction: n, answers, onChange, dis
       return <label key={name} style={{ display: "grid", gap: "5px" }}>
         <span>{label}</span>
         {schema.description && <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{schema.description}</span>}
-        {schema.enum ? <select aria-label={label} style={control} value={value === undefined ? "" : String(schema.enum.findIndex(v => v === value))} onChange={e => field(name, e.target.value === "" ? undefined : schema.enum![Number(e.target.value)])}>
+        {schema.enum ? <select className="mindfs-native-control" aria-label={label} style={control} value={value === undefined ? "" : String(schema.enum.findIndex(v => v === value))} onChange={e => field(name, e.target.value === "" ? undefined : schema.enum![Number(e.target.value)])}>
           <option value="">{t("native.choose")}</option>{schema.enum.map((v, i) => <option key={i} value={i}>{String(v)}</option>)}
-        </select> : schema.type === "boolean" ? <select aria-label={label} style={control} value={value === undefined ? "" : String(value)} onChange={e => field(name, e.target.value === "" ? undefined : e.target.value === "true")}>
+        </select> : schema.type === "boolean" ? <select className="mindfs-native-control" aria-label={label} style={control} value={value === undefined ? "" : String(value)} onChange={e => field(name, e.target.value === "" ? undefined : e.target.value === "true")}>
           <option value="">{t("native.choose")}</option><option value="true">{t("native.yes")}</option><option value="false">{t("native.no")}</option>
-        </select> : <input aria-label={label} style={control} type={schema.type === "string" ? "text" : "number"} step={schema.type === "integer" ? 1 : "any"} value={typeof value === "string" || typeof value === "number" ? value : ""} onChange={e => field(name, schema.type === "string" ? e.target.value : e.target.value === "" ? undefined : Number(e.target.value))} />}
+        </select> : <input className="mindfs-native-control" aria-label={label} style={control} type={schema.type === "string" ? "text" : "number"} step={schema.type === "integer" ? 1 : "any"} value={typeof value === "string" || typeof value === "number" ? value : ""} onChange={e => field(name, schema.type === "string" ? e.target.value : e.target.value === "" ? undefined : Number(e.target.value))} />}
       </label>;
     }) : <label style={{ display: "grid", gap: "6px" }}>{t("native.jsonContent")}
       <details><summary>{t("native.schema")}</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(n.schema, null, 2)}</pre></details>
-      <textarea aria-label={t("native.jsonContent")} rows={8} spellCheck={false} style={{ ...control, resize: "vertical", fontFamily: "monospace" }} value={answers.q_1 || "{}"} onChange={e => onChange({ ...answers, q_1: e.target.value })} />
+      <textarea className="mindfs-native-control" aria-label={t("native.jsonContent")} rows={8} spellCheck={false} style={{ ...control, resize: "vertical", fontFamily: "monospace" }} value={answers.q_1 || "{}"} onChange={e => onChange({ ...answers, q_1: e.target.value })} />
     </label>)}
   </fieldset>;
 }

@@ -368,6 +368,7 @@ export function SessionCard({
           >
             <button
               type="button"
+              className="workspace-session-inline-action"
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation();
@@ -399,6 +400,7 @@ export function SessionCard({
             </button>
             <button
               type="button"
+              className="workspace-session-inline-action"
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation();

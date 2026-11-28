@@ -1,7 +1,7 @@
 import { PhoneMoreMount, PhoneMoreGroup } from "../remoteui/PhoneMoreHost";
 import { isRemoteWebUi } from "../../services/remoteUi";
 import { fileTreeMenuButtonStyle, WebPushMenuItem } from "../WebPushMenuItem";
-import { isIOSAppRuntime } from "../../services/runtime";
+import { isIOSAppRuntime, isMacAppRuntime } from "../../services/runtime";
 import { BarkMenuItem } from "../notifications/BarkSettings";
 import { APPEARANCE_OPTIONS, LOCALE_OPTIONS } from "../fileTreeModel";
 import { setAppearanceMode } from "../../services/appearance";
@@ -83,7 +83,7 @@ export function FileTreeSettingsMenu({ agentConfigFlowApi, agentLifecycleApi, ag
             ) : null}
             <FileTreeProjectGroup agentConfigFlowApi={agentConfigFlowApi} agentLifecycleApi={agentLifecycleApi} agentLifecycleStateApi={agentLifecycleStateApi} fileTreeMenuBehaviorApi={fileTreeMenuBehaviorApi} fileTreeMenusApi={fileTreeMenusApi} fileTreePreferenceStateApi={fileTreePreferenceStateApi} fileTreePreferencesApi={fileTreePreferencesApi} relayServicesApi={relayServicesApi} props={{ relayNoRelayer }} />
             <PhoneMoreGroup phone={inPhoneMore} name="notifications" title={t("remote.phone.notifications")}>
-              {!isNativeApp && !isIOSAppRuntime() ? <WebPushMenuItem phone={inPhoneMore} /> : null}
+              {!isNativeApp && !isIOSAppRuntime() && !isMacAppRuntime() ? <WebPushMenuItem phone={inPhoneMore} /> : null}
               <BarkMenuItem phone={inPhoneMore} />
             </PhoneMoreGroup>
             {!inPhoneMore && <div style={{ height: "1px", background: "var(--border-color)", margin: "6px 4px" }} />}

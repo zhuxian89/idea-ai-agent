@@ -20,6 +20,7 @@ import (
 	rootfs "mindfs/server/internal/fs"
 	"mindfs/server/internal/preferences"
 	"mindfs/server/internal/session"
+	"mindfs/server/internal/turndiff"
 )
 
 func TestSaveUploadedFilesDefaultsToAttachmentDirAndRenamesConflicts(t *testing.T) {
@@ -524,6 +525,28 @@ func TestDeleteSessionDeletesSubSessionTree(t *testing.T) {
 		t.Fatalf("create sibling: %v", err)
 	}
 
+	metaDir, err := root.EnsureMetaDir()
+	if err != nil {
+		t.Fatalf("ensure meta dir: %v", err)
+	}
+	sampleFile := turndiff.ChangedFile{
+		Path:   "demo.txt",
+		Before: turndiff.FileState{Present: true, Mode: 0o644, Bytes: []byte("a")},
+		After:  turndiff.FileState{Present: true, Mode: 0o644, Bytes: []byte("b")},
+	}
+	parentSnap, err := turndiff.SaveArtifact(metaDir, parent.Key, []turndiff.ChangedFile{sampleFile})
+	if err != nil {
+		t.Fatalf("save parent artifact: %v", err)
+	}
+	childSnap, err := turndiff.SaveArtifact(metaDir, child.Key, []turndiff.ChangedFile{sampleFile})
+	if err != nil {
+		t.Fatalf("save child artifact: %v", err)
+	}
+	siblingSnap, err := turndiff.SaveArtifact(metaDir, sibling.Key, []turndiff.ChangedFile{sampleFile})
+	if err != nil {
+		t.Fatalf("save sibling artifact: %v", err)
+	}
+
 	if err := service.DeleteSession(ctx, DeleteSessionInput{RootID: root.ID, Key: parent.Key}); err != nil {
 		t.Fatalf("delete parent: %v", err)
 	}
@@ -531,6 +554,14 @@ func TestDeleteSessionDeletesSubSessionTree(t *testing.T) {
 		if _, err := manager.Get(ctx, deleted.Key, 0); err == nil {
 			t.Fatalf("session %s still exists", deleted.Key)
 		}
+	}
+	for _, snapID := range []string{parentSnap, childSnap} {
+		if _, err := os.Stat(filepath.Join(metaDir, "turn-diffs", snapID)); !os.IsNotExist(err) {
+			t.Fatalf("turn-diff artifact %s should be deleted, stat err=%v", snapID, err)
+		}
+	}
+	if _, err := turndiff.LoadArtifact(metaDir, sibling.Key, siblingSnap, "demo.txt"); err != nil {
+		t.Fatalf("sibling turn-diff artifact should remain: %v", err)
 	}
 	if _, err := manager.Get(ctx, sibling.Key, 0); err != nil {
 		t.Fatalf("sibling should remain: %v", err)

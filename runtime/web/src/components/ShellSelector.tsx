@@ -29,7 +29,7 @@ export function ShellSelector({
   }, [isOpen]);
 
   return (
-    <div ref={dropdownRef} style={{ position: "relative" }}>
+    <div ref={dropdownRef} className="action-bar-shell-selector" style={{ position: "relative" }}>
       <button
         type="button"
         onClick={() => shells.length > 0 && setIsOpen((prev) => !prev)}

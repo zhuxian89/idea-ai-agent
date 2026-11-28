@@ -33,8 +33,20 @@ export function useSessionSidebarModel({ appFoundationApi, workbenchLayoutApi, c
   const { sessionByKey } = sessionRestoreApi;
 
   const sessionWithRoot = sessions.map(item => ({ ...item, root_id: item.root_id || currentRootId || undefined }));
+  const currentMultiGroup = currentRootId
+    ? multiProjectSessionGroups.find(group => group.rootId === currentRootId)
+    : undefined;
+  const currentPhoneSessions = sessionWithRoot.length
+    ? sessionWithRoot
+    : currentMultiGroup?.sessions || [];
+  const currentTopLevelCount = currentPhoneSessions.filter(item => !item.parent_session_key).length;
   const phoneGroups = remotePhone ? [
-    ...(currentRootId ? [{ rootId: currentRootId, rootName: managedRootByIdRef.current[currentRootId]?.display_name || currentRootId, sessions: sessionWithRoot.length ? sessionWithRoot : multiProjectSessionGroups.find(group => group.rootId === currentRootId)?.sessions || [], totalCount: sessionWithRoot.length }] : []),
+    ...(currentRootId ? [{
+      rootId: currentRootId,
+      rootName: managedRootByIdRef.current[currentRootId]?.display_name || currentMultiGroup?.rootName || currentRootId,
+      sessions: currentPhoneSessions,
+      totalCount: Math.max(currentTopLevelCount, currentMultiGroup?.totalCount || 0),
+    }] : []),
     ...multiProjectSessionGroups.filter(group => group.rootId !== currentRootId),
   ] : [];
   const phoneFactsBySession = new Map<string, PhoneSessionFacts>();

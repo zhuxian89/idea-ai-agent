@@ -74,6 +74,9 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
   let quick;
   let revision = 12;
   const submitted = [];
+  const failedPlans = [];
+  let planGate = null;
+  let planFailure = "";
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.routeWebSocket(/\/ws(?:\?|$)/, (ws) => { socket = ws; });
@@ -135,6 +138,15 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
     if (pathname === `/api/collab/runs/${runId}/meeting`) {
       const action = request.postDataJSON();
       submitted.push(action);
+      if (action.action === "plan") {
+        if (planGate) await planGate; // 模拟请求在途：放行前弹窗处于提交中
+        if (planFailure) { // 模拟后端拒绝（例如另一个页面已经开始生成计划）
+          const error = planFailure;
+          planFailure = "";
+          failedPlans.push(submitted.pop());
+          return json({ error }, 409);
+        }
+      }
       const round = detail.meeting.rounds.at(-1);
       switch (action.action) {
         case "retry_turn":
@@ -262,6 +274,28 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
   await expect(page.getByText("严格只读", { exact: true }).last()).toBeVisible();
   await page.getByRole("button", { name: "设为默认" }).click();
   await expect(page.getByText("默认", { exact: true }).last()).toBeVisible();
+  // 同一个弹窗里分「快速模式 / 开大会」两个标签，打开时停在当前发起页的模式，切换不用关掉再换入口。
+  const modalTabs = page.locator(".collab-modal").getByRole("tablist", { name: "模板类型" });
+  await expect(modalTabs.getByRole("tab", { name: "开大会" })).toHaveAttribute("aria-selected", "true");
+  await modalTabs.getByRole("tab", { name: "快速模式" }).click();
+  await expect(modalTabs.getByRole("tab", { name: "快速模式" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".collab-modal")).toContainText("受限实现模板");
+  await expect(page.locator(".collab-modal")).not.toContainText("成员2（主笔）");
+  await modalTabs.getByRole("tab", { name: "开大会" }).click();
+  await expect(page.locator(".collab-modal")).toContainText("成员2（主笔）");
+  // 编辑中不能切标签，避免丢掉没保存的内容。
+  await page.locator(".collab-modal").getByRole("button", { name: "编辑" }).first().click();
+  await expect(modalTabs.getByRole("tab", { name: "快速模式" })).toBeDisabled();
+  await page.locator(".collab-modal").getByRole("button", { name: "取消" }).click();
+  await expect(modalTabs.getByRole("tab", { name: "快速模式" })).toBeEnabled();
+  // 在另一个标签里点「应用」：发起页切到该模式并套用选中的这份模板。
+  await modalTabs.getByRole("tab", { name: "快速模式" }).click();
+  await page.locator(".collab-modal").getByRole("button", { name: "应用" }).first().click();
+  await expect(page.locator(".collab-modal")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "快速模式", exact: true }).first()).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("select").filter({ hasText: "受限实现模板" }).first()).toHaveValue("quick-template");
+  await page.getByRole("button", { name: "开大会", exact: true }).first().click();
+  await page.getByRole("button", { name: "管理全局模板" }).click();
   await page.locator(".collab-modal-head button").first().click();
   await expect(page.getByLabel("主笔")).toHaveValue("member-2");
   await expect(page.getByLabel("轮次上限")).toHaveValue("2");
@@ -294,13 +328,14 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
   await page.locator("#meeting-m-01-001").getByRole("button", { name: "检查并重试" }).click();
   await expect(page.getByText("该成员仍在执行", { exact: true })).toBeVisible();
   await page.locator("#meeting-m-01-001 .collab-tc-select").click();
-  await expect(page.locator(".collab-detail-pane").getByRole("img", { name: "发言中" })).toBeVisible();
+  await expect(page.locator(".collab-detail-head .t")).toHaveText("成员1");
+  await expect(page.locator(".collab-detail-head .collab-detail-permission")).toHaveCount(0);
+  await expect(page.locator(".collab-detail-head .collab-model-dot")).toHaveCount(0);
   await expect(page.locator(".collab-detail-body")).not.toHaveClass(/remote-glow-frame/);
   await expect(page.locator(".collab-detail-footer .remote-status-activity.remote-glow-frame")).toHaveCount(1);
   finishRound(detail);
   first.readonly_state = "modified";
   update();
-  await expect(page.locator(".collab-detail-pane").getByRole("img", { name: "已交付" })).toBeVisible();
   await expect(message).not.toHaveAttribute("data-glow-active");
   await expect(message).toContainText("已交付");
   await expect(message.getByText("检测到工作区变更")).toBeVisible();
@@ -340,7 +375,12 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
   await expect(page.locator("#meeting-m-01-006")).toContainText("成员2 · Opus 4.6");
   await expect(page.locator("#meeting-m-01-006")).toContainText("已交付");
 
-  await expect(page.locator(".collab-shell")).toHaveCSS("background-color", "rgb(241, 242, 245)");
+  await expect(page.locator(".collab-shell")).toHaveCSS("background-color", "rgb(243, 244, 246)");
+  // 侧栏底部复用单聊页脚：电脑状态、公网访问入口（侧栏收起时只留窄栏，不显示页脚）。
+  await page.getByRole("button", { name: "展开运行列表" }).first().click();
+  await expect(page.locator(".collab-sidebar .sidebar-service-footer .sysmon")).toBeVisible();
+  await expect(page.locator(".collab-sidebar .sidebar-service-footer .file-tree-relay-action")).toBeVisible();
+  await page.getByRole("button", { name: "收起运行列表" }).first().click();
   if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "desktop-light.png") });
   const discussRemaining = page.getByRole("button", { name: "只讨论剩余分歧", exact: true });
   const firstItems = detail.meeting.rounds[0].items;
@@ -362,7 +402,16 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
   await expect(page.locator("#meeting-m-02-001")).toBeFocused();
   await page.emulateMedia({ colorScheme: "dark" });
   await page.locator("html").evaluate((root) => root.setAttribute("data-theme", "dark"));
-  await expect(page.locator(".collab-shell")).toHaveCSS("background-color", "rgb(13, 15, 19)");
+  await expect(page.locator(".collab-shell")).toHaveCSS("background-color", "rgb(2, 6, 23)");
+  // 其余外观与单聊同色：跟随系统（系统深色）沿用深色，草地、苔藓取各自的页面底色。
+  await page.locator("html").evaluate((root) => root.removeAttribute("data-theme"));
+  await expect(page.locator(".collab-shell")).toHaveCSS("background-color", "rgb(2, 6, 23)");
+  for (const [theme, canvas] of [["meadow", "rgb(244, 239, 230)"], ["moss", "rgb(223, 229, 212)"]]) {
+    await page.locator("html").evaluate((root, name) => root.setAttribute("data-theme", name), theme);
+    await expect(page.locator(".collab-shell")).toHaveCSS("background-color", canvas);
+  }
+  await page.locator("html").evaluate((root) => root.setAttribute("data-theme", "dark"));
+  await expect(page.locator(".collab-shell")).toHaveCSS("background-color", "rgb(2, 6, 23)");
   await page.locator("#meeting-m-02-001 .collab-tc-select").click();
   await expect(page.locator(".collab-detail-pane").getByText("原生过程对话")).toBeVisible();
   await expect(page.locator('.collab-detail-pane [data-onboarding="action-bar"]').getByRole("textbox")).toBeVisible();
@@ -457,7 +506,21 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
   await expect(choose.getByRole("button", { name: "下一条" })).toHaveCount(0);
   await choose.getByRole("radio", { name: /采纳 方案 2 · 请求重试/ }).click();
   await expect.poll(overflow).toEqual([0, 0]);
+  // 提交被后端拒绝：原因必须显示在弹窗里（手机上弹窗全屏，页面上的提示被挡住），选择保留，可以直接重试。
+  planFailure = "另一个页面已经开始生成正式计划，请刷新后重试";
   await createPlan.click();
+  await expect(choose.getByRole("alert")).toContainText("另一个页面已经开始生成正式计划");
+  await expect(choose.getByRole("alert")).toBeVisible();
+  await expect(choose.getByRole("radio", { name: /采纳 方案 2 · 请求重试/ })).toHaveAttribute("aria-checked", "true");
+  assert.equal(failedPlans.length, 1);
+  // 请求在途时冻结选择：界面上改了也不会进入这次计划，不能看起来像生效了。
+  let releasePlan;
+  planGate = new Promise((resolve) => { releasePlan = resolve; });
+  await createPlan.click();
+  await expect(choose.getByRole("radio", { name: /采纳 方案 1 · 按钮重复触发/ })).toBeDisabled();
+  await expect(choose.getByRole("radio", { name: /采纳 方案 2 · 请求重试/ })).toBeDisabled();
+  releasePlan();
+  planGate = null;
   const readyComposer = page.getByRole("textbox", { name: "会议补充" });
   await expect(readyComposer).toBeVisible();
   await readyComposer.fill("为什么批量场景也会触发重试？");
@@ -484,10 +547,38 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
   finishRound(detail);
   const overrideRound = detail.meeting.rounds[0];
   const basePositions = overrideRound.items[0].positions;
+  const threeMemberProposal = {
+    id: "D3", slot_id: "member-3", turn_id: "m-01-003", version_id: "D3-v1", stance: "propose",
+    quote: "采用指数退避并将上限控制在 30 秒", reason: "避免雪崩重试",
+    citations: [{ file_path: "src/retry.go", line_start: 18, line_end: 24, citation_verified: true }],
+  };
+  const threeMemberPositions = [
+    {
+      id: "D3", slot_id: "member-1", turn_id: "m-01-004", version_id: "D3-v1", stance: "agree",
+      quote: "同意 30 秒上限，同时保留抖动因子", checked: "已核实重试配置",
+      citations: [{ file_path: "src/retry.go", line_start: 18, line_end: 24, citation_verified: true }],
+    },
+    {
+      id: "D3", slot_id: "member-2", turn_id: "m-01-005", version_id: "D3-v1", stance: "unconfirmed",
+      issue: "引文与正文不匹配", checked: "已对照 retry.go，需补充原话引文",
+      citations: [{ file_path: "src/retry.go", line_start: 20, line_end: 22, citation_verified: true }],
+    },
+    {
+      id: "D3", slot_id: "member-3", version_id: "D3-v1", stance: "agree", source: "author",
+    },
+    {
+      // 成员 3 是提案人（上面有可采纳的提案），但这轮互评的控制块无效：未确认的互评不能被他的提案遮掉。
+      id: "D3", slot_id: "member-3", turn_id: "m-01-006", version_id: "D3-v1", stance: "unconfirmed", issue: "控制块无效",
+    },
+  ];
+  detail.run.snapshot.members = [
+    ...detail.run.snapshot.members,
+    { slot_id: "member-3", role: "member", agent: "codex", model: "gpt-5.3-codex" },
+  ];
   overrideRound.items = [
     { id: "D1", title: "缓存淘汰策略", aligned: true, positions: basePositions },
     { id: "D2", title: "分片键选择", aligned: true, positions: basePositions },
-    { id: "D3", title: "重试退避上限", aligned: false, positions: basePositions },
+    { id: "D3", title: "重试退避上限", aligned: false, proposal: threeMemberProposal, positions: threeMemberPositions },
     { id: "D4", title: "灰度开关位置", aligned: false, positions: basePositions },
   ];
   update();
@@ -497,6 +588,52 @@ test("开大会群聊与附件点名、多议题逐项裁决并实现、单议�
   await autoCollapsedToggle.click();
   await expect(autoCollapsedToggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(".meeting-summary .meeting-item")).toHaveCount(4);
+  // 没有人反对、只是有成员没有有效表态的议题叫「待确认」，不再混进「分歧」：D3 待确认，D4 才是分歧。
+  const badgeOf = (id) => page.locator(".meeting-summary .meeting-item", { hasText: id }).locator(".meeting-item-badge");
+  await expect(badgeOf("D3")).toHaveText("待确认");
+  await expect(badgeOf("D4")).toHaveText("分歧");
+  await expect(page.locator(".meeting-summary-pill[data-state='pending']")).toHaveText("1 待确认");
+  await expect(page.locator(".meeting-summary-pill[data-state='disputed']")).toHaveText("1 分歧");
+  await expect(page.locator(".meeting-next-actions")).toContainText("1 项分歧、1 项待确认");
+
+  // 3 成员条目（2 同意 + 1 未确认无原话）：裁决弹窗里必须展示 3 家，并写明「2 同意 · 1 未确认」与未确认原因
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "提前裁决", exact: true }).click();
+  const threeDialog = page.getByRole("dialog", { name: "逐条裁决" });
+  await expect(threeDialog).toContainText("2 同意 · 2 未确认");
+  await expect(threeDialog.getByRole("radio", { name: /^采纳/ })).toHaveCount(2);
+  const readonlyCards = threeDialog.locator(".decision-option--readonly");
+  // 只读卡：成员 2（引文不匹配）和成员 3 的未确认互评；提案人对自己提案的默认同意不单独成卡。
+  await expect(readonlyCards).toHaveCount(2);
+  await expect(readonlyCards.filter({ hasText: "控制块无效" })).toHaveCount(1);
+  const unconfirmedCard = readonlyCards.filter({ hasText: "引文与正文不匹配" });
+  await expect(unconfirmedCard).toHaveCount(1);
+  await expect(unconfirmedCard).toContainText("未确认");
+  await expect(unconfirmedCard).toContainText("无有效原话 · 不可采纳");
+  await expect(unconfirmedCard).toContainText("引文与正文不匹配");
+  await unconfirmedCard.getByRole("button", { name: "展开理由和出处" }).click();
+  await expect(unconfirmedCard).toContainText("已对照 retry.go，需补充原话引文");
+  await expect(unconfirmedCard.getByRole("button", { name: "src/retry.go:20–22" })).toBeVisible();
+  if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "phone-decision-unconfirmed.png") });
+  await threeDialog.getByRole("button", { name: "关闭裁决" }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 弹窗开着时数据变了：选过的方案不再可采纳（例如该成员重试后引文没了），这一条不能还显示「已处理」。
+  await page.getByRole("button", { name: "提前裁决", exact: true }).click();
+  const staleDialog = page.getByRole("dialog", { name: "逐条裁决" });
+  await staleDialog.getByRole("radio", { name: /^采纳/ }).first().click();
+  await expect(staleDialog).toContainText("已处理 1");
+  const adoptedQuote = threeMemberProposal.quote;
+  threeMemberProposal.quote = "";
+  threeMemberPositions[0].quote = "";
+  update();
+  await expect(staleDialog.getByRole("radio", { name: /^采纳/ })).toHaveCount(0);
+  await expect(staleDialog).toContainText("已处理 0");
+  await expect(staleDialog.getByRole("button", { name: "生成正式计划" })).toHaveCount(0);
+  threeMemberProposal.quote = adoptedQuote;
+  threeMemberPositions[0].quote = "同意 30 秒上限，同时保留抖动因子";
+  update();
+  await staleDialog.getByRole("button", { name: "关闭裁决" }).click();
   await page.getByRole("button", { name: "否决全部，按我方向", exact: true }).click();
   const overrideDialog = page.getByRole("dialog", { name: "否决全部议题" });
   const overrideSubmit = overrideDialog.getByRole("button", { name: "按我的方向生成正式计划" });

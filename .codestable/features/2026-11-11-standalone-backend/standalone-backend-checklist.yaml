@@ -1,8 +1,56 @@
 feature: 2026-11-11-standalone-backend
 status: in_progress
 entrypoint: README.md
-current_step: desktop-static-status-bar
+current_step: standalone-0169-local7-local-upgrade
 steps:
+- id: standalone-0169-local7-local-upgrade
+  description: 本机测试包 0.1.69-local.7（macos-arm64）移除多 Agent 详情页顶栏（.collab-detail-head）的权限盾牌/锁与状态圆点，在窄屏/手机端替换为「≡」运行列表抽屉按钮，支持从阶段对话直接切换其他协作记录或返回单聊。tsc、vite build、collab-quick-mode/collab-meeting/collab-edit-models（3/3）、隔离 Go vet/kanban/旧库迁移竞态、verify-release-assets 6 附件静态门禁与临时 HOME 隔离安装 4/4 通过；回滚源为已装 0.1.69-local.6（upgrade.py --check 预检通过，10 项目可读，Relay bound=True connected=True）。独立 launchd 升级任务 dev.ideaagent.standalone-upgrade-0169-local7 已排程，结果以 build/reports/standalone-0.1.69-local.7-live-upgrade/result.txt 为准；装后手机真机实测待验收。
+  status: in_progress
+- id: standalone-0169-local6-local-upgrade
+  description: 本机测试包 0.1.69-local.6（macos-arm64）已安装并验证通过（result.txt 确认 0.1.69-local.6 installed and verified at http://127.0.0.1:7441，10 项目可读，程序/模板接口/网页资源与 Relay 状态均核验通过），现作为 0.1.69-local.7 回滚源。
+  status: done
+- id: standalone-0169-local5-local-upgrade
+  description: 本机测试包 0.1.69-local.5（macos-arm64）已安装并验证通过（result.txt 确认 0.1.69-local.5 installed and verified at http://127.0.0.1:7441，10 项目可读，程序/模板接口/网页资源与 Relay 状态均核验通过），现作为 0.1.69-local.6 回滚源；真机测试暴露的回复元信息两行折行已在 local.6 修复。
+  status: done
+- id: phone-web-style-polish-round-01
+  description: 手机端远程网页工作台（html[data-remote-ui="1"][data-device="phone"] 与 .remote-phone）5 阶段纯样式优化及第 01 轮审核 R1–R7 交付复测源码完成：统一 4px 网格/三档嵌套圆角/六档整数字阶/三档触控热区、安全区单变量契约、两行输入区、提问卡静谧表面与强调色统一、多 Agent 入口角标高对比度（5.02:1–8.26:1）、协作与会议页全量可编辑控件 16px，以及生产 CSS 包层叠修复（裁决弹窗 <=640px 提升至 .collab-modal.meeting-decision-modal 确保窄屏全屏 0px 圆角与宽屏 16px 圆角、文档预览弹窗保留 .collab-modal-body--file 零内边距）。已验证：tsc --noEmit、vite build（305 文件/零 /mindfs-assets/）、前端回归 38 项（32+4+2）、最终生产 CSS 包 R1–R7 与桌面隔离 Playwright 专项校验、隔离环境 TestFrontendAssetsStayWithBackend 与 kanban 全量/-race 旧库迁移全部通过。已构建本机测试包 0.1.69-local.5 并排程升级；iPhone Safari/PWA、iOS App WKWebView 与 Android Chrome 软键盘及 16px 防缩放、320px 实机与经 Relay 入口验收待完成。
+  status: in_progress
+- id: standalone-0169-local4-local-upgrade
+  description: 本机测试包 0.1.69-local.4（macos-arm64）已安装并验证通过（result.txt 确认 0.1.69-local.4 installed and verified at http://127.0.0.1:7441，10 个项目可读，程序/模板接口/网页资源与 Relay 状态均核验通过），现作为 0.1.69-local.5 回滚源；装后用真实会议实机验证待完成。
+  status: done
+- id: meeting-quote-markdown-mismatch-fix
+  description: 开大会「引文与正文不匹配」误判根因为 claude 抄引文时去掉行内代码反引号而后台逐字节比对，已用当场真实原始输出确认。三项改动（忽略排版标记、引文问题保留立场、待确认单列）加一轮裁决流程审查（9 条逐条核实并修复，另修弹窗内选择失效仍显示已处理）源码完成。真实数据回放未确认 8→0；collab -race、api、kanban 与旧库迁移、go vet、端到端三成员裁决用例与前端回归通过，网页全量 422 项仅 2 项既有 Node 22.9 .ts 失败。尚未打包安装；详情接口读取非同一事务、缺理由未确认互评是否可采纳待定；已存旧结果需单成员重试或下一轮；真实会议实机复测待验收。
+  status: in_progress
+- id: meeting-decision-show-unconfirmed
+  description: 修复开大会裁决弹窗（MeetingDecisions）漏显无有效原话的「未确认」成员与头部漏统计「N 未确认」的问题；无有效原话成员以虚线只读状态卡展示原因、理由与出处（标明不可采纳）。tsc、Vite 构建、collab-meeting 浏览器回归（含 3 成员 2 同意 + 1 未确认 390px 手机断言）与截图通过；尚未重新打包安装。
+  status: in_progress
+- id: standalone-0169-local3-local-upgrade
+  description: 本机测试包 0.1.69-local.3（macos-arm64）已安装并验证通过（result.txt 确认 0.1.69-local.3 installed and verified，10 个项目可读，程序/模板接口/网页资源与 Relay 状态均核验通过）。
+  status: done
+- id: delete-confirm-and-associated-file-cleanup
+  description: 单聊手机抽屉与多 Agent 记录列表删除改为二次确认弹窗（ConfirmDialog，手机下 44px 等宽按钮），同步打磨手机端操作体验（双端抽屉左滑关闭、打开抽屉自动收起键盘、搜索一键清空、底部安全区避让、热区放大至 36-44px），并在真删除时彻底清理关联磁盘文件（单聊 .mindfs/turn-diffs、多 Agent .mindfs/runs/<runID> 整树与全轮次/零时间戳发言会话）。隔离 Go -race（turndiff/collab/api/usecase/kanban 与旧库迁移）、go vet、tsc、Vite 构建、remote-phone/collab-quick-mode/collab-meeting 浏览器回归及亮暗截图通过；尚未打包安装，真机体验与实删验证待完成。
+  status: in_progress
+- id: phone-session-drawer-align-collab
+  description: 手机端单聊点左上三条横线弹出的会话抽屉对齐多 Agent 侧栏：顶部「＋ 新建会话」+ 全部/待处理/进行中筛选 + 搜索框，列表按项目分组（当前项目置顶标「当前」、待处理角标、可折叠、超 6 条折叠「还有 N 条」支持加载更多、非运行项可删），移除底部「全部会话」按钮；同步修手机端启动加载多项目会话组与当前项目计数。tsc、Vite 生产构建、remote-phone（6/6）及相关 4 套件（19/19）与四主题截图通过；尚未重新打包安装，真机实测待验收。
+  status: in_progress
+- id: standalone-0169-local2-local-upgrade
+  description: 本机测试包 0.1.69-local.2（macos-arm64）在 local.1 基础上含模板弹窗标签、记录列表跨项目分组与类型标签、排队消息条重做。隔离 Go 测试、打包静态核对和临时 HOME 隔离安装通过；回滚源为 0.1.69-local.1 构建（与已装逐字节一致）。升级已排程到本机，结果以 build/reports/standalone-0.1.69-local.2-live-upgrade/result.txt 为准；装后实机页面待验收。
+  status: in_progress
+- id: action-queue-bar-redesign
+  description: 输入框上方排队消息条与状态卡、输入框对齐（缩进条件与输入框行一致），三个操作统一线性图标与主题变量，加「排队」标签。tsc、新增 action-queue 回归 2 项通过，网页全量仅 2 项既有 Node 22.9 加载 .ts 失败；真实排队场景与 IDE/远程手机实机观感待验收，尚未打包安装。
+  status: in_progress
+- id: collab-template-tabs-and-run-list
+  description: 多 Agent 全局模板弹窗分「快速模式 / 开大会」标签；记录列表按项目分组、每条标注类型、可直接打开其他项目的记录。tsc、collab-meeting、collab-quick-mode 回归通过，网页全量 415/417（余 2 项为 Node 22.9 无法加载 .ts 的既有失败）。尚未打包安装，真实多项目数据、其他项目记录实时更新与草地/苔藓主题实机观感待验收。
+  status: in_progress
+- id: standalone-0169-local1-local-upgrade
+  description: 本机测试包 0.1.69-local.1（macos-arm64）含 ACP 上下文占用修复、多 Agent 五主题适配与侧栏页脚复用单聊组件。隔离 Go 测试（kanban、旧库迁移竞态、agent/acp、vet）、打包静态核对和临时 HOME 隔离安装通过；回滚源为公开 0.1.68 包（与已装逐字节一致）。升级已排程到本机，结果以 build/reports/standalone-0.1.69-local.1-live-upgrade/result.txt 为准；装后实机页面待验收。
+  status: in_progress
+- id: acp-context-window-usage-fix
+  description: 修复 ACP（含 agy CLI）将累计 PromptResponse.Usage.TotalTokens 误覆写为上下文占用导致超 100% 的问题，拆分会话最新 contextWindow 与单轮 turnContextWindow（出错/取消/单轮无 usage_update 时保留会话最新有效占用，MessageDone 仅带本轮快照）。源码完成；真实 agy 1.5.18 acp 抓取证实 usage_update.used 为当前占用而 PromptResponse.usage.totalTokens 为轮内累计和；第 01 轮最终交付复测通过隔离环境 Go 竞态（agent/acp 10 轮 -race、agent/codex、agent/claude、session、api/usecase、kanban）、kanban 旧库迁移、TestShippedRegistry|TestAntigravity 及 go vet / go build ./server/...。未验证：无网络沙箱下未跑 agent 包的 relay_models_test.go 与 update_check_test.go；尚未重新打包安装及实机验收。
+  status: in_progress
+- id: standalone-0168-and-plugin-0127-formal-release
+  description: 独立后台 0.1.68 正式发布并设为默认版本（CI Run 45948732023，六平台 24 附件与 Windows 5.1/Linux systemd/默认在线安装全部通过，旧 standalone-v0.1.67 归档下架）；IDEA 插件 0.1.27 同版更新保持 GitHub Latest（CI Run 45950291098，5 ZIP + SHA256SUMS 静态门禁、双端内嵌后台 305 HTTP 资源、Windows 5.1 三包验证及公开回读全部通过）。Linux/Windows ARM64 与 macOS Intel 真机运行、真实登录自启及已装 0.1.27 重装重启待用户实机确认。
+  status: done
 - id: desktop-static-status-bar
   description: 桌面与平板远程网页状态栏统一对齐手机端：移除外层 .remote-center / .collab-detail-body 大框流光，改为输入框上方独立 .remote-status-activity.remote-glow-frame 承载单份 SessionActivity（默认开启呼吸灯，桌面设置菜单保留「Agent 状态框流光」配置与开关），协作运行卡/发言卡/状态点与手机共用同一套流光设置。TypeScript、Vite 生产构建（305 文件/零 /mindfs-assets/）、8 个前端测试套件（44/44）、TestFrontendAssetsStayWithBackend（24/24）及 kanban 全量与 -race 旧库迁移门禁全部通过；尚未打包安装，Chrome 经 Relay 15 分钟长驻打字卡顿现场对照录制待实机确认。
   status: in_progress

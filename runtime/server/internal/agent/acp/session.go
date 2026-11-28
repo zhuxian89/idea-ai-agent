@@ -361,11 +361,10 @@ func (s *session) OnUpdate(onUpdate func(types.Event)) {
 		}
 		if onUpdate != nil {
 			if update.Type == UpdateTypeMessageDone {
-				contextWindow, _ := s.ContextWindow(context.Background())
 				onUpdate(types.Event{
 					Type:      types.EventTypeMessageDone,
 					SessionID: update.SessionID,
-					Data:      types.MessageDone{ContextWindow: contextWindow},
+					Data:      types.MessageDone{ContextWindow: update.ContextWindow},
 				})
 				return
 			}

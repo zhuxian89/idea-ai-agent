@@ -387,7 +387,8 @@ test("快速模式与开大会运行中修改模型（含不可用模型提示�
   const detailHead = page.locator(".collab-detail-head");
   const detailBody = page.locator(".collab-detail-body");
   await expect(detailHead.getByRole("img", { name: "Claude Code" })).toBeVisible();
-  await expect(detailHead.getByRole("img", { name: "已交付" })).toBeVisible();
+  await expect(detailHead.locator(".collab-detail-permission")).toHaveCount(0);
+  await expect(detailHead.locator(".collab-model-dot")).toHaveCount(0);
   await expect(detailBody.getByText("run-meeting-running-m-01-003", { exact: true })).toBeVisible();
   if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "r04-meeting-detail-desktop.png") });
 
@@ -405,7 +406,7 @@ test("快速模式与开大会运行中修改模型（含不可用模型提示�
   assert.ok(await list.evaluate((el) => el.scrollLeft > 0));
   await laterProcess.click();
   await assertDetailRow("成员5", "gpt-5.4 · high");
-  await expect(detailHead.getByRole("img", { name: "交付中" })).toBeVisible();
+  await expect(detailHead.getByRole("button", { name: "运行列表" })).toBeVisible();
   await expect(detailHead.locator('.collab-detail-agent img[alt="Codex"]')).toBeVisible();
   await expect(detailBody.getByText("run-meeting-running-m-01-004", { exact: true })).toBeVisible();
   if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "r04-meeting-detail-phone.png") });

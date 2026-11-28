@@ -22,7 +22,8 @@ func TestMeetingRestatementRequiresSameStanceAndVersion(t *testing.T) {
 		{"same version and stance", "d1-V2", "disagree", "disagree"},
 		{"old version", "D1-v1", "disagree", "unconfirmed"},
 		{"missing version", "", "disagree", "unconfirmed"},
-		{"changed stance", "D1-v2", "agree", "unconfirmed"},
+		// 引文对不上不再让整票作废：改口后的新立场按正文计入；改口缺少理由由 alignMeetingItems 另行判为未确认（见下方用例）。
+		{"changed stance", "D1-v2", "agree", "agree"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			turn := MeetingTurn{ID: "current", SlotID: "one", Kind: meetingReview, Status: StepStatusDone, Body: "本轮立场"}

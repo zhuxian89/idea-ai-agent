@@ -36,17 +36,17 @@
   background: var(--accent-color); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600;
 }
 .file-tree-relay-action:disabled { background: rgba(148, 163, 184, .2); color: var(--text-secondary); cursor: not-allowed; }
-.remote-shell .file-tree-relay-action { background: transparent; color: var(--text-secondary); }
-.remote-shell .file-tree-relay-action:enabled:hover { background: color-mix(in srgb, var(--text-primary) 6%, transparent); color: var(--text-primary); }
-.remote-shell .file-tree-relay-action:disabled { opacity: .6; }
+:is(.remote-shell, .sidebar-service-footer) .file-tree-relay-action { background: transparent; color: var(--text-secondary); }
+:is(.remote-shell, .sidebar-service-footer) .file-tree-relay-action:enabled:hover { background: color-mix(in srgb, var(--text-primary) 6%, transparent); color: var(--text-primary); }
+:is(.remote-shell, .sidebar-service-footer) .file-tree-relay-action:disabled { opacity: .6; }
 /* 页脚：图标在左、箭头在右，内容靠左，与上方状态卡的圆环、下方文字同一条左线（文字颜色与边框保持原样）。 */
 .file-tree-relay-action .rel-ico { display: none; }
-.remote-shell .file-tree-relay-action { justify-content: flex-start; gap: 10px; height: 40px; padding: 0 9px; /* 按钮自带 1px 边框，减去后与状态卡内容同线 */ }
-.remote-shell .file-tree-relay-action > span { flex: 1; min-width: 0; text-align: left; }
-.remote-shell .file-tree-relay-action .rel-ico { display: block; flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.remote-shell .file-tree-relay-action .rel-go { width: 14px; height: 14px; stroke-width: 2; opacity: .75; }
+:is(.remote-shell, .sidebar-service-footer) .file-tree-relay-action { justify-content: flex-start; gap: 10px; height: 40px; padding: 0 9px; /* 按钮自带 1px 边框，减去后与状态卡内容同线 */ }
+:is(.remote-shell, .sidebar-service-footer) .file-tree-relay-action > span { flex: 1; min-width: 0; text-align: left; }
+:is(.remote-shell, .sidebar-service-footer) .file-tree-relay-action .rel-ico { display: block; flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:is(.remote-shell, .sidebar-service-footer) .file-tree-relay-action .rel-go { width: 14px; height: 14px; stroke-width: 2; opacity: .75; }
 .file-tree-footer-note { font-size: 11px; color: var(--text-secondary); line-height: 1.5; text-align: center; }
-.remote-shell .file-tree-footer-note { font-size: 12px; text-align: left; padding: 0 10px; }
+:is(.remote-shell, .sidebar-service-footer) .file-tree-footer-note { font-size: 12px; text-align: left; padding: 0 10px; }
 .workspace-project-tabs { display: flex; align-items: center; gap: 2px; width: 100%; min-width: 0; }
 .workspace-project-tabs button { min-width: 0; padding: 5px 4px; border: 0; border-radius: 5px; color: var(--text-secondary); background: transparent; font-size: 11px; font-weight: 500; line-height: 18px; white-space: nowrap; cursor: pointer; }
 .workspace-project-tabs button[aria-selected="true"] { color: var(--accent-hover); background: var(--workspace-selected); font-weight: 600; }
@@ -57,3 +57,6 @@
 }
 
 .workspace-sessions-title { padding-left: 10px; font-size: 13px; font-weight: 600; }
+
+/* 多 Agent 侧栏底部（与文件树页脚同样的排布） */
+.sidebar-service-footer { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; padding: 10px 12px 12px; border-top: 1px solid var(--border-color); }

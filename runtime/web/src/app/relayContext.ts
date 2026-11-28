@@ -1,7 +1,7 @@
 import { isRelayNodePage } from "../services/base";
 import type { RelayStatusPayload } from "../services/bootstrap";
 import { storeRelayNodes } from "../services/launcherNodeSync";
-import { isIOSAppRuntime, isNativeShellRuntime } from "../services/runtime";
+import { isIOSAppRuntime, isMacAppRuntime, isNativeShellRuntime } from "../services/runtime";
 import type { ManagedRootPayload } from "./projectModel";
 
 export const APP_DOCUMENT_TITLE = "Local AI Agent";
@@ -32,7 +32,7 @@ export function isStandaloneDisplayMode(): boolean {
   return (
     window.matchMedia?.("(display-mode: standalone)")?.matches === true ||
     navigatorWithStandalone.standalone === true ||
-    isIOSAppRuntime()
+    isIOSAppRuntime() || isMacAppRuntime()
   );
 }
 

@@ -150,13 +150,26 @@ test('the footer shares one left axis: card, phone-QR button, version and notes'
   const tree = readFileTreeSources();
   // The card and the button carry the same 10px inset (the button's 1px border is taken off its padding).
   assert.match(monitor, /\.sysmon-card \{[^}]*padding: 0 10px;[^}]*background: transparent;/, 'the card has no fill of its own');
-  assert.match(sidebar, /\.remote-shell \.file-tree-relay-action \{[^}]*justify-content: flex-start;[^}]*padding: 0 9px;/);
-  assert.ok(!/\.remote-shell \.file-tree-relay-action \{[^}]*color:[^}]*accent/.test(sidebar), 'the button text colour is unchanged');
-  assert.match(sidebar, /\.remote-shell \.file-tree-footer-note \{[^}]*text-align: left;[^}]*padding: 0 10px;/);
+  assert.match(sidebar, /\:is\(\.remote-shell, \.sidebar-service-footer\) \.file-tree-relay-action \{[^}]*justify-content: flex-start;[^}]*padding: 0 9px;/);
+  assert.ok(!/\:is\(\.remote-shell, \.sidebar-service-footer\) \.file-tree-relay-action \{[^}]*color:[^}]*accent/.test(sidebar), 'the button text colour is unchanged');
+  assert.match(sidebar, /\:is\(\.remote-shell, \.sidebar-service-footer\) \.file-tree-footer-note \{[^}]*text-align: left;[^}]*padding: 0 10px;/);
   assert.match(update, /\.remote-published-update \{[^}]*padding: 8px 10px 0;/);
   // Markup: icon, label, arrow; and both footer notes use the shared class instead of inline centring.
-  assert.match(tree, /className="rel-ico"[\s\S]*<span>\{relayActionLabel\}<\/span>[\s\S]*className="rel-ico rel-go"/);
+  assert.match(tree, /className="rel-ico"[\s\S]*<span>\{label\}<\/span>[\s\S]*className="rel-ico rel-go"/);
   assert.equal((tree.match(/className="file-tree-footer-note"/g) || []).length, 2);
+});
+
+test('the multi-agent sidebar reuses the same footer pieces instead of copying them', () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  const footer = read('../src/components/SidebarServiceFooter.tsx');
+  assert.match(footer, /<SystemMonitor \/>/);
+  assert.match(footer, /<RelayActionButton /);
+  assert.match(footer, /<RemotePublishedUpdate /);
+  assert.match(read('../src/components/fileTree/FileTreeFooter.tsx'), /<RelayActionButton /);
+  const app = read('../src/App.tsx');
+  assert.match(app, /sidebarFooter=\{!isMobile \? \(\s*<SidebarServiceFooter\s+showMonitor=\{isStandaloneRuntime\}/);
+  assert.match(app, /onRelayAction=\{handleRelayAction\}[\s\S]*?publicStandaloneVersion=\{publicStandaloneVersion\}/);
+  assert.match(read('../src/components/collab/CollabShell.tsx'), /全局模板[\s\S]*?\{sidebarFooter\}/);
 });
 
 test('the version is shown on its own, without a product prefix', async () => {

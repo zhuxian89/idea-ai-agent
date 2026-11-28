@@ -1,7 +1,7 @@
 import Foundation
 
 enum Config {
-    static let relayBaseURL = URL(string: "https://relay.20260310.best")!
+    static let relayBaseURL = AppleShell.relayBaseURL
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
     static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
     static let bundleId = Bundle.main.bundleIdentifier ?? "com.localaiagent.app"

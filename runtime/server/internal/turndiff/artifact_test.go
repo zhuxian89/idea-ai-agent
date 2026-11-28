@@ -43,3 +43,36 @@ func TestLoadArtifactRejectsTraversalBlob(t *testing.T) {
 		t.Fatal("traversal blob was accepted")
 	}
 }
+
+func TestDeleteSessionArtifactsDeletesMatchingOnly(t *testing.T) {
+	parent := t.TempDir()
+	file := ChangedFile{
+		Path:   "file.txt",
+		Before: FileState{Present: true, Mode: 0o644, Bytes: []byte("before")},
+		After:  FileState{Present: true, Mode: 0o644, Bytes: []byte("after")},
+	}
+	idA1, err := SaveArtifact(parent, "sess-a", []ChangedFile{file})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idA2, err := SaveArtifact(parent, "sess-a-child", []ChangedFile{file})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idB, err := SaveArtifact(parent, "sess-b", []ChangedFile{file})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := DeleteSessionArtifacts(parent, []string{"sess-a", "sess-a-child"}); err != nil {
+		t.Fatalf("DeleteSessionArtifacts: %v", err)
+	}
+	for _, removedID := range []string{idA1, idA2} {
+		if _, err := os.Stat(filepath.Join(parent, "turn-diffs", removedID)); !os.IsNotExist(err) {
+			t.Fatalf("expected snapshot %s deleted, stat err=%v", removedID, err)
+		}
+	}
+	if _, err := LoadArtifact(parent, "sess-b", idB, "file.txt"); err != nil {
+		t.Fatalf("unrelated session snapshot should remain intact: %v", err)
+	}
+}

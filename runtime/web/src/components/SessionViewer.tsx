@@ -562,6 +562,7 @@ function SessionViewerInner({
     return (
       <div
         key={timelineItemKey}
+        className={isUser ? "mindfs-msg-row mindfs-msg-row--user" : "mindfs-msg-row mindfs-msg-row--assistant"}
         data-session-seq={item.seq || undefined}
         data-user-message-index={userMessageIndex}
         style={{
@@ -604,6 +605,7 @@ function SessionViewerInner({
             ) : null}
             {hasRichUserAttachments ? (
               <div
+                className="mindfs-user-bubble mindfs-user-bubble--rich"
                 style={{
                   width: "100%",
                   maxWidth: "100%",
@@ -679,6 +681,7 @@ function SessionViewerInner({
             ) : null}
             {!hasRichUserAttachments && displayContent ? (
               <div
+                className="mindfs-user-bubble"
                 style={{
                   padding: "10px 16px",
                   borderRadius: "18px 18px 4px 18px",
@@ -703,6 +706,7 @@ function SessionViewerInner({
               </div>
             ) : null}
             <span
+              className="mindfs-user-meta"
               style={{
                 fontSize: "10px",
                 color: "var(--text-secondary)",
@@ -730,6 +734,7 @@ function SessionViewerInner({
               <span>{time}</span>
               <button
                 type="button"
+                className="mindfs-msg-meta-btn"
                 onClick={() => {
                   onEditUserMessage?.(item.content || "");
                 }}
@@ -741,6 +746,7 @@ function SessionViewerInner({
               </button>
               {promptSaved ? (
                 <span
+                  className="mindfs-msg-meta-btn"
                   aria-label={t("session.promptSaved")}
                   title={t("session.promptSaved")}
                   style={{
@@ -754,6 +760,7 @@ function SessionViewerInner({
               ) : (
                 <button
                   type="button"
+                  className="mindfs-msg-meta-btn"
                   onClick={() => {
                     if (!promptSaveContent) {
                       reportError(
@@ -799,6 +806,7 @@ function SessionViewerInner({
               )}
               <button
                 type="button"
+                className="mindfs-msg-meta-btn"
                 onClick={() => {
                   if (!promptSaveContent) {
                     reportError("clipboard.write_failed", t("session.emptyMessageCannotCopy"));
@@ -904,6 +912,7 @@ function SessionViewerInner({
               >
                 <button
                   type="button"
+                  className="mindfs-msg-meta-btn"
                   onClick={() => {
                     if (!assistantMarkdownContent) {
                       reportError(
@@ -977,6 +986,7 @@ function SessionViewerInner({
                 {canForkAgentMessage ? (
                   <button
                     type="button"
+                    className="mindfs-msg-meta-btn"
                     onClick={() => {
                       const seq = Number(item.seq || 0);
                       if (seq > 0) {
@@ -995,7 +1005,7 @@ function SessionViewerInner({
                   style={{ width: "12px", height: "12px" }}
                 />
                 {assistantExchangeMeta ? (
-                  <span>{assistantExchangeMeta}</span>
+                  <span className="mindfs-assistant-meta-model">{assistantExchangeMeta}</span>
                 ) : null}
                 <span>{time}{assistantDurationLabel ? ` ${assistantDurationLabel}` : ""}</span>
                 {item.showContextWindow !== false ? <ReplyContext value={item.contextWindow} /> : null}
@@ -1351,6 +1361,7 @@ function SessionViewerInner({
           >
             <button
                 type="button"
+                className="mindfs-jump-latest-btn"
                 onClick={() => {
                   cancelTargetSeqScroll();
                   if (targetSeq) {

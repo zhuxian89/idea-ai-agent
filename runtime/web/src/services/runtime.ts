@@ -82,6 +82,14 @@ export function isIOSAppRuntime(): boolean {
   return app?.platform === "ios";
 }
 
+export function isMacAppRuntime(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const app = (window as Window & { MindFSMacApp?: { platform?: string } }).MindFSMacApp;
+  return app?.platform === "macos";
+}
+
 export function isHarmonyRuntime(): boolean {
   return getNativePlatform() === "harmony";
 }
@@ -159,5 +167,5 @@ export function shouldRegisterServiceWorker(): boolean {
 }
 
 export function shouldEnablePWAInstall(): boolean {
-  return !isNativeShellRuntime() && !isIOSAppRuntime();
+  return !isNativeShellRuntime() && !isIOSAppRuntime() && !isMacAppRuntime();
 }

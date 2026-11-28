@@ -22,11 +22,11 @@ import {
   getEffectiveAppearanceMode,
 } from "../services/appearance";
 import TokenEditor, { type TokenEditorHandle } from "./editor/TokenEditor";
-import { renderToolIcon } from "./stream/ToolCallCard";
 import { useI18n, type MessageKey } from "../i18n";
 import { VoiceRecordingPopover } from "./VoiceRecordingPopover";
 import { CompactUploadProgress } from "./CompactUploadProgress";
 import { deletePrompt, savePrompt } from "../services/prompts";
+import "./actionQueue.css";
 import { PendingAttachment, QueuedMessageInfo, ActionBarProps } from "./actionBarTypes";
 import { ShellSelector } from "./ShellSelector";
 import {
@@ -946,35 +946,29 @@ export function ActionBar({
         ) : null}
         {queuedMessages.length > 0 ? (
           <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "3px",
-              padding: isMobile ? "0 31px 4px" : "0 0 4px",
-              maxHeight: isMobile ? "116px" : "144px",
-              overflowY: "auto",
-              scrollbarWidth: "thin",
-            }}
+            className="action-queue"
+            role="list"
+            aria-label={t("action.queueLabel")}
+            data-mobile={isMobile ? "1" : undefined}
+            data-inset={isMobile && !compactWorkbench && !remotePhone ? "1" : undefined}
           >
-            {queuedMessages.map((item) => (
+            {queuedMessages.map((item, index) => (
               <div
                 key={item.id}
-                style={{
-                  position: "relative",
-                  display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) auto",
-                  alignItems: "center",
-                  gap: "6px",
-                  minHeight: "28px",
-                  padding: "2px 3px 2px 9px",
-                  border: "1px solid color-mix(in srgb, var(--accent-color) 32%, transparent)",
-                  borderRadius: "8px",
-                  background: "var(--panel-bg)",
-                  boxShadow: isMobile ? "none" : "var(--panel-shadow)",
-                }}
+                role="listitem"
+                className="action-queue-item"
+                data-editing={editingQueueId === item.id ? "1" : undefined}
               >
+                <span className="action-queue-tag">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                  </svg>
+                  {queuedMessages.length > 1 ? `${t("action.queueLabel")} ${index + 1}` : t("action.queueLabel")}
+                </span>
                 {editingQueueId === item.id ? (
                   <input
+                    className="action-queue-input"
                     value={editingQueueText}
                     onChange={(event) => setEditingQueueText(event.currentTarget.value)}
                     onKeyDown={(event) => {
@@ -987,115 +981,69 @@ export function ActionBar({
                       }
                     }}
                     autoFocus
-                    style={{
-                      minWidth: 0,
-                      height: "24px",
-                      border: "none",
-                      borderRadius: 0,
-                      background: "transparent",
-                      color: "var(--text-primary)",
-                      fontSize: "12px",
-                      padding: 0,
-                      outline: "none",
-                    }}
                   />
                 ) : (
-                  <div
-                    title={item.content}
-                    style={{
-                      minWidth: 0,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      fontSize: "12px",
-                      color: "var(--text-secondary)",
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    {item.content}
-                  </div>
+                  <div className="action-queue-text" title={item.content}>{item.content}</div>
                 )}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "3px",
-                  }}
-                >
+                <div className="action-queue-actions">
                   {editingQueueId === item.id ? (
                     <>
                       <button
                         type="button"
+                        className="action-queue-btn"
+                        data-tone="primary"
                         aria-label={t("action.queueSave")}
                         title={t("common.save")}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => void saveEditQueuedMessage()}
                         disabled={!editingQueueText.trim()}
-                        style={{ width: "28px", height: "28px", border: "none", borderRadius: "7px", background: "transparent", color: editingQueueText.trim() ? "var(--accent-color)" : "var(--text-secondary)", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: editingQueueText.trim() ? "pointer" : "not-allowed", opacity: editingQueueText.trim() ? 1 : 0.45 }}
                       >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
                       </button>
                       <button
                         type="button"
+                        className="action-queue-btn"
                         aria-label={t("action.queueCancelEdit")}
                         title={t("common.cancel")}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={cancelEditQueuedMessage}
-                        style={{ width: "28px", height: "28px", border: "none", borderRadius: "7px", background: "transparent", color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
                       >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M18 6 6 18" />
-                          <path d="m6 6 12 12" />
-                        </svg>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
                       </button>
                     </>
                   ) : (
                     <>
                       <button
                         type="button"
-                        aria-label={t("action.queueDelete")}
-                        title={t("common.delete")}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => void onRemoveQueuedMessage?.(item.id)}
-                        style={{ width: "28px", height: "28px", border: "none", borderRadius: "7px", background: "transparent", color: "#dc2626", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14H6L5 6" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                          <path d="M9 6V4h6v2" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
+                        className="action-queue-btn"
                         aria-label={t("action.queueEdit")}
                         title={t("common.edit")}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => startEditQueuedMessage(item)}
-                        style={{ width: "28px", height: "28px", border: "none", borderRadius: "7px", background: "transparent", color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
                       >
-                        <span style={{ display: "inline-flex", transform: "scale(1.125)" }}>
-                          {renderToolIcon("edit")}
-                        </span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                       </button>
                       <button
                         type="button"
+                        className="action-queue-btn"
+                        data-tone="danger"
+                        aria-label={t("action.queueDelete")}
+                        title={t("common.delete")}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => void onRemoveQueuedMessage?.(item.id)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="action-queue-btn"
+                        data-tone="primary"
                         aria-label={t("action.queueSendNow")}
                         title={t("action.queueSendNow")}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => void onSendQueuedMessageNow?.(item.id)}
-                        style={{ width: "28px", height: "28px", border: "none", borderRadius: "7px", background: "transparent", color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M0 0h24v24H0z" fill="none" />
-                          <g fill="currentColor" fillRule="evenodd" clipRule="evenodd">
-                            <path d="M3 14a1 1 0 0 1 1-1h12a3 3 0 0 0 3-3V6a1 1 0 1 1 2 0v4a5 5 0 0 1-5 5H4a1 1 0 0 1-1-1" />
-                            <path d="M3.293 14.707a1 1 0 0 1 0-1.414l4-4a1 1 0 0 1 1.414 1.414L5.414 14l3.293 3.293a1 1 0 1 1-1.414 1.414z" />
-                          </g>
-                        </svg>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5" /><path d="m5 12 7-7 7 7" /></svg>
                       </button>
                     </>
                   )}
@@ -1131,7 +1079,7 @@ export function ActionBar({
                 display: "flex",
                 alignItems: "center",
                 position: "relative",
-                transition: isDragging ? "none" : "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                transition: isDragging ? "none" : "border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 minHeight: `${editorMinHeight}px`,
                 minWidth: 0,
                 width: "100%",
@@ -1176,6 +1124,7 @@ export function ActionBar({
 
             {activeToken && (candidates.length > 0 || activeToken.type === "prompt") ? (
               <div
+                className="action-bar-candidates"
                 style={{
                   position: "absolute",
                   left: "8px",
@@ -1248,6 +1197,7 @@ export function ActionBar({
                         {candidate.type === "prompt" ? (
                           <button
                             type="button"
+                            className="action-bar-prompt-delete"
                             onMouseDown={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
@@ -1292,6 +1242,7 @@ export function ActionBar({
                       <>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <input
+                            className="action-bar-prompt-input"
                             value={newPromptText}
                             onChange={(event) => {
                               setNewPromptText(event.currentTarget.value);
@@ -1325,6 +1276,7 @@ export function ActionBar({
                           />
                           <button
                             type="button"
+                            className="action-bar-prompt-action"
                             onClick={() => void submitNewPrompt()}
                             disabled={!newPromptText.trim() || savingPrompt}
                             aria-label={t("common.save")}
@@ -1337,6 +1289,7 @@ export function ActionBar({
                           </button>
                           <button
                             type="button"
+                            className="action-bar-prompt-action"
                             onClick={cancelAddPrompt}
                             disabled={savingPrompt}
                             aria-label={t("common.cancel")}
@@ -1397,7 +1350,7 @@ export function ActionBar({
               </div>
             ) : null}
 
-            <div className={compactWorkbench ? "idea-input-controls" : undefined} data-onboarding="input-controls" style={{ position: "absolute", right: isMobile ? "4px" : "8px", bottom: isMultiLine ? "6px" : "50%", transform: isMultiLine ? "none" : "translateY(50%)", display: "flex", alignItems: "center", gap: isMobile ? "0px" : "2px", zIndex: 5, transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+            <div className={compactWorkbench ? "idea-input-controls" : undefined} data-onboarding="input-controls" style={{ position: "absolute", right: isMobile ? "4px" : "8px", bottom: isMultiLine ? "6px" : "50%", transform: isMultiLine ? "none" : "translateY(50%)", display: "flex", alignItems: "center", gap: isMobile ? "0px" : "2px", zIndex: 5, transition: "bottom 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
               <div
                 data-onboarding="session-ring"
                 onMouseDown={handleDragStart}
@@ -1412,7 +1365,7 @@ export function ActionBar({
                   height: "32px",
                   cursor: "pointer",
                   transform: `translateX(${dragX}px)`,
-                  transition: isDragging ? "none" : "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  transition: isDragging ? "none" : "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                   position: "relative",
                   zIndex: 10,
                   opacity: 1,
@@ -1595,7 +1548,7 @@ export function ActionBar({
                 type="button"
                 onClick={showCancel ? handleCancel : handleSend}
                 disabled={voiceBusy || (showCancel ? cancelling : !canSend)}
-                style={{ width: "28px", height: "28px", borderRadius: "8px", border: "none", background: showCancel ? "rgba(239,68,68,0.14)" : (canSend ? "var(--accent-color)" : "transparent"), color: showCancel ? "#ef4444" : (canSend ? "#fff" : "var(--text-secondary)"), display: "flex", alignItems: "center", justifyContent: "center", cursor: showCancel ? (cancelling ? "wait" : "pointer") : (canSend ? "pointer" : "not-allowed"), transition: "all 0.2s", opacity: showCancel ? 1 : (canSend ? 1 : 0.3) }}
+                style={{ width: "28px", height: "28px", borderRadius: "8px", border: "none", background: showCancel ? "rgba(239,68,68,0.14)" : (canSend ? "var(--accent-color)" : "transparent"), color: showCancel ? "#ef4444" : (canSend ? "#fff" : "var(--text-secondary)"), display: "flex", alignItems: "center", justifyContent: "center", cursor: showCancel ? (cancelling ? "wait" : "pointer") : (canSend ? "pointer" : "not-allowed"), transition: "background-color 0.2s, color 0.2s, opacity 0.2s", opacity: showCancel ? 1 : (canSend ? 1 : 0.3) }}
               >
                 {sending || cancelling ? (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>

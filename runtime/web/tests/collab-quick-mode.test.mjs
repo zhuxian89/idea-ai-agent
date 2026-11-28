@@ -985,6 +985,11 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
         const waiting_count = items.filter((r) => r.status === "waiting_user").length;
         return json({ items, waiting_count });
       }
+      if (pathname.startsWith("/api/collab/runs/") && method === "DELETE") {
+        const runId = decodeURIComponent(pathname.slice("/api/collab/runs/".length));
+        runsById.delete(runId);
+        return json({ ok: true });
+      }
       if (pathname === "/api/collab/runs" && method === "POST") {
         if (holdStartRunPromise) {
           await holdStartRunPromise;
@@ -1277,7 +1282,11 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await expect(page.locator(".collab-project-path")).toHaveText("/workspace/billing-service");
   await expect(page.locator(".collab-sb-foot")).toContainText("billing-service");
   await expect(page.locator(".collab-run-item", { hasText: "补齐账单对账幂等校验" })).toBeVisible();
-  await expect(page.locator(".collab-run-item", { hasText: "重构流式控制块过滤器并补齐边界单测" })).toHaveCount(0);
+  // 当前项目分组里只有当前项目的记录；另一项目的记录仍在列表里（在它自己的分组下），不用来回切项目。
+  const currentRuns = page.locator('.collab-run-group[data-current="1"]');
+  await expect(currentRuns.locator(".collab-run-item", { hasText: "补齐账单对账幂等校验" })).toBeVisible();
+  await expect(currentRuns.locator(".collab-run-item", { hasText: "重构流式控制块过滤器并补齐边界单测" })).toHaveCount(0);
+  await expect(page.locator(".collab-run-group:not([data-current]) .collab-run-item", { hasText: "重构流式控制块过滤器并补齐边界单测" })).toBeVisible();
   await expect(page.locator(".collab-task-textarea")).toHaveValue("修正账单回调重试边界");
   assert.equal(new URL(page.url()).searchParams.get("root") || "", "proj-2");
   assert.equal(new URL(page.url()).searchParams.get("session") || "", "");
@@ -1302,8 +1311,8 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
     else root.setAttribute("data-appearance", prevAppearance);
     return { light, dark };
   });
-  assert.equal(pathColors.light, "rgb(81, 81, 84)", "light mode project path should use --cb-text-sec (#515154, 7.07:1)");
-  assert.equal(pathColors.dark, "rgb(161, 161, 170)", "dark mode project path should use --cb-text-sec (#a1a1aa, 7.48:1)");
+  assert.equal(pathColors.light, "rgb(71, 85, 105)", "light mode project path should use --cb-text-sec (#475569, 7.6:1)");
+  assert.equal(pathColors.dark, "rgb(148, 163, 184)", "dark mode project path should use --cb-text-sec (#94a3b8, 7.0:1)");
 
   // Starting a run after switching project targets proj-2
   await page.getByRole("button", { name: "开始一写一审" }).click();
@@ -1319,7 +1328,11 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await expect(runningCard).toHaveAttribute("data-glow-active", "");
   await expect.poll(() => readGlow(runningCard)).toEqual(["visible", "glow-flow, glow-breathe", "\"\""]);
   await expect(runningDot).toHaveCSS("animation-name", "collabPulseDot");
-  await expect(page.locator(".collab-run-dot.completed")).toHaveCSS("animation-name", "none");
+  const completedDots = page.locator(".collab-run-dot.completed");
+  expect(await completedDots.count()).toBeGreaterThan(0);
+  for (let index = 0; index < await completedDots.count(); index += 1) {
+    await expect(completedDots.nth(index)).toHaveCSS("animation-name", "none");
+  }
   await expect(page.locator(".collab-detail-body")).not.toHaveClass(/remote-glow-frame/);
   await expect(page.locator(".collab-detail-footer .remote-status-activity.remote-glow-frame")).toHaveCount(1);
   if (screenshotDir) {
@@ -1760,8 +1773,8 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await expect(runningCard).not.toContainText("Claude Code");
   await expect(page.locator(".collab-detail-title .m")).toContainText("Opus 4.6 · high");
   await expect(page.locator(".collab-detail-title").getByRole("img", { name: "Claude Code" })).toBeVisible();
-  await expect(page.locator(".collab-detail-head").getByRole("img", { name: "严格只读" })).toBeVisible();
-  await expect(page.locator(".collab-detail-head").getByRole("img", { name: "进行中" })).toBeVisible();
+  await expect(page.locator(".collab-detail-head .collab-detail-permission")).toHaveCount(0);
+  await expect(page.locator(".collab-detail-head .collab-model-dot")).toHaveCount(0);
   assert.equal((await page.locator(".collab-detail-title .t").boundingBox()).y,
     (await page.locator(".collab-detail-title .m").boundingBox()).y);
 
@@ -2107,7 +2120,10 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   await expect(page.locator(".collab-workspace")).toHaveAttribute("data-level", "detail");
   await stepDetails.locator(":scope > summary").click();
   await expect(stepDetails.getByRole("button", { name: "01-impl.md" })).toBeVisible();
-  await expect(page.locator(".collab-detail-head").getByRole("img", { name: "已完成" })).toBeVisible();
+  await expect(page.locator(".collab-detail-head .collab-detail-permission")).toHaveCount(0);
+  await expect(page.locator(".collab-detail-head .collab-model-dot")).toHaveCount(0);
+  const detailRunListBtn = page.locator(".collab-detail-head").getByRole("button", { name: "运行列表" });
+  await expect(detailRunListBtn).toBeVisible();
   const detailHeadBox = await page.locator(".collab-detail-head").boundingBox();
   assert.ok(detailHeadBox.height <= 50);
   assert.equal((await page.locator(".collab-detail-title .t").boundingBox()).y,
@@ -2117,6 +2133,11 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   const backCardsBox = await backCardsBtn.boundingBox();
   assert.ok(detailHeadBox && detailHeadBox.y >= 58.5, `detail head y=${detailHeadBox?.y} must clear Dynamic Island 59px`);
   assert.ok(backCardsBox && backCardsBox.height >= 44, `back to cards button height=${backCardsBox?.height} must be >=44px`);
+  // Directly open run list drawer from detail view without exiting back to cards
+  await detailRunListBtn.click();
+  await expect(page.locator(".collab-sidebar:not(.collapsed)")).toBeVisible();
+  await page.getByRole("button", { name: "收起运行列表" }).click();
+  await expect(page.locator(".collab-sidebar.collapsed")).toHaveCount(1);
   if (screenshotDir) {
     await page.screenshot({ path: path.join(screenshotDir, "05-phone-detail-layer.png") });
   }
@@ -2124,6 +2145,35 @@ test("Collab Quick Mode shell, global templates, dispute decisions, reused conve
   // Tap "返回阶段卡片" -> returns cleanly to Layer 1 cards, then "返回单聊" returns to Phone chat!
   await backCardsBtn.click();
   await expect(page.locator(".collab-workspace")).toHaveAttribute("data-level", "cards");
+
+  // 记录列表按项目分组，每条带类型标签；删除需二次确认；其他项目的记录直接点开，项目自动切换，不用来回切项目。
+  await page.getByRole("button", { name: "运行列表" }).click();
+  await expect(page.locator(".collab-run-item", { hasText: "重构流式控制块过滤器" }).locator(".collab-run-kind")).toHaveText("快速");
+  await expect(page.locator('.collab-run-group[data-current="1"] .collab-run-group-name')).toHaveText("idea-ai-agent");
+  const deletableItem = page.locator(".collab-run-item", { hasText: "第二条独立待裁决任务" });
+  const collabNewBtnBox = await page.locator(".collab-new-btn").boundingBox();
+  const collabDeleteBtnBox = await deletableItem.locator(".collab-run-delete").boundingBox();
+  assert.ok(collabNewBtnBox && collabNewBtnBox.height >= 44, `phone collab new button must be >=44px: ${JSON.stringify(collabNewBtnBox)}`);
+  assert.ok(collabDeleteBtnBox && collabDeleteBtnBox.width >= 36 && collabDeleteBtnBox.height >= 36, `phone collab delete button must be >=36x36: ${JSON.stringify(collabDeleteBtnBox)}`);
+  await deletableItem.locator(".collab-run-delete").click();
+  const deleteDialog = page.getByRole("dialog", { name: "删除协作记录" });
+  await expect(deleteDialog).toBeVisible();
+  await expect(deleteDialog).toContainText("第二条独立待裁决任务");
+  await expect(deleteDialog).toContainText(".mindfs/runs/");
+  const collabConfirmBox = await deleteDialog.getByRole("button", { name: "确认删除" }).boundingBox();
+  assert.ok(collabConfirmBox && collabConfirmBox.height >= 44, `phone confirm delete button must be >=44px: ${JSON.stringify(collabConfirmBox)}`);
+  await deleteDialog.getByRole("button", { name: "取消" }).click();
+  await expect(deleteDialog).toBeHidden();
+  await expect(deletableItem).toBeVisible();
+  await deletableItem.locator(".collab-run-delete").click();
+  await deleteDialog.getByRole("button", { name: "确认删除" }).click();
+  await expect(deleteDialog).toBeHidden();
+  await expect(deletableItem).toHaveCount(0);
+  await page.locator(".collab-run-group:not([data-current]) .collab-run-item", { hasText: "补齐账单对账幂等校验" }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("root") || "").toBe("proj-2");
+  await expect(page.locator(".collab-workspace")).toHaveAttribute("data-level", "cards");
+  await expect(page.locator(".collab-card").first()).toBeVisible();
+  await expect(page.locator(".collab-detail-title, .collab-pane-head").first()).toContainText("补齐账单对账幂等校验");
   await page.getByRole("button", { name: "返回单聊" }).first().click();
   await expect(page.locator(".collab-shell")).toHaveCount(0);
 

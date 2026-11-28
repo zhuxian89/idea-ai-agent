@@ -320,6 +320,7 @@ export function QuickDecisions({
                     aria-label={`${item.item_id} 处理指示`}
                     value={current.note}
                     rows={3}
+                    readOnly={busy}
                     placeholder="输入对该条的具体处理指示..."
                     onChange={(event) =>
                       onChoice(item.item_id, { decision: "custom", note: event.target.value })

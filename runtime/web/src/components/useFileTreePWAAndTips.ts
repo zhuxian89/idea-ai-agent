@@ -3,7 +3,7 @@ import { useI18n } from "../i18n";
 import { protectedJSON } from "../services/api";
 import { appPath } from "../services/base";
 import { openExternalURL } from "../services/platformNavigation";
-import { isIOSAppRuntime, shouldEnablePWAInstall } from "../services/runtime";
+import { isMacAppRuntime, shouldEnablePWAInstall } from "../services/runtime";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -251,8 +251,8 @@ export function useFileTreePWAAndTips({
         ? t("pwa.helpDeferred")
         : t("pwa.helpUnavailable");
 
-  const shouldShowInstallButton = !relayNoRelayer && !isNativeApp && !isKnownInstalled && !(isAndroidChrome && !deferredInstallPrompt);
-  const shouldShowInstallHelp = !relayNoRelayer && !isNativeApp && !isIOSAppRuntime() && (!!installHelp) && (isKnownInstalled || isIOS || isMacSafari || isDesktopChromium || deferredInstallPrompt !== null || (isAndroidChrome && !deferredInstallPrompt));
+  const shouldShowInstallButton = !relayNoRelayer && !isNativeApp && !isMacAppRuntime() && !isKnownInstalled && !(isAndroidChrome && !deferredInstallPrompt);
+  const shouldShowInstallHelp = !relayNoRelayer && !isNativeApp && shouldEnablePWAInstall() && (!!installHelp) && (isKnownInstalled || isIOS || isMacSafari || isDesktopChromium || deferredInstallPrompt !== null || (isAndroidChrome && !deferredInstallPrompt));
 
   const visibleRelayTips = React.useMemo(
     () => relayTips.filter((tip) => tip.id && tip.title && !dismissedRelayTipIds.includes(tip.id)),

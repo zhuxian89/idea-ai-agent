@@ -36,17 +36,40 @@ test("phone keeps chat chrome compact and navigates cards, quick switching, proj
   await page.mouse.click(375, 120);
   await expect(quick).toBeHidden();
   await shell.locator(".remote-phone-leading").click();
-  const choices = quick.getByRole("list").getByRole("button");
+  // Grouped like multi-agent drawer: no bottom "All sessions" button, empty other projects omitted
+  await expect(quick.getByRole("button", { name: "All sessions" })).toHaveCount(0);
+  const projectGroups = quick.locator(".remote-phone-group");
+  await expect(projectGroups).toHaveCount(2);
+  await expect(projectGroups.nth(0)).toHaveAttribute("data-current", "1");
+  await expect(projectGroups.nth(0).locator(".remote-phone-group-name")).toHaveText("Alpha project");
+  await expect(projectGroups.nth(0).locator(".remote-phone-group-current")).toHaveText("Current");
+  await expect(projectGroups.nth(1).locator(".remote-phone-group-name")).toHaveText("Beta project");
+  await expect(projectGroups.nth(1).locator(".remote-phone-group-wait")).toHaveText("1");
+  const choices = quick.locator(".remote-phone-recent");
   await expect(choices.locator("strong")).toHaveText([
-    "Other conversation", "Main conversation", "Pinned finished", "Recently finished", "Older finished",
+    "Main conversation", "Pinned finished", "Recently finished", "Older finished", "Other conversation",
   ]);
-  await expect(choices.first()).toContainText("Beta project");
-  await expect(choices.first()).toContainText("Needs an answer");
   const current = quick.locator('[aria-current="true"]');
   await expect(current).toContainText("Main conversation");
   await expect(current).toContainText("Running");
+  // Filter pills match multi-agent drawer
+  await quick.locator(".remote-phone-drawer-filters").getByRole("button", { name: "Waiting", exact: true }).click();
+  await expect(projectGroups.nth(0).locator(".remote-phone-group-empty")).toHaveText('No matching sessions in "Alpha project"');
+  await expect(choices.locator("strong")).toHaveText(["Other conversation"]);
+  await quick.locator(".remote-phone-drawer-filters").getByRole("button", { name: "All", exact: true }).click();
+  await expect(choices).toHaveCount(5);
+  // Collapsible project group header
+  await projectGroups.nth(0).locator(".remote-phone-group-head").click();
+  await expect(projectGroups.nth(0).locator(".remote-phone-group-head")).toHaveAttribute("aria-expanded", "false");
+  await expect(choices).toHaveCount(1);
+  await projectGroups.nth(0).locator(".remote-phone-group-head").click();
+  await expect(choices).toHaveCount(5);
+  // Search across projects + one-tap clear button
   await quick.getByRole("searchbox").fill("missing session");
   await expect(quick.getByText("No matching sessions")).toBeVisible();
+  await quick.locator(".remote-phone-search-clear").click();
+  await expect(quick.getByRole("searchbox")).toHaveValue("");
+  await expect(choices).toHaveCount(5);
   await quick.getByRole("searchbox").fill(" beta project ");
   await expect(choices).toHaveCount(1);
   await quick.getByRole("button", { name: /Other conversation/ }).click();
@@ -57,8 +80,10 @@ test("phone keeps chat chrome compact and navigates cards, quick switching, proj
   await page.emulateMedia({ reducedMotion: "reduce" });
   assert.equal(await glowStyle("animationName"), "none");
   assert.equal(await glowStyle("visibility"), "visible");
-  await shell.getByRole("button", { name: "Sessions", exact: true }).click();
-  await page.getByRole("dialog", { name: "Sessions" }).getByRole("button", { name: "All sessions" }).click();
+  // Navigate to Projects -> Sessions / More via bottom nav
+  await shell.getByRole("button", { name: "Projects", exact: true }).click();
+  await expect(shell).toHaveAttribute("data-page", "projects");
+  await shell.locator("nav").getByRole("button", { name: "Sessions", exact: true }).click();
   await expect(shell).toHaveAttribute("data-page", "sessions");
   await expect(shell.locator(".workspace-session-row")).toHaveCount(1);
   await expect(shell.locator(".remote-phone-card-preview")).toHaveText("Recent preview");
@@ -72,6 +97,51 @@ test("phone keeps chat chrome compact and navigates cards, quick switching, proj
   await shell.locator("nav").getByRole("button", { name: "Projects", exact: true }).click();
   await expect(shell.locator(".remote-phone-projects .workspace-projects")).toBeVisible();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+});
+
+test("phone drawer supports new session, delete on non-running items, and folds groups past 6 items", async t => {
+  const page = await setup(t);
+  await page.evaluate(() => window.addExtraAlphaSessions(4));
+  const shell = page.locator(".remote-phone");
+  await shell.locator(".remote-phone-leading").click();
+  const quick = page.getByRole("dialog", { name: "Sessions", exact: true });
+  await expect(quick).toBeVisible();
+  const alphaGroup = quick.locator('.remote-phone-group[data-current="1"]');
+  // 8 total sessions in Alpha -> 6 visible + "2 more" button
+  await expect(alphaGroup.locator(".remote-phone-recent")).toHaveCount(6);
+  const moreBtn = alphaGroup.getByRole("button", { name: "2 more" });
+  await expect(moreBtn).toBeVisible();
+  await moreBtn.click();
+  await expect(alphaGroup.locator(".remote-phone-recent")).toHaveCount(8);
+  // Running session has no delete button; finished session requires two-step confirmation
+  const newBtnBox = await quick.locator(".remote-phone-new-btn").boundingBox();
+  const groupHeadBox = await alphaGroup.locator(".remote-phone-group-head").boundingBox();
+  assert.ok(newBtnBox && newBtnBox.height >= 44, `phone new-session button should be >=44px tall: ${JSON.stringify(newBtnBox)}`);
+  assert.ok(groupHeadBox && groupHeadBox.height >= 40, `phone group header should be >=40px tall: ${JSON.stringify(groupHeadBox)}`);
+  const runningRow = alphaGroup.locator(".remote-phone-session-row").filter({ hasText: "Main conversation" });
+  await expect(runningRow.locator(".remote-phone-session-delete")).toHaveCount(0);
+  const olderRow = alphaGroup.locator(".remote-phone-session-row").filter({ hasText: "Older finished" });
+  const deleteBtnBox = await olderRow.locator(".remote-phone-session-delete").boundingBox();
+  assert.ok(deleteBtnBox && deleteBtnBox.width >= 36 && deleteBtnBox.height >= 36, `phone delete button should be >=36x36: ${JSON.stringify(deleteBtnBox)}`);
+  await olderRow.locator(".remote-phone-session-delete").click();
+  const confirmDialog = page.getByRole("dialog", { name: "Delete session", exact: true });
+  await expect(confirmDialog).toBeVisible();
+  await expect(confirmDialog).toContainText("Older finished");
+  const confirmCancelBox = await confirmDialog.getByRole("button", { name: "Cancel", exact: true }).boundingBox();
+  const confirmDeleteBox = await confirmDialog.getByRole("button", { name: "Delete", exact: true }).boundingBox();
+  assert.ok(confirmCancelBox && confirmCancelBox.height >= 44 && confirmDeleteBox && confirmDeleteBox.height >= 44, `phone confirm buttons should be >=44px tall: cancel=${JSON.stringify(confirmCancelBox)} delete=${JSON.stringify(confirmDeleteBox)}`);
+  await confirmDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(confirmDialog).toBeHidden();
+  await expect(alphaGroup.locator(".remote-phone-recent")).toHaveCount(8);
+  await olderRow.locator(".remote-phone-session-delete").click();
+  await expect(confirmDialog).toBeVisible();
+  await confirmDialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirmDialog).toBeHidden();
+  await expect(alphaGroup.locator(".remote-phone-recent")).toHaveCount(7);
+  // New session button creates a session and closes the drawer
+  await quick.getByRole("button", { name: /New session/ }).click();
+  await expect(quick).toBeHidden();
+  await expect(shell.locator(".remote-phone-title")).toContainText("New session 1");
 });
 
 test("phone header aligns the one-line title with the compact sessions and projects icons", async t => {

@@ -22,6 +22,7 @@ import {
 } from "./services/ideaBridge";
 import { RemoteAccessDialog, RemoteQRDialog } from "./components/remote/RemoteAccessDialog";
 import { SystemMonitor } from "./components/SystemMonitor";
+import { SidebarServiceFooter } from "./components/SidebarServiceFooter";
 import { useAppFoundation } from "./app/workbench/useAppFoundation";
 import { useSessionList } from "./app/workbench/useSessionList";
 import { useExternalSessionImport } from "./app/workbench/useExternalSessionImport";
@@ -94,7 +95,7 @@ export function App(props: AppProps) {
   const managedRootActionsApi = useManagedRootActions({ appFoundationApi, currentRootApi, sessionSelectionApi, projectTreeApi, fileViewerStateApi, managedRootsApi, sessionListApi, rootResetApi, actionHandlersApi });
   useGitFileStats({ currentRootApi, sessionListApi, gitApi, externalSessionImportApi });
   useWorkspaceEvents({ appFoundationApi, workbenchLayoutApi, currentRootApi, sessionSelectionApi, projectTreeApi, fileViewerStateApi, relayConnectionApi, managedRootsApi, sessionListApi, appServicesApi, sessionCacheStateApi, gitApi, externalSessionImportApi, sessionMessagingApi, agentCatalogApi, actionHandlersApi, pluginsApi, managedRootActionsApi });
-  useAppBootstrap({ appFoundationApi, currentRootApi, projectTreeApi, pluginStateApi, relayConnectionApi, managedRootsApi, sessionListApi, workbenchSessionNavigationApi, agentCatalogApi, actionHandlersApi, pluginsApi });
+  useAppBootstrap({ appFoundationApi, workbenchLayoutApi, currentRootApi, projectTreeApi, pluginStateApi, relayConnectionApi, managedRootsApi, sessionListApi, workbenchSessionNavigationApi, agentCatalogApi, actionHandlersApi, pluginsApi });
   useUrlNavigation({ appFoundationApi, currentRootApi, projectTreeApi, pluginStateApi, sessionListApi, workbenchSessionNavigationApi, actionHandlersApi });
   const actionBarModelApi = useActionBarModel({ appFoundationApi, currentRootApi, sessionSelectionApi, sessionCacheStateApi });
   const sessionRestoreApi = useSessionRestore({ appFoundationApi, currentRootApi, sessionSelectionApi, sessionListApi, sessionCacheStateApi, actionHandlersApi });
@@ -231,6 +232,16 @@ export function App(props: AppProps) {
           onWaitingCountChange={setCollabWaitingCount}
           onBindStageSession={bindStageSession}
           onExit={closeCollab}
+          sidebarFooter={!isMobile ? (
+            <SidebarServiceFooter
+              showMonitor={isStandaloneRuntime}
+              relayActionLabel={relayActionLabel}
+              relayActionDisabled={relayActionDisabled}
+              onRelayAction={handleRelayAction}
+              versionNote={standalonePage && standaloneVersion && !publicStandaloneVersion ? t("standalone.version", { version: standaloneVersion }) : null}
+              publicStandaloneVersion={publicStandaloneVersion}
+            />
+          ) : null}
           conversationSessionKey={selectedSession?.key || selectedSession?.session_key}
           conversationView={
             <SelectedSessionView
@@ -314,6 +325,12 @@ export function App(props: AppProps) {
           onFilter: setPhoneFilter,
           facts: getPhoneFacts,
           onSession: handleSelectSession,
+          onNewSession: handleNewSession,
+          onDeleteSession: workbenchSessionNavigationApi.handleDeleteSession,
+          onLoadMoreProject: (group) =>
+            group.rootId === currentRootId
+              ? sessionListApi.handleLoadOlderSessions()
+              : sessionListApi.loadMoreMultiProjectSessions(group),
           importOpen: sessionListMode === "import" || sessionSearchResultsMode,
           connection: status,
           multiProjectSessionsEnabled,

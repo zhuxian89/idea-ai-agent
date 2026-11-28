@@ -170,3 +170,49 @@ func TestReadOnlySnapshotExcludesRunDocsAndFlagsRealEdits(t *testing.T) {
 		t.Fatalf("unobserved snapshot must not report clean: state=%s note=%q", state3, note3)
 	}
 }
+
+func TestRemoveRunDirDeletesAllSubdirsAndRejectsSymlinks(t *testing.T) {
+	root := t.TempDir()
+	runID := "run-full-clean"
+	if _, err := WriteRunDoc(root, runID, DocImpl, "# impl"); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteImplDiffMeta(root, runID, ImplDiffMeta{Observed: true, Diff: "+x"}); err != nil {
+		t.Fatal(err)
+	}
+	extraDir := filepath.Join(root, ".mindfs", "runs", runID, "extra-artifacts", "nested")
+	if err := os.MkdirAll(extraDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extraDir, "notes.txt"), []byte("extra"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Symlink inside runDir must be unlinked without touching its external target.
+	externalDir := t.TempDir()
+	victim := filepath.Join(externalDir, "keep.txt")
+	if err := os.WriteFile(victim, []byte("SAFE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Symlink(externalDir, filepath.Join(root, ".mindfs", "runs", runID, "ext-link"))
+
+	if err := RemoveRunDir(root, runID); err != nil {
+		t.Fatalf("RemoveRunDir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".mindfs", "runs", runID)); !os.IsNotExist(err) {
+		t.Fatalf("expected run dir completely removed, stat err=%v", err)
+	}
+	if data, err := os.ReadFile(victim); err != nil || string(data) != "SAFE" {
+		t.Fatalf("external victim file modified or deleted: err=%v data=%q", err, string(data))
+	}
+
+	// Symlinked .mindfs/runs/<id> itself must fail without touching outside files.
+	if err := os.Symlink(externalDir, filepath.Join(root, ".mindfs", "runs", "run-symlink-escape")); err == nil {
+		if err := RemoveRunDir(root, "run-symlink-escape"); err == nil {
+			t.Fatal("expected RemoveRunDir on symlinked runDir to fail")
+		}
+		if data, err := os.ReadFile(victim); err != nil || string(data) != "SAFE" {
+			t.Fatalf("external victim file touched via symlinked runDir: err=%v data=%q", err, string(data))
+		}
+	}
+}

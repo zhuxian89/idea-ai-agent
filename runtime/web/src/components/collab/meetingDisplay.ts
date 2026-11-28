@@ -1,6 +1,6 @@
 import type { AgentStatus } from "../../services/agents";
 import type { CollabMemberSlot } from "../../services/collab";
-import type { MeetingPosition, MeetingTurn } from "../../services/collabMeeting";
+import type { MeetingItem, MeetingPosition, MeetingTurn } from "../../services/collabMeeting";
 import { collabPermissionLabel, compactCollabModelLabel, meetingTurnModel, resolveCollabModelInfo } from "./collabModelDisplay";
 
 export const meetingTurnStatus = {
@@ -42,4 +42,27 @@ export function meetingCandidateLabel(candidates: MeetingPosition[] | undefined,
   const index = candidates?.findIndex((candidate) => candidate.version_id === version) ?? -1;
   if (!candidates || index < 0) return "";
   return [`方案 ${index + 1}`, candidates[index].title].filter(Boolean).join(" · ");
+}
+
+export type MeetingItemState = "aligned" | "stalled" | "disputed" | "pending";
+
+export const meetingItemStateLabels: Record<MeetingItemState, string> = {
+  aligned: "共识",
+  stalled: "僵持",
+  disputed: "分歧",
+  pending: "待确认",
+};
+
+/**
+ * 议题状态。没有人反对、只是还有成员没有有效表态（未交付、漏答、引文或理由不合格）的议题叫「待确认」，
+ * 它不是分歧：不需要作者裁决，再问没表态的成员即可。单议题选方案的条目沿用原有判定。
+ */
+export function meetingItemState(item: MeetingItem): MeetingItemState {
+  if (item.aligned) return "aligned";
+  if (item.stalled) return "stalled";
+  if (item.candidates) return "disputed";
+  const positions = item.positions || [];
+  const pending = !positions.some((position) => position.stance === "disagree") &&
+    positions.some((position) => position.stance === "unconfirmed");
+  return pending ? "pending" : "disputed";
 }

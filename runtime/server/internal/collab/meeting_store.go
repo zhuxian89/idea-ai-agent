@@ -90,6 +90,10 @@ type MeetingPosition struct {
 	Source    string       `json:"source,omitempty"`
 	// ReportedStance records an agree or disagree that failed field validation.
 	ReportedStance string `json:"reported_stance,omitempty"`
+	// RejectedQuote keeps a quote that could not be found in the body, for diagnosis.
+	RejectedQuote string `json:"rejected_quote,omitempty"`
+	// Agent is the agent that actually wrote this position; members can switch agents mid-meeting.
+	Agent string `json:"agent,omitempty"`
 }
 
 type MeetingItem struct {

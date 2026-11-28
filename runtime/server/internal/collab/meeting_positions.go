@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 const meetingPositionsIntro = "正文完整保留观点与依据。最后另起一行输出一个控制块，quote 必须逐字引用正文中的原话，出处用真实项目相对路径和行号。"
@@ -52,24 +53,41 @@ func parseMeetingPositions(root string, round MeetingRound, turn MeetingTurn, bl
 		pos := MeetingPosition{ID: id, Title: strings.TrimSpace(item.Title),
 			Stance: strings.TrimSpace(item.Stance), Quote: strings.TrimSpace(item.Quote), Checked: strings.TrimSpace(item.Checked),
 			Risk: strings.TrimSpace(item.Risk), Reason: strings.TrimSpace(item.Reason), VersionID: strings.TrimSpace(item.VersionID),
-			Citations: VerifyCitations(root, item.Citations), TurnID: turn.ID, SlotID: turn.SlotID, Doc: turn.Doc}
+			Citations: VerifyCitations(root, item.Citations), TurnID: turn.ID, SlotID: turn.SlotID, Doc: turn.Doc, Agent: turn.Agent}
+		quote, quoteFound := locateMeetingQuote(turn.Body, pos.Quote)
+		// 互评里的同意、反对，立场写在正文里，引文只是佐证：引文缺失或对不上时保留立场并提醒，
+		// 不让一句引文的瑕疵把整票作废；提案和修订要靠引文承载方案原文，仍然必须核对通过。
+		reviewVote := turn.Kind == meetingReview && (pos.Stance == "agree" || pos.Stance == "disagree")
+		quoteIssue := ""
 		switch {
 		case pos.Quote == "":
-			pos.Issue = "缺少逐字引文"
-		case !strings.Contains(turn.Body, pos.Quote):
-			pos.Quote, pos.Issue = "", "引文与正文不匹配"
+			quoteIssue = "缺少逐字引文"
+		case !quoteFound:
+			quoteIssue = "引文与正文不匹配"
+			pos.RejectedQuote, pos.Quote = pos.Quote, "" // 留下被拒绝的引文，事后能看出差在哪
+		default:
+			pos.Quote = quote // 存正文里的原文片段（带 Markdown 标记），页面和文档与正文一致
+		}
+		keepVote := false
+		switch {
+		case quoteIssue != "" && !reviewVote:
+			pos.Issue = quoteIssue
 		case pos.Stance == "disagree" && pos.Reason == "":
 			pos.Issue = "缺少异议理由"
 		case pos.Stance == "propose" && (pos.Title == "" || turn.Kind == meetingReview && pos.Reason == ""):
 			pos.Issue = "缺少标题或修订理由"
 		case pos.Stance != "agree" && pos.Stance != "disagree" && pos.Stance != "propose":
 			pos.Issue = "立场无效"
+		case quoteIssue != "":
+			pos.Issue, keepVote = quoteIssue, true
 		}
 		if pos.Issue != "" {
-			if turn.Kind == meetingReview && (pos.Stance == "agree" || pos.Stance == "disagree") {
-				pos.ReportedStance = pos.Stance
+			if reviewVote {
+				pos.ReportedStance = pos.Stance // 与上一轮同版本同立场的重述有瑕疵时，沿用上一轮有引文有理由的表态
 			}
-			pos.Stance = "unconfirmed"
+			if !keepVote {
+				pos.Stance = "unconfirmed"
+			}
 		}
 		clipMeetingPosition(&pos)
 		positions = append(positions, pos)
@@ -78,6 +96,68 @@ func parseMeetingPositions(root string, round MeetingRound, turn MeetingTurn, bl
 		return positions, nil, "未识别的条目编号：" + strings.Join(dedupeStrings(unknownIDs), "、")
 	}
 	return positions, nil, ""
+}
+
+// 引文常把正文里的行内代码（`x`）或加粗（**x**）当作排版去掉标记再抄，句子本身并没有变。
+// 只差这类 Markdown 标记也算逐字引用；返回正文里的原文片段，其他任何差异仍判为不匹配。
+func locateMeetingQuote(body, quote string) (string, bool) {
+	if quote == "" {
+		return "", false
+	}
+	if strings.Contains(body, quote) {
+		return quote, true
+	}
+	needle := strings.TrimSpace(stripMeetingMarks(quote))
+	if needle == "" {
+		return "", false
+	}
+	var plain strings.Builder
+	var starts, ends []int // 去标记后的每个字节，对应正文里该字符的起止字节位置
+	for i := 0; i < len(body); {
+		_, width := utf8.DecodeRuneInString(body[i:])
+		if !meetingMarkAt(body, i) {
+			plain.WriteString(body[i : i+width])
+			for k := 0; k < width; k++ {
+				starts, ends = append(starts, i), append(ends, i+width)
+			}
+		}
+		i += width
+	}
+	index := strings.Index(plain.String(), needle)
+	if index < 0 {
+		return "", false
+	}
+	start, end := starts[index], ends[index+len(needle)-1]
+	// 片段两端紧挨着的标记一并带上，保证反引号成对。
+	for start > 0 && meetingMarkAt(body, start-1) {
+		start--
+	}
+	for end < len(body) && meetingMarkAt(body, end) {
+		end++
+	}
+	return body[start:end], true
+}
+
+// meetingMarkAt 判断 text[i] 是否是 Markdown 排版定界符：反引号，或成对出现的加粗 `**`。
+// 单个星号是内容（乘号、指针、通配符），不能当作排版去掉，否则 `2*3` 会被当成 `23`。
+func meetingMarkAt(text string, i int) bool {
+	switch text[i] {
+	case '`':
+		return true
+	case '*':
+		return i > 0 && text[i-1] == '*' || i+1 < len(text) && text[i+1] == '*'
+	}
+	return false
+}
+
+func stripMeetingMarks(text string) string {
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if !meetingMarkAt(text, i) {
+			b.WriteByte(text[i])
+		}
+	}
+	return b.String()
 }
 
 // 立场字段只在保存和展示时截断，引文校验已在截断前对照原文完成；完整内容见原文文件。
@@ -102,6 +182,7 @@ func clipMeetingPosition(pos *MeetingPosition) {
 		quoteLimit = meetingProposalQuoteLimit
 	}
 	pos.Quote = clipRunes(pos.Quote, quoteLimit)
+	pos.RejectedQuote = clipRunes(pos.RejectedQuote, meetingStanceQuoteLimit)
 	pos.Title = clipRunes(pos.Title, meetingTitleLimit)
 	pos.Checked = clipRunes(pos.Checked, meetingNoteLimit)
 	pos.Risk = clipRunes(pos.Risk, meetingNoteLimit)
@@ -122,7 +203,7 @@ func meetingCandidates(run Run, round MeetingRound) []MeetingItem {
 		}
 		if len(proposals) == before {
 			proposals = append(proposals, MeetingPosition{Stance: "unconfirmed", Quote: strings.TrimSpace(turn.Body),
-				TurnID: turn.ID, SlotID: turn.SlotID, Doc: turn.Doc, Issue: firstNonEmpty(turn.PositionIssue, "控制块未提供提案")})
+				TurnID: turn.ID, SlotID: turn.SlotID, Doc: turn.Doc, Agent: turn.Agent, Issue: firstNonEmpty(turn.PositionIssue, "控制块未提供提案")})
 		}
 	}
 	if run.Snapshot.TopicMode == TopicSingle && len(proposals) > 0 {
@@ -259,11 +340,16 @@ func meetingReviewPosition(itemID string, turn MeetingTurn, prior MeetingPositio
 		position = MeetingPosition{ID: itemID, SlotID: turn.SlotID, TurnID: turn.ID, Doc: turn.Doc, Stance: "unconfirmed", Issue: "重复表态"}
 	}
 	if prior.Stance == "agree" || prior.Stance == "disagree" {
+		restated := strings.HasPrefix(prior.Issue, "本轮重述")
 		if matches == 0 && turn.PositionIssue == "" {
-			prior.Issue = ""
+			if restated {
+				prior.Issue = "" // 只清掉上一轮的「重述未通过」说明；引文未核实的提醒要保留到成员补正
+			}
 			return prior
 		}
-		if matches == 1 && position.ReportedStance == prior.Stance && position.VersionID != "" && strings.EqualFold(position.VersionID, prior.VersionID) {
+		// 上一轮表态自己就带着引文问题（没有有效引文）时，不用它去顶替本轮新交的理由和出处。
+		priorVerified := prior.Quote != "" || prior.Issue == "" || restated
+		if priorVerified && matches == 1 && position.ReportedStance == prior.Stance && position.VersionID != "" && strings.EqualFold(position.VersionID, prior.VersionID) {
 			prior.Issue = "本轮重述未通过校验（" + position.Issue + "），沿用上一轮有效立场"
 			return prior
 		}
@@ -343,11 +429,8 @@ func adoptedMeetingPosition(item MeetingItem, decision MeetingDecision) *Meeting
 	if item.Revision > 1 {
 		return nil
 	}
-	for _, pos := range item.Positions {
-		if pos.SlotID == slotID && pos.Quote != "" && (pos.Stance == "disagree" || pos.Stance == "propose") {
-			return &pos
-		}
-	}
+	// 没有版本和发言编号的旧格式：弹窗每个成员只显示第一条有原话的立场（先提案、再各立场），
+	// 这里取同一条，保证作者点的和最终写进裁决、写进计划的是同一段原话。
 	if item.Proposal != nil && item.Proposal.SlotID == slotID && item.Proposal.Quote != "" {
 		return item.Proposal
 	}
@@ -359,6 +442,16 @@ func adoptedMeetingPosition(item MeetingItem, decision MeetingDecision) *Meeting
 	return nil
 }
 
+// meetingPositionName 署名取发言当时的 Agent：成员中途换过模型后，历史原话不能署给新模型。
+func meetingPositionName(run Run, pos MeetingPosition) string {
+	for i, member := range run.Snapshot.Members {
+		if member.SlotID == pos.SlotID {
+			return fmt.Sprintf("成员%d · %s", i+1, firstNonEmpty(pos.Agent, member.Agent))
+		}
+	}
+	return pos.SlotID
+}
+
 func meetingMemberName(run Run, slotID string) string {
 	for i, member := range run.Snapshot.Members {
 		if member.SlotID == slotID {
@@ -366,6 +459,21 @@ func meetingMemberName(run Run, slotID string) string {
 		}
 	}
 	return slotID
+}
+
+// meetingItemPending 是「没有人反对，只是还有成员没有有效表态」：它不是分歧，只需要把没表态的人再问一遍。
+func meetingItemPending(item MeetingItem) bool {
+	if item.Aligned || item.Stalled || len(item.Candidates) > 0 {
+		return false // 单议题是在多个候选方案里选，不是补齐一张票，沿用原判定
+	}
+	unconfirmed := false
+	for _, pos := range item.Positions {
+		if pos.Stance == "disagree" {
+			return false
+		}
+		unconfirmed = unconfirmed || pos.Stance == "unconfirmed"
+	}
+	return unconfirmed
 }
 
 func renderMeetingItems(run Run, round MeetingRound) string {
@@ -377,6 +485,8 @@ func renderMeetingItems(run Run, round MeetingRound) string {
 			state = "共识"
 		} else if item.Stalled {
 			state = "僵持"
+		} else if meetingItemPending(item) {
+			state = "待确认"
 		}
 		fmt.Fprintf(&b, "\n## %s %s（%s）\n", item.ID, item.Title, state)
 		writeMeetingItemPositions(&b, run, item)
@@ -409,7 +519,7 @@ func writeMeetingItemPositions(b *strings.Builder, run Run, item MeetingItem) {
 
 func writeMeetingPosition(b *strings.Builder, run Run, pos MeetingPosition) {
 	labels := map[string]string{"agree": "同意", "disagree": "异议", "propose": "提出方案", "unconfirmed": "未确认"}
-	fmt.Fprintf(b, "\n#### %s · %s\n", meetingMemberName(run, pos.SlotID), labels[pos.Stance])
+	fmt.Fprintf(b, "\n#### %s · %s\n", meetingPositionName(run, pos), labels[pos.Stance])
 	if pos.VersionID != "" {
 		fmt.Fprintln(b, "\n版本："+pos.VersionID)
 	}
@@ -428,6 +538,9 @@ func writeMeetingPosition(b *strings.Builder, run Run, pos MeetingPosition) {
 	}
 	if pos.Quote != "" {
 		fmt.Fprintln(b, "\n> "+strings.ReplaceAll(pos.Quote, "\n", "\n> "))
+	}
+	if pos.RejectedQuote != "" {
+		fmt.Fprintln(b, "\n未采纳的引文（正文中找不到）：`"+strings.ReplaceAll(strings.ReplaceAll(pos.RejectedQuote, "`", "'"), "\n", " ")+"`")
 	}
 	if pos.Checked != "" {
 		fmt.Fprintln(b, "\n检查："+pos.Checked)
@@ -465,9 +578,12 @@ func renderMeetingDecisions(run Run, round MeetingRound) string {
 			fmt.Fprintf(&b, "\n## %s %s\n", item.ID, item.Title)
 			switch decision.Choice {
 			case "adopt":
-				fmt.Fprintf(&b, "\n采纳 %s。\n", meetingMemberName(run, decision.SlotID))
-				if selected := adoptedMeetingPosition(item, decision); selected != nil {
+				selected := adoptedMeetingPosition(item, decision)
+				if selected != nil {
+					fmt.Fprintf(&b, "\n采纳 %s。\n", meetingPositionName(run, *selected))
 					writeMeetingPosition(&b, run, *selected)
+				} else {
+					fmt.Fprintf(&b, "\n采纳 %s。\n", meetingMemberName(run, decision.SlotID))
 				}
 			case "custom":
 				fmt.Fprintln(&b, "\n"+strings.TrimSpace(decision.Note))

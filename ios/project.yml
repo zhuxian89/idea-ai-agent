@@ -22,7 +22,7 @@ targets:
   LocalAIAgent:
     type: application
     platform: iOS
-    sources: [LocalAIAgent]
+    sources: [LocalAIAgent, ../apple-shared]
     settings:
       base:
         TARGETED_DEVICE_FAMILY: '1'

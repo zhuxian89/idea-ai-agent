@@ -11,6 +11,7 @@ export function PhoneSheet({ title, open, onClose, children, side }: {
 }) {
   const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const titleId = useId();
   useLayoutEffect(() => {
     const dialog = ref.current;
@@ -20,7 +21,27 @@ export function PhoneSheet({ title, open, onClose, children, side }: {
     }
   }, [open]);
   return createPortal(
-    <dialog className="remote-phone-sheet" data-side={side} ref={ref} onClick={event => {
+    <dialog className="remote-phone-sheet" data-side={side} ref={ref}
+      onTouchStart={event => {
+        if (side !== "left" || event.touches.length !== 1) return;
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("input, textarea, select")) {
+          swipeStart.current = null;
+          return;
+        }
+        swipeStart.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+      }}
+      onTouchEnd={event => {
+        if (side !== "left" || !swipeStart.current || event.changedTouches.length !== 1) return;
+        const dx = event.changedTouches[0].clientX - swipeStart.current.x;
+        const dy = event.changedTouches[0].clientY - swipeStart.current.y;
+        swipeStart.current = null;
+        if (dx < -56 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+          ref.current?.close();
+          onClose();
+        }
+      }}
+      onClick={event => {
       if (side !== "left" || event.target !== event.currentTarget) return;
       const bounds = event.currentTarget.getBoundingClientRect();
       if (event.clientX >= bounds.right || event.clientX < bounds.left) onClose();

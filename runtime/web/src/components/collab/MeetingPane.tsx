@@ -10,7 +10,7 @@ import { MeetingComposer } from "./MeetingComposer";
 import { MeetingDecisions } from "./MeetingDecisions";
 import { MeetingPositionDetails } from "./MeetingPositionDetails";
 import { collabPermissionLabel } from "./collabModelDisplay";
-import { describeMeetingMember, meetingCandidateLabel } from "./meetingDisplay";
+import { describeMeetingMember, meetingCandidateLabel, meetingItemState, meetingItemStateLabels } from "./meetingDisplay";
 import "./MeetingPane.css";
 
 const topicDoc = "00-会议议题.md";
@@ -62,6 +62,10 @@ export function MeetingPane({
   const following = useRef(true);
   const current = meeting.rounds.at(-1);
   const unfixed = current?.items?.filter((item) => !item.aligned) || [];
+  const unfixedPending = unfixed.filter((item) => meetingItemState(item) === "pending").length;
+  // 「待确认」不是分歧：没有人反对，只是还有成员没有有效表态
+  const unfixedText = [unfixed.length - unfixedPending > 0 ? `${unfixed.length - unfixedPending} 项分歧` : "",
+    unfixedPending > 0 ? `${unfixedPending} 项待确认` : ""].filter(Boolean).join("、");
   const singleTopic = run.snapshot.topic_mode === "single";
   const awaiting = run.status === "waiting_user";
   const alignedPhase = run.current_step === "alignment";
@@ -148,8 +152,8 @@ export function MeetingPane({
     const agreeCount = positions.filter((pos) => pos.stance === "agree").length;
     const disagreeCount = positions.filter((pos) => pos.stance === "disagree").length;
     const unconfirmed = positions.filter((pos) => pos.stance === "unconfirmed").length;
-    const state = item.aligned ? "aligned" : item.stalled ? "stalled" : "disputed";
-    const stateLabel = item.aligned ? "共识" : item.stalled ? "僵持" : "分歧";
+    const state = meetingItemState(item);
+    const stateLabel = meetingItemStateLabels[state];
     const stats: { text: string; tone: "agree" | "disagree" | "muted" }[] = item.candidates
       ? [{ text: item.aligned ? meetingCandidateLabel(item.candidates, positions[0]?.version_id) : `${item.candidates.length} 个方案`, tone: item.aligned ? "agree" : "muted" }]
       : [
@@ -205,6 +209,8 @@ export function MeetingPane({
     const hasReviews = round.number === 1 && round.turns.some((turn) => turn.kind === "review");
     const reviewMarker = sorted.find((turn) => turn.kind === "review");
     const consensus = (round.items || []).filter((item) => item.aligned).length;
+    const pendingCount = (round.items || []).filter((item) => meetingItemState(item) === "pending").length;
+    const disputeCount = (round.items?.length || 0) - consensus - pendingCount;
     const summaryIndex = sorted.findIndex((turn) => round.summary_at ?
       turn.at.replace(/Z$/, "") > round.summary_at.replace(/Z$/, "") : turn.kind === "plan" || turn.kind === "confirmation");
     const boundary = summaryIndex === -1 ? sorted.length : summaryIndex;
@@ -217,7 +223,7 @@ export function MeetingPane({
         onClick={() => { following.current = false; setOpenRounds((old) => ({ ...old, [round.number]: !open })); }}>
         <strong>第 {round.number} 轮</strong>
         <span>{open ? round.number === 1 ? hasReviews ? "互评" : "独立提案" : "轮流讨论" :
-          [proposals ? `${proposals} 份提案` : "", `${reviews} 份互评`, round.summary_doc && `${consensus} 共识 · ${(round.items?.length || 0) - consensus} 分歧`].filter(Boolean).join(" · ")}</span>
+          [proposals ? `${proposals} 份提案` : "", `${reviews} 份互评`, round.summary_doc && `${consensus} 共识 · ${disputeCount} 分歧${pendingCount > 0 ? ` · ${pendingCount} 待确认` : ""}`].filter(Boolean).join(" · ")}</span>
         <CollabIcon name="chevron" />
       </button>
       {open && <>
@@ -241,10 +247,11 @@ export function MeetingPane({
                   <strong>共识与分歧</strong>
                   {itemCount > 0 && <span className="meeting-summary-counts">
                     {consensus > 0 && <span className="meeting-summary-pill" data-state="aligned">{consensus} 共识</span>}
-                    {(itemCount - consensus) > 0 && <span className="meeting-summary-pill"
+                    {disputeCount > 0 && <span className="meeting-summary-pill"
                       data-state={round.items!.some((item) => !item.aligned && item.stalled) ? "stalled" : "disputed"}>
-                      {itemCount - consensus} 分歧
+                      {disputeCount} 分歧
                     </span>}
+                    {pendingCount > 0 && <span className="meeting-summary-pill" data-state="pending">{pendingCount} 待确认</span>}
                   </span>}
                 </span>
                 <span className="meeting-summary-chevron" aria-hidden="true"><CollabIcon name="chevron" /></span>
@@ -318,7 +325,7 @@ export function MeetingPane({
             <button type="button" className="collab-btn-secondary" disabled={busy} onClick={() => setDeciding("override")}>否决全部，按我方向</button>
           </> : <>
             <span className={arbitration ? "meeting-warning" : "meeting-muted"}>
-              {singleTopic ? "尚未就方案达成一致" : arbitration ? `还有 ${unfixed.length} 项分歧未对齐，请你裁决` : `还有 ${unfixed.length} 项分歧`}
+              {singleTopic ? "尚未就方案达成一致" : arbitration ? `还有 ${unfixedText}未对齐，请你裁决` : `还有 ${unfixedText}`}
             </span>
             <button type="button" className="collab-btn-secondary" disabled={busy}
               onClick={() => void act({ action: "next", round: current.number })}><CollabIcon name="next" />{singleTopic ? "继续讨论方案" : "只讨论剩余分歧"}</button>
@@ -367,7 +374,7 @@ export function MeetingPane({
     </>}
     {deciding && alignmentReady && <MeetingDecisions key={`${current.number}-${deciding}`} items={unfixed}
       totalItems={current.items?.length || 0} rootId={run.root_id} initialOverride={deciding === "override"}
-      getMember={positionMember} choices={choices} onChoice={onChoice} busy={busy} onClose={() => setDeciding(false)}
+      getMember={positionMember} choices={choices} onChoice={onChoice} busy={busy} error={error} onClose={() => setDeciding(false)}
       onSubmit={(decisions) => void act({ action: "plan", round: current.number, decisions })}
       onOverride={(text) => void act({ action: "plan", round: current.number, override_all: true, text })} />}
   </div>;

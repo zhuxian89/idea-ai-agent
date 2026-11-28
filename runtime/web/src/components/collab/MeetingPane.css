@@ -411,6 +411,11 @@
   background: var(--cb-red-soft);
   color: var(--cb-red);
 }
+.meeting-summary-pill[data-state="pending"],
+.meeting-item-badge[data-state="pending"] {
+  background: var(--cb-accent-soft);
+  color: var(--cb-accent);
+}
 .meeting-summary-doc-btn {
   display: inline-flex;
   align-items: center;
@@ -1021,9 +1026,23 @@
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
 }
 .decision-option-quote[data-open="true"] { -webkit-line-clamp: unset; display: block; }
+.decision-option--readonly {
+  border-style: dashed;
+  background: var(--cb-subtle);
+}
+.decision-option-main--readonly {
+  cursor: default;
+}
+.decision-readonly-mark {
+  flex: 0 0 18px; inline-size: 18px; block-size: 18px; margin-top: 1px; border-radius: 50%;
+  border: 1.5px dashed var(--cb-amber); background: var(--cb-amber-soft);
+}
+.decision-option-issue {
+  font-size: 12.5px; line-height: 1.45; color: var(--cb-amber); overflow-wrap: anywhere;
+}
 .decision-more {
-  justify-self: start; margin: 0 12px 10px 40px; padding: 2px 0; border: 0; background: transparent;
-  color: var(--cb-accent); font: inherit; font-size: 12px; cursor: pointer;
+  justify-self: start; margin: 0 12px 8px 40px; padding: 6px 0; min-height: 36px; border: 0; background: transparent;
+  color: var(--cb-accent); font: inherit; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center;
 }
 .decision-option-detail { display: grid; gap: 6px; margin: 0 12px 12px 40px; padding-top: 8px; border-top: 1px solid var(--cb-border); font-size: 12.5px; }
 .decision-option textarea {
@@ -1085,4 +1104,192 @@
   outline: none;
   border-color: var(--cb-accent);
   box-shadow: 0 0 0 3px var(--cb-accent-soft);
+}
+
+/* 裁决提交失败的原因，显示在弹窗底部按钮上方 */
+.decision-error {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--cb-red-soft);
+  color: var(--cb-red);
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Remote Phone Web Alignment (strictly scoped so IDEA narrow toolwindows stay untouched) ---------- */
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane {
+  font-size: var(--rp-fs-13, 13px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane[data-compact="true"] {
+  border-radius: var(--rp-r-row, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-header,
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-bottom,
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-timeline {
+  padding-inline: var(--rp-s3, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-timeline {
+  scrollbar-gutter: auto;
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .collab-run-models {
+  overflow: hidden;
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-header {
+  padding-block: var(--rp-s2, 8px);
+  gap: var(--rp-s2, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-bottom {
+  padding-top: var(--rp-s2, 8px);
+  padding-bottom: calc(var(--rp-s3, 12px) + var(--cb-safe-bottom));
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-phases {
+  font-size: var(--rp-fs-11, 11px);
+  flex-wrap: wrap;
+  row-gap: var(--rp-s1, 4px);
+}
+@media (max-width: 360px) {
+  html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-phases li {
+    gap: 3px;
+  }
+  html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-phases li:not(:last-child)::after {
+    margin-right: 4px;
+  }
+  html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-phases .meeting-round-tag {
+    padding-inline-start: 4px;
+  }
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-topic > span,
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-inputs,
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-compact-status {
+  font-size: var(--rp-fs-12, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-message.collab-card {
+  padding: var(--rp-s2, 8px) var(--rp-s3, 12px);
+  border-radius: var(--rp-r-row, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-turn-title {
+  font-size: var(--rp-fs-14, 14px);
+  font-weight: 600;
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-summary {
+  padding: var(--rp-s3, 12px);
+  border-radius: var(--rp-r-row, 12px);
+  gap: var(--rp-s2, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-summary-title > strong {
+  font-size: var(--rp-fs-14, 14px);
+  font-weight: 600;
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-summary-doc-btn,
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-inputs .collab-quiet-link {
+  min-height: var(--rp-touch-minor, 36px);
+  padding: 0 var(--rp-s2, 8px);
+  border-radius: var(--rp-r-ctl, 8px);
+  font-size: var(--rp-fs-12, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-item {
+  border-radius: var(--rp-r-ctl, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-item-summary {
+  min-height: var(--rp-touch-row, 40px);
+  padding: var(--rp-s2, 8px) var(--rp-s3, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-item-body {
+  padding: var(--rp-s2, 8px) var(--rp-s3, 12px);
+  gap: var(--rp-s2, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-position {
+  padding: var(--rp-s2, 8px) var(--rp-s3, 12px);
+  border-radius: var(--rp-r-ctl, 8px);
+  font-size: var(--rp-fs-12, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-position-label,
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-position-quote {
+  font-size: var(--rp-fs-13, 13px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-position-tag {
+  font-size: var(--rp-fs-11, 11px);
+  border-radius: 4px;
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-citation {
+  font-size: var(--rp-fs-12, 12px);
+  border-radius: var(--rp-r-ctl, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-permission select,
+html[data-remote-ui="1"][data-device="phone"] .meeting-settings select,
+html[data-remote-ui="1"][data-device="phone"] .meeting-settings input,
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane select {
+  min-height: var(--rp-touch-minor, 36px);
+  padding: var(--rp-s1, 4px) var(--rp-s2, 8px);
+  border-radius: var(--rp-r-ctl, 8px);
+  font-size: var(--rp-fs-16, 16px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-permission .idea-permission-select {
+  min-height: var(--rp-touch-row, 40px);
+  border-radius: var(--rp-r-ctl, 8px);
+  font-size: var(--rp-fs-13, 13px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-settings input {
+  width: 72px;
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-composer {
+  padding: var(--rp-s2, 8px) var(--rp-s3, 12px);
+  border-radius: var(--rp-r-row, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-composer textarea,
+html[data-remote-ui="1"][data-device="phone"] .meeting-pane .meeting-plan-reason textarea {
+  font-size: var(--rp-fs-16, 16px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-mode-switch {
+  border-radius: var(--rp-r-ctl, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-mode-switch button {
+  min-height: var(--rp-touch-minor, 36px);
+  border-radius: 6px;
+  font-size: var(--rp-fs-13, 13px);
+}
+@media (max-width: 640px) {
+  html[data-remote-ui="1"][data-device="phone"] .collab-modal.meeting-decision-modal {
+    max-width: none;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-progress {
+  padding: var(--rp-s3, 12px) var(--rp-s4, 16px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-body {
+  padding: var(--rp-s4, 16px);
+  gap: var(--rp-s3, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-item-head h3 {
+  font-size: var(--rp-fs-16, 16px);
+  font-weight: 600;
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-option {
+  border-radius: var(--rp-r-row, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-option-issue,
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-more,
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-option-detail,
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-override-hint,
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-error {
+  font-size: var(--rp-fs-12, 12px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-option textarea,
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-override-textarea {
+  font-size: var(--rp-fs-16, 16px);
+  border-radius: var(--rp-r-ctl, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-override-btn {
+  min-height: var(--rp-touch-minor, 36px);
+  padding: 0 var(--rp-s3, 12px);
+  border-radius: var(--rp-r-ctl, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .meeting-decision-modal .decision-footer {
+  gap: var(--rp-s2, 8px);
+  padding: var(--rp-s3, 12px) var(--rp-s4, 16px) calc(var(--rp-s3, 12px) + var(--cb-safe-bottom));
 }

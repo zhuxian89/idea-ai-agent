@@ -612,10 +612,14 @@ func (s *Service) deleteMeeting(ctx context.Context, rootID, runID string) error
 			return err
 		}
 	}
+	seenSessions := make(map[string]struct{})
 	for _, round := range detail.Rounds {
 		for _, turn := range round.Turns {
-			if turn.SessionKey != "" && !turn.At.IsZero() {
-				_ = s.runner.DeleteStageSession(ctx, rootID, turn.SessionKey)
+			if key := strings.TrimSpace(turn.SessionKey); key != "" {
+				if _, ok := seenSessions[key]; !ok {
+					seenSessions[key] = struct{}{}
+					_ = s.runner.DeleteStageSession(ctx, rootID, key)
+				}
 			}
 		}
 	}
@@ -623,7 +627,7 @@ func (s *Service) deleteMeeting(ctx context.Context, rootID, runID string) error
 	if err != nil {
 		return err
 	}
-	if _, err := CleanupRunDocs(root, runID, nil); err != nil {
+	if err := RemoveRunDir(root, runID); err != nil {
 		return err
 	}
 	if err := store.DeleteRun(ctx, runID); err != nil {

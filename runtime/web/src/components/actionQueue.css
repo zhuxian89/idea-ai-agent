@@ -1,0 +1,117 @@
+/*
+ * 输入框上方的排队消息：与上方状态卡、下方输入框同宽同圆角，三个操作用同一套线性图标。
+ * 颜色全部取应用主题变量，深色、浅色、草地、苔藓、跟随系统都自动适配。
+ */
+.action-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 156px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 0 0 6px;
+}
+.action-queue[data-inset="1"] { padding: 0 31px 6px; }
+
+.action-queue-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  box-shadow: var(--panel-shadow);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+.action-queue[data-mobile="1"] .action-queue-item { border-radius: 10px; box-shadow: none; min-height: 44px; }
+.action-queue-item[data-editing="1"] {
+  border-color: var(--accent-color);
+  box-shadow: var(--panel-focus-shadow);
+}
+
+/* 左侧「排队」标记：小标签，多条时带序号，一眼看出这是还没发出的消息 */
+.action-queue-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+  color: var(--accent-color);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.action-queue-tag svg { width: 13px; height: 13px; flex: none; }
+
+.action-queue-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.action-queue-input {
+  min-width: 0;
+  width: 100%;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.action-queue-actions { display: flex; align-items: center; gap: 2px; }
+
+.action-queue-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.action-queue[data-mobile="1"] .action-queue-btn { width: 36px; height: 36px; }
+.action-queue-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.action-queue-btn:hover:enabled,
+.action-queue-btn:focus-visible { background: var(--menu-active-bg); color: var(--text-primary); }
+.action-queue-btn:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; }
+.action-queue-btn[data-tone="danger"]:hover:enabled,
+.action-queue-btn[data-tone="danger"]:focus-visible {
+  background: color-mix(in srgb, var(--danger-color, #dc2626) 14%, transparent);
+  color: var(--danger-color, #dc2626);
+}
+/* 「立即发送」是这一行的主操作：始终用强调色 */
+.action-queue-btn[data-tone="primary"] { color: var(--accent-color); }
+.action-queue-btn[data-tone="primary"]:hover:enabled,
+.action-queue-btn[data-tone="primary"]:focus-visible {
+  background: color-mix(in srgb, var(--accent-color) 16%, transparent);
+  color: var(--accent-hover, var(--accent-color));
+}
+.action-queue-btn:disabled { opacity: 0.4; cursor: not-allowed; }

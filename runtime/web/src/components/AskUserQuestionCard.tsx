@@ -183,6 +183,7 @@ export function AskUserQuestionCard({
 
   return (
     <div
+      className="mindfs-ask-card"
       style={{
         width: "100%",
         minWidth: 0,
@@ -195,6 +196,7 @@ export function AskUserQuestionCard({
     >
       <button
         type="button"
+        className="mindfs-ask-head"
         onClick={() => setExpanded((value) => !value)}
         style={{
           width: "100%",
@@ -254,7 +256,7 @@ export function AskUserQuestionCard({
         </span>
       </button>
       {expanded ? (
-        <div style={{ padding: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div className="mindfs-ask-body" style={{ padding: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
           {native ? <NativeInteractionFields compactDetails={phoneSheet} interaction={native} answers={answers} onChange={setAnswers} disabled={submitting || submitted || !active || !isCurrent} /> : questions.map((question, index) => {
             const key = `q_${index}`;
             const options = Array.isArray(question.options) ? question.options : [];
@@ -279,6 +281,7 @@ export function AskUserQuestionCard({
               <div key={key} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {itemTitle ? (
                   <div
+                    className="mindfs-ask-title"
                     style={{
                       fontSize: "13px",
                       fontWeight: 700,
@@ -301,6 +304,8 @@ export function AskUserQuestionCard({
                       return (
                         <label
                           key={label}
+                          className="mindfs-ask-option"
+                          data-checked={checked ? "true" : undefined}
                           style={{
                             display: "flex",
                             gap: "8px",
@@ -338,6 +343,8 @@ export function AskUserQuestionCard({
                       );
                     })}
                     <textarea
+                      className="mindfs-ask-textarea"
+                      data-active={customAnswerActive ? "true" : undefined}
                       value={customAnswer}
                       disabled={submitted}
                       onFocus={() => setFocusedCustomAnswerKey(key)}
@@ -363,6 +370,7 @@ export function AskUserQuestionCard({
                   </div>
                 ) : (
                   <textarea
+                    className="mindfs-ask-textarea"
                     value={selected}
                     disabled={submitted}
                     onChange={(event) => setAnswer(index, event.target.value)}
@@ -386,6 +394,8 @@ export function AskUserQuestionCard({
         })}
         <button
           type="button"
+          className="mindfs-ask-submit"
+          data-ready={canSubmit ? "true" : undefined}
           disabled={!canSubmit}
           onClick={async () => {
             if (!canSubmit || !rootId || !sessionKey || !toolUseId || !onAnswer) return;

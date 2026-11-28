@@ -21,13 +21,14 @@ import (
 )
 
 type fakeCollabRunner struct {
-	mu             sync.Mutex
-	store          *Store
-	rootPath       string
-	statuses       []agent.Status
-	turns          []StageTurnRequest
-	handler        func(callIndex int, req StageTurnRequest) (string, error)
-	beforeRootPath func()
+	mu              sync.Mutex
+	store           *Store
+	rootPath        string
+	statuses        []agent.Status
+	turns           []StageTurnRequest
+	deletedSessions []string
+	handler         func(callIndex int, req StageTurnRequest) (string, error)
+	beforeRootPath  func()
 }
 
 func (f *fakeCollabRunner) StageTurnActive(string, string) bool { return false }
@@ -97,7 +98,10 @@ func (f *fakeCollabRunner) CollabChangedFiles(context.Context, string, string, t
 }
 
 func (f *fakeCollabRunner) CancelStageTurn(context.Context, string, string) error { return nil }
-func (f *fakeCollabRunner) DeleteStageSession(context.Context, string, string) error {
+func (f *fakeCollabRunner) DeleteStageSession(_ context.Context, _ string, key string) error {
+	f.mu.Lock()
+	f.deletedSessions = append(f.deletedSessions, key)
+	f.mu.Unlock()
 	return nil
 }
 func (f *fakeCollabRunner) RunUpdated(string, Run, int) {}
@@ -1178,5 +1182,130 @@ type notifyingCollabRunner struct {
 func (n *notifyingCollabRunner) RunUpdated(_ string, run Run, _ int) {
 	if n.onUpdate != nil {
 		n.onUpdate(run)
+	}
+}
+
+func TestDeleteRunCleansRunDirectoryAndAllRoundStageSessions(t *testing.T) {
+	ctx := context.Background()
+	repo := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "collab-delete.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	store, err := NewStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tplStore, err := NewTemplateStoreAt(filepath.Join(t.TempDir(), "collab-templates.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runID := "run-delete-test"
+	run := Run{
+		ID:          runID,
+		RootID:      "root-1",
+		Mode:        ModeQuick,
+		Title:       "Delete cleanup test",
+		TaskPrompt:  "Delete cleanup test",
+		Status:      RunStatusCompleted,
+		CurrentStep: StepFixTest,
+		Round:       2,
+		Steps: []StepCard{
+			{Key: StepImpl, SessionKey: roundSessionKey(runID, 1, StepImpl), Status: StepStatusDone},
+			{Key: StepReview, SessionKey: roundSessionKey(runID, 2, StepReview), Status: StepStatusDone},
+			{Key: StepResponse, SessionKey: roundSessionKey(runID, 2, StepResponse), Status: StepStatusDone},
+			{Key: StepFixTest, SessionKey: roundSessionKey(runID, 2, StepFixTest), Status: StepStatusDone},
+		},
+	}
+	if _, err := store.CreateRun(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteRunDoc(repo, runID, DocImpl, "# impl"); err != nil {
+		t.Fatal(err)
+	}
+	extraFile := filepath.Join(repo, ".mindfs", "runs", runID, "custom-dir", "artifact.log")
+	if err := os.MkdirAll(filepath.Dir(extraFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(extraFile, []byte("log"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &fakeCollabRunner{rootPath: repo, store: store}
+	svc := NewService(tplStore, runner)
+	if err := svc.DeleteRun(ctx, "root-1", runID); err != nil {
+		t.Fatalf("DeleteRun: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".mindfs", "runs", runID)); !os.IsNotExist(err) {
+		t.Fatalf("expected .mindfs/runs/%s removed, stat err=%v", runID, err)
+	}
+	deleted := make(map[string]bool)
+	for _, key := range runner.deletedSessions {
+		deleted[key] = true
+	}
+	for _, want := range []string{
+		roundSessionKey(runID, 1, StepImpl),
+		roundSessionKey(runID, 1, StepReview),
+		roundSessionKey(runID, 1, StepResponse),
+		roundSessionKey(runID, 1, StepFixTest),
+		roundSessionKey(runID, 2, StepReview),
+		roundSessionKey(runID, 2, StepResponse),
+		roundSessionKey(runID, 2, StepFixTest),
+	} {
+		if !deleted[want] {
+			t.Fatalf("expected stage session %q deleted, got %v", want, runner.deletedSessions)
+		}
+	}
+
+	// Meeting deletion must also clean up turns whose At is zero and remove extra run files.
+	meetingID := "run-meeting-delete-test"
+	meetingRun := Run{
+		ID:          meetingID,
+		RootID:      "root-1",
+		Mode:        ModeGroup,
+		Title:       "Meeting delete test",
+		TaskPrompt:  "Meeting delete test",
+		Status:      RunStatusCompleted,
+		CurrentStep: "done",
+		Round:       1,
+	}
+	if _, err := store.CreateRun(ctx, meetingRun); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.saveMeeting(ctx, meetingRun, MeetingRound{
+		RunID:  meetingID,
+		Number: 1,
+		Turns: []MeetingTurn{
+			{ID: "m-01-001", SessionKey: meetingID + "-m-01-001", At: time.Now().UTC()},
+			{ID: "m-01-002", SessionKey: meetingID + "-m-01-002"}, // zero At (interrupted/started turn)
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	meetingExtra := filepath.Join(repo, ".mindfs", "runs", meetingID, "extra-notes", "draft.txt")
+	if err := os.MkdirAll(filepath.Dir(meetingExtra), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(meetingExtra, []byte("draft"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runner.deletedSessions = nil
+	if err := svc.DeleteRun(ctx, "root-1", meetingID); err != nil {
+		t.Fatalf("DeleteRun(meeting): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".mindfs", "runs", meetingID)); !os.IsNotExist(err) {
+		t.Fatalf("expected meeting run dir removed, stat err=%v", err)
+	}
+	meetingDeleted := make(map[string]bool)
+	for _, key := range runner.deletedSessions {
+		meetingDeleted[key] = true
+	}
+	for _, want := range []string{meetingID + "-m-01-001", meetingID + "-m-01-002"} {
+		if !meetingDeleted[want] {
+			t.Fatalf("expected meeting session %q deleted, got %v", want, runner.deletedSessions)
+		}
 	}
 }

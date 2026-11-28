@@ -13,6 +13,7 @@ import (
 	agenttypes "mindfs/server/internal/agent/types"
 	"mindfs/server/internal/commandexec"
 	"mindfs/server/internal/session"
+	"mindfs/server/internal/turndiff"
 )
 
 type CreateSessionInput struct {
@@ -377,6 +378,7 @@ func (s *Service) DeleteSession(ctx context.Context, in DeleteSessionInput) erro
 		commandexec.CloseSession(in.RootID, key)
 		s.Registry.ReleaseFileWatcher(in.RootID, key)
 	}
+	_ = turndiff.DeleteSessionArtifacts(root.MetaDir(), keys)
 	return nil
 }
 

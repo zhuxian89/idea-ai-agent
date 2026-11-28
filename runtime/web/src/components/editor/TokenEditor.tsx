@@ -863,6 +863,7 @@ const TokenEditor = forwardRef<TokenEditorHandle, TokenEditorProps>(function Tok
 
   return (
     <div
+      className="token-editor-root"
       onMouseDown={onPointerDown}
       onTouchStart={onPointerDown}
       style={{
@@ -922,6 +923,7 @@ const TokenEditor = forwardRef<TokenEditorHandle, TokenEditorProps>(function Tok
           placeholder={
             isEmpty && !isFocused ? (
               <div
+                className="token-editor-placeholder"
                 style={{
                   position: "absolute",
                   left: "14px",

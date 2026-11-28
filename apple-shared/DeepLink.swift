@@ -3,7 +3,7 @@ import Foundation
 enum DeepLink {
     static let maximumLength = 16_384
 
-    static func parse(_ input: URL, relay: URL = Config.relayBaseURL) -> URL? {
+    static func parse(_ input: URL, relay: URL = AppleShell.relayBaseURL) -> URL? {
         guard input.absoluteString.utf8.count <= maximumLength,
               let parts = URLComponents(url: input, resolvingAgainstBaseURL: false),
               parts.scheme?.lowercased() == "localaiagent", parts.host == "open",

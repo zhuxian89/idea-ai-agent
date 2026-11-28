@@ -636,6 +636,7 @@ export function AgentSelector({
             }}
           >
             <div
+              className="agent-menu-heading"
               style={{
                 padding: "6px 12px",
                 fontSize: "11px",
@@ -947,6 +948,7 @@ function SectionHeader({
   return (
     <button
       type="button"
+      className="agent-menu-section-head"
       onClick={onToggle}
       aria-expanded={expanded}
       style={{
@@ -965,6 +967,7 @@ function SectionHeader({
       }}
     >
       <span
+        className="agent-menu-section-title"
         style={{
           flex: "0 1 auto",
           minWidth: 0,

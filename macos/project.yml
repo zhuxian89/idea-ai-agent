@@ -1,0 +1,58 @@
+name: LocalAIAgentMac
+options:
+  developmentLanguage: zh-Hans
+  deploymentTarget:
+    macOS: '13.0'
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Version.xcconfig
+  Release: Version.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: '-'
+    ENABLE_APP_SANDBOX: NO
+targets:
+  LocalAIAgentMac:
+    type: application
+    platform: macOS
+    sources: [LocalAIAgentMac, ../apple-shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.localaiagent.mac
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: Local AI Agent
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSPrincipalClass: NSApplication
+        CFBundleURLTypes:
+          - CFBundleURLName: com.localaiagent.mac
+            CFBundleURLSchemes: [localaiagent]
+  LocalAIAgentMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - LocalAIAgentMacTests
+      - ../apple-shared
+      - path: LocalAIAgentMac
+        excludes: [main.swift]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.localaiagent.mac.tests
+schemes:
+  LocalAIAgentMac:
+    build:
+      targets:
+        LocalAIAgentMac: all
+    test:
+      targets: [LocalAIAgentMacTests]

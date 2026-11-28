@@ -676,18 +676,24 @@ func (s *Service) DeleteRun(ctx context.Context, rootID, runID string) error {
 		delete(s.workers, runKey)
 	}
 	s.mu.Unlock()
-	for n := 1; n < run.Round; n++ {
-		for _, key := range []string{StepReview, StepResponse, StepFixTest} {
-			_ = s.runner.DeleteStageSession(ctx, rootID, roundSessionKey(run.ID, n, key))
+	sessionKeys := make(map[string]struct{})
+	for n := 1; n <= run.Round; n++ {
+		for _, key := range []string{StepImpl, StepReview, StepResponse, StepFixTest} {
+			sessionKeys[roundSessionKey(run.ID, n, key)] = struct{}{}
 		}
 	}
 	for _, step := range run.Steps {
-		if strings.TrimSpace(step.SessionKey) != "" {
-			_ = s.runner.DeleteStageSession(ctx, rootID, step.SessionKey)
+		if key := strings.TrimSpace(step.SessionKey); key != "" {
+			sessionKeys[key] = struct{}{}
 		}
 	}
+	for key := range sessionKeys {
+		_ = s.runner.DeleteStageSession(ctx, rootID, key)
+	}
 	if rootPath, rootErr := s.runner.RootPath(rootID); rootErr == nil {
-		_, _ = CleanupRunDocs(rootPath, runID, nil)
+		if err := RemoveRunDir(rootPath, runID); err != nil {
+			return err
+		}
 	}
 	if err := store.DeleteRun(ctx, runID); err != nil {
 		return err

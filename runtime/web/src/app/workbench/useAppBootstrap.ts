@@ -12,6 +12,7 @@ import { mapManagedRootsToEntries, readURLState } from "../urlState";
 import { loadLastRootId } from "../storagePrefs";
 import { reportError } from "../../services/error";
 import type { useAppFoundation } from "./useAppFoundation";
+import type { useWorkbenchLayout } from "./useWorkbenchLayout";
 import type { useCurrentRoot } from "./useCurrentRoot";
 import type { useProjectTree } from "./useProjectTree";
 import type { usePluginState } from "./usePluginState";
@@ -25,6 +26,7 @@ import type { usePlugins } from "./usePlugins";
 
 type Deps = {
   appFoundationApi: ReturnType<typeof useAppFoundation>;
+  workbenchLayoutApi: ReturnType<typeof useWorkbenchLayout>;
   currentRootApi: ReturnType<typeof useCurrentRoot>;
   projectTreeApi: ReturnType<typeof useProjectTree>;
   pluginStateApi: ReturnType<typeof usePluginState>;
@@ -37,8 +39,9 @@ type Deps = {
   pluginsApi: ReturnType<typeof usePlugins>;
 };
 
-export function useAppBootstrap({ appFoundationApi, currentRootApi, projectTreeApi, pluginStateApi, relayConnectionApi, managedRootsApi, sessionListApi, workbenchSessionNavigationApi, agentCatalogApi, actionHandlersApi, pluginsApi }: Deps) {
+export function useAppBootstrap({ appFoundationApi, workbenchLayoutApi, currentRootApi, projectTreeApi, pluginStateApi, relayConnectionApi, managedRootsApi, sessionListApi, workbenchSessionNavigationApi, agentCatalogApi, actionHandlersApi, pluginsApi }: Deps) {
   const { didInitRef, handleSelectSessionRef, managedRootIdsRef, t } = appFoundationApi;
+  const { remotePhone } = workbenchLayoutApi;
   const { setCurrentRootId } = currentRootApi;
   const { refreshTreeDir } = projectTreeApi;
   const { setPluginQuery } = pluginStateApi;
@@ -166,12 +169,13 @@ export function useAppBootstrap({ appFoundationApi, currentRootApi, projectTreeA
       return;
     }
     setAgentsVersion((v) => v + 1);
-    if (multiProjectSessionsEnabled) {
+    if (multiProjectSessionsEnabled || remotePhone) {
       void loadMultiProjectSessionGroups();
     }
   }, [
     bootstrapState.phase,
     loadMultiProjectSessionGroups,
     multiProjectSessionsEnabled,
+    remotePhone,
   ]);
 }

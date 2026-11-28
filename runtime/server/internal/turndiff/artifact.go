@@ -201,6 +201,76 @@ func LoadArtifact(parent, session, id, path string) (*ChangedFile, error) {
 	return nil, errors.New("path not in turn diff artifact")
 }
 
+// DeleteSessionArtifacts removes every turn-diff snapshot directory under
+// <parent>/turn-diffs whose manifest belongs to one of sessionKeys.
+// It validates snapshot IDs and refuses to follow symlinks.
+func DeleteSessionArtifacts(parent string, sessionKeys []string) error {
+	if strings.TrimSpace(parent) == "" || len(sessionKeys) == 0 {
+		return nil
+	}
+	targets := make(map[string]bool, len(sessionKeys))
+	for _, key := range sessionKeys {
+		if trimmed := strings.TrimSpace(key); trimmed != "" {
+			targets[trimmed] = true
+		}
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+	dir := filepath.Join(parent, "turn-diffs")
+	dirInfo, err := os.Lstat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if dirInfo.Mode()&os.ModeSymlink != 0 || !dirInfo.IsDir() {
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(parent)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	for _, entry := range entries {
+		id := entry.Name()
+		if !validArtifactID(id) || entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() {
+			continue
+		}
+		manifestPath := filepath.FromSlash(filepath.Join("turn-diffs", id, "manifest.json"))
+		f, err := root.Open(manifestPath)
+		if err != nil {
+			continue
+		}
+		data, readErr := io.ReadAll(io.LimitReader(f, maxManifestBytes+1))
+		_ = f.Close()
+		if readErr != nil || int64(len(data)) > maxManifestBytes {
+			continue
+		}
+		var manifest artifactManifest
+		if err := json.Unmarshal(data, &manifest); err != nil || manifest.Version != 1 {
+			continue
+		}
+		if !targets[strings.TrimSpace(manifest.Session)] {
+			continue
+		}
+		snapshotDir := filepath.Join(dir, id)
+		info, lstatErr := os.Lstat(snapshotDir)
+		if lstatErr != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			continue
+		}
+		if err := os.RemoveAll(snapshotDir); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 func writeArtifactSide(snapshotDir, path, side string, state FileState) (artifactFileSide, string, error) {
 	metadata := artifactFileSide{Present: state.Present, Binary: state.Binary, Mode: state.Mode}
 	if !state.Present {

@@ -351,6 +351,54 @@ func CleanupRunDocs(rootPath, runID string, keepDocs []string) ([]string, error)
 	return removed, err
 }
 
+// RemoveRunDir safely deletes the entire .mindfs/runs/<runID> directory tree,
+// including all round subdirectories, metadata dotfiles, and any extra files
+// placed inside the run directory. It rejects symlinked run path segments and
+// unlinks symlinks inside the run directory without traversing their targets.
+func RemoveRunDir(rootPath, runID string) error {
+	runDir, err := ensureSafeRunDir(rootPath, runID, false, true)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return removeDirTreeNoFollow(runDir)
+}
+
+func removeDirTreeNoFollow(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		target := filepath.Join(dir, entry.Name())
+		info, lstatErr := os.Lstat(target)
+		if lstatErr != nil {
+			if os.IsNotExist(lstatErr) {
+				continue
+			}
+			return lstatErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			continue
+		}
+		if err := removeDirTreeNoFollow(target); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(dir); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func removeEmptyDirectory(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) > 0 {

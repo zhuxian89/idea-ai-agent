@@ -44,6 +44,107 @@
 .session-recovery-button:disabled { opacity: .55; cursor: not-allowed; }
 .idea-network-notice { flex: 0 0 auto; padding: 8px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-primary); background: var(--panel-bg); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 
+.mindfs-confirm-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  max-width: none;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--menu-bg, #ffffff);
+  color: var(--text-primary, #0f172a);
+  box-shadow: 0 20px 54px rgba(2, 6, 23, 0.28);
+}
+.mindfs-confirm-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.48);
+  backdrop-filter: blur(2px);
+}
+.mindfs-confirm-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.mindfs-confirm-desc {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary, #475569);
+  overflow-wrap: anywhere;
+}
+.mindfs-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.mindfs-confirm-btn {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.mindfs-confirm-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.mindfs-confirm-btn--cancel {
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+}
+.mindfs-confirm-btn--cancel:active:not(:disabled) { background: var(--selection-bg); }
+.mindfs-confirm-btn--danger {
+  border: 0;
+  background: var(--danger-color, #dc2626);
+  color: #ffffff;
+}
+.mindfs-confirm-btn--danger:active:not(:disabled) { opacity: 0.88; }
+.mindfs-confirm-btn--primary {
+  border: 0;
+  background: var(--accent-color, #2563eb);
+  color: #ffffff;
+}
+@media (max-width: 600px) {
+  .mindfs-confirm-actions {
+    gap: 10px;
+  }
+  .mindfs-confirm-btn {
+    flex: 1;
+    min-height: 44px;
+    font-size: 14.5px;
+  }
+}
+
+html[data-remote-ui="1"][data-device="phone"] .mindfs-confirm-dialog {
+  padding: var(--rp-s4, 16px);
+  border-radius: var(--rp-r-panel, 16px);
+  box-shadow: none;
+}
+html[data-remote-ui="1"][data-device="phone"] .mindfs-confirm-title {
+  margin: 0 0 var(--rp-s2, 8px);
+  font-size: var(--rp-fs-16, 16px);
+  font-weight: 600;
+}
+html[data-remote-ui="1"][data-device="phone"] .mindfs-confirm-desc {
+  margin: 0 0 var(--rp-s4, 16px);
+  font-size: var(--rp-fs-13, 13px);
+}
+html[data-remote-ui="1"][data-device="phone"] .mindfs-confirm-actions {
+  gap: var(--rp-s2, 8px);
+}
+html[data-remote-ui="1"][data-device="phone"] .mindfs-confirm-btn {
+  flex: 1;
+  min-height: var(--rp-touch-primary, 44px);
+  padding: 0 var(--rp-s3, 12px);
+  border-radius: var(--rp-r-ctl, 8px);
+  font-size: var(--rp-fs-14, 14px);
+  font-weight: 600;
+}
+
 :root {
   color-scheme: light;
   --mindfs-safe-area-top: 0px;

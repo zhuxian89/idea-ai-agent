@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useI18n } from "../i18n";
 import { PhoneMoreHostContext, type PhoneMoreConnection } from "../components/remoteui/PhoneMoreHost";
 import { PhoneSheet } from "../components/remoteui/PhoneSheet";
+import { PhoneSessionDrawerList, type DrawerSessionFilter } from "../components/remoteui/PhoneSessionDrawerList";
 import { PhoneActivityHostContext, PhoneSessionFactsContext, phoneSessionFilters, type PhoneSessionFacts, type PhoneSessionFilter } from "../components/remoteui/phoneSessionFacts";
 import type { ProjectSessionGroup, SessionItem } from "../components/SessionList";
 import "./remotePhone.css";
@@ -16,8 +17,6 @@ const icons = {
   more: "M12 5h.1M12 12h.1M12 19h.1",
 };
 
-const quickPriority = { wait: 0, work: 1, error: 2, idle: 2 };
-
 export type RemotePhoneProps = {
   title: string;
   project: string;
@@ -29,6 +28,9 @@ export type RemotePhoneProps = {
   onFilter: (filter: PhoneSessionFilter) => void;
   facts: (session: SessionItem) => PhoneSessionFacts;
   onSession: (session: SessionItem) => void;
+  onNewSession?: () => void;
+  onDeleteSession?: (session: SessionItem) => void;
+  onLoadMoreProject?: (group: ProjectSessionGroup) => Promise<void> | void;
   importOpen?: boolean;
   connection?: PhoneMoreConnection;
   multiProjectSessionsEnabled: boolean;
@@ -53,6 +55,7 @@ export function RemotePhoneShell({ leftOpen, rightOpen, onProjects, onSessions, 
   const [more, setMore] = useState(false);
   const [quick, setQuick] = useState(false);
   const [query, setQuery] = useState("");
+  const [drawerFilter, setDrawerFilter] = useState<DrawerSessionFilter>("all");
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [activityHost, setActivityHost] = useState<HTMLDivElement | null>(null);
   const [moreHost, setMoreHost] = useState<HTMLDivElement | null>(null);
@@ -68,12 +71,6 @@ export function RemotePhoneShell({ leftOpen, rightOpen, onProjects, onSessions, 
     (state === "wait" || state === "error") &&
     !(item.key === phone.activeKey && item.root_id === phone.root) &&
     !dismissed.includes(id));
-  const search = query.trim().toLocaleLowerCase();
-  const quickOptions = quick ? summary
-    .filter(({ item, project, preview }) => `${item.name || item.key} ${project} ${preview || ""}`.toLocaleLowerCase().includes(search))
-    .sort((a, b) => quickPriority[a.state] - quickPriority[b.state] ||
-      Number(!!b.item.pinned_at) - Number(!!a.item.pinned_at) ||
-      (b.item.updated_at || "").localeCompare(a.item.updated_at || "")) : [];
 
   function go(to: Page) {
     setMore(to === "more");
@@ -96,7 +93,12 @@ export function RemotePhoneShell({ leftOpen, rightOpen, onProjects, onSessions, 
           <button type="button" className="remote-phone-icon remote-phone-leading" aria-label={phone.viewingFile ? labels.projects : labels.sessions} aria-haspopup={phone.viewingFile ? undefined : "dialog"} aria-expanded={phone.viewingFile ? undefined : quick}
             onClick={() => {
               if (phone.viewingFile) go("projects");
-              else { setQuery(""); setQuick(true); }
+              else {
+                (document.activeElement as HTMLElement | null)?.blur?.();
+                setQuery("");
+                setDrawerFilter("all");
+                setQuick(true);
+              }
             }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d={phone.viewingFile ? icons.back : icons.sessions} /></svg>
           </button>
@@ -161,30 +163,64 @@ export function RemotePhoneShell({ leftOpen, rightOpen, onProjects, onSessions, 
       </nav>}
     </div>
     <PhoneSheet side="left" title={labels.sessions} open={quick && page === "chat"} onClose={() => setQuick(false)}>
-      <div className="remote-phone-search-bar">
-        <input className="remote-phone-search" type="search" aria-label={t("remote.phone.searchRecent")} placeholder={t("remote.phone.searchRecent")} value={query} onChange={event => setQuery(event.target.value)} />
-      </div>
-      {quickOptions.length ? <ul className="remote-phone-recent-list" role="list">
-        {quickOptions.map(({ item, project, state, preview }) => {
-          const current = item.key === phone.activeKey && item.root_id === phone.root;
-          return <li key={`${item.root_id}:${item.key}`}>
-            <button type="button" className="remote-phone-recent" aria-current={current || undefined} onClick={() => select(item)}>
-              <span>
-                <strong>{item.name || item.key}</strong>
-                {preview && <small>{preview}</small>}
-                <small className="remote-phone-recent-meta">
-                  <span>{project}</span>
-                  <span className="remote-phone-recent-state"><i data-state={state} aria-hidden="true" />{t(`remote.phone.${state}`)}</span>
-                </small>
-              </span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d={current ? "m5 12 4 4L19 6" : "m9 6 6 6-6 6"} />
-              </svg>
+      <div className="remote-phone-drawer-controls">
+        {phone.onNewSession ? (
+          <button
+            type="button"
+            className="remote-phone-new-btn"
+            onClick={() => {
+              go("chat");
+              phone.onNewSession?.();
+            }}
+          >
+            <span>＋ {t("session.new")}</span>
+          </button>
+        ) : null}
+        <div className="remote-phone-drawer-filters" role="group" aria-label={labels.sessions}>
+          {(
+            [
+              { id: "all", label: t("remote.phone.filterAll") },
+              { id: "wait", label: t("remote.phone.filterWait") },
+              { id: "work", label: t("remote.phone.filterWork") },
+            ] as const
+          ).map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              className={`remote-phone-drawer-pill${drawerFilter === f.id ? " active" : ""}`}
+              aria-pressed={drawerFilter === f.id}
+              onClick={() => setDrawerFilter(f.id)}
+            >
+              {f.label}
             </button>
-          </li>;
-        })}
-      </ul> : <p className="remote-phone-recent-empty">{t(search ? "sessionList.noSearchMatch" : "sessionList.empty")}</p>}
-      <button type="button" className="remote-phone-all" onClick={() => { phone.onFilter(""); go("sessions"); }}>{t("remote.phone.allSessions")}</button>
+          ))}
+        </div>
+        <div className="remote-phone-search-bar">
+          <input className="remote-phone-search" type="search" aria-label={t("remote.phone.searchRecent")} placeholder={t("remote.phone.searchRecent")} value={query} onChange={event => setQuery(event.target.value)} />
+          {query ? (
+            <button
+              type="button"
+              className="remote-phone-search-clear"
+              aria-label={t("sessionList.clearSearch")}
+              onClick={() => setQuery("")}
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <PhoneSessionDrawerList
+        groups={phone.groups}
+        currentRootId={phone.root}
+        currentProjectName={phone.project}
+        activeKey={phone.activeKey}
+        filter={drawerFilter}
+        search={query}
+        facts={phone.facts}
+        onSelect={select}
+        onDelete={phone.onDeleteSession}
+        onLoadMoreProject={phone.onLoadMoreProject}
+      />
     </PhoneSheet>
     </PhoneSessionFactsContext.Provider>
   );

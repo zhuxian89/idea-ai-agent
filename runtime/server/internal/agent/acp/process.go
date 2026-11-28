@@ -77,15 +77,16 @@ type activePromptState struct {
 var stderrMessagePattern = regexp.MustCompile(`"message"\s*:\s*"([^"]+)"`)
 
 type sessionState struct {
-	ID            acp.SessionId
-	readOnly      bool
-	models        *acp.SessionModelState
-	modes         *acp.SessionModeState
-	configOptions []acp.SessionConfigOption
-	commands      []acp.AvailableCommand
-	contextWindow types.ContextWindow
-	onUpdate      func(SessionUpdate)
-	mu            sync.RWMutex
+	ID                acp.SessionId
+	readOnly          bool
+	models            *acp.SessionModelState
+	modes             *acp.SessionModeState
+	configOptions     []acp.SessionConfigOption
+	commands          []acp.AvailableCommand
+	contextWindow     types.ContextWindow
+	turnContextWindow types.ContextWindow
+	onUpdate          func(SessionUpdate)
+	mu                sync.RWMutex
 }
 
 func (s *sessionState) setReadOnly(readOnly bool) {
@@ -176,9 +177,16 @@ func (s *sessionState) getCommands() []acp.AvailableCommand {
 	return append([]acp.AvailableCommand(nil), s.commands...)
 }
 
-func (s *sessionState) setContextWindow(contextWindow types.ContextWindow) {
+func (s *sessionState) recordContextWindow(contextWindow types.ContextWindow) {
 	s.mu.Lock()
 	s.contextWindow = contextWindow
+	s.turnContextWindow = contextWindow
+	s.mu.Unlock()
+}
+
+func (s *sessionState) resetTurnContextWindow() {
+	s.mu.Lock()
+	s.turnContextWindow = types.ContextWindow{}
 	s.mu.Unlock()
 }
 
@@ -188,11 +196,18 @@ func (s *sessionState) getContextWindow() types.ContextWindow {
 	return s.contextWindow
 }
 
+func (s *sessionState) getTurnContextWindow() types.ContextWindow {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.turnContextWindow
+}
+
 // SessionUpdate is the internal session update type.
 type SessionUpdate struct {
-	Type      UpdateType
-	SessionID string
-	Raw       acp.SessionUpdate
+	Type          UpdateType
+	SessionID     string
+	Raw           acp.SessionUpdate
+	ContextWindow types.ContextWindow
 }
 
 // UpdateType defines the type of session update.
@@ -233,19 +248,18 @@ func (c *mindfsClient) SessionUpdate(ctx context.Context, params acp.SessionNoti
 	if session == nil {
 		return nil
 	}
-	handler := session.getOnUpdate()
-	if handler == nil {
-		return nil
-	}
 
 	internalUpdate := wrapSessionUpdate(string(params.SessionId), params.Update)
+	handled := false
 	if params.Update.AvailableCommandsUpdate != nil {
+		handled = true
 		session.setCommands(params.Update.AvailableCommandsUpdate.AvailableCommands)
 		c.proc.mu.Lock()
 		c.proc.commands = append([]acp.AvailableCommand(nil), params.Update.AvailableCommandsUpdate.AvailableCommands...)
 		c.proc.mu.Unlock()
 	}
 	if params.Update.CurrentModeUpdate != nil {
+		handled = true
 		current := params.Update.CurrentModeUpdate.CurrentModeId
 		if state := session.getModes(); state != nil {
 			state.CurrentModeId = current
@@ -256,27 +270,41 @@ func (c *mindfsClient) SessionUpdate(ctx context.Context, params acp.SessionNoti
 		}
 	}
 	if params.Update.ConfigOptionUpdate != nil {
+		handled = true
 		session.setConfigOptions(params.Update.ConfigOptionUpdate.ConfigOptions)
 		c.proc.mu.Lock()
 		c.proc.configOptions = cloneConfigOptions(params.Update.ConfigOptionUpdate.ConfigOptions)
 		c.proc.mu.Unlock()
 	}
 	if params.Update.UsageUpdate != nil {
-		current := session.getContextWindow()
-		current.ModelContextWindow = params.Update.UsageUpdate.Size
-		if current.TotalTokens == 0 {
-			current.TotalTokens = params.Update.UsageUpdate.Used
+		handled = true
+		if window, ok := parseACPUsageUpdate(params.Update.UsageUpdate); ok {
+			session.recordContextWindow(window)
 		}
-		session.setContextWindow(current)
+	}
+	if params.Update.SessionInfoUpdate != nil {
+		handled = true
 	}
 
 	if internalUpdate.Type != "" {
-		handler(internalUpdate)
-	} else {
+		if handler := session.getOnUpdate(); handler != nil {
+			handler(internalUpdate)
+		}
+	} else if !handled {
 		raw, _ := json.Marshal(params.Update)
 		log.Printf("[agent/acp] unhandled raw=%s", string(raw))
 	}
 	return nil
+}
+
+func parseACPUsageUpdate(update *acp.SessionUsageUpdate) (types.ContextWindow, bool) {
+	if update == nil || update.Used < 0 || update.Size <= 0 {
+		return types.ContextWindow{}, false
+	}
+	return types.ContextWindow{
+		TotalTokens:        update.Used,
+		ModelContextWindow: update.Size,
+	}, true
 }
 
 func (c *mindfsClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
@@ -657,6 +685,7 @@ func (p *Process) SendMessage(ctx context.Context, sessionKey, content string) e
 	if sess == nil {
 		return nil
 	}
+	sess.resetTurnContextWindow()
 	log.Printf("[agent/acp] send.begin agent=%s session_key=%s bytes=%d", p.agentLabel(), sessionKey, len(content))
 
 	promptCtx, promptCancel := context.WithCancel(ctx)
@@ -667,7 +696,7 @@ func (p *Process) SendMessage(ctx context.Context, sessionKey, content string) e
 		promptCancel()
 	}()
 
-	resp, err := p.conn.Prompt(promptCtx, acp.PromptRequest{
+	_, err := p.conn.Prompt(promptCtx, acp.PromptRequest{
 		SessionId: sess.ID,
 		Prompt: []acp.ContentBlock{
 			acp.TextBlock(content),
@@ -676,17 +705,16 @@ func (p *Process) SendMessage(ctx context.Context, sessionKey, content string) e
 	if err != nil {
 		return p.wrapPromptError(sessionKey, string(sess.ID), err)
 	}
-	if resp.Usage != nil {
-		current := sess.getContextWindow()
-		current.TotalTokens = resp.Usage.TotalTokens
-		sess.setContextWindow(current)
-	}
+	// ACP PromptResponse.Usage reports cumulative token consumption across model
+	// calls in the turn/session, never current context window occupancy. Context
+	// occupancy comes exclusively from SessionUsageUpdate (used / size).
 
 	// Signal completion
 	if onUpdate := sess.getOnUpdate(); onUpdate != nil {
 		onUpdate(SessionUpdate{
-			Type:      UpdateTypeMessageDone,
-			SessionID: string(sess.ID),
+			Type:          UpdateTypeMessageDone,
+			SessionID:     string(sess.ID),
+			ContextWindow: sess.getTurnContextWindow(),
 		})
 	}
 	log.Printf("[agent/acp] send.done agent=%s session_key=%s duration_ms=%d", p.agentLabel(), sessionKey, time.Since(start).Milliseconds())

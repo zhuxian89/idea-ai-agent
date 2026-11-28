@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { AgentStatus } from "../../services/agents";
 import type {
   CollabMemberSlot,
@@ -18,33 +18,37 @@ import {
   normalizeSlotForSubmission,
 } from "./collabModelDisplay";
 
+type TemplateInput = {
+  id?: string;
+  name: string;
+  is_default?: boolean;
+  members: CollabMemberSlot[];
+  skill_paths?: string[];
+  final_author_slot_id?: string;
+  topic_mode?: MeetingTopicMode;
+  max_rounds?: number;
+};
+
 interface Props {
-  open: boolean;
-  mode: CollabMode;
-  templates: CollabTemplateWithAvailability[];
+  /** 打开时先停在哪个标签：当前发起页所在的模式 */
+  initialMode: CollabMode;
   skills: CollabSkillSummary[];
   agents: AgentStatus[];
+  /** 读取某个模式的全局模板；两个标签各自读取，不依赖发起页当前加载的那一份 */
+  loadTemplates: (mode: CollabMode) => Promise<CollabTemplateWithAvailability[]>;
   onClose: () => void;
-  onApply: (tpl: CollabTemplateWithAvailability) => void;
-  onSave: (tpl: {
-    id?: string;
-    name: string;
-    is_default?: boolean;
-    members: CollabMemberSlot[];
-    skill_paths?: string[];
-    final_author_slot_id?: string;
-    topic_mode?: MeetingTopicMode;
-    max_rounds?: number;
-  }) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
+  onApply: (mode: CollabMode, tpl: CollabTemplateWithAvailability) => void;
+  onSave: (mode: CollabMode, tpl: TemplateInput) => Promise<void>;
+  onDelete: (mode: CollabMode, id: string) => Promise<void>;
 }
 
+const TAB_LABELS: Record<CollabMode, string> = { quick: "快速模式", group: "开大会" };
+
 export function CollabTemplateModal({
-  open,
-  mode,
-  templates,
+  initialMode,
   skills,
   agents,
+  loadTemplates,
   onClose,
   onApply,
   onSave,
@@ -57,12 +61,36 @@ export function CollabTemplateModal({
   const [author, setAuthor] = useState("");
   const [topicMode, setTopicMode] = useState<MeetingTopicMode>("multi");
   const [rounds, setRounds] = useState(3);
-  const group = mode === "group";
+  const [tab, setTab] = useState<CollabMode>(initialMode);
+  const group = tab === "group";
+  const [lists, setLists] = useState<Partial<Record<CollabMode, CollabTemplateWithAvailability[]>>>({});
+  const [loadError, setLoadError] = useState("");
+  const templates = lists[tab] ?? [];
+  const loading = lists[tab] === undefined && !loadError;
   const [skillPaths, setSkillPaths] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  if (!open) return null;
+  const reload = useCallback(async (mode: CollabMode) => {
+    try {
+      const items = await loadTemplates(mode);
+      setLists((prev) => ({ ...prev, [mode]: items }));
+      setLoadError("");
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "读取模板失败");
+    }
+  }, [loadTemplates]);
+
+  useEffect(() => {
+    if (lists[tab] === undefined) void reload(tab);
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const switchTab = (next: CollabMode) => {
+    if (next === tab || editingId) return;
+    setLoadError("");
+    setError("");
+    setTab(next);
+  };
 
   const startCreate = () => {
     const defaults = defaultCollabMembers(agents, group);
@@ -97,7 +125,7 @@ export function CollabTemplateModal({
     setBusy(true);
     setError("");
     try {
-      await onSave({
+      await onSave(tab, {
         id: editingId === "__new__" ? undefined : editingId || undefined,
         name: name.trim(),
         ...(group ? { final_author_slot_id: author, max_rounds: rounds, topic_mode: topicMode } : {}),
@@ -105,6 +133,7 @@ export function CollabTemplateModal({
         members: members.map((slot) => normalizeSlotForSubmission(slot, agents)),
         skill_paths: skills.length > 0 ? filterVisibleSkillPaths(skillPaths, skills) : skillPaths,
       });
+      await reload(tab);
       setEditingId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存模板失败");
@@ -129,6 +158,22 @@ export function CollabTemplateModal({
           </button>
         </div>
         <div className="collab-modal-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="collab-seg-group" role="tablist" aria-label="模板类型">
+            {(["quick", "group"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                aria-selected={tab === item}
+                className={`collab-seg-btn ${tab === item ? "active" : ""}`}
+                disabled={Boolean(editingId) && tab !== item}
+                title={editingId && tab !== item ? "请先保存或取消当前编辑" : undefined}
+                onClick={() => switchTab(item)}
+              >
+                {TAB_LABELS[item]}
+              </button>
+            ))}
+          </div>
           <div style={{ fontSize: 12, color: "var(--cb-text-ter)" }}>
             应用模板是复制快照，修改或删除全局模板不会影响历史运行记录。
           </div>
@@ -249,9 +294,18 @@ export function CollabTemplateModal({
             </div>
           )}
 
-          {templates.length === 0 && !editingId ? (
+          {error && !editingId ? <div style={{ color: "var(--cb-red)", fontSize: 12 }}>{error}</div> : null}
+
+          {loadError ? (
+            <div style={{ color: "var(--cb-red)", fontSize: 12 }}>
+              读取{TAB_LABELS[tab]}模板失败：{loadError}
+              <button type="button" className="collab-btn-secondary" style={{ marginLeft: 8 }} onClick={() => void reload(tab)}>重试</button>
+            </div>
+          ) : loading ? (
+            <div style={{ padding: "20px 0", textAlign: "center", color: "var(--cb-text-ter)", fontSize: 13 }}>加载中…</div>
+          ) : templates.length === 0 && !editingId ? (
             <div style={{ padding: "20px 0", textAlign: "center", color: "var(--cb-text-ter)", fontSize: 13 }}>
-              暂无全局模板，点击右上角「＋ 新建模板」或在发起页直接保存。
+              暂无{TAB_LABELS[tab]}模板，点击右上角「＋ 新建模板」或在发起页直接保存。
             </div>
           ) : (
             templates.map((tpl) => (
@@ -278,7 +332,7 @@ export function CollabTemplateModal({
                       type="button"
                       className="collab-btn-secondary"
                       onClick={() => {
-                        onApply(tpl);
+                        onApply(tab, tpl);
                         onClose();
                       }}
                     >
@@ -289,7 +343,7 @@ export function CollabTemplateModal({
                         type="button"
                         className="collab-btn-secondary"
                         onClick={() =>
-                          void onSave({
+                          void onSave(tab, {
                             id: tpl.id,
                             name: tpl.name,
                             is_default: true,
@@ -298,7 +352,7 @@ export function CollabTemplateModal({
                             final_author_slot_id: tpl.final_author_slot_id,
                             max_rounds: tpl.max_rounds,
                             topic_mode: tpl.topic_mode,
-                          })
+                          }).then(() => reload(tab)).catch((err) => setError(err instanceof Error ? err.message : "设置默认失败"))
                         }
                       >
                         设为默认
@@ -315,7 +369,9 @@ export function CollabTemplateModal({
                       type="button"
                       className="collab-btn-secondary"
                       style={{ color: "var(--cb-red)" }}
-                      onClick={() => void onDelete(tpl.id)}
+                      onClick={() =>
+                        void onDelete(tab, tpl.id).then(() => reload(tab)).catch((err) => setError(err instanceof Error ? err.message : "删除模板失败"))
+                      }
                     >
                       删除
                     </button>

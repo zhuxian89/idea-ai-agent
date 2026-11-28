@@ -1,4 +1,4 @@
-import UIKit
+import Foundation
 
 struct ThemeColor {
     let red: Double
@@ -24,6 +24,5 @@ struct ThemeColor {
     }
     // Choose whichever foreground has greater WCAG contrast against the page chrome.
     var lightStatusBar: Bool { luminance < 0.179 }
-    var uiColor: UIColor { UIColor(red: red, green: green, blue: blue, alpha: 1) }
     static let initial = ThemeColor(hex: "#101827")!
 }

@@ -7,6 +7,7 @@ import type { useFooterState } from "./useFooterState";
 import type { useFileTreeMenuBehavior } from "./useFileTreeMenuBehavior";
 import type { FileTreeProps } from "../fileTreeModel";
 
+import { RelayActionButton } from "./RelayActionButton";
 import { FileTreeRelayTip } from "./FileTreeRelayTip";
 import { FileTreeUpdateNotes } from "./FileTreeUpdateNotes";
 
@@ -43,18 +44,7 @@ export function FileTreeFooter({ fileTreeMenuBehaviorApi, fileTreeMenusApi, foot
       ) : null}
       <FileTreeRelayTip fileTreeMenusApi={fileTreeMenusApi} footerStateApi={footerStateApi} />
       {footerTop}
-      {relayActionLabel ? (
-        <button
-          type="button"
-          className="file-tree-relay-action"
-          disabled={relayActionDisabled}
-          onClick={() => onRelayAction?.()}
-        >
-          <svg className="rel-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.4" /><rect x="14" y="3" width="7" height="7" rx="1.4" /><rect x="3" y="14" width="7" height="7" rx="1.4" /><path d="M14 14h3v3h-3zM20 14v.01M14 20h3M20 17v4" /></svg>
-          <span>{relayActionLabel}</span>
-          <svg className="rel-ico rel-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-        </button>
-      ) : null}
+      {relayActionLabel ? <RelayActionButton label={relayActionLabel} disabled={relayActionDisabled} onClick={onRelayAction} /> : null}
       {phoneMore?.connection ? <div className="phone-more-connection">
         <span><i data-state={phoneMore.connection} />{t(`action.ws.${phoneMore.connection}`)}</span>
         {relayActionHelp && <span>{relayActionHelp}</span>}
